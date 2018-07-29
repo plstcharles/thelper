@@ -9,7 +9,6 @@ Overview
 
     * - tests
       - | |travis|
-        |
     * - package
       - | |pyver| |commits-since|
 
@@ -20,6 +19,10 @@ Overview
 .. |travis| image:: https://travis-ci.org/plstcharles/thelper.svg?branch=master
     :alt: Travis-CI Build Status
     :target: https://travis-ci.org/plstcharles/thelper
+
+.. |commits-since| image:: https://img.shields.io/github/commits-since/plstcharles/thelper/latest.svg
+    :alt: Commits since latest release
+    :target: https://github.com/plstcharles/thelper/compare/v0.1.0...master
 
 .. not ready for live version (WiP)
 
@@ -46,10 +49,6 @@ Overview
    .. |supported-implementations| image:: https://img.shields.io/pypi/implementation/thelper.svg
        :alt: Supported implementations
        :target: https://pypi.python.org/pypi/thelper
-
-.. |commits-since| image:: https://img.shields.io/github/commits-since/plstcharles/thelper/latest.svg
-    :alt: Commits since latest release
-    :target: https://github.com/plstcharles/thelper/compare/latest...master
 
 .. end-badges
 
