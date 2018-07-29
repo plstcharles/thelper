@@ -22,7 +22,7 @@ Overview
 
 .. |commits-since| image:: https://img.shields.io/github/commits-since/plstcharles/thelper/latest.svg
     :alt: Commits since latest release
-    :target: https://github.com/plstcharles/thelper/compare/v0.1.0...master
+    :target: https://github.com/plstcharles/thelper/compare/v0.0.0...master
 
 .. not ready for live version (WiP)
 
