@@ -9,10 +9,10 @@ import setuptools
 from setuptools.command.build_ext import build_ext
 
 
-def read(*names, **kwargs):
+def read(*names,**kwargs):
     return io.open(
-        os.path.join(os.path.dirname(__file__), *names),
-        encoding=kwargs.get("encoding", "utf8")
+        os.path.join(os.path.dirname(__file__),*names),
+        encoding=kwargs.get("encoding","utf8")
     ).read()
 
 
@@ -25,6 +25,7 @@ if "TOXENV" in os.environ and "SETUPPY_CFLAGS" in os.environ:
 
 class optional_build_ext(build_ext):
     """Allow the building of C extensions to fail."""
+
     def run(self):
         try:
             build_ext.run(self)
@@ -32,8 +33,8 @@ class optional_build_ext(build_ext):
             self._unavailable(e)
             self.extensions = []  # avoid copying missing files (it would fail).
 
-    def _unavailable(self, e):
-        print("*" * 80)
+    def _unavailable(self,e):
+        print("*"*80)
         print("""WARNING:
 
     An optional code optimization (C extension) could not be compiled.
@@ -43,8 +44,8 @@ class optional_build_ext(build_ext):
 
         print("CAUSE:")
         print("")
-        print("    " + repr(e))
-        print("*" * 80)
+        print("    "+repr(e))
+        print("*"*80)
 
 
 setuptools.setup(
@@ -52,25 +53,26 @@ setuptools.setup(
     version="0.0.0",
     license="Apache Software License 2.0",
     description="Provides training help & tools for PyTorch-based machine learning projects.",
-    long_description="%s\n%s" % (
-        re.compile("^.. start-badges.*^.. end-badges", re.M | re.S).sub("", read("README.rst")),
-        re.sub(":[a-z]+:`~?(.*?)`", r"``\1``", read("CHANGELOG.rst"))
+    long_description="%s\n%s"%(
+        re.compile("^.. start-badges.*^.. end-badges",re.M|re.S).sub("",read("README.rst")),
+        re.sub(":[a-z]+:`~?(.*?)`",r"``\1``",read("CHANGELOG.rst"))
     ),
     author="Pierre-Luc St-Charles",
     author_email="pierreluc.stcharles@gmail.com",
     url="https://github.com/plstcharles/thelper",
     packages=setuptools.find_packages("src"),
-    package_dir={"": "src"},
+    package_dir={"":"src"},
     py_modules=[os.path.splitext(os.path.basename(path))[0] for path in glob.glob("src/*.py")],
     include_package_data=True,
     zip_safe=False,
     classifiers=[
         # complete classifier list: http://pypi.python.org/pypi?%3Aaction=list_classifiers
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 2 - Pre-Alpha",
         "Intended Audience :: Developers",
         "Intended Audience :: Science/Research",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "License :: OSI Approved :: Apache Software License",
+        "Natural Language :: English",
         "Operating System :: Unix",
         "Operating System :: POSIX",
         "Operating System :: Microsoft :: Windows",
@@ -78,7 +80,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: Implementation :: CPython",
     ],
-    keywords=["pytorch", "trainer", "loader"],
+    keywords=["pytorch","trainer","loader"],
     install_requires=[
         "augmentor>=0.2.2",
         "matplotlib>=2.2.2",
@@ -91,21 +93,21 @@ setuptools.setup(
     ],
     python_requires="~=3.5",
     extras_require={
-        "rst": ["docutils>=0.11"],
+        "rst":["docutils>=0.11"],
     },
     entry_points={
-        "console_scripts": [
+        "console_scripts":[
             "thelper = thelper.cli:main",
         ]
     },
-    cmdclass={"build_ext": optional_build_ext},
+    cmdclass={"build_ext":optional_build_ext},
     ext_modules=[
         setuptools.Extension(
-            os.path.splitext(os.path.relpath(path, "src").replace(os.sep, "."))[0],
+            os.path.splitext(os.path.relpath(path,"src").replace(os.sep,"."))[0],
             sources=[path],
             include_dirs=[os.path.dirname(path)]
         )
-        for root, _, _ in os.walk("src")
-        for path in glob.glob(os.path.join(root, "*.c"))
+        for root,_,_ in os.walk("src")
+        for path in glob.glob(os.path.join(root,"*.c"))
     ],
 )

@@ -19,6 +19,7 @@ data
 venv*/
 pyvenv*/
 pip-log.txt
+thelper.log
 .coverage
 .tox
 .coverage.*

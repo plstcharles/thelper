@@ -1,0 +1,127 @@
+{
+    "name": "example",
+    "datasets": {
+        "cifar_train": {
+            "type": "torchvision.datasets.CIFAR10",
+            "params": [
+                {"name": "root", "value": "data/cifar/train"},
+                {"name": "train", "value": true},
+                {"name": "download", "value": true}
+            ],
+            "transforms": {
+                "torchvision.transforms.Resize": {
+                    "size": [224, 224]
+                },
+                "thelper.transforms.NumpyNormalizeMinMax": {
+                    "min": 0,
+                    "max": 255
+                },
+                "thelper.transforms.NumpyNormalizeZeroMeanUnitVar": {
+                    "mean": [0.485, 0.456, 0.406],
+                    "std": [0.229, 0.224, 0.225]
+                },
+                "torchvision.transforms.ToTensor": {}
+            }
+        },
+        "cifar_test": {
+            "type": "torchvision.datasets.CIFAR10",
+            "params": [
+                {"name": "root", "value": "data/cifar/test"},
+                {"name": "train", "value": false},
+                {"name": "download", "value": true}
+            ],
+            "transforms": {
+                "torchvision.transforms.Resize": {
+                    "size": [224, 224]
+                },
+                "thelper.transforms.NumpyNormalizeMinMax": {
+                    "min": 0,
+                    "max": 255
+                },
+                "thelper.transforms.NumpyNormalizeZeroMeanUnitVar": {
+                    "mean": [0.485, 0.456, 0.406],
+                    "std": [0.229, 0.224, 0.225]
+                },
+                "torchvision.transforms.ToTensor": {}
+            }
+        }
+    },
+    "data_config": {
+        "batch_size": 16,
+        "shuffle": true,
+        "seed": 0,
+        "workers": 0,
+        "pin_memory": false,
+        "drop_last": false,
+        "train_augments": {
+            "Augmentor.Pipeline": {
+                "input_tensor": false,
+                "output_tensor": false,
+                "append": false,
+                "stages": {
+                    "flip_left_right": {"probability": 0.5}
+                }
+            }
+        },
+        "train_split": {
+            "cifar_train": 0.8
+        },
+        "valid_split": {
+            "cifar_train": 0.2
+        },
+        "test_split": {
+            "cifar_test": 1.0
+        }
+    },
+    "model": {
+        "name": "resnet18test",
+        "type": "torchvision.models.resnet18",
+        "params": [
+            {"name": "pretrained", "value": "True"}
+        ],
+        "classif_params": [
+            {"name": "nb_classes", "value": 10}
+        ]
+    },
+    "loss": {
+        "type": "torch.nn.CrossEntropyLoss",
+        "params": []
+    },
+    "metrics": {
+        "accuracy": {
+            "type": "thelper.optim.CategoryAccuracy",
+            "params": [
+                {"name": "top_k", "value": 1}
+            ]
+        }
+    },
+    "optimization": {
+        "optimizer": {
+            "type": "torch.optim.Adam",
+            "params": [
+                {"name": "lr", "value": 1e-04},
+                {"name": "weight_decay", "value": 0}
+            ]
+        },
+        "scheduler": {
+            "type": "torch.optim.lr_scheduler.ExponentialLR",
+            "params": [
+                {"name": "gamma", "value": 0.85}
+            ],
+            "step": 1
+        }
+    },
+    "trainer": {
+        "type": "thelper.train.ImageClassifTrainer",
+        "params": [
+            {"name": "input_keys", "value": ["image","img","input","0"]},
+            {"name": "label_keys", "value": ["label","lbl","gt","1"]}
+        ],
+        "train_device": "cuda:0",
+        "valid_device": "cuda:0",
+        "epochs": 1000,
+        "save_dir": "data/saved",
+        "save_freq": 1,
+        "monitor": "accuracy"
+    }
+}
