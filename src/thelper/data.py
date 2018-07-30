@@ -134,7 +134,7 @@ def load_dataset_templates(config,root):
             transforms,append = thelper.transforms.load_transforms(dataset_config["transforms"])
         if inspect.isclass(type) and issubclass(type,thelper.data.Dataset):
             # assume that the dataset is derived from thelper.data.Dataset (it is fully sampling-ready)
-            templates[dataset_name] = type(dataset_name,root,config=params,transforms=transforms)
+            templates[dataset_name] = type(name=dataset_name,root=root,config=params,transforms=transforms)
         else:
             # assume that __getitem__ and __len__ are implemented, but we need to make it sampling-ready
             templates[dataset_name] = thelper.data.ExternalDataset(dataset_name,root,type,config=params,transforms=transforms)
