@@ -86,7 +86,7 @@ setuptools.setup(
         "matplotlib>=2.2.2",
         "numpy>=1.14.0",
         "opencv-python>=3.3.0",
-        "torch>=0.4.1",
+        "torch>=0.4.0",
         # "scikit-learn>=0.19.1", check ver and readd later
         # "scipy>=1.1.0", check ver and readd later
         "torchvision>=0.2.1",
