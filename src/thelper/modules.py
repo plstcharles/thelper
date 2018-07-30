@@ -1,5 +1,5 @@
-import logging
 import inspect
+import logging
 from abc import abstractmethod
 
 import numpy as np

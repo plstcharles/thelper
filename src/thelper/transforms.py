@@ -1,9 +1,9 @@
 import logging
 
-import PIL
 import Augmentor
 import cv2 as cv
 import numpy as np
+import PIL
 import torchvision.transforms
 import torchvision.utils
 

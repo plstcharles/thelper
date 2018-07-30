@@ -1,12 +1,12 @@
-import logging
 import inspect
+import logging
 import os
 from abc import abstractmethod
 from collections import Counter
 from copy import copy
 
-import PIL
 import numpy as np
+import PIL
 import torch
 import torch.utils.data
 
@@ -92,7 +92,7 @@ class DataConfig(object):
                 dataset = copy(dataset_templates[name])
                 if loader_idx==0 and self.train_augments:
                     if dataset.transforms:
-                        if self.train_augments[1]: # append or not
+                        if self.train_augments[1]:  # append or not
                             dataset.transforms = thelper.transforms.Compose([dataset.transforms,copy(self.train_augments[0])])
                         else:
                             dataset.transforms = thelper.transforms.Compose([copy(self.train_augments[0]),dataset.transforms])

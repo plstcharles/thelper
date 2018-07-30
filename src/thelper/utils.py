@@ -222,7 +222,7 @@ def draw_sample(sample,pred=None,image_key="image",label_key="label",block=False
             raise AssertionError("missing classification-related fields in sample dict, and dict is multi-elem")
         key1,key2 = sample.keys()
         if ((isinstance(sample[key1],torch.Tensor) and sample[key1].dim()>1) and
-            (isinstance(sample[key2],list) or (isinstance(sample[key2],torch.Tensor) and sample[key2].dim()==1))):
+                (isinstance(sample[key2],list) or (isinstance(sample[key2],torch.Tensor) and sample[key2].dim()==1))):
             image_key,label_key = key1,key2
         elif ((isinstance(sample[key2],torch.Tensor) and sample[key2].dim()>1) and
               (isinstance(sample[key1],list) or (isinstance(sample[key1],torch.Tensor) and sample[key1].dim()==1))):

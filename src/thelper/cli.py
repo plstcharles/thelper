@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 
 def train(config,resume,data_root,display_graphs=False):
     logger = thelper.utils.get_func_logger()
-    if not "name" in config or not config["name"]:
+    if "name" not in config or not config["name"]:
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
     logger.info("Instantiating training session '%s'..."%session_name)
