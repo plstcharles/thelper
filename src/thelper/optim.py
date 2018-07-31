@@ -99,7 +99,7 @@ class CategoryAccuracy(Metric):
     def accumulate(self,pred,gt):
         top_k = pred.topk(self.top_k,1)[1]
         true_k = gt.view(len(gt),1).expand_as(top_k)
-        self.correct += top_k.eq(true_k).float().sum().data[0]
+        self.correct += top_k.eq(true_k).float().sum().item()
         self.total += len(pred)
         return self.eval()
 
@@ -127,7 +127,7 @@ class BinaryAccuracy(Metric):
         if pred.size()!=gt.size():
             raise AssertionError("pred and gt should have similar size")
         pred_round = pred.round().long()
-        self.correct += pred_round.eq(gt).float().sum().data[0]
+        self.correct += pred_round.eq(gt).float().sum().item()
         self.total += len(pred)
         return self.eval()
 
