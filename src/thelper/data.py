@@ -54,9 +54,12 @@ class DataConfig(object):
         for name,usage in self.total_usage.items():
             if usage>0 and usage!=1:
                 self.logger.warning("dataset split for '%s' does not sum 1; will normalize..."%name)
-                self.train_split[name] /= usage
-                self.valid_split[name] /= usage
-                self.test_split[name] /= usage
+                if name in self.train_split:
+                    self.train_split[name] /= usage
+                if name in self.valid_split:
+                    self.valid_split[name] /= usage
+                if name in self.test_split:
+                    self.test_split[name] /= usage
 
     def get_idx_split(self,dataset_map_size):
         self.logger.debug("loading dataset split & normalizing ratios")
