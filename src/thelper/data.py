@@ -1,7 +1,7 @@
 import inspect
 import logging
 import os
-from abc import abstractmethod
+from abc import ABC,abstractmethod
 from collections import Counter
 from copy import copy
 
@@ -11,7 +11,9 @@ import torch
 import torch.utils.data
 
 import thelper.transforms
+import thelper.tasks
 import thelper.utils
+
 
 logger = logging.getLogger(__name__)
 
@@ -121,24 +123,40 @@ class DataConfig(object):
 
 def load_dataset_templates(config,root):
     templates = {}
-    # todo : check compatibility between predicted types? (thru key map?)
+    task_out = None
     for dataset_name,dataset_config in config.items():
         if "type" not in dataset_config:
             raise AssertionError("missing field 'type' for instantiation of dataset '%s'"%dataset_name)
-        type = thelper.utils.import_class(dataset_config["type"])
+        dataset_type = thelper.utils.import_class(dataset_config["type"])
         if "params" not in dataset_config:
             raise AssertionError("missing field 'params' for instantiation of dataset '%s'"%dataset_name)
         params = thelper.utils.keyvals2dict(dataset_config["params"])
         transforms = None
         if "transforms" in dataset_config and dataset_config["transforms"]:
             transforms,append = thelper.transforms.load_transforms(dataset_config["transforms"])
-        if inspect.isclass(type) and issubclass(type,thelper.data.Dataset):
+        if issubclass(dataset_type,thelper.data.Dataset):
             # assume that the dataset is derived from thelper.data.Dataset (it is fully sampling-ready)
-            templates[dataset_name] = type(name=dataset_name,root=root,config=params,transforms=transforms)
+            templates[dataset_name] = dataset_type(name=dataset_name,root=root,config=params,transforms=transforms)
         else:
             # assume that __getitem__ and __len__ are implemented, but we need to make it sampling-ready
-            templates[dataset_name] = thelper.data.ExternalDataset(dataset_name,root,type,config=params,transforms=transforms)
-    return templates
+            if "task" not in dataset_config or not dataset_config["task"]:
+                raise AssertionError("missing field 'task' for instantiation of external dataset '%s'"%dataset_name)
+            task_config = dataset_config["task"]
+            if "type" not in task_config:
+                raise AssertionError("missing field 'type' in task config for instantiation of dataset '%s'"%dataset_name)
+            task_type = thelper.utils.import_class(task_config["type"])
+            if "params" not in task_config:
+                raise AssertionError("missing field 'params' in task config for instantiation of dataset '%s'"%dataset_name)
+            task_params = thelper.utils.keyvals2dict(task_config["params"])
+            task = task_type(**task_params)
+            if not issubclass(task_type,thelper.tasks.Task):
+                raise AssertionError("the task type for dataset '%s' must be derived from 'thelper.tasks.Task'"%dataset_name)
+            templates[dataset_name] = thelper.data.ExternalDataset(dataset_name,root,dataset_type,task,config=params,transforms=transforms)
+        if task_out is None:
+            task_out = templates[dataset_name].get_task()
+        elif task_out!=templates[dataset_name].get_task():
+            raise AssertionError("not all datasets have similar task, or sample input/gt keys")
+    return templates,task_out
 
 
 class SubsetRandomSampler(torch.utils.data.sampler.SubsetRandomSampler):
@@ -151,7 +169,7 @@ class SubsetRandomSampler(torch.utils.data.sampler.SubsetRandomSampler):
         return self.indices[idx]
 
 
-class Dataset(torch.utils.data.Dataset):
+class Dataset(torch.utils.data.Dataset,ABC):
     def __init__(self,name,root,config=None,transforms=None):
         super().__init__()
         if not name:
@@ -208,15 +226,24 @@ class Dataset(torch.utils.data.Dataset):
         # note: returned samples should be dictionaries (keys are used in config file to setup model i/o during training)
         raise NotImplementedError
 
+    @abstractmethod
+    def get_task(self):
+        # the task is up to the derived class to specify (but it must be derived from the thelper.tasks.Task)
+        raise NotImplementedError
+
 
 class ExternalDataset(Dataset):
-    def __init__(self,name,root,type,config=None,transforms=None):
+    def __init__(self,name,root,dataset_type,task,config=None,transforms=None):
         super().__init__(name,root,config=config,transforms=transforms)
         self.logger.info("instantiating external dataset '%s'..."%name)
-        if not type or not hasattr(type,"__getitem__") or not hasattr(type,"__len__"):
+        if not dataset_type or not hasattr(dataset_type,"__getitem__") or not hasattr(dataset_type,"__len__"):
             raise AssertionError("external dataset type must implement '__getitem__' and '__len__' methods")
-        self.type = type
-        self.samples = type(**config)
+        if not issubclass(type(task),thelper.tasks.Task):
+            raise AssertionError("task type must be derived from 'thelper.tasks.Task' class")
+        self.dataset_type = dataset_type
+        self.task = task
+        self.key_in,self.key_gt = None,None
+        self.samples = dataset_type(**config)
         self.warned_partial_transform = False
         self.warned_dictionary = False
 
@@ -257,6 +284,9 @@ class ExternalDataset(Dataset):
             self.logger.warning("blindly transforming sample parts for dataset '%s'; consider using a proper interface"%self.name)
             self.warned_partial_transform = True
         if warn_dictionary and not self.warned_dictionary:
-            self.logger.warning("dataset '%s' not returning samples as dictionaries; will map elements to their indices"%self.name)
+            self.logger.warning("dataset '%s' not returning samples as dictionaries; will blindly map elements to their indices"%self.name)
             self.warned_dictionary = True
         return out_sample
+
+    def get_task(self):
+        return self.task

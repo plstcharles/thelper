@@ -36,12 +36,12 @@ def load_trainer(session_name,model,loss,metrics,optimizer,
         os.mkdir(save_dir)
     if "type" not in trainer_config or not trainer_config["type"]:
         raise AssertionError("trainer config missing 'type' field")
-    type = thelper.utils.import_class(trainer_config["type"])
+    trainer_type = thelper.utils.import_class(trainer_config["type"])
     if "params" not in trainer_config:
         raise AssertionError("trainer config missing 'params' field")
     params = thelper.utils.keyvals2dict(trainer_config["params"])
     metapack = (model,loss,metrics,optimizer,scheduler,schedstep)
-    trainer = type(session_name,save_dir,metapack,loaders,trainer_config,**params)
+    trainer = trainer_type(session_name,save_dir,metapack,loaders,trainer_config,**params)
     if resume:
         config_backup = json.load(open(trainer.config_path,"r"))
         if config_backup!=config:

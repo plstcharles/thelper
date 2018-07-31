@@ -8,6 +8,14 @@
                 {"name": "train", "value": true},
                 {"name": "download", "value": true}
             ],
+            "task": {
+                "type": "thelper.tasks.Classification",
+                "params": [
+                    {"name": "nb_classes", "value": 10},
+                    {"name": "input_key", "value": "0"},
+                    {"name": "label_key", "value": "1"}
+                ]
+            },
             "transforms": {
                 "torchvision.transforms.Resize": {
                     "size": [224, 224]
@@ -30,6 +38,14 @@
                 {"name": "train", "value": false},
                 {"name": "download", "value": true}
             ],
+            "task": {
+                "type": "thelper.tasks.Classification",
+                "params": [
+                    {"name": "nb_classes", "value": 10},
+                    {"name": "input_key", "value": "0"},
+                    {"name": "label_key", "value": "1"}
+                ]
+            },
             "transforms": {
                 "torchvision.transforms.Resize": {
                     "size": [224, 224]
@@ -78,9 +94,6 @@
         "type": "torchvision.models.resnet18",
         "params": [
             {"name": "pretrained", "value": "True"}
-        ],
-        "classif_params": [
-            {"name": "nb_classes", "value": 10}
         ]
     },
     "loss": {

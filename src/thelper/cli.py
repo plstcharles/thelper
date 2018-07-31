@@ -33,7 +33,7 @@ def train(config,resume,data_root,display_graphs=False):
     logger.debug("loading datasets templates")
     if not isinstance(datasets_config,dict):
         raise AssertionError("invalid datasets config type")
-    dataset_templates = thelper.data.load_dataset_templates(datasets_config,data_root)
+    dataset_templates,task = thelper.data.load_dataset_templates(datasets_config,data_root)
     logger.debug("loading data usage config")
     if "data_config" not in config or not config["data_config"]:
         raise AssertionError("config missing 'data_config' field")
@@ -51,7 +51,7 @@ def train(config,resume,data_root,display_graphs=False):
     logger.debug("loading model")
     if "model" not in config or not config["model"]:
         raise AssertionError("config missing 'model' field")
-    model = thelper.modules.load_model(config["model"])
+    model = thelper.modules.load_model(config["model"],task)
     if hasattr(model,"summary"):
         model.summary()
     logger.debug("loading loss & metrics configurations")

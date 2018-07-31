@@ -1,5 +1,5 @@
 import logging
-from abc import abstractmethod
+from abc import ABC,abstractmethod
 
 import thelper.utils
 
@@ -9,11 +9,11 @@ logger = logging.getLogger(__name__)
 def load_loss(config):
     if "type" not in config or not config["type"]:
         raise AssertionError("loss config missing 'type' field")
-    type = thelper.utils.import_class(config["type"])
+    loss_type = thelper.utils.import_class(config["type"])
     if "params" not in config:
         raise AssertionError("loss config missing 'params' field")
     params = thelper.utils.keyvals2dict(config["params"])
-    loss = type(**params)
+    loss = loss_type(**params)
     return loss
 
 
@@ -24,11 +24,11 @@ def load_metrics(config):
     for name,metric_config in config.items():
         if "type" not in metric_config or not metric_config["type"]:
             raise AssertionError("metric config missing 'type' field")
-        type = thelper.utils.import_class(metric_config["type"])
+        metric_type = thelper.utils.import_class(metric_config["type"])
         if "params" not in metric_config:
             raise AssertionError("metric config missing 'params' field")
         params = thelper.utils.keyvals2dict(metric_config["params"])
-        metric = type(**params)
+        metric = metric_type(**params)
         goal = getattr(metric,"goal",None)
         if not callable(goal) or (goal()!=thelper.optim.Metric.minimize and goal()!=thelper.optim.Metric.maximize):
             raise AssertionError("expected metric to define 'goal' direction (min or max)")
@@ -60,7 +60,7 @@ def load_optimization(model,config):
     return optimizer,scheduler,scheduler_step
 
 
-class Metric(object):
+class Metric(ABC):
     # 'goal' values for optimization (minimum/maximum)
     minimize = float("-inf")
     maximize = float("inf")
