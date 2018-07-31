@@ -96,7 +96,7 @@ class DataConfig(object):
             for name,sample_idxs in idxs_map.items():
                 dataset = copy(dataset_templates[name])
                 if loader_idx==0 and self.train_augments:
-                    if dataset.transforms:
+                    if dataset.transforms is not None:
                         if self.train_augments[1]:  # append or not
                             dataset.transforms = thelper.transforms.Compose([dataset.transforms,copy(self.train_augments[0])])
                         else:
@@ -195,7 +195,7 @@ class Dataset(torch.utils.data.Dataset,ABC):
 
     @sampler.setter
     def sampler(self,newsampler):
-        if newsampler:
+        if newsampler is not None:
             sample_iter = iter(newsampler)
             try:
                 while True:
@@ -212,7 +212,7 @@ class Dataset(torch.utils.data.Dataset,ABC):
 
     def __len__(self):
         # if a sampler is active, return its subset size
-        if self.sampler:
+        if self.sampler is not None:
             return len(self.sampler)
         return len(self.samples)
 
@@ -251,7 +251,7 @@ class ExternalDataset(Dataset):
         self.warned_dictionary = False
 
     def __getitem__(self,idx):
-        if self.sampler:
+        if self.sampler is not None:
             idx = self.sampler[idx]
         sample = self.samples[idx]
         # we will only transform sample contents that are nparrays, PIL images, or torch tensors (might cause issues...)

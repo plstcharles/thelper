@@ -72,12 +72,12 @@ def train(config,resume,data_root,display_graphs=False):
         raise AssertionError("config missing 'optimization' field")
     optimizer,scheduler,schedstep = thelper.optim.load_optimization(model,config["optimization"])
     logger.debug("loading trainer configuration")
-    loaders = (train_loader,valid_loader)
+    loaders = (train_loader,valid_loader,test_loader)
     trainer = thelper.train.load_trainer(session_name,model,loss,metrics,optimizer,
                                          scheduler,schedstep,loaders,config,resume=resume)
     logger.debug("starting trainer")
     trainer.train()
-    logger.debug("training done")
+    logger.debug("all done")
 
 
 def main(args=None):

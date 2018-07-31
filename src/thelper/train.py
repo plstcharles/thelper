@@ -42,7 +42,7 @@ def load_trainer(session_name,model,loss,metrics,optimizer,
     params = thelper.utils.keyvals2dict(trainer_config["params"])
     metapack = (model,loss,metrics,optimizer,scheduler,schedstep)
     trainer = trainer_type(session_name,save_dir,metapack,loaders,trainer_config,**params)
-    if resume:
+    if resume is not None:
         config_backup = json.load(open(trainer.config_path,"r"))
         if config_backup!=config:
             answer = thelper.utils.query_yes_no("Current config differs from config loaded at '%s'; continue?"%trainer.config_path)
@@ -72,16 +72,23 @@ def load_trainer(session_name,model,loss,metrics,optimizer,
 class Trainer:
     def __init__(self,session_name,save_dir,metapack,loaders,config):
         model,loss,metrics,optimizer,scheduler,schedstep = metapack
-        train_loader,valid_loader = loaders
-        if not model or not loss or not metrics or not optimizer or not config or not train_loader:
+        if not model or not loss or not metrics or not optimizer or not config:
             raise AssertionError("missing input args")
+        train_loader,valid_loader,test_loader = loaders
+        if not (train_loader or valid_loader or test_loader):
+            raise AssertionError("must provide at least one loader with available data")
         self.logger = thelper.utils.get_class_logger()
         self.name = session_name
         self.train_loader = train_loader
         self.valid_loader = valid_loader
+        self.test_loader = test_loader
         if "epochs" not in config or not config["epochs"] or int(config["epochs"])<=0:
             raise AssertionError("bad trainer config epoch count")
-        self.epochs = int(config["epochs"])
+        if train_loader:
+            self.epochs = int(config["epochs"])
+        else:
+            self.epochs = 1
+            self.logger.info("no training data provided, will run a single epoch on valid/test data")
         self.save_freq = int(config["save_freq"]) if "save_freq" in config else 1
         self.save_dir = save_dir
         self.checkpoint_dir = os.path.join(self.save_dir,"checkpoints")
@@ -132,33 +139,56 @@ class Trainer:
         self.logger.info("created training log for session '%s'"%session_name)
 
     def train(self):
-        for epoch in range(self.start_epoch,self.epochs+1):
-            result = self._epoch(epoch)
-            output = {}
-            new_best = False
-            monitor_type_key = "train_metrics" if self.valid_loader is None else "valid_metrics"
-            for key,value in result.items():
-                if key==monitor_type_key:
-                    if self.monitor not in value:
-                        raise AssertionError("not monitoring required variable in metrics")
-                    monitor_val = value[self.monitor]
-                    if ((self.monitor_goal==thelper.optim.Metric.minimize and monitor_val<self.monitor_best) or
-                            (self.monitor_goal==thelper.optim.Metric.maximize and monitor_val>self.monitor_best)):
-                        self.monitor_best = monitor_val
-                        new_best = True
-                    output["monitor"] = monitor_val
-                output[key] = value
-                self.logger.debug(' epoch result =>  {:15s}: {}'.format(str(key),value))
-            self.outputs[epoch] = output
-            if new_best or (epoch%self.save_freq)==0:
-                self._save(epoch,save_best=new_best)
-            if self.scheduler and (epoch%self.schedstep)==0:
-                self.scheduler.step(epoch)
-                lr = self.scheduler.get_lr()[0]
-                self.logger.info("update learning rate to %.7f"%lr)
+        if self.train_loader:
+            for epoch in range(self.start_epoch,self.epochs+1):
+                result = self._train_epoch(epoch,self.train_loader)
+                monitor_type_key = "train_metrics"
+                if self.valid_loader:
+                    result_valid = self._eval_epoch(epoch,self.valid_loader,"valid")
+                    result = {**result,**result_valid}
+                    monitor_type_key = "valid_metrics"
+                monitor_val = None
+                new_best = False
+                for key,value in result.items():
+                    if key==monitor_type_key:
+                        if self.monitor not in value:
+                            raise AssertionError("not monitoring required variable '%s' in metrics"%self.monitor)
+                        monitor_val = value[self.monitor]
+                        if ((self.monitor_goal==thelper.optim.Metric.minimize and monitor_val<self.monitor_best) or
+                                (self.monitor_goal==thelper.optim.Metric.maximize and monitor_val>self.monitor_best)):
+                            self.monitor_best = monitor_val
+                            new_best = True
+                    self.logger.debug(' epoch result =>  {:15s}: {}'.format(str(key),value))
+                if monitor_val==None:
+                    raise AssertionError("training/validation did not produce required monitoring variable '%s' in metrics"%self.monitor)
+                self.outputs[epoch] = result
+                if new_best or (epoch%self.save_freq)==0:
+                    self._save(epoch,save_best=new_best)
+                if self.scheduler and (epoch%self.schedstep)==0:
+                    self.scheduler.step(epoch)
+                    lr = self.scheduler.get_lr()[0]
+                    self.logger.info("update learning rate to %.7f"%lr)
+            self.logger.info("training done")
+            return
+        result = {}
+        if self.valid_loader:
+            result_valid = self._eval_epoch(self.start_epoch,self.valid_loader,"valid")
+            result = {**result,**result_valid}
+        if self.test_loader:
+            result_test = self._eval_epoch(self.start_epoch,self.test_loader,"test")
+            result = {**result,**result_test}
+        for key,value in result.items():
+            self.logger.debug(' final result =>  {:15s}: {}'.format(str(key),value))
+        self.logger.info("evaluation done")
+        # not saving final eval results anywhere...? todo
+
 
     @abstractmethod
-    def _epoch(self,epoch):
+    def _train_epoch(self,epoch,loader):
+        raise NotImplementedError
+
+    @abstractmethod
+    def _eval_epoch(self,epoch,loader,eval_type="valid"):
         raise NotImplementedError
 
     def _save(self,epoch,save_best=False):
@@ -174,7 +204,7 @@ class Trainer:
         filename = os.path.join(self.checkpoint_dir,"ckpt.%04d.L%.3f.tar"%(epoch,latest_loss))
         torch.save(curr_state,filename)
         if save_best:
-            os.rename(filename,os.path.join(self.checkpoint_dir,"ckpt.best-train.tar"))
+            os.rename(filename,os.path.join(self.checkpoint_dir,"ckpt.best.tar"))
             self.logger.info("saving new best checkpoint @ epoch %d"%epoch)
         else:
             self.logger.info("saving checkpoint @ epoch %d"%epoch)
@@ -211,69 +241,77 @@ class ImageClassifTrainer(Trainer):
         if input is None or label is None:
             raise AssertionError("could not find input or label keys in sample dict")
         input,label = torch.FloatTensor(input),torch.LongTensor(label)
-        input,label = input.to(self.train_dev),label.to(self.train_dev)
+        input,label = input.to(self.train_dev),label.to(self.train_dev)  # valid device still ignored, todo
         return input,label
 
-    def _epoch(self,epoch):
-        self.model.train()
+    def _train_epoch(self,epoch,loader):
+        if not loader:
+            raise AssertionError("no available data to load")
         result = {}
-        total_train_loss = 0
+        self.model.train()
+        total_loss = 0
         for metric in self.metrics.values():
             metric.reset()
-        for idx,sample in enumerate(self.train_loader):
+        for idx,sample in enumerate(loader):
             input,label = self._to_tensor(sample)
             self.optimizer.zero_grad()
             pred = self.model(input)
             loss = self.loss(pred,label)
             loss.backward()
             self.optimizer.step()
-            total_train_loss += loss.item()
+            total_loss += loss.item()
             for metric in self.metrics.values():
                 metric.accumulate(pred.cpu(),label.cpu())
             self.logger.info(
                 "train epoch: {} [{}/{} ({:.0f}%)]   loss: {:.6f}   {}: {:.2f}".format(
                     epoch,
-                    idx*self.train_loader.batch_size,
-                    len(self.train_loader)*self.train_loader.batch_size,
-                    (idx/len(self.train_loader))*100.0,
+                    idx*loader.batch_size,
+                    len(loader)*loader.batch_size,
+                    (idx/len(loader))*100.0,
                     loss.item(),
                     self.metrics[self.monitor].name,
                     self.metrics[self.monitor].eval()
                 )
             )
-        train_metric_vals = {}
+        metric_vals = {}
         for metric_name,metric in self.metrics.items():
-            train_metric_vals[metric_name] = metric.eval()
-        result["train_loss"] = total_train_loss/len(self.train_loader)
-        result["train_metrics"] = train_metric_vals
-        if self.valid_loader:
-            self.model.eval()
-            with torch.no_grad():
-                total_valid_loss = 0
+            metric_vals[metric_name] = metric.eval()
+        result["train_loss"] = total_loss/len(loader)
+        result["train_metrics"] = metric_vals
+        return result
+
+    def _eval_epoch(self,epoch,loader,eval_type="valid"):
+        if not loader:
+            raise AssertionError("no available data to load")
+        result = {}
+        self.model.eval()
+        with torch.no_grad():
+            total_loss = 0
+            for metric in self.metrics.values():
+                metric.reset()
+            for idx,sample in enumerate(loader):
+                input,label = self._to_tensor(sample)
+                pred = self.model(input)
+                loss = self.loss(pred,label)
+                total_loss += loss.item()
                 for metric in self.metrics.values():
-                    metric.reset()
-                for idx,sample in enumerate(self.valid_loader):
-                    input,label = self._to_tensor(sample)
-                    pred = self.model(input)
-                    loss = self.loss(pred,label)
-                    total_valid_loss += loss.item()
-                    for metric in self.metrics.values():
-                        metric.accumulate(pred.cpu(),label.cpu())
-                    # set logger to output based on timer?
-                    self.logger.info(
-                        "valid epoch: {} [{}/{} ({:.0f}%)]   loss: {:.6f}   {}: {:.2f}".format(
-                            epoch,
-                            idx*self.valid_loader.batch_size,
-                            len(self.valid_loader)*self.valid_loader.batch_size,
-                            (idx/len(self.valid_loader))*100.0,
-                            loss.item(),
-                            self.metrics[self.monitor].name,
-                            self.metrics[self.monitor].eval()
-                        )
+                    metric.accumulate(pred.cpu(),label.cpu())
+                # set logger to output based on timer?
+                self.logger.info(
+                    "{} epoch: {} [{}/{} ({:.0f}%)]   loss: {:.6f}   {}: {:.2f}".format(
+                        eval_type,
+                        epoch,
+                        idx*loader.batch_size,
+                        len(loader)*loader.batch_size,
+                        (idx/len(loader))*100.0,
+                        loss.item(),
+                        self.metrics[self.monitor].name,
+                        self.metrics[self.monitor].eval()
                     )
-                valid_metric_vals = {}
-                for metric_name,metric in self.metrics.items():
-                    valid_metric_vals[metric_name] = metric.eval()
-                result["valid_loss"] = total_valid_loss/len(self.valid_loader)
-                result["valid_metrics"] = valid_metric_vals
+                )
+            metric_vals = {}
+            for metric_name,metric in self.metrics.items():
+                metric_vals[metric_name] = metric.eval()
+            result[eval_type+"_loss"] = total_loss/len(loader)
+            result[eval_type+"_metrics"] = metric_vals
         return result

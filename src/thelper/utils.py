@@ -201,7 +201,7 @@ def draw_classifs(images,labels_gt,labels_pred=None,labels_map=None):
         else:
             ax.imshow(images[ax_idx,...],interpolation='nearest')
         curr_label_gt = labels_map[labels_gt[ax_idx]] if labels_map else labels_gt[ax_idx]
-        if labels_pred:
+        if labels_pred is not None:
             curr_label_pred = labels_map[labels_pred[ax_idx]] if labels_map else labels_pred[ax_idx]
             xlabel = "GT={0}\nPred={1}".format(curr_label_gt,curr_label_pred)
         else:
