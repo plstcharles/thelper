@@ -230,12 +230,17 @@ class ImageClassifTrainer(Trainer):
             total_train_loss += loss.item()
             for metric in self.metrics.values():
                 metric.accumulate(pred.cpu(),label.cpu())
-            self.logger.info('train epoch: {} [{}/{} ({:.0f}%)] loss: {:.6f}'.format(
-                epoch,
-                idx*self.train_loader.batch_size,
-                len(self.train_loader)*self.train_loader.batch_size,
-                (idx/len(self.train_loader))*100.0,
-                loss.item()))
+            self.logger.info(
+                "train epoch: {} [{}/{} ({:.0f}%)]   loss: {:.6f}   {}: {:.2f}".format(
+                    epoch,
+                    idx*self.train_loader.batch_size,
+                    len(self.train_loader)*self.train_loader.batch_size,
+                    (idx/len(self.train_loader))*100.0,
+                    loss.item(),
+                    self.metrics[self.monitor].name,
+                    self.metrics[self.monitor].eval()
+                )
+            )
         train_metric_vals = {}
         for metric_name,metric in self.metrics.items():
             train_metric_vals[metric_name] = metric.eval()
@@ -255,12 +260,17 @@ class ImageClassifTrainer(Trainer):
                     for metric in self.metrics.values():
                         metric.accumulate(pred.cpu(),label.cpu())
                     # set logger to output based on timer?
-                    self.logger.info('valid epoch: {} [{}/{} ({:.0f}%)] loss: {:.6f}'.format(
-                        epoch,
-                        idx*self.valid_loader.batch_size,
-                        len(self.valid_loader)*self.valid_loader.batch_size,
-                        (idx/len(self.valid_loader))*100.0,
-                        loss.item()))
+                    self.logger.info(
+                        "valid epoch: {} [{}/{} ({:.0f}%)]   loss: {:.6f}   {}: {:.2f}".format(
+                            epoch,
+                            idx*self.valid_loader.batch_size,
+                            len(self.valid_loader)*self.valid_loader.batch_size,
+                            (idx/len(self.valid_loader))*100.0,
+                            loss.item(),
+                            self.metrics[self.monitor].name,
+                            self.metrics[self.monitor].eval()
+                        )
+                    )
                 valid_metric_vals = {}
                 for metric_name,metric in self.metrics.items():
                     valid_metric_vals[metric_name] = metric.eval()
