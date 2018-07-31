@@ -265,7 +265,7 @@ def draw_sample(sample,pred=None,image_key="image",label_key="label",block=False
         image_list.append(image_normalized)
     draw_classifs(image_list,labels,labels_pred=pred)  # normalize & pass mask to draw func also? todo
     if block:
-        plt.waitforbuttonpress()
+        plt.show(block=block)
     else:
         plt.pause(0.01)
 

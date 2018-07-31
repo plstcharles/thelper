@@ -47,7 +47,7 @@ def train(config,resume,data_root,display_graphs=False):
         data_iter = iter(train_loader_copy)
         # noinspection PyUnresolvedReferences
         data_sample = data_iter.next()
-        thelper.utils.draw_sample(data_sample)
+        thelper.utils.draw_sample(data_sample,block=True)
     logger.debug("loading model")
     if "model" not in config or not config["model"]:
         raise AssertionError("config missing 'model' field")
