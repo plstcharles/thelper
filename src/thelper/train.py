@@ -201,7 +201,8 @@ class Trainer:
     def _save(self,epoch,save_best=False):
         curr_state = {
             "name":self.name,
-            "outputs":self.outputs,
+            "epoch":epoch,
+            "outputs":self.outputs[epoch],
             "state_dict":self.model.state_dict(),
             "optimizer":self.optimizer.state_dict(),
             "monitor_best":self.monitor_best,
