@@ -1,5 +1,5 @@
 {
-    "name": "example",
+    "name": "example_external_model",
     "datasets": {
         "cifar_train": {
             "type": "torchvision.datasets.CIFAR10",
@@ -132,7 +132,7 @@
         ],
         "train_device": "cuda:0",
         "valid_device": "cuda:0",
-        "epochs": 1000,
+        "epochs": 10,
         "save_dir": "data/saved",
         "save_freq": 1,
         "monitor": "accuracy"

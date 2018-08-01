@@ -7,12 +7,14 @@ from copy import copy
 
 import numpy as np
 import PIL
+import PIL.Image
 import torch
 import torch.utils.data
+import torch.utils.data.sampler
 
-import thelper.transforms
-import thelper.tasks
 import thelper.utils
+import thelper.tasks
+import thelper.transforms
 
 
 logger = logging.getLogger(__name__)
@@ -35,6 +37,7 @@ class DataConfig(object):
         self.train_augments = None
         if "train_augments" in config and config["train_augments"]:
             self.train_augments = thelper.transforms.load_transforms(config["train_augments"])
+
         def get_split(prefix,config):
             key = prefix+"_split"
             if key not in config or not config[key]:
@@ -43,6 +46,7 @@ class DataConfig(object):
             if any(ratio<0 or ratio>1 for ratio in split.values()):
                 raise AssertionError("split ratios in '%s' must be in [0,1]"%key)
             return split
+
         self.train_split = get_split("train",config)
         self.valid_split = get_split("valid",config)
         self.test_split = get_split("test",config)
@@ -149,7 +153,7 @@ def load_dataset_templates(config,root):
         transforms = None
         if "transforms" in dataset_config and dataset_config["transforms"]:
             transforms,append = thelper.transforms.load_transforms(dataset_config["transforms"])
-        if issubclass(dataset_type,thelper.data.Dataset):
+        if issubclass(dataset_type,Dataset):
             # assume that the dataset is derived from thelper.data.Dataset (it is fully sampling-ready)
             templates[dataset_name] = dataset_type(name=dataset_name,root=root,config=params,transforms=transforms)
         else:
@@ -166,7 +170,7 @@ def load_dataset_templates(config,root):
             task = task_type(**task_params)
             if not issubclass(task_type,thelper.tasks.Task):
                 raise AssertionError("the task type for dataset '%s' must be derived from 'thelper.tasks.Task'"%dataset_name)
-            templates[dataset_name] = thelper.data.ExternalDataset(dataset_name,root,dataset_type,task,config=params,transforms=transforms)
+            templates[dataset_name] = ExternalDataset(dataset_name,root,dataset_type,task,config=params,transforms=transforms)
         if task_out is None:
             task_out = templates[dataset_name].get_task()
         elif task_out!=templates[dataset_name].get_task():
@@ -269,7 +273,6 @@ class ExternalDataset(Dataset):
         # we will only transform sample contents that are nparrays, PIL images, or torch tensors (might cause issues...)
         if not self.transforms or sample is None:
             return sample
-        out_sample = None
         warn_partial_transform = False
         warn_dictionary = False
         if isinstance(sample,(list,tuple)):

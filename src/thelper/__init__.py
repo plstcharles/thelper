@@ -1,12 +1,13 @@
 import logging
 
-import thelper.data  # noqa
-import thelper.modules  # noqa
-import thelper.optim  # noqa
-import thelper.train  # noqa
-import thelper.transforms  # noqa
-
-from ._thelper import longest  # noqa
+import thelper.cli
+import thelper.data
+import thelper.modules
+import thelper.optim
+import thelper.tasks
+import thelper.train
+import thelper.transforms
+import thelper.utils
 
 logger = logging.getLogger("thelper")
 
