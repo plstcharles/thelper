@@ -169,6 +169,12 @@ class Trainer:
                     lr = self.scheduler.get_lr()[0]
                     self.logger.info("update learning rate to %.7f"%lr)
             self.logger.info("training done")
+            if self.test_loader:
+                result_test = self._eval_epoch(self.epochs,self.test_loader,"test")
+                self.outputs[self.epochs] = {**self.outputs[self.epochs],**result_test}
+                for key,value in self.outputs[self.epochs].items():
+                    self.logger.debug(' final result =>  {:15s}: {}'.format(str(key),value))
+                self.logger.info("evaluation done")
             return
         result = {}
         if self.valid_loader:
