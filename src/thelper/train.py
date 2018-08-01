@@ -264,10 +264,10 @@ class ImageClassifTrainer(Trainer):
             for metric in self.metrics.values():
                 metric.accumulate(pred.cpu(),label.cpu())
             self.logger.info(
-                "train epoch: {} [{}/{} ({:.0f}%)]   loss: {:.6f}   {}: {:.2f}".format(
+                "train epoch: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}: {:.2f}".format(
                     epoch,
-                    idx*loader.batch_size,
-                    len(loader)*loader.batch_size,
+                    idx,
+                    len(loader),
                     (idx/len(loader))*100.0,
                     loss.item(),
                     self.metrics[self.monitor].name,
@@ -299,11 +299,11 @@ class ImageClassifTrainer(Trainer):
                     metric.accumulate(pred.cpu(),label.cpu())
                 # set logger to output based on timer?
                 self.logger.info(
-                    "{} epoch: {} [{}/{} ({:.0f}%)]   loss: {:.6f}   {}: {:.2f}".format(
+                    "{} epoch: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}: {:.2f}".format(
                         eval_type,
                         epoch,
-                        idx*loader.batch_size,
-                        len(loader)*loader.batch_size,
+                        idx,
+                        len(loader),
                         (idx/len(loader))*100.0,
                         loss.item(),
                         self.metrics[self.monitor].name,
