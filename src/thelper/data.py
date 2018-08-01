@@ -1,5 +1,5 @@
-import inspect
 import logging
+import time
 import os
 from abc import ABC,abstractmethod
 from collections import Counter
@@ -35,31 +35,37 @@ class DataConfig(object):
         self.train_augments = None
         if "train_augments" in config and config["train_augments"]:
             self.train_augments = thelper.transforms.load_transforms(config["train_augments"])
-        if "train_split" not in config or not config["train_split"]:
-            raise AssertionError("data config missing 'train_split' field")
-        self.train_split = config["train_split"]
-        if any(ratio<0 or ratio>1 for ratio in self.train_split.values()):
-            raise AssertionError("split ratios must be in [0,1]")
-        if "valid_split" not in config or not config["valid_split"]:
-            raise AssertionError("data config missing 'valid_split' field")
-        self.valid_split = config["valid_split"]
-        if any(ratio<0 or ratio>1 for ratio in self.valid_split.values()):
-            raise AssertionError("split ratios must be in [0,1]")
-        if "test_split" not in config or not config["test_split"]:
-            raise AssertionError("data config missing 'test_split' field")
-        self.test_split = config["test_split"]
-        if any(ratio<0 or ratio>1 for ratio in self.test_split.values()):
-            raise AssertionError("split ratios must be in [0,1]")
+        def get_split(prefix,config):
+            key = prefix+"_split"
+            if key not in config or not config[key]:
+                return {}
+            split = config[key]
+            if any(ratio<0 or ratio>1 for ratio in split.values()):
+                raise AssertionError("split ratios in '%s' must be in [0,1]"%key)
+            return split
+        self.train_split = get_split("train",config)
+        self.valid_split = get_split("valid",config)
+        self.test_split = get_split("test",config)
+        if not self.train_split and not self.valid_split and not self.test_split:
+            raise AssertionError("data config must define a split for at least one loader type (train/valid/test)")
         self.total_usage = Counter(self.train_split)+Counter(self.valid_split)+Counter(self.test_split)
         for name,usage in self.total_usage.items():
-            if usage>0 and usage!=1:
-                self.logger.warning("dataset split for '%s' does not sum 1; will normalize..."%name)
-                if name in self.train_split:
-                    self.train_split[name] /= usage
-                if name in self.valid_split:
-                    self.valid_split[name] /= usage
-                if name in self.test_split:
-                    self.test_split[name] /= usage
+            if usage!=1:
+                normalize_ratios = None
+                if usage<0:
+                    raise AssertionError("ratio should never be negative...")
+                elif usage>0 and usage<1:
+                    time.sleep(0.25)  # to make sure all debug/info prints are done, and we see the question
+                    normalize_ratios = thelper.utils.query_yes_no("Dataset split for '%s' has a ratio sum less than 1; do you want to normalize the split?"%name)
+                if (normalize_ratios or usage>1) and usage>0:
+                    if usage>1:
+                        self.logger.warning("dataset split for '%s' sums to more than 1; will normalize..."%name)
+                    if name in self.train_split:
+                        self.train_split[name] /= usage
+                    if name in self.valid_split:
+                        self.valid_split[name] /= usage
+                    if name in self.test_split:
+                        self.test_split[name] /= usage
 
     def get_idx_split(self,dataset_map_size):
         self.logger.debug("loading dataset split & normalizing ratios")
@@ -114,13 +120,19 @@ class DataConfig(object):
                                                            num_workers=self.workers,
                                                            pin_memory=self.pin_memory,
                                                            drop_last=self.drop_last))
-            else:
+            elif len(datasets)==1:
                 loaders.append(torch.utils.data.DataLoader(datasets[0],
                                                            batch_size=self.batch_size,
                                                            num_workers=self.workers,
                                                            pin_memory=self.pin_memory,
                                                            drop_last=self.drop_last))
+            else:
+                loaders.append(None)
         train_loader,valid_loader,test_loader = loaders
+        train_samples = len(train_loader) if train_loader else 0
+        valid_samples = len(valid_loader) if valid_loader else 0
+        test_samples = len(test_loader) if test_loader else 0
+        self.logger.info("initialized loaders with batch counts: train=%d, valid=%d, test=%d"%(train_samples,valid_samples,test_samples))
         return train_loader,valid_loader,test_loader
 
 

@@ -123,6 +123,7 @@ def main(args=None):
         if not config:
             raise AssertionError("torch checkpoint loading failed")
     elif args.config is not None:
+        thelper.logger.debug("parsing config at '%s'"%args.config)
         config = json.load(open(args.config))
         if "name" not in config or not config["name"]:
             raise AssertionError("model configuration must be named")
