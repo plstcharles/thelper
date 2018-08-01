@@ -178,13 +178,14 @@ class Trainer:
             return
         result = {}
         if self.valid_loader:
-            result_valid = self._eval_epoch(self.start_epoch,self.valid_loader,"valid")
+            result_valid = self._eval_epoch(0,self.valid_loader,"valid")
             result = {**result,**result_valid}
         if self.test_loader:
-            result_test = self._eval_epoch(self.start_epoch,self.test_loader,"test")
+            result_test = self._eval_epoch(0,self.test_loader,"test")
             result = {**result,**result_test}
         for key,value in result.items():
             self.logger.debug(' final result =>  {:15s}: {}'.format(str(key),value))
+        self.outputs[0] = result
         self.logger.info("evaluation done")
         # not saving final eval results anywhere...? todo
 
