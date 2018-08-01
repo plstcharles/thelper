@@ -43,6 +43,8 @@ def train(config,resume,data_root,display_graphs=False):
     logger.debug("splitting datasets and creating loaders")
     train_loader,valid_loader,test_loader = data_config.get_data_split(dataset_templates)
     if display_graphs and logger.isEnabledFor(logging.DEBUG):
+        if not train_loader:
+            raise AssertionError("cannot draw sample example graph, train loader is empty")
         train_loader_copy = copy(train_loader)
         data_iter = iter(train_loader_copy)
         # noinspection PyUnresolvedReferences
