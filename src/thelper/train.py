@@ -158,7 +158,7 @@ class Trainer:
                                 (self.monitor_goal==thelper.optim.Metric.maximize and monitor_val>self.monitor_best)):
                             self.monitor_best = monitor_val
                             new_best = True
-                    self.logger.debug(' epoch result =>  {:15s}: {}'.format(str(key),value))
+                    self.logger.debug(' epoch {} result =>  {:15s}: {}'.format(epoch,str(key),value))
                 if monitor_val==None:
                     raise AssertionError("training/validation did not produce required monitoring variable '%s' in metrics"%self.monitor)
                 self.outputs[epoch] = result
