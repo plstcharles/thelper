@@ -209,10 +209,10 @@ class Trainer:
             "config":json.load(open(self.config_path,"r"))
         }
         latest_loss = self.outputs[epoch]["train_loss"]
-        filename = os.path.join(self.checkpoint_dir,"ckpt.%04d.L%.3f.tar"%(epoch,latest_loss))
+        filename = os.path.join(self.checkpoint_dir,"ckpt.%04d.L%.3f.pth"%(epoch,latest_loss))
         torch.save(curr_state,filename)
         if save_best:
-            filename_best = os.path.join(self.checkpoint_dir,"ckpt.best.tar")
+            filename_best = os.path.join(self.checkpoint_dir,"ckpt.best.pth")
             torch.save(curr_state,filename_best)
             self.logger.info("saving new best checkpoint @ epoch %d"%epoch)
         else:
