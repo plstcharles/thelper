@@ -33,7 +33,7 @@ class Module(torch.nn.Module,ABC):
 
 class ExternalModule(Module):
     def __init__(self,model_type,task,name=None,config=None):
-        super().__init__(task,name=name,config=config)
+        super().__init__(task,name=name)
         self.logger.info("instantiating external module '%s'..."%name)
         self.model_type = model_type
         self.task = task
