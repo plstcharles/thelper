@@ -229,5 +229,5 @@ def main(args=None):
         override_config = None
         if args.override_cfg:
             thelper.logger.debug("parsing override config at '%s'"%args.override_cfg)
-            override_config = json.load(open(args.cfg_path))
+            override_config = json.load(open(args.override_cfg))
         resume_session(ckptdata,args.data_root,args.save_dir,config=override_config,eval_only=args.eval_only,display_graphs=args.display_graphs)
