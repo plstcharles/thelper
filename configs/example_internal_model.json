@@ -130,8 +130,8 @@
         ],
         "train_device": "cuda:0",
         "valid_device": "cuda:0",
+        "test_device": "cuda:0",
         "epochs": 10,
-        "save_dir": "data/saved",
         "save_freq": 1,
         "monitor": "accuracy"
     }

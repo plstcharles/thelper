@@ -16,9 +16,15 @@ logger = logging.getLogger(__name__)
 class Module(torch.nn.Module,ABC):
     def __init__(self,task,name=None):
         super().__init__()
-        self.logger = thelper.utils.get_class_logger()
         self.task = task
         self.name = name
+        self.logger = logging.getLogger(self._get_derived_name())
+
+    def _get_derived_name(self):
+        dname = str(self.__class__.__qualname__)
+        if self.name:
+            dname += "."+self.name
+        return dname
 
     @abstractmethod
     def forward(self,*input):
@@ -40,6 +46,12 @@ class ExternalModule(Module):
         self.model = model_type(**config)
         if not hasattr(self.model,"forward"):
             raise AssertionError("external module must implement 'forward' method")
+
+    def _get_derived_name(self):
+        dname = thelper.utils.get_caller_name(0).rsplit(".",1)[0]
+        if self.name:
+            dname += "."+self.name
+        return dname
 
     def forward(self,*input):
         return self.model(*input)

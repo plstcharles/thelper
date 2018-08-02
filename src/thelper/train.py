@@ -1,8 +1,6 @@
 import json
 import logging
 import os
-import sys
-import time
 from abc import abstractmethod
 
 import torch
@@ -13,27 +11,11 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-def load_trainer(session_name,model,loss,metrics,optimizer,
-                 scheduler,schedstep,loaders,config,resume=None):
+def load_trainer(session_name,save_dir,config,model,loss,
+                 metrics,optimizer,scheduler,schedstep,loaders):
     if "trainer" not in config or not config["trainer"]:
         raise AssertionError("config missing 'trainer' field")
     trainer_config = config["trainer"]
-    if "save_dir" not in trainer_config or not trainer_config["save_dir"]:
-        raise AssertionError("trainer config missing 'save_dir' field")
-    save_dir = str(trainer_config["save_dir"])
-    if not os.path.exists(save_dir):
-        os.mkdir(save_dir)
-    save_dir = os.path.join(save_dir,session_name)
-    overwrite = False
-    old_session_name = session_name
-    time.sleep(0.5)  # to make sure all debug/info prints are done, and we see the question
-    while os.path.exists(save_dir) and not overwrite:
-        overwrite = thelper.utils.query_yes_no("Training session at '%s' already exists; overwrite?"%save_dir)
-        if not overwrite:
-            session_name = thelper.utils.query_string("Please provide a new session name (old=%s):"%old_session_name)
-            save_dir = os.path.join(save_dir,session_name)
-    if not os.path.exists(save_dir):
-        os.mkdir(save_dir)
     if "type" not in trainer_config or not trainer_config["type"]:
         raise AssertionError("trainer config missing 'type' field")
     trainer_type = thelper.utils.import_class(trainer_config["type"])
@@ -42,30 +24,6 @@ def load_trainer(session_name,model,loss,metrics,optimizer,
     params = thelper.utils.keyvals2dict(trainer_config["params"])
     metapack = (model,loss,metrics,optimizer,scheduler,schedstep)
     trainer = trainer_type(session_name,save_dir,metapack,loaders,trainer_config,**params)
-    if resume is not None:
-        config_backup = json.load(open(trainer.config_path,"r"))
-        if config_backup!=config:
-            answer = thelper.utils.query_yes_no("Current config differs from config loaded at '%s'; continue?"%trainer.config_path)
-            if answer:
-                logger.warning("config mismatch with previous run; will reload anyway")
-            else:
-                logger.error("config mismatch with the one loaded at '%s', user aborted"%trainer.config_path)
-                sys.exit(1)
-        logger.info("loading checkpoint '%s'..."%resume)
-        checkpoint = torch.load(resume)
-        trainer.start_epoch = checkpoint["epoch"]+1
-        trainer.monitor_best = checkpoint["monitor_best"]
-        trainer.model.load_state_dict(checkpoint["state_dict"])
-        trainer.optimizer.load_state_dict(checkpoint["optimizer"])
-        trainer.outputs = checkpoint["outputs"]
-        if "cuda" in trainer.train_dev:
-            for state in trainer.optimizer.state.values():
-                for k,v in state.items():
-                    if isinstance(v,torch.Tensor):
-                        state[k] = v.cuda(trainer.train_dev)
-        logger.info("loaded training session '%s' @ epoch %d"%(trainer.name,trainer.start_epoch))
-    else:
-        json.dump(config,open(trainer.config_path,"w"),indent=4,sort_keys=False)
     return trainer
 
 
@@ -92,7 +50,7 @@ class Trainer:
         self.save_freq = int(config["save_freq"]) if "save_freq" in config else 1
         self.save_dir = save_dir
         self.checkpoint_dir = os.path.join(self.save_dir,"checkpoints")
-        self.config_path = os.path.join(self.save_dir,"config.json")
+        self.config_backup_path = os.path.join(self.save_dir,"config.json")  # this file is created in cli.get_save_dir
         if not os.path.exists(self.checkpoint_dir):
             os.mkdir(self.checkpoint_dir)
         self.outputs = {}
@@ -108,6 +66,7 @@ class Trainer:
             self.default_dev = "cuda:0"
         self.train_dev = str(config["train_device"]) if "train_device" in config else self.default_dev
         self.valid_dev = str(config["valid_device"]) if "valid_device" in config else self.default_dev
+        self.test_dev = str(config["test_device"]) if "test_device" in config else self.default_dev
         if not torch.cuda.is_available() and ("cuda" in self.train_dev or "cuda" in self.valid_dev):
             raise AssertionError("cuda not available (according to pytorch), cannot use gpu for training/validation")
         elif torch.cuda.is_available():
@@ -116,7 +75,8 @@ class Trainer:
                 raise AssertionError("cuda device '%s' not currently available"%self.train_dev)
             if "cuda:" in self.valid_dev and int(self.valid_dev.rsplit(":",1)[1])>=nb_cuda_dev:
                 raise AssertionError("cuda device '%s' not currently available"%self.valid_dev)
-            self.model = self.model.to(self.train_dev)
+            if "cuda:" in self.test_dev and int(self.test_dev.rsplit(":",1)[1])>=nb_cuda_dev:
+                raise AssertionError("cuda device '%s' not currently available"%self.test_dev)
         if "monitor" not in config or not config["monitor"]:
             raise AssertionError("missing 'monitor' field for trainer config")
         self.monitor = config["monitor"]
@@ -141,9 +101,11 @@ class Trainer:
     def train(self):
         if self.train_loader:
             for epoch in range(self.start_epoch,self.epochs+1):
+                self.model = self.model.to(self.train_dev)
                 result = self._train_epoch(epoch,self.train_loader)
                 monitor_type_key = "train_metrics"
                 if self.valid_loader:
+                    self.model = self.model.to(self.valid_dev)
                     result_valid = self._eval_epoch(epoch,self.valid_loader,"valid")
                     result = {**result,**result_valid}
                     monitor_type_key = "valid_metrics"
@@ -170,6 +132,7 @@ class Trainer:
                     self.logger.info("update learning rate to %.7f"%lr)
             self.logger.info("training done")
             if self.test_loader:
+                self.model = self.model.to(self.test_dev)
                 result_test = self._eval_epoch(self.epochs,self.test_loader,"test")
                 self.outputs[self.epochs] = {**self.outputs[self.epochs],**result_test}
                 for key,value in self.outputs[self.epochs].items():
@@ -178,9 +141,11 @@ class Trainer:
             return
         result = {}
         if self.valid_loader:
+            self.model = self.model.to(self.valid_dev)
             result_valid = self._eval_epoch(0,self.valid_loader,"valid")
             result = {**result,**result_valid}
         if self.test_loader:
+            self.model = self.model.to(self.test_dev)
             result_test = self._eval_epoch(0,self.test_loader,"test")
             result = {**result,**result_test}
         for key,value in result.items():
@@ -199,6 +164,10 @@ class Trainer:
         raise NotImplementedError
 
     def _save(self,epoch,save_best=False):
+        fullconfig = None
+        if self.config_backup_path and os.path.exists(self.config_backup_path):
+            with open(self.config_backup_path,"r") as fd:
+                fullconfig = json.load(fd)
         curr_state = {
             "name":self.name,
             "epoch":epoch,
@@ -206,7 +175,7 @@ class Trainer:
             "state_dict":self.model.state_dict(),
             "optimizer":self.optimizer.state_dict(),
             "monitor_best":self.monitor_best,
-            "config":json.load(open(self.config_path,"r"))
+            "config":fullconfig
         }
         latest_loss = self.outputs[epoch]["train_loss"]
         filename = os.path.join(self.checkpoint_dir,"ckpt.%04d.L%.3f.pth"%(epoch,latest_loss))
@@ -235,7 +204,7 @@ class ImageClassifTrainer(Trainer):
         else:
             self.label_keys = label_keys
 
-    def _to_tensor(self,sample):
+    def _to_tensor(self,sample,dev):
         if not isinstance(sample,dict):
             raise AssertionError("trainer expects samples to come in dicts for key-based usage")
         input,label = None,None
@@ -250,7 +219,7 @@ class ImageClassifTrainer(Trainer):
         if input is None or label is None:
             raise AssertionError("could not find input or label keys in sample dict")
         input,label = torch.FloatTensor(input),torch.LongTensor(label)
-        input,label = input.to(self.train_dev),label.to(self.train_dev)  # valid device still ignored, todo
+        input,label = input.to(dev),label.to(dev)
         return input,label
 
     def _train_epoch(self,epoch,loader):
@@ -258,11 +227,15 @@ class ImageClassifTrainer(Trainer):
             raise AssertionError("no available data to load")
         result = {}
         self.model.train()
+        for state in self.optimizer.state.values():
+            for k,v in state.items():
+                if isinstance(v,torch.Tensor):
+                    state[k] = v.to(self.train_dev)
         total_loss = 0
         for metric in self.metrics.values():
             metric.reset()
         for idx,sample in enumerate(loader):
-            input,label = self._to_tensor(sample)
+            input,label = self._to_tensor(sample,self.train_dev)
             self.optimizer.zero_grad()
             pred = self.model(input)
             loss = self.loss(pred,label)
@@ -292,14 +265,17 @@ class ImageClassifTrainer(Trainer):
     def _eval_epoch(self,epoch,loader,eval_type="valid"):
         if not loader:
             raise AssertionError("no available data to load")
+        if eval_type!="valid" and eval_type!="test":
+            raise AssertionError("unexpected eval type")
         result = {}
         self.model.eval()
+        dev = self.valid_dev if eval_type=="valid" else self.test_dev
         with torch.no_grad():
             total_loss = 0
             for metric in self.metrics.values():
                 metric.reset()
             for idx,sample in enumerate(loader):
-                input,label = self._to_tensor(sample)
+                input,label = self._to_tensor(sample,dev)
                 pred = self.model(input)
                 loss = self.loss(pred,label)
                 total_loss += loss.item()

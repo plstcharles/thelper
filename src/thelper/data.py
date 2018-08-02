@@ -193,17 +193,21 @@ class Dataset(torch.utils.data.Dataset,ABC):
         super().__init__()
         if not name:
             raise AssertionError("dataset name must not be empty (lookup might fail)")
-        if not root or not os.path.exists(root) or not os.path.isdir(root):
-            raise AssertionError("dataset root folder at '%s' does not exist"%root)
-        self.logger = thelper.utils.get_class_logger()
         self.name = name
         self.root = root
         self.config = config
         self.transforms = transforms
+        self.logger = logging.getLogger(self._get_derived_name())
         self._sampler = None
         self.samples = None  # must be filled by the derived class
 
     # todo: add method to reset sampler shuffling when epoch complete?
+
+    def _get_derived_name(self):
+        dname = str(self.__class__.__qualname__)
+        if self.name:
+            dname += "."+self.name
+        return dname
 
     @property
     def sampler(self):
@@ -265,6 +269,12 @@ class ExternalDataset(Dataset):
         self.samples = dataset_type(**config)
         self.warned_partial_transform = False
         self.warned_dictionary = False
+
+    def _get_derived_name(self):
+        dname = thelper.utils.get_caller_name(0).rsplit(".",1)[0]
+        if self.name:
+            dname += "."+self.name
+        return dname
 
     def __getitem__(self,idx):
         if self.sampler is not None:
