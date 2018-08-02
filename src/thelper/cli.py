@@ -138,11 +138,12 @@ def create_session(config,data_root,save_dir,display_graphs=False):
     logger.debug("all done")
 
 
-def resume_session(ckptdata,data_root,save_dir,map_location=None,display_graphs=False):
+def resume_session(ckptdata,data_root,save_dir,config=None,display_graphs=False):
     logger = thelper.utils.get_func_logger()
-    if "config" not in ckptdata or not ckptdata["config"]:
-        raise AssertionError("checkpoint data missing 'config' field")
-    config = ckptdata["config"]
+    if not config:
+        if "config" not in ckptdata or not ckptdata["config"]:
+            raise AssertionError("checkpoint data missing 'config' field")
+        config = ckptdata["config"]
     if "name" not in config or not config["name"]:
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
@@ -188,6 +189,7 @@ def main(args=None):
     resume_session_ap.add_argument("ckpt_path",type=str,help="path to the checkpoint to resume training from")
     resume_session_ap.add_argument("save_dir",type=str,help="path to the root directory where checkpoints should be saved")
     resume_session_ap.add_argument("-m","--map-location",default=None,help="map location for loading data (default=None)")
+    resume_session_ap.add_argument("-c","--override-cfg",default=None,help="override config file path (default=None)")
     resume_session_ap.set_defaults(new_session=False)
     args = ap.parse_args(args=args)
     if args.verbose>2:
@@ -223,4 +225,8 @@ def main(args=None):
     else:
         thelper.logger.debug("parsing checkpoint at '%s'"%args.ckpt_path)
         ckptdata = torch.load(args.ckpt_path,map_location=args.map_location)
-        resume_session(ckptdata,args.data_root,args.save_dir,map_location=args.map_location,display_graphs=args.display_graphs)
+        override_config = None
+        if args.override_cfg:
+            thelper.logger.debug("parsing override config at '%s'"%args.override_cfg)
+            override_config = json.load(open(args.cfg_path))
+        resume_session(ckptdata,args.data_root,args.save_dir,config=override_config,display_graphs=args.display_graphs)
