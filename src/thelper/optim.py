@@ -1,6 +1,7 @@
 import logging
 from abc import ABC,abstractmethod
 
+import torch
 import sklearn.metrics
 
 import thelper.utils
@@ -135,12 +136,12 @@ class ClassifReport(Metric):
         self.gt = None
 
     def accumulate(self,pred,gt):
-        if not pred:
+        if self.pred is None:
             self.pred = pred.clone()
             self.gt = gt.clone()
         else:
-            self.pred.cat(pred)
-            self.gt.cat(gt)
+            self.pred = torch.cat(self.pred,pred)
+            self.gt = torch.cat(self.gt,gt)
 
     def eval(self):
         return self.report(self.gt.numpy(),self.pred.numpy())
@@ -170,12 +171,12 @@ class ConfusionMatrix(Metric):
         self.gt = None
 
     def accumulate(self,pred,gt):
-        if not pred:
+        if self.pred is None:
             self.pred = pred.clone()
             self.gt = gt.clone()
         else:
-            self.pred.cat(pred)
-            self.gt.cat(gt)
+            self.pred = torch.cat(self.pred,pred)
+            self.gt = torch.cat(self.gt,gt)
 
     def eval(self):
         return self.matrix(self.gt.numpy(),self.pred.numpy())
