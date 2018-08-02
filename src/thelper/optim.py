@@ -1,6 +1,8 @@
 import logging
 from abc import ABC,abstractmethod
 
+import sklearn.metrics
+
 import thelper.utils
 
 logger = logging.getLogger(__name__)
@@ -30,8 +32,8 @@ def load_metrics(config):
         params = thelper.utils.keyvals2dict(metric_config["params"])
         metric = metric_type(**params)
         goal = getattr(metric,"goal",None)
-        if not callable(goal) or (goal()!=thelper.optim.Metric.minimize and goal()!=thelper.optim.Metric.maximize):
-            raise AssertionError("expected metric to define 'goal' direction (min or max)")
+        if not callable(goal):
+            raise AssertionError("expected metric to define 'goal' based on parent interface")
         metrics[name] = metric
     return metrics
 
@@ -115,6 +117,78 @@ class CategoryAccuracy(Metric):
 
     def summary(self):
         self.logger.info("metric '%s' with top_k=%d"%(self.name,self.top_k))
+
+
+class ClassifReport(Metric):
+    def __init__(self,labels=None,target_names=None,sample_weight=None,digits=2):
+        super().__init__("ClassifReport")
+
+        def gen_report(y_true,y_pred):
+            return sklearn.metrics.classification_report(y_true,y_pred,
+                                                         labels=labels,
+                                                         target_names=target_names,
+                                                         sample_weight=sample_weight,
+                                                         digits=digits)
+
+        self.report = gen_report
+        self.pred = None
+        self.gt = None
+
+    def accumulate(self,pred,gt):
+        if not pred:
+            self.pred = pred.clone()
+            self.gt = gt.clone()
+        else:
+            self.pred.cat(pred)
+            self.gt.cat(gt)
+
+    def eval(self):
+        return self.report(self.gt.numpy(),self.pred.numpy())
+
+    def reset(self):
+        self.pred = None
+        self.gt = None
+
+    def goal(self):
+        return None  # means this class should not be used for monitoring
+
+    def summary(self):
+        self.logger.info("classification report '%s'"%self.name)
+
+
+class ConfusionMatrix(Metric):
+    def __init__(self,labels=None,sample_weight=None):
+        super().__init__("ConfusionMatrix")
+
+        def gen_matrix(y_true,y_pred):
+            return sklearn.metrics.confusion_matrix(y_true,y_pred,
+                                                    labels=labels,
+                                                    sample_weight=sample_weight)
+
+        self.matrix = gen_matrix
+        self.pred = None
+        self.gt = None
+
+    def accumulate(self,pred,gt):
+        if not pred:
+            self.pred = pred.clone()
+            self.gt = gt.clone()
+        else:
+            self.pred.cat(pred)
+            self.gt.cat(gt)
+
+    def eval(self):
+        return self.matrix(self.gt.numpy(),self.pred.numpy())
+
+    def reset(self):
+        self.pred = None
+        self.gt = None
+
+    def goal(self):
+        return None  # means this class should not be used for monitoring
+
+    def summary(self):
+        self.logger.info("confusion matrix '%s'"%self.name)
 
 
 class BinaryAccuracy(Metric):

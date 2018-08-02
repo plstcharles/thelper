@@ -138,7 +138,7 @@ def create_session(config,data_root,save_dir,display_graphs=False):
     logger.debug("all done")
 
 
-def resume_session(ckptdata,data_root,save_dir,config=None,display_graphs=False):
+def resume_session(ckptdata,data_root,save_dir,config=None,eval_only=False,display_graphs=False):
     logger = thelper.utils.get_func_logger()
     if not config:
         if "config" not in ckptdata or not ckptdata["config"]:
@@ -162,7 +162,7 @@ def resume_session(ckptdata,data_root,save_dir,config=None,display_graphs=False)
     model.load_state_dict(ckptdata["state_dict"])
     loss,metrics,optimizer,scheduler,schedstep = load_train_cfg(config,model)
     optimizer.load_state_dict(ckptdata["optimizer"])
-    loaders = (train_loader,valid_loader,test_loader)
+    loaders = (None if eval_only else train_loader,valid_loader,test_loader)
     trainer = thelper.train.load_trainer(session_name,save_dir,config,model,loss,
                                          metrics,optimizer,scheduler,schedstep,loaders)
     trainer.start_epoch = ckptdata["epoch"]+1
@@ -190,6 +190,7 @@ def main(args=None):
     resume_session_ap.add_argument("save_dir",type=str,help="path to the root directory where checkpoints should be saved")
     resume_session_ap.add_argument("-m","--map-location",default=None,help="map location for loading data (default=None)")
     resume_session_ap.add_argument("-c","--override-cfg",default=None,help="override config file path (default=None)")
+    resume_session_ap.add_argument("-e","--eval-only",default=False,action="store_true",help="only run evaluation pass (valid+test)")
     resume_session_ap.set_defaults(new_session=False)
     args = ap.parse_args(args=args)
     if args.verbose>2:
@@ -229,4 +230,4 @@ def main(args=None):
         if args.override_cfg:
             thelper.logger.debug("parsing override config at '%s'"%args.override_cfg)
             override_config = json.load(open(args.cfg_path))
-        resume_session(ckptdata,args.data_root,args.save_dir,config=override_config,display_graphs=args.display_graphs)
+        resume_session(ckptdata,args.data_root,args.save_dir,config=override_config,eval_only=args.eval_only,display_graphs=args.display_graphs)
