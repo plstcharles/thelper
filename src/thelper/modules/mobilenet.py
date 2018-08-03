@@ -23,6 +23,7 @@ def conv_1x1_bn(inp, oup):
 
 
 class InvertedResidual(nn.Module):
+
     def __init__(self, inp, oup, stride, expand_ratio):
         super(InvertedResidual, self).__init__()
         self.stride = stride
@@ -51,8 +52,9 @@ class InvertedResidual(nn.Module):
 
 
 class MobileNetV2(thelper.modules.Module):
+
     def __init__(self, task, name=None, input_size=224, width_mult=1.):
-        super().__init__(task,name=name)
+        super().__init__(task, name=name)
         # setting of inverted residual blocks
         self.interverted_residual_setting = [
             # t, c, n, s
@@ -81,7 +83,7 @@ class MobileNetV2(thelper.modules.Module):
                 input_channel = output_channel
         # building last several layers
         self.features.append(conv_1x1_bn(input_channel, self.last_channel))
-        self.features.append(nn.AvgPool2d(input_size//32))
+        self.features.append(nn.AvgPool2d(input_size // 32))
         # make it nn.Sequential
         self.features = nn.Sequential(*self.features)
         # building classifier
