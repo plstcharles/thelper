@@ -83,6 +83,12 @@ def str2bool(s):
     raise AssertionError("unrecognized input type")
 
 
+def truncstr(s,max=7):
+    if len(s)>=10:
+        return s[:10]
+    return s
+
+
 def lreplace(string,old_prefix,new_prefix):
     return re.sub(r'^(?:%s)+'%re.escape(old_prefix),lambda m:new_prefix*(m.end()//len(old_prefix)),string)
 
