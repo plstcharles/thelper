@@ -201,20 +201,25 @@ class Trainer:
 
 
 class ImageClassifTrainer(Trainer):
-    def __init__(self,session_name,save_dir,metapack,loaders,config,input_keys="0",label_keys="1"):
+    def __init__(self,session_name,save_dir,metapack,loaders,config):
         super().__init__(session_name,save_dir,metapack,loaders,config)
+        if not isinstance(self.model.task,thelper.tasks.Classification):
+            raise AssertionError("expected task to be classification")
+        input_keys = self.model.task.get_input_key()
         if isinstance(input_keys,str):
             self.input_keys = [input_keys]
         elif not isinstance(input_keys,list):
             raise AssertionError("input keys must be provided as a list of string")
         else:
             self.input_keys = input_keys
+        label_keys = self.model.task.get_gt_key()
         if isinstance(label_keys,str):
             self.label_keys = [label_keys]
         elif not isinstance(label_keys,list):
             raise AssertionError("input keys must be provided as a list of string")
         else:
             self.label_keys = label_keys
+        self.class_map = self.model.task.get_class_map()
 
     def _to_tensor(self,sample,dev):
         if not isinstance(sample,dict):
