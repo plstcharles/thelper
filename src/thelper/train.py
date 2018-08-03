@@ -120,7 +120,11 @@ class Trainer:
                                 (self.monitor_goal==thelper.optim.Metric.maximize and monitor_val>self.monitor_best)):
                             self.monitor_best = monitor_val
                             new_best = True
-                    self.logger.debug(' epoch {} result =>  {:15s}: {}'.format(epoch,str(key),value))
+                    if not isinstance(value,dict):
+                        self.logger.debug(" epoch {} result =>  {}: {}".format(epoch,str(key),value))
+                    else:
+                        for subkey,subvalue in value.items():
+                            self.logger.debug(" epoch {} result =>  {}:{}: {}".format(epoch,str(key),str(subkey),subvalue))
                 if monitor_val==None:
                     raise AssertionError("training/validation did not produce required monitoring variable '%s' in metrics"%self.monitor)
                 self.outputs[epoch] = result
@@ -136,7 +140,11 @@ class Trainer:
                 result_test = self._eval_epoch(self.epochs,self.test_loader,"test")
                 self.outputs[self.epochs] = {**self.outputs[self.epochs],**result_test}
                 for key,value in self.outputs[self.epochs].items():
-                    self.logger.debug(' final result =>  {:15s}: {}'.format(str(key),value))
+                    if not isinstance(value,dict):
+                        self.logger.debug(" final result =>  {}: {}".format(str(key),value))
+                    else:
+                        for subkey,subvalue in value.items():
+                            self.logger.debug(" final result =>  {}:{}: {}".format(str(key),str(subkey),subvalue))
                 self.logger.info("evaluation done")
             return
         result = {}
@@ -149,7 +157,11 @@ class Trainer:
             result_test = self._eval_epoch(0,self.test_loader,"test")
             result = {**result,**result_test}
         for key,value in result.items():
-            self.logger.debug(' final result =>  {:15s}: {}'.format(str(key),value))
+            if not isinstance(value,dict):
+                self.logger.debug(" final result =>  {}: {}".format(str(key),value))
+            else:
+                for subkey,subvalue in value.items():
+                    self.logger.debug(" final result =>  {}:{}: {}".format(str(key),str(subkey),subvalue))
         self.outputs[0] = result
         self.logger.info("evaluation done")
         # not saving final eval results anywhere...? todo
