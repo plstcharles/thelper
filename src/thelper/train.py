@@ -234,6 +234,8 @@ class ImageClassifTrainer(Trainer):
         total_loss = 0
         for metric in self.metrics.values():
             metric.reset()
+            if hasattr(metric,"set_class_map") and callable(metric.set_class_map):
+                metric.set_class_map(self.class_map)
         for idx,sample in enumerate(loader):
             input,label = self._to_tensor(sample,self.train_dev)
             self.optimizer.zero_grad()

@@ -3,6 +3,7 @@ from abc import ABC,abstractmethod
 
 import torch
 import sklearn.metrics
+import pandas as pd
 
 import thelper.utils
 
@@ -121,30 +122,44 @@ class CategoryAccuracy(Metric):
 
 
 class ClassifReport(Metric):
-    def __init__(self,labels=None,target_names=None,sample_weight=None,digits=2):
+    def __init__(self,labels=None,class_map=None,sample_weight=None,digits=2):
         super().__init__("ClassifReport")
 
-        def gen_report(y_true,y_pred):
-            return sklearn.metrics.classification_report(y_true,y_pred,
-                                                         labels=labels,
-                                                         target_names=target_names,
-                                                         sample_weight=sample_weight,
-                                                         digits=digits)
+        def gen_report(y_true,y_pred,_class_map):
+            if not _class_map:
+                res = sklearn.metrics.classification_report(y_true,y_pred,
+                                                            sample_weight=sample_weight,
+                                                            digits=digits)
+            else:
+                _y_true = [_class_map[classid] for classid in y_true]
+                _y_pred = [_class_map[classid] if classid in _class_map else "<unset>" for classid in y_pred]
+                res = sklearn.metrics.classification_report(_y_true,_y_pred,
+                                                            sample_weight=sample_weight,
+                                                            digits=digits)
+            return "\n"+res
 
         self.report = gen_report
+        self.class_map = class_map
+        if class_map and not isinstance(class_map,dict):
+            raise AssertionError("unexpected class map type")
         self.pred = None
         self.gt = None
 
+    def set_class_map(self,class_map):
+        if class_map and not isinstance(class_map,dict):
+            raise AssertionError("unexpected class map type")
+        self.class_map = class_map
+
     def accumulate(self,pred,gt):
         if self.pred is None:
-            self.pred = pred.clone()
-            self.gt = gt.clone()
+            self.pred = pred.topk(1,1)[1].view(len(gt))
+            self.gt = gt.view(len(gt)).clone()
         else:
-            self.pred = torch.cat(self.pred,pred)
-            self.gt = torch.cat(self.gt,gt)
+            self.pred = torch.cat((self.pred,pred.topk(1,1)[1].view(len(gt))),0)
+            self.gt = torch.cat((self.gt,gt.view(len(gt))),0)
 
     def eval(self):
-        return self.report(self.gt.numpy(),self.pred.numpy())
+        return self.report(self.gt.numpy(),self.pred.numpy(),self.class_map)
 
     def reset(self):
         self.pred = None
@@ -158,28 +173,42 @@ class ClassifReport(Metric):
 
 
 class ConfusionMatrix(Metric):
-    def __init__(self,labels=None,sample_weight=None):
+    def __init__(self,percentage=False,class_map=None):
         super().__init__("ConfusionMatrix")
 
-        def gen_matrix(y_true,y_pred):
-            return sklearn.metrics.confusion_matrix(y_true,y_pred,
-                                                    labels=labels,
-                                                    sample_weight=sample_weight)
+        def gen_matrix(y_true,y_pred,_class_map):
+            if not _class_map:
+                res = pd.crosstab(pd.Series(y_true),pd.Series(y_pred),margins=True)
+            else:
+                _y_true = pd.Series([thelper.utils.truncstr(_class_map[classid]) for classid in y_true])
+                _y_pred = pd.Series([thelper.utils.truncstr(_class_map[classid]) if classid in _class_map else "<unset>" for classid in y_pred])
+                res = pd.crosstab(_y_true,_y_pred,rownames=["True"],colnames=["Predicted"],margins=True)
+            if percentage:
+                return res.apply(lambda r: 100.0*r/r.sum())
+            return "\n"+res.to_string()
 
         self.matrix = gen_matrix
+        self.class_map = class_map
+        if class_map and not isinstance(class_map,dict):
+            raise AssertionError("unexpected class map type")
         self.pred = None
         self.gt = None
 
+    def set_class_map(self,class_map):
+        if class_map and not isinstance(class_map,dict):
+            raise AssertionError("unexpected class map type")
+        self.class_map = class_map
+
     def accumulate(self,pred,gt):
         if self.pred is None:
-            self.pred = pred.clone()
-            self.gt = gt.clone()
+            self.pred = pred.topk(1,1)[1].view(len(gt))
+            self.gt = gt.view(len(gt)).clone()
         else:
-            self.pred = torch.cat(self.pred,pred)
-            self.gt = torch.cat(self.gt,gt)
+            self.pred = torch.cat((self.pred,pred.topk(1,1)[1].view(len(gt))),0)
+            self.gt = torch.cat((self.gt,gt.view(len(gt))),0)
 
     def eval(self):
-        return self.matrix(self.gt.numpy(),self.pred.numpy())
+        return self.matrix(self.gt.numpy(),self.pred.numpy(),self.class_map)
 
     def reset(self):
         self.pred = None
