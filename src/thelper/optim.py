@@ -187,7 +187,7 @@ class ConfusionMatrix(Metric):
                 _y_pred = pd.Series([thelper.utils.truncstr(_class_map[classid]) if classid in _class_map else "<unset>" for classid in y_pred])
                 res = pd.crosstab(_y_true, _y_pred, rownames=["True"], colnames=["Predicted"], margins=True)
             if percentage:
-                return res.apply(lambda r: 100.0 * r / r.sum())
+                return "\n" + res.apply(lambda r: 100.0 * r / r.sum()).to_string()
             return "\n" + res.to_string()
 
         self.matrix = gen_matrix
