@@ -232,10 +232,10 @@ class BinaryAccuracy(Metric):
         self.total = 0
 
     def accumulate(self, pred, gt):
+        pred = pred.topk(1,1)[1].view(len(gt))
         if pred.size() != gt.size():
             raise AssertionError("pred and gt should have similar size")
-        pred_round = pred.round().long()
-        self.correct += pred_round.eq(gt).float().sum().item()
+        self.correct += pred.eq(gt).float().sum().item()
         self.total += len(pred)
         return self.eval()
 
