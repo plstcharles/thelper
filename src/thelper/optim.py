@@ -50,7 +50,7 @@ def load_optimization(model, config):
         raise AssertionError("optimizer config missing 'type' field")
     optimizer_type = thelper.utils.import_class(optimizer_config["type"])
     optimizer_params = thelper.utils.keyvals2dict(optimizer_config["params"]) if "params" in optimizer_config else None
-    optimizer = optimizer_type(model.parameters(), **optimizer_params)
+    optimizer = optimizer_type(filter(lambda p: p.requires_grad, model.parameters()), **optimizer_params)
     scheduler = None
     scheduler_step = 1
     if "scheduler" in config and config["scheduler"]:
@@ -232,7 +232,7 @@ class BinaryAccuracy(Metric):
         self.total = 0
 
     def accumulate(self, pred, gt):
-        pred = pred.topk(1,1)[1].view(len(gt))
+        pred = pred.topk(1, 1)[1].view(len(gt))
         if pred.size() != gt.size():
             raise AssertionError("pred and gt should have similar size")
         self.correct += pred.eq(gt).float().sum().item()
