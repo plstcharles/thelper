@@ -251,9 +251,9 @@ class ImageClassifTrainer(Trainer):
                     state[k] = v.to(self.train_dev)
         total_loss = 0
         for metric in self.metrics.values():
-            metric.reset()
             if hasattr(metric, "set_class_map") and callable(metric.set_class_map):
                 metric.set_class_map(self.class_map)
+            metric.reset()
         for idx, sample in enumerate(loader):
             input, label = self._to_tensor(sample, self.train_dev)
             self.optimizer.zero_grad()
@@ -293,6 +293,8 @@ class ImageClassifTrainer(Trainer):
         with torch.no_grad():
             total_loss = 0
             for metric in self.metrics.values():
+                if hasattr(metric, "set_class_map") and callable(metric.set_class_map):
+                    metric.set_class_map(self.class_map)
                 metric.reset()
             for idx, sample in enumerate(loader):
                 input, label = self._to_tensor(sample, dev)

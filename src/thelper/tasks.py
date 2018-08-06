@@ -26,6 +26,9 @@ class Classification(Task):
                 self.class_map = json.load(fd)
         if not isinstance(self.class_map, dict):
             raise AssertionError("expected class map to be dict (idx->name)")
+        if len(self.class_map) < 2:
+            raise AssertionError("should have at least two classes!")
+        self.binary = len(self.class_map) == 2
         self.input_key = input_key
         self.label_key = label_key
 
