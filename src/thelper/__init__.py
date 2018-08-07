@@ -2,14 +2,13 @@ import logging
 
 import thelper.cli
 import thelper.data
+import thelper.features
 import thelper.modules
 import thelper.optim
 import thelper.tasks
 import thelper.train
 import thelper.transforms
 import thelper.utils
-import thelper.features
-import thelper.features
 
 logger = logging.getLogger("thelper")
 

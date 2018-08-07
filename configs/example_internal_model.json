@@ -65,7 +65,8 @@
     "data_config": {
         "batch_size": 32,
         "shuffle": true,
-        "seed": 0,
+        "valid_seed": [],
+        "test_seed": 0,
         "workers": 0,
         "pin_memory": false,
         "drop_last": false,
@@ -73,11 +74,11 @@
             "Augmentor.Pipeline": {
                 "input_tensor": false,
                 "output_tensor": false,
-                "append": false,
                 "stages": {
                     "flip_left_right": {"probability": 0.5}
                 }
-            }
+            },
+            "append": false
         },
         "train_split": {
             "cifar_train": 0.8
@@ -124,10 +125,7 @@
     },
     "trainer": {
         "type": "thelper.train.ImageClassifTrainer",
-        "params": [
-            {"name": "input_keys", "value": ["image","img","input","0"]},
-            {"name": "label_keys", "value": ["label","lbl","gt","1"]}
-        ],
+        "params": [],
         "train_device": "cuda:0",
         "valid_device": "cuda:0",
         "test_device": "cuda:0",

@@ -24,7 +24,7 @@ def fixup_augmentor_list(sample):
 def load_transforms(config):
     logger.debug("loading transforms from config")
     transforms = []
-    append = True
+    append_transf = True
     for transform_name, transform_config in config.items():
         if transform_name == "Augmentor.Pipeline":
             augp = Augmentor.Pipeline()
@@ -45,15 +45,18 @@ def load_transforms(config):
             transforms.append(fixup_augmentor_list)
             if transform_config["output_tensor"]:
                 transforms.append(torchvision.transforms.ToTensor())
-            if "append" in transform_config:
-                append = thelper.utils.str2bool(transform_config["append"])
+        elif transform_name == "append":
+            append_transf = thelper.utils.str2bool(transform_config)
         else:
             transform_type = thelper.utils.import_class(transform_name)
             transform = transform_type(**transform_config)
             transforms.append(transform)
     if len(transforms) > 1:
-        return thelper.transforms.Compose(transforms), append
-    return transforms[0], append
+        return thelper.transforms.Compose(transforms), append_transf
+    elif len(transforms) == 1:
+        return transforms[0], append_transf
+    else:
+        return None, False
 
 
 class Compose(torchvision.transforms.Compose):

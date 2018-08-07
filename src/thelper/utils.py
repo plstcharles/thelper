@@ -360,5 +360,3 @@ def check_key(key, tdict, tdict_name, msg=''):
             raise AssertionError("%s missing '%s' field" % (tdict_name, key))
         else:
             raise AssertionError(msg)
-
-

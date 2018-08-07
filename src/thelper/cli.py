@@ -11,13 +11,10 @@ import time
 from copy import copy
 
 import torch
-
-import thelper
-
 import numpy as np
-
 import matplotlib.pyplot as plt
 
+import thelper
 
 logging.basicConfig(level=logging.INFO)
 
@@ -487,13 +484,14 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, 
     trainer.train()
     logger.debug("all done")
 
+
 def main(args=None):
     ap = argparse.ArgumentParser(description='thelper model trainer application')
     ap.add_argument("--version", default=False, action="store_true", help="prints the version of the library and exits")
     ap.add_argument("-l", "--log", default="thelper.log", type=str, help="path to the output log file (default: './thelper.log')")
     ap.add_argument("-v", "--verbose", action="count", default=0, help="set logging terminal verbosity level (additive)")
     ap.add_argument("-g", "--display-graphs", action="store_true", default=False, help="toggles whether graphs should be displayed or not")
-    ap.add_argument("-d", "--data-root", default="./data/", type=str, help="path to the root directory passed to dataset interfaces for parsing")
+    ap.add_argument("-d", "--data-root", default=None, type=str, help="path to the root directory passed to dataset interfaces for parsing")
     subparsers = ap.add_subparsers(title="Operating mode")
     new_session_ap = subparsers.add_parser("new", help="creates a new session from a config file")
     new_session_ap.add_argument("cfg_path", type=str, help="path to the training configuration file")
@@ -530,9 +528,10 @@ def main(args=None):
     logger_ch.setLevel(log_level)
     logger_ch.setFormatter(logger_format)
     thelper.logger.addHandler(logger_ch)
-    thelper.logger.debug("checking dataset root '%s'..." % args.data_root)
-    if not os.path.exists(args.data_root) or not os.path.isdir(args.data_root):
-        raise AssertionError("invalid data root folder at '%s'; please specify the correct path via --data-root=PATH")
+    if args.data_root:
+        thelper.logger.debug("checking dataset root '%s'..." % args.data_root)
+        if not os.path.exists(args.data_root) or not os.path.isdir(args.data_root):
+            raise AssertionError("invalid data root folder at '%s'; please specify a valid path via --data-root=PATH")
     if args.new_session:
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
         config = json.load(open(args.cfg_path))

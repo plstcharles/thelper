@@ -31,13 +31,15 @@ class DataConfig(object):
             raise AssertionError("data config missing 'batch_size' field")
         self.batch_size = config["batch_size"]
         self.shuffle = thelper.utils.str2bool(config["shuffle"]) if "shuffle" in config else False
-        self.seed = config["seed"] if "seed" in config and isinstance(config["seed"], (int, str)) else None
+        self.test_seed = config["test_seed"] if "test_seed" in config and isinstance(config["test_seed"], (int, str)) else None
+        self.valid_seed = config["valid_seed"] if "valid_seed" in config and isinstance(config["valid_seed"], (int, str)) else None
         self.workers = config["workers"] if "workers" in config and config["workers"] >= 0 else 1
         self.pin_memory = thelper.utils.str2bool(config["pin_memory"]) if "pin_memory" in config else False
         self.drop_last = thelper.utils.str2bool(config["drop_last"]) if "drop_last" in config else False
         self.train_augments = None
+        self.train_augments_append = False
         if "train_augments" in config and config["train_augments"]:
-            self.train_augments = thelper.transforms.load_transforms(config["train_augments"])
+            self.train_augments, self.train_augments_append = thelper.transforms.load_transforms(config["train_augments"])
 
         def get_split(prefix, config):
             key = prefix + "_split"
@@ -80,13 +82,14 @@ class DataConfig(object):
                 raise AssertionError("dataset '%s' does not exist" % name)
         indices = {name: list(range(size)) for name, size in dataset_map_size.items()}
         if self.shuffle:
-            np.random.seed(self.seed)
+            np.random.seed(self.test_seed) # test idxs will be picked first, then valid+train
             for idxs in indices.values():
                 np.random.shuffle(idxs)
         train_idxs, valid_idxs, test_idxs = {}, {}, {}
         offsets = dict.fromkeys(self.total_usage, 0)
-        for name in self.total_usage.keys():
-            for idxs_map, ratio_map in zip([train_idxs, valid_idxs, test_idxs], [self.train_split, self.valid_split, self.test_split]):
+        for loader_idx, (idxs_map, ratio_map) in enumerate(zip([test_idxs, valid_idxs, train_idxs],
+                                                               [self.test_split, self.valid_split, self.train_split])):
+            for name in self.total_usage.keys():
                 if name in ratio_map:
                     count = int(round(ratio_map[name] * dataset_map_size[name]))
                     if count < 0:
@@ -97,6 +100,12 @@ class DataConfig(object):
                     endidx = min(begidx + count, dataset_map_size[name])
                     idxs_map[name] = indices[name][begidx:endidx]
                     offsets[name] = endidx
+            if loader_idx==0 and self.shuffle:
+                np.random.seed(self.valid_seed)  # all test idxs are now picked, reshuffle for train/valid
+                for name in self.total_usage.keys():
+                    trainvalid_idxs = indices[name][offsets[name]:]
+                    np.random.shuffle(trainvalid_idxs)
+                    indices[name][offsets[name]:] = trainvalid_idxs
         return train_idxs, valid_idxs, test_idxs
 
     def get_data_split(self, dataset_templates):
@@ -109,10 +118,10 @@ class DataConfig(object):
                 dataset = copy(dataset_templates[name])
                 if loader_idx == 0 and self.train_augments:
                     if dataset.transforms is not None:
-                        if self.train_augments[1]:  # append or not
-                            dataset.transforms = thelper.transforms.Compose([dataset.transforms, copy(self.train_augments[0])])
+                        if self.train_augments_append:  # append or not
+                            dataset.transforms = thelper.transforms.Compose([dataset.transforms, copy(self.train_augments)])
                         else:
-                            dataset.transforms = thelper.transforms.Compose([copy(self.train_augments[0]), dataset.transforms])
+                            dataset.transforms = thelper.transforms.Compose([copy(self.train_augments), dataset.transforms])
                     else:
                         dataset.transforms = copy(self.train_augments)
                 dataset.sampler = SubsetRandomSampler(sample_idxs)
@@ -154,7 +163,7 @@ def load_dataset_templates(config, root):
         params = thelper.utils.keyvals2dict(dataset_config["params"])
         transforms = None
         if "transforms" in dataset_config and dataset_config["transforms"]:
-            transforms, append = thelper.transforms.load_transforms(dataset_config["transforms"])
+            transforms, _ = thelper.transforms.load_transforms(dataset_config["transforms"])
         if issubclass(dataset_type, Dataset):
             # assume that the dataset is derived from thelper.data.Dataset (it is fully sampling-ready)
             templates[dataset_name] = dataset_type(name=dataset_name, root=root, config=params, transforms=transforms)
