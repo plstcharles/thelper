@@ -187,7 +187,7 @@ def main(args=None):
     new_session_ap.set_defaults(new_session=True)
     resume_session_ap = subparsers.add_parser("resume", help="resume a session from a checkpoint file")
     resume_session_ap.add_argument("ckpt_path", type=str, help="path to the checkpoint to resume training from")
-    resume_session_ap.add_argument("save_dir", type=str, help="path to the root directory where checkpoints should be saved")
+    resume_session_ap.add_argument("-s", "--save-dir", default=None, type=str, help="path to the root directory where checkpoints should be saved")
     resume_session_ap.add_argument("-m", "--map-location", default=None, help="map location for loading data (default=None)")
     resume_session_ap.add_argument("-c", "--override-cfg", default=None, help="override config file path (default=None)")
     resume_session_ap.add_argument("-e", "--eval-only", default=False, action="store_true", help="only run evaluation pass (valid+test)")
@@ -230,4 +230,7 @@ def main(args=None):
         if args.override_cfg:
             thelper.logger.debug("parsing override config at '%s'" % args.override_cfg)
             override_config = json.load(open(args.override_cfg))
-        resume_session(ckptdata, args.data_root, args.save_dir, config=override_config, eval_only=args.eval_only, display_graphs=args.display_graphs)
+        save_dir = args.save_dir
+        if save_dir is None:
+            save_dir = os.path.abspath(os.path.join(os.path.dirname(args.ckpt_path), "../.."))
+        resume_session(ckptdata, args.data_root, save_dir, config=override_config, eval_only=args.eval_only, display_graphs=args.display_graphs)
