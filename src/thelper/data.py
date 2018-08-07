@@ -36,8 +36,9 @@ class DataConfig(object):
         self.pin_memory = thelper.utils.str2bool(config["pin_memory"]) if "pin_memory" in config else False
         self.drop_last = thelper.utils.str2bool(config["drop_last"]) if "drop_last" in config else False
         self.train_augments = None
+        self.train_augments_append = False
         if "train_augments" in config and config["train_augments"]:
-            self.train_augments = thelper.transforms.load_transforms(config["train_augments"])
+            self.train_augments, self.train_augments_append = thelper.transforms.load_transforms(config["train_augments"])
 
         def get_split(prefix, config):
             key = prefix + "_split"
@@ -109,10 +110,10 @@ class DataConfig(object):
                 dataset = copy(dataset_templates[name])
                 if loader_idx == 0 and self.train_augments:
                     if dataset.transforms is not None:
-                        if self.train_augments[1]:  # append or not
-                            dataset.transforms = thelper.transforms.Compose([dataset.transforms, copy(self.train_augments[0])])
+                        if self.train_augments_append:  # append or not
+                            dataset.transforms = thelper.transforms.Compose([dataset.transforms, copy(self.train_augments)])
                         else:
-                            dataset.transforms = thelper.transforms.Compose([copy(self.train_augments[0]), dataset.transforms])
+                            dataset.transforms = thelper.transforms.Compose([copy(self.train_augments), dataset.transforms])
                     else:
                         dataset.transforms = copy(self.train_augments)
                 dataset.sampler = SubsetRandomSampler(sample_idxs)
@@ -154,7 +155,7 @@ def load_dataset_templates(config, root):
         params = thelper.utils.keyvals2dict(dataset_config["params"])
         transforms = None
         if "transforms" in dataset_config and dataset_config["transforms"]:
-            transforms, append = thelper.transforms.load_transforms(dataset_config["transforms"])
+            transforms, _ = thelper.transforms.load_transforms(dataset_config["transforms"])
         if issubclass(dataset_type, Dataset):
             # assume that the dataset is derived from thelper.data.Dataset (it is fully sampling-ready)
             templates[dataset_name] = dataset_type(name=dataset_name, root=root, config=params, transforms=transforms)
