@@ -15,6 +15,31 @@ import torch
 logger = logging.getLogger(__name__)
 
 
+def test_cuda_device():
+    """
+    work around for gpu on cluster
+    :return:
+    """
+    device_id = -1
+    try:
+        device_id=0
+        torch.cuda.set_device(device_id)
+        a = torch.cuda.FloatTensor(1)
+        logger.info('Setting to device: 0')
+    except:
+        try:
+            device_id = 1
+            torch.cuda.set_device(device_id)
+            a = torch.cuda.FloatTensor(1)
+            logger.info('Setting to device: 1')
+        except:
+            device_id = -1
+            logger.warning("No cuda device available!")
+
+    torch.cuda.empty_cache()
+    return device_id
+
+
 def import_class(fullname):
     modulename, classname = fullname.rsplit('.', 1)
     module = importlib.import_module(modulename)

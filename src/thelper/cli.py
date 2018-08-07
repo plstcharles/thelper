@@ -89,6 +89,9 @@ def get_save_dir(out_root, session_name, config, resume=False):
     save_dir = os.path.join(save_dir, session_name)
     if not resume:
         overwrite = False
+        if 'overwrite' in config:
+            overwrite = config['overwrite']
+
         old_session_name = session_name
         time.sleep(0.5)  # to make sure all debug/info prints are done, and we see the question
         while os.path.exists(save_dir) and not overwrite:
@@ -123,6 +126,9 @@ def create_session(config, data_root, save_dir, display_graphs=False):
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
     save_dir = get_save_dir(save_dir, session_name, config)
+    save_dir_logs = os.path.join(save_dir, 'logs')
+    if not os.path.exists(save_dir_logs):
+        os.makedirs(save_dir_logs)
     logger.info("Creating new training session '%s'..." % session_name)
     task, train_loader, valid_loader, test_loader = load_datasets(config, data_root)
     if display_graphs and logger.isEnabledFor(logging.DEBUG):
@@ -392,6 +398,8 @@ def features_visualization(config,resume,data_root,display_graphs=False):
     logger.info('maximum number of data that can be presented: %i with size %ix%i' % (max_data, roi_size,roi_size))
     k=0
     pbar = tqdm(total=max_data)
+
+    label_name_list = ['accept']
     for iter, (fns) in enumerate(data_loader):
         if k >= max_data:
             break
@@ -400,9 +408,10 @@ def features_visualization(config,resume,data_root,display_graphs=False):
             dataset = pkl.load(bz2.open(fn, 'rb'))
             feature = dataset['features']
             labels.append(dataset['label_name'])
-            images.append(torch.from_numpy(cv2.resize(dataset['image'],dsize=(roi_size,roi_size)).transpose(2,0,1)))
-            feature_size = feature.shape[0]
-            X.append(feature)
+            if dataset['label_name'] in label_name_list:
+                images.append(torch.from_numpy(cv2.resize(dataset['image'],dsize=(roi_size,roi_size)).transpose(2,0,1)))
+                feature_size = feature.shape[0]
+                X.append(feature)
             pbar.update(1)
             k+=1
 
