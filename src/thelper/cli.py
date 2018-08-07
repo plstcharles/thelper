@@ -478,8 +478,6 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, 
     trainer.train()
     logger.debug("all done")
 
-
->>>>>>> 26140c0d498a7d9110ab779bc357635fc5fe41c3
 def main(args=None):
     ap = argparse.ArgumentParser(description='thelper model trainer application')
     ap.add_argument("--version", default=False, action="store_true", help="prints the version of the library and exits")
