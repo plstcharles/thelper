@@ -11,13 +11,10 @@ import time
 from copy import copy
 
 import torch
-
-import thelper
-
 import numpy as np
-
 import matplotlib.pyplot as plt
 
+import thelper
 
 logging.basicConfig(level=logging.INFO)
 
