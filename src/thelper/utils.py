@@ -17,12 +17,12 @@ logger = logging.getLogger(__name__)
 
 def test_cuda_device():
     """
-    work around for gpu on cluster
+    work around for gpu identification on cluster
     :return:
     """
     device_id = -1
     try:
-        device_id=0
+        device_id = 0
         torch.cuda.set_device(device_id)
         a = torch.cuda.FloatTensor(1)
         logger.info('Setting to device: 0')
@@ -48,12 +48,12 @@ def import_class(fullname):
 
 def get_class_logger(skip=0):
     """Shorthand to get logger for current class frame."""
-    return logging.getLogger(get_caller_name(skip+1).rsplit(".", 1)[0])
+    return logging.getLogger(get_caller_name(skip + 1).rsplit(".", 1)[0])
 
 
 def get_func_logger(skip=0):
     """Shorthand to get logger for current function frame."""
-    return logging.getLogger(get_caller_name(skip+1))
+    return logging.getLogger(get_caller_name(skip + 1))
 
 
 def get_caller_name(skip=2):
@@ -74,8 +74,8 @@ def get_caller_name(skip=2):
         return framelist
 
     stack = stack_(sys._getframe(1))
-    start = 0+skip
-    if len(stack) < start+1:
+    start = 0 + skip
+    if len(stack) < start + 1:
         return ''
     parentframe = stack[start]
     name = []
@@ -115,7 +115,7 @@ def truncstr(s, max=7):
 
 
 def lreplace(string, old_prefix, new_prefix):
-    return re.sub(r'^(?:%s)+'%re.escape(old_prefix), lambda m: new_prefix*(m.end()//len(old_prefix)), string)
+    return re.sub(r'^(?:%s)+' % re.escape(old_prefix), lambda m: new_prefix * (m.end() // len(old_prefix)), string)
 
 
 def keyvals2dict(keyvals):
@@ -150,11 +150,11 @@ def query_yes_no(question, default=None):
     elif default == "no":
         prompt = " [y/N] "
     else:
-        raise AssertionError("invalid default answer: '%s'"%default)
+        raise AssertionError("invalid default answer: '%s'" % default)
     sys.stdout.flush()
     sys.stderr.flush()
     while True:
-        sys.stdout.write(question+prompt)
+        sys.stdout.write(question + prompt)
         choice = input().lower()
         if default is not None and choice == "":
             return valid[default]
@@ -177,7 +177,7 @@ def query_string(question, default=None, allow_empty=False):
     sys.stderr.flush()
     while True:
         if default is not None:
-            sys.stdout.write(question+" (default="+default+")")
+            sys.stdout.write(question + " (default=" + default + ")")
         else:
             sys.stdout.write(question)
         answer = input()
@@ -215,12 +215,12 @@ def draw_popbars(labels, counts, xlabel="", ylabel="Pop. Count"):
 
 
 def draw_classifs(images, labels_gt, labels_pred=None, labels_map=None):
-    nb_imgs = len(images) if isinstance(images, list) else images.shape[images.ndim-1]
+    nb_imgs = len(images) if isinstance(images, list) else images.shape[images.ndim - 1]
     if nb_imgs < 1:
         return
     grid_size_x = int(math.ceil(math.sqrt(nb_imgs)))
-    grid_size_y = int(math.ceil(nb_imgs/grid_size_x))
-    if grid_size_x*grid_size_y < nb_imgs:
+    grid_size_y = int(math.ceil(nb_imgs / grid_size_x))
+    if grid_size_x * grid_size_y < nb_imgs:
         raise AssertionError("bad gridding for subplots")
     fig, axes = plt.subplots(grid_size_y, grid_size_x)
     plt.tight_layout()
@@ -253,13 +253,14 @@ def draw_sample(sample, pred=None, image_key="image", label_key="label", block=F
             raise AssertionError("missing classification-related fields in sample dict, and dict is multi-elem")
         key1, key2 = sample.keys()
         if ((isinstance(sample[key1], torch.Tensor) and sample[key1].dim() > 1) and
-                (isinstance(sample[key2], list) or (isinstance(sample[key2], torch.Tensor) and sample[key2].dim() == 1))):
+            (isinstance(sample[key2], list) or (isinstance(sample[key2], torch.Tensor) and sample[key2].dim() == 1))):
             image_key, label_key = key1, key2
         elif ((isinstance(sample[key2], torch.Tensor) and sample[key2].dim() > 1) and
               (isinstance(sample[key1], list) or (isinstance(sample[key1], torch.Tensor) and sample[key1].dim() == 1))):
             image_key, label_key = key2, key1
         else:
-            raise AssertionError("missing classification-related fields in sample dict, and could not find proper default types")
+            raise AssertionError(
+                "missing classification-related fields in sample dict, and could not find proper default types")
     labels = sample[label_key]
     if not isinstance(labels, list) and not (isinstance(labels, torch.Tensor) and labels.dim() == 1):
         raise AssertionError("expected classification labels to be in list or 1-d tensor format")
@@ -288,7 +289,7 @@ def draw_sample(sample, pred=None, image_key="image", label_key="label", block=F
         if image.ndim != 3:
             raise AssertionError("indexing should return a pre-squeezed array")
         if image.shape[2] == 2:
-            image = np.dstack((image, image[:,:, 0]))
+            image = np.dstack((image, image[:, :, 0]))
         elif image.shape[2] > 3:
             image = image[..., :3]
         image_normalized = np.empty_like(image, dtype=np.uint8).copy()  # copy needed here due to ocv 3.3 bug
@@ -301,7 +302,7 @@ def draw_sample(sample, pred=None, image_key="image", label_key="label", block=F
         plt.pause(0.01)
 
 
-def draw_errbars(labels,min,max,stddev,mean,xlabel="",ylabel="Raw Value"):
+def draw_errbars(labels, min, max, stddev, mean, xlabel="", ylabel="Raw Value"):
     if min.shape != max.shape or min.shape != stddev.shape or min.shape != mean.shape:
         raise AssertionError("input dim mismatch")
     if len(min.shape) != 1 and len(min.shape) != 2:
@@ -318,39 +319,40 @@ def draw_errbars(labels,min,max,stddev,mean,xlabel="",ylabel="Raw Value"):
         ax = axs[ax_idx]
         ax.locator_params(nbins=nb_subplots)
         ax.errorbar(xrange, mean[:, ax_idx], stddev[:, ax_idx], fmt='ok', lw=3)
-        ax.errorbar(xrange, mean[:, ax_idx], [mean[:, ax_idx]-min[:, ax_idx], max[:, ax_idx]-mean[:, ax_idx]], fmt='.k', ecolor='gray', lw=1)
+        ax.errorbar(xrange, mean[:, ax_idx], [mean[:, ax_idx] - min[:, ax_idx], max[:, ax_idx] - mean[:, ax_idx]],
+                    fmt='.k', ecolor='gray', lw=1)
         ax.set_xticks(xrange)
-        ax.set_xticklabels(labels, visible=(ax_idx == nb_subplots-1))
-        ax.set_title("Band %d"%(ax_idx+1))
+        ax.set_xticklabels(labels, visible=(ax_idx == nb_subplots - 1))
+        ax.set_title("Band %d" % (ax_idx + 1))
         ax.tick_params(axis="x", labelsize="6", labelrotation=45)
     plt.tight_layout()
     fig.show()
 
 
-def get_glob_paths(input_glob_pattern,can_be_dir=False):
+def get_glob_paths(input_glob_pattern, can_be_dir=False):
     glob_file_paths = glob.glob(input_glob_pattern)
     if not glob_file_paths:
-        raise AssertionError("invalid input glob pattern '%s'"%input_glob_pattern)
+        raise AssertionError("invalid input glob pattern '%s'" % input_glob_pattern)
     for file_path in glob_file_paths:
         if not os.path.isfile(file_path) and not (can_be_dir and os.path.isdir(file_path)):
-            raise AssertionError("invalid input file at globbed path '%s'"%file_path)
+            raise AssertionError("invalid input file at globbed path '%s'" % file_path)
     return glob_file_paths
 
 
-def get_dataset_file_paths(input_path,dataset_root,allow_glob=False,can_be_dir=False):
+def get_dataset_file_paths(input_path, dataset_root, allow_glob=False, can_be_dir=False):
     if os.path.isabs(input_path):
         if '*' in input_path and allow_glob:
             return get_glob_paths(input_path)
         elif not os.path.isfile(input_path) and not (can_be_dir and os.path.isdir(input_path)):
-            raise AssertionError("invalid input file at absolute path '%s'"%input_path)
+            raise AssertionError("invalid input file at absolute path '%s'" % input_path)
     else:
         if not os.path.isdir(dataset_root):
-            raise AssertionError("invalid dataset root directory at '%s'"%dataset_root)
+            raise AssertionError("invalid dataset root directory at '%s'" % dataset_root)
         input_path = os.path.join(dataset_root, input_path)
         if '*' in input_path and allow_glob:
             return get_glob_paths(input_path)
         elif not os.path.isfile(input_path) and not (can_be_dir and os.path.isdir(input_path)):
-            raise AssertionError("invalid input file at path '%s'"%input_path)
+            raise AssertionError("invalid input file at path '%s'" % input_path)
     return [input_path]
 
 
