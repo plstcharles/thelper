@@ -8,6 +8,8 @@ import thelper.tasks
 import thelper.train
 import thelper.transforms
 import thelper.utils
+import thelper.features
+import thelper.features
 
 logger = logging.getLogger("thelper")
 

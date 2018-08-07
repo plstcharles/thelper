@@ -321,3 +321,13 @@ def get_dataset_file_paths(input_path,dataset_root,allow_glob=False,can_be_dir=F
         elif not os.path.isfile(input_path) and not (can_be_dir and os.path.isdir(input_path)):
             raise AssertionError("invalid input file at path '%s'"%input_path)
     return [input_path]
+
+
+def check_key(key, tdict, tdict_name, msg=''):
+    if key not in tdict:
+        if msg == '':
+            raise AssertionError("%s missing '%s' field" % (tdict_name, key))
+        else:
+            raise AssertionError(msg)
+
+
