@@ -124,7 +124,7 @@ class CategoryAccuracy(Metric):
 
 class ClassifReport(Metric):
 
-    def __init__(self, labels=None, class_map=None, sample_weight=None, digits=2):
+    def __init__(self, class_map=None, sample_weight=None, digits=2):
         super().__init__("ClassifReport")
 
         def gen_report(y_true, y_pred, _class_map):

@@ -57,10 +57,8 @@ class Trainer:
         if not os.path.exists(self.checkpoint_dir):
             os.mkdir(self.checkpoint_dir)
         self.use_tbx = False
-        if "use_tbx" not in config or not config["use_tbx"] or int(config["use_tbx"]) <= 0:
-            self.use_tbx = False
-        else:
-            self.use_tbx = config["use_tbx"]
+        if "use_tbx" in config:
+            self.use_tbx = thelper.utils.str2bool(config["use_tbx"])
         if self.use_tbx:
             self.tbx_dir = os.path.join(self.save_dir, "tbx_logs")
             if not os.path.exists(self.tbx_dir):
@@ -107,7 +105,7 @@ class Trainer:
         else:
             raise AssertionError("monitored metric does not return proper optimization goal")
         self.start_epoch = 1
-        train_logger_path = os.path.join(self.save_dir, "train.log")
+        train_logger_path = os.path.join(self.save_dir, "logs", "train.log")
         train_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         train_logger_fh = logging.FileHandler(train_logger_path)
         train_logger_fh.setFormatter(train_logger_format)
