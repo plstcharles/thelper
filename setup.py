@@ -88,9 +88,9 @@ setuptools.setup(
         "numpy>=1.14.0",
         "opencv-python>=3.3.0",
         "torch>=0.4.0",
-        # "scikit-learn>=0.19.1", check ver and readd later
-        # "scipy>=1.1.0", check ver and readd later
+        "scikit-learn>=0.19.1",
         "torchvision>=0.2.1",
+        "tensorboardX>=1.2.0",
     ],
     python_requires="~=3.5",
     extras_require={
