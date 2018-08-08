@@ -1,4 +1,5 @@
 import logging
+from collections import deque
 from abc import ABC, abstractmethod
 
 import torch
@@ -69,11 +70,12 @@ class Metric(ABC):
     minimize = float("-inf")
     maximize = float("inf")
 
-    def __init__(self, name):
+    def __init__(self, name, tbx_eval_iter=False):
         if not name:
             raise AssertionError("metric name must not be empty (lookup might fail)")
         self.logger = thelper.utils.get_class_logger()
         self.name = name
+        self.tbx_eval_iter = tbx_eval_iter  # defines whether the metric can be evaluated each iter by tensorboard
 
     @abstractmethod
     def accumulate(self, pred, gt):
@@ -86,6 +88,9 @@ class Metric(ABC):
     @abstractmethod
     def reset(self):
         raise NotImplementedError
+
+    def needs_reset(self):
+        return True  # override and return false if reset not needed
 
     @abstractmethod
     def goal(self):
@@ -95,31 +100,84 @@ class Metric(ABC):
 
 class CategoryAccuracy(Metric):
 
-    def __init__(self, top_k=1):
-        super().__init__("CategoryAccuracy")
+    def __init__(self, top_k=1, max_accum=None, tbx_eval_iter=True):
+        super().__init__("CategoryAccuracy", tbx_eval_iter=tbx_eval_iter)
         self.top_k = top_k
-        self.correct = 0
-        self.total = 0
+        self.max_accum = max_accum
+        self.correct = deque()
+        self.total = deque()
+        self.warned_eval_bad = False
 
     def accumulate(self, pred, gt):
         top_k = pred.topk(self.top_k, 1)[1]
         true_k = gt.view(len(gt), 1).expand_as(top_k)
-        self.correct += top_k.eq(true_k).float().sum().item()
-        self.total += len(pred)
-        return self.eval()
+        self.correct.append(top_k.eq(true_k).float().sum().item())
+        self.total.append(len(pred))
+        if self.max_accum and len(self.correct) > self.max_accum:
+            self.correct.popleft()
+            self.total.popleft()
 
     def eval(self):
-        return (float(self.correct) / float(self.total)) * 100
+        if len(self.total) == 0 or sum(self.total) == 0:
+            if not self.warned_eval_bad:
+                self.warned_eval_bad = True
+                self.logger.warning("metric '%s' eval result invalid (set as 0.0), no results accumulated" % self.name)
+            return 0.0
+        return (float(sum(self.correct)) / float(sum(self.total))) * 100
 
     def reset(self):
-        self.correct = 0
-        self.total = 0
+        self.correct = deque()
+        self.total = deque()
+
+    def needs_reset(self):
+        return self.max_accum is None
 
     def goal(self):
         return Metric.maximize
 
     def summary(self):
         self.logger.info("metric '%s' with top_k=%d" % (self.name, self.top_k))
+
+
+class BinaryAccuracy(Metric):
+
+    def __init__(self, max_accum=None, tbx_eval_iter=True):
+        super().__init__("BinaryAccuracy", tbx_eval_iter=tbx_eval_iter)
+        self.max_accum = max_accum
+        self.correct = deque()
+        self.total = deque()
+        self.warned_eval_bad = False
+
+    def accumulate(self, pred, gt):
+        pred = pred.topk(1, 1)[1].view(len(gt))
+        if pred.size() != gt.size():
+            raise AssertionError("pred and gt should have similar size")
+        self.correct.append(pred.eq(gt).float().sum().item())
+        self.total.append(len(pred))
+        if self.max_accum and len(self.correct) > self.max_accum:
+            self.correct.popleft()
+            self.total.popleft()
+
+    def eval(self):
+        if len(self.total) == 0 or sum(self.total) == 0:
+            if not self.warned_eval_bad:
+                self.warned_eval_bad = True
+                self.logger.warning("metric '%s' eval result invalid (set as 0.0), no results accumulated" % self.name)
+            return 0.0
+        return (float(sum(self.correct)) / float(sum(self.total))) * 100
+
+    def reset(self):
+        self.correct = deque()
+        self.total = deque()
+
+    def needs_reset(self):
+        return self.max_accum is None
+
+    def goal(self):
+        return Metric.maximize
+
+    def summary(self):
+        self.logger.info("metric '%s'" % self.name)
 
 
 class ClassifReport(Metric):
@@ -222,32 +280,3 @@ class ConfusionMatrix(Metric):
 
     def summary(self):
         self.logger.info("confusion matrix '%s'" % self.name)
-
-
-class BinaryAccuracy(Metric):
-
-    def __init__(self):
-        super().__init__("BinaryAccuracy")
-        self.correct = 0
-        self.total = 0
-
-    def accumulate(self, pred, gt):
-        pred = pred.topk(1, 1)[1].view(len(gt))
-        if pred.size() != gt.size():
-            raise AssertionError("pred and gt should have similar size")
-        self.correct += pred.eq(gt).float().sum().item()
-        self.total += len(pred)
-        return self.eval()
-
-    def eval(self):
-        return (float(self.correct) / float(self.total)) * 100
-
-    def reset(self):
-        self.correct = 0
-        self.total = 0
-
-    def goal(self):
-        return Metric.maximize
-
-    def summary(self):
-        self.logger.info("metric '%s'" % self.name)
