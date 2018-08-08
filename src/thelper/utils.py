@@ -362,3 +362,15 @@ def check_key(key, tdict, tdict_name, msg=''):
             raise AssertionError("%s missing '%s' field" % (tdict_name, key))
         else:
             raise AssertionError(msg)
+
+def get_table_from_classification_report(classification_report):
+    lines = classification_report.splitlines()
+    header = lines[1].split()
+    data=[]
+    for line in  lines[2:-1]:
+        els = line.split()
+        if len(els):
+            data.append(els)
+    data = np.vstack(data).transpose()
+    avg = lines[len(lines)-1].split()
+    return (header,data, avg)

@@ -6,6 +6,8 @@ from abc import abstractmethod
 import torch
 import torch.optim
 
+from tensorboardX import SummaryWriter
+
 import thelper.utils
 
 logger = logging.getLogger(__name__)
@@ -54,6 +56,19 @@ class Trainer:
         self.config_backup_path = os.path.join(self.save_dir, "config.json")  # this file is created in cli.get_save_dir
         if not os.path.exists(self.checkpoint_dir):
             os.mkdir(self.checkpoint_dir)
+        self.use_tbx = False
+        if "use_tbx" not in config or not config["use_tbx"] or int(config["use_tbx"]) <= 0:
+            self.use_tbx = False
+        else:
+            self.use_tbx = config["use_tbx"]
+        if self.use_tbx:
+            self.tbx_dir = os.path.join(self.save_dir, "tbx_logs")
+            if not os.path.exists(self.tbx_dir):
+                os.mkdir(self.tbx_dir)
+            self.writer = SummaryWriter(log_dir=self.tbx_dir, comment=self.name)
+            logger.info('using tensorboard : tensorboard --logdir %s --port <your_port>' % self.tbx_dir)
+        self.current_iter = 0
+        self.current_lr= 0
         self.outputs = {}
         self.model = model
         self.loss = loss
@@ -112,6 +127,42 @@ class Trainer:
                     monitor_type_key = "valid_metrics"
                 monitor_val = None
                 new_best = False
+
+                if self.use_tbx:
+                    self.writer.add_scalars('train_epoch/loss', {'train': result['train_loss'], 'valid': result['valid_loss']}, epoch+1)
+                    self.writer.add_scalars('train_epoch/accuracy',
+                                           {'train': result['train_metrics']['accuracy'],
+                                            'valid': result['valid_metrics']['accuracy']}, epoch + 1)
+                    header, data, avg = thelper.utils.get_table_from_classification_report(result['train_metrics']['fullreport'])
+                    summary_data_precision = {}
+                    summary_data_recall = {}
+                    summary_data_f1 = {}
+                    for iter, class_id in enumerate(data[0]):
+                        summary_data_precision[class_id]=float(data[1][iter])
+                        summary_data_recall[class_id] = float(data[2][iter])
+                        summary_data_f1[class_id] = float(data[3][iter])
+                    self.writer.add_scalars('train_epoch/%s' % header[0],
+                                            summary_data_precision, epoch + 1)
+                    self.writer.add_scalars('train_epoch/%s' % header[1],
+                                            summary_data_recall, epoch + 1)
+                    self.writer.add_scalars('train_epoch/%s' % header[2],
+                                            summary_data_f1, epoch + 1)
+                    header, data, avg = thelper.utils.get_table_from_classification_report(
+                        result['valid_metrics']['fullreport'])
+                    summary_data_precision = {}
+                    summary_data_recall = {}
+                    summary_data_f1 = {}
+                    for iter, class_id in enumerate(data[0]):
+                        summary_data_precision[class_id] = float(data[1][iter])
+                        summary_data_recall[class_id] = float(data[2][iter])
+                        summary_data_f1[class_id] = float(data[3][iter])
+                    self.writer.add_scalars('valid_epoch/%s' % header[0],
+                                            summary_data_precision, epoch + 1)
+                    self.writer.add_scalars('valid_epoch/%s' % header[1],
+                                            summary_data_recall, epoch + 1)
+                    self.writer.add_scalars('valid_epoch/%s' % header[2],
+                                            summary_data_f1, epoch + 1)
+
                 for key, value in result.items():
                     if key == monitor_type_key:
                         if self.monitor not in value:
@@ -240,6 +291,11 @@ class ImageClassifTrainer(Trainer):
         input, label = input.to(dev), label.to(dev)
         return input, label
 
+    def get_lr(self):
+        for param_group in self.optimizer.param_groups:
+            if 'lr' in param_group:
+                return  param_group['lr']
+
     def _train_epoch(self, epoch, loader):
         if not loader:
             raise AssertionError("no available data to load")
@@ -249,6 +305,9 @@ class ImageClassifTrainer(Trainer):
             for k, v in state.items():
                 if isinstance(v, torch.Tensor):
                     state[k] = v.to(self.train_dev)
+
+        self.current_lr = self.get_lr()
+
         total_loss = 0
         for metric in self.metrics.values():
             if hasattr(metric, "set_class_map") and callable(metric.set_class_map):
@@ -262,23 +321,31 @@ class ImageClassifTrainer(Trainer):
             loss.backward()
             self.optimizer.step()
             total_loss += loss.item()
+            batch_size=len(loader)
+            self.current_iter += 1
             for metric in self.metrics.values():
                 metric.accumulate(pred.cpu(), label.cpu())
             self.logger.info(
-                "train epoch: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}: {:.2f}".format(
+                "train epoch: {} iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}: {:.2f}".format(
                     epoch,
+                    self.current_iter,
                     idx,
-                    len(loader),
-                    (idx / len(loader)) * 100.0,
+                    batch_size,
+                    (idx / batch_size) * 100.0,
                     loss.item(),
                     self.metrics[self.monitor].name,
                     self.metrics[self.monitor].eval()
                 )
             )
+            if self.use_tbx:
+                self.writer.add_scalar('train/%s' % self.metrics[self.monitor].name, self.metrics[self.monitor].eval(),  self.current_iter )
+                self.writer.add_scalar('train/lr', self.current_lr,  self.current_iter)
+                self.writer.add_scalar('train/loss', loss.item(),  self.current_iter)
+
         metric_vals = {}
         for metric_name, metric in self.metrics.items():
             metric_vals[metric_name] = metric.eval()
-        result["train_loss"] = total_loss / len(loader)
+        result["train_loss"] = total_loss / batch_size
         result["train_metrics"] = metric_vals
         return result
 
