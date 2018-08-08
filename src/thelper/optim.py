@@ -73,7 +73,6 @@ class Metric(ABC):
     def __init__(self, name, tbx_eval_iter=False):
         if not name:
             raise AssertionError("metric name must not be empty (lookup might fail)")
-        self.logger = thelper.utils.get_class_logger()
         self.name = name
         self.tbx_eval_iter = tbx_eval_iter  # defines whether the metric can be evaluated each iter by tensorboard
 
@@ -121,7 +120,7 @@ class CategoryAccuracy(Metric):
         if len(self.total) == 0 or sum(self.total) == 0:
             if not self.warned_eval_bad:
                 self.warned_eval_bad = True
-                self.logger.warning("metric '%s' eval result invalid (set as 0.0), no results accumulated" % self.name)
+                logger.warning("metric '%s' eval result invalid (set as 0.0), no results accumulated" % self.name)
             return 0.0
         return (float(sum(self.correct)) / float(sum(self.total))) * 100
 
@@ -136,7 +135,7 @@ class CategoryAccuracy(Metric):
         return Metric.maximize
 
     def summary(self):
-        self.logger.info("metric '%s' with top_k=%d" % (self.name, self.top_k))
+        logger.info("metric '%s' with top_k=%d" % (self.name, self.top_k))
 
 
 class BinaryAccuracy(Metric):
@@ -162,7 +161,7 @@ class BinaryAccuracy(Metric):
         if len(self.total) == 0 or sum(self.total) == 0:
             if not self.warned_eval_bad:
                 self.warned_eval_bad = True
-                self.logger.warning("metric '%s' eval result invalid (set as 0.0), no results accumulated" % self.name)
+                logger.warning("metric '%s' eval result invalid (set as 0.0), no results accumulated" % self.name)
             return 0.0
         return (float(sum(self.correct)) / float(sum(self.total))) * 100
 
@@ -177,7 +176,99 @@ class BinaryAccuracy(Metric):
         return Metric.maximize
 
     def summary(self):
-        self.logger.info("metric '%s'" % self.name)
+        logger.info("metric '%s'" % self.name)
+
+
+class ExternalMetric(Metric):
+
+    def __init__(self, metric_name, metric_params=None, target_name=None,
+                 target_label=None, class_map=None, max_accum=None, tbx_eval_iter=True):
+        name = str(metric_name).rsplit(".", 1)[-1]
+        if target_name:
+            name += "_" + str(target_name)
+        super().__init__(name, tbx_eval_iter=tbx_eval_iter)
+        self.metric_type = thelper.utils.import_class(metric_name)
+        if metric_params:
+            self.metric_params = thelper.utils.keyvals2dict(metric_params["params"])
+        else:
+            self.metric_params = {}
+        self.target_name = target_name
+        self.target_label = target_label
+        self.class_map = class_map
+        if class_map is not None and not isinstance(class_map, dict):
+            raise AssertionError("unexpected class map type")
+        if class_map is not None:
+            if self.target_label is not None and self.target_name is not None:
+                if class_map[self.target_label] != self.target_name:
+                    raise AssertionError("target label '{}' did not match with name '{}' in class map".format(self.target_label, self.target_name))
+            elif self.target_name is None and self.target_label is not None:
+                self.target_name = class_map[self.target_label]
+            elif self.target_label is None and self.target_name is not None:
+                for tgt_lbl, tgt_name in class_map.items():
+                    if tgt_name == self.target_name:
+                        self.target_label = tgt_lbl
+                        break
+                if self.target_label is None:
+                    raise AssertionError("could not find target name '%s' in provided class mapping" % self.target_name)
+        self.max_accum = max_accum
+        self.y_true = deque()
+        self.y_pred = deque()
+
+    def set_class_map(self, class_map):
+        if not isinstance(class_map, dict):
+            raise AssertionError("unexpected class map type")
+        if self.target_label is not None and self.target_name is not None:
+            if class_map[self.target_label] != self.target_name:
+                raise AssertionError("target label '{}' did not match with name '{}' in class map".format(self.target_label, self.target_name))
+        elif self.target_name is None and self.target_label is not None:
+            self.target_name = class_map[self.target_label]
+        elif self.target_label is None and self.target_name is not None:
+            for tgt_lbl, tgt_name in class_map.items():
+                if tgt_name == self.target_name:
+                    self.target_label = tgt_lbl
+                    break
+            if self.target_label is None:
+                raise AssertionError("could not find target name '%s' in provided class mapping" % self.target_name)
+        self.class_map = class_map
+
+    def accumulate(self, pred, gt):
+        pred = pred.topk(1, 1)[1].view(len(gt))
+        if pred.size() != gt.size():
+            raise AssertionError("pred and gt should have similar size")
+        if self.target_name is not None and self.target_label is None:
+            raise AssertionError("could not map target name '%s' to target label, missing class map" % self.target_name)
+        elif self.target_label is not None:
+            must_keep = [y_pred == self.target_label or y_true == self.target_label for y_pred, y_true in zip(pred, gt)]
+            for idx in range(len(must_keep)):
+                if must_keep[idx]:
+                    self.y_true.append(gt[idx].item()==self.target_label)
+                    self.y_pred.append(pred[idx].item()==self.target_label)
+        else:
+            for idx in range(len(pred.numel())):
+                self.y_true.append(gt[idx].item())
+                self.y_pred.append(pred[idx].item())
+        while self.max_accum and len(self.y_true) > self.max_accum:
+            self.y_true.popleft()
+            self.y_pred.popleft()
+
+    def eval(self):
+        return self.metric_type(self.y_true, self.y_pred, **self.metric_params)
+
+    def reset(self):
+        self.y_true = deque()
+        self.y_pred = deque()
+
+    def needs_reset(self):
+        return self.max_accum is None
+
+    def goal(self):
+        return Metric.maximize
+
+    def summary(self):
+        if self.target_name:
+            logger.info("external metric '%s' for target = '%s'" % (self.name, self.target_name))
+        else:
+            logger.info("external metric '%s' for all targets" % self.name)
 
 
 class ClassifReport(Metric):
@@ -229,7 +320,7 @@ class ClassifReport(Metric):
         return None  # means this class should not be used for monitoring
 
     def summary(self):
-        self.logger.info("classification report '%s'" % self.name)
+        logger.info("classification report '%s'" % self.name)
 
 
 class ConfusionMatrix(Metric):
@@ -279,4 +370,4 @@ class ConfusionMatrix(Metric):
         return None  # means this class should not be used for monitoring
 
     def summary(self):
-        self.logger.info("confusion matrix '%s'" % self.name)
+        logger.info("confusion matrix '%s'" % self.name)
