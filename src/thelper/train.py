@@ -138,12 +138,12 @@ class Trainer:
                     self.logger.info("update learning rate to %.8f" % self.current_lr)
                 self.model = self.model.to(self.train_dev)
                 result = self._train_epoch(epoch, self.train_loader)
-                monitor_type_key = "train_metrics"
+                monitor_type_key = "train/metrics"
                 if self.valid_loader:
                     self.model = self.model.to(self.valid_dev)
                     result_valid = self._eval_epoch(epoch, self.valid_loader, "valid")
                     result = {**result, **result_valid}
-                    monitor_type_key = "valid_metrics"
+                    monitor_type_key = "valid/metrics"
                 new_best = False
                 losses = {}
                 monitor_vals = {}
