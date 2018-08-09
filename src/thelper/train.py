@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+import time
+import platform
 from copy import deepcopy
 from abc import abstractmethod
 
@@ -212,18 +214,21 @@ class Trainer:
         if self.config_backup_path and os.path.exists(self.config_backup_path):
             with open(self.config_backup_path, "r") as fd:
                 fullconfig = json.load(fd)
+        timestr = time.strftime("%Y%m%d-%H%M%S")
         curr_state = {
             "name": self.name,
             "epoch": epoch,
             "iter": self.current_iter,
+            "time": timestr,
+            "host": platform.node(),
             "outputs": self.outputs[epoch],
             "state_dict": self.model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "monitor_best": self.monitor_best,
             "config": fullconfig
         }
-        latest_loss = self.outputs[epoch]["train_loss"]
-        filename = os.path.join(self.checkpoint_dir, "ckpt.%04d.L%.3f.pth" % (epoch, latest_loss))
+        filename = "ckpt.%04d.%s.%s.pth" % (epoch, platform.node(), timestr)
+        filename = os.path.join(self.checkpoint_dir, filename)
         torch.save(curr_state, filename)
         if save_best:
             filename_best = os.path.join(self.checkpoint_dir, "ckpt.best.pth")
@@ -301,7 +306,7 @@ class ImageClassifTrainer(Trainer):
             for metric in self.train_metrics.values():
                 metric.accumulate(pred.cpu(), label.cpu())
             self.logger.info(
-                "train epoch: {} iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}: {:.2f}".format(
+                "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}: {:.2f}".format(
                     epoch,
                     self.current_iter,
                     idx,
