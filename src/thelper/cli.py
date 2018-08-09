@@ -8,7 +8,6 @@ import logging
 import os
 import sys
 import time
-from copy import copy
 
 import torch
 import numpy as np
@@ -130,8 +129,7 @@ def create_session(config, data_root, save_dir, display_graphs=False):
     if display_graphs and logger.isEnabledFor(logging.DEBUG):
         if not train_loader:
             raise AssertionError("cannot draw sample example graph, train loader is empty")
-        train_loader_copy = copy(train_loader)
-        data_iter = iter(train_loader_copy)
+        data_iter = iter(train_loader)
         # noinspection PyUnresolvedReferences
         data_sample = data_iter.next()
         thelper.utils.draw_sample(data_sample, block=True)
@@ -464,8 +462,7 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, 
     if display_graphs and logger.isEnabledFor(logging.DEBUG):
         if not train_loader:
             raise AssertionError("cannot draw sample example graph, train loader is empty")
-        train_loader_copy = copy(train_loader)
-        data_iter = iter(train_loader_copy)
+        data_iter = iter(train_loader)
         # noinspection PyUnresolvedReferences
         data_sample = data_iter.next()
         thelper.utils.draw_sample(data_sample, block=True)
