@@ -53,7 +53,6 @@ def load_optimization(model, config):
     optimizer_params = thelper.utils.keyvals2dict(optimizer_config["params"]) if "params" in optimizer_config else None
     optimizer = optimizer_type(filter(lambda p: p.requires_grad, model.parameters()), **optimizer_params)
     scheduler = None
-    scheduler_step = 1
     if "scheduler" in config and config["scheduler"]:
         scheduler_config = config["scheduler"]
         if "type" not in scheduler_config or not scheduler_config["type"]:
@@ -61,8 +60,7 @@ def load_optimization(model, config):
         scheduler_type = thelper.utils.import_class(scheduler_config["type"])
         scheduler_params = thelper.utils.keyvals2dict(scheduler_config["params"]) if "params" in scheduler_config else None
         scheduler = scheduler_type(optimizer, **scheduler_params)
-        scheduler_step = scheduler_config["step"] if "step" in scheduler_config else 1
-    return optimizer, scheduler, scheduler_step
+    return optimizer, scheduler
 
 
 class Metric(ABC):

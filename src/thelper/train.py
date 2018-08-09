@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def load_trainer(session_name, save_dir, config, model, loss,
-                 metrics, optimizer, scheduler, schedstep, loaders):
+                 metrics, optimizer, scheduler, loaders):
     if "trainer" not in config or not config["trainer"]:
         raise AssertionError("config missing 'trainer' field")
     trainer_config = config["trainer"]
@@ -25,7 +25,7 @@ def load_trainer(session_name, save_dir, config, model, loss,
     if "params" not in trainer_config:
         raise AssertionError("trainer config missing 'params' field")
     params = thelper.utils.keyvals2dict(trainer_config["params"])
-    metapack = (model, loss, metrics, optimizer, scheduler, schedstep)
+    metapack = (model, loss, metrics, optimizer, scheduler)
     trainer = trainer_type(session_name, save_dir, metapack, loaders, trainer_config, **params)
     return trainer
 
@@ -33,7 +33,7 @@ def load_trainer(session_name, save_dir, config, model, loss,
 class Trainer:
 
     def __init__(self, session_name, save_dir, metapack, loaders, config):
-        model, loss, metrics, optimizer, scheduler, schedstep = metapack
+        model, loss, metrics, optimizer, scheduler = metapack
         if not model or not loss or not metrics or not optimizer or not config:
             raise AssertionError("missing input args")
         train_loader, valid_loader, test_loader = loaders
@@ -73,7 +73,6 @@ class Trainer:
         self.eval_metrics = deepcopy(metrics)
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self.schedstep = schedstep
         self.config = config
         self.default_dev = "cpu"
         if torch.cuda.is_available():
@@ -117,6 +116,10 @@ class Trainer:
     def train(self):
         if self.train_loader:
             for epoch in range(self.start_epoch, self.epochs + 1):
+                if self.scheduler:
+                    self.scheduler.step(epoch=(epoch-1))  # epoch idx is 1-based, scheduler expects 0-based
+                    self.current_lr = self.scheduler.get_lr()[0]
+                    self.logger.info("update learning rate to %.8f" % self.current_lr)
                 self.model = self.model.to(self.train_dev)
                 result = self._train_epoch(epoch, self.train_loader)
                 monitor_type_key = "train_metrics"
@@ -159,10 +162,6 @@ class Trainer:
                 self.outputs[epoch] = result
                 if new_best or (epoch % self.save_freq) == 0:
                     self._save(epoch, save_best=new_best)
-                if self.scheduler and (epoch % self.schedstep) == 0:
-                    self.scheduler.step(epoch)
-                    self.current_lr = self.scheduler.get_lr()[0]
-                    self.logger.info("update learning rate to %.8f" % self.current_lr)
             self.logger.info("training done")
             if self.test_loader:
                 self.model = self.model.to(self.test_dev)
@@ -179,11 +178,11 @@ class Trainer:
         result = {}
         if self.valid_loader:
             self.model = self.model.to(self.valid_dev)
-            result_valid = self._eval_epoch(0, self.valid_loader, "valid")
+            result_valid = self._eval_epoch(self.start_epoch, self.valid_loader, "valid")
             result = {**result, **result_valid}
         if self.test_loader:
             self.model = self.model.to(self.test_dev)
-            result_test = self._eval_epoch(0, self.test_loader, "test")
+            result_test = self._eval_epoch(self.start_epoch, self.test_loader, "test")
             result = {**result, **result_test}
         for key, value in result.items():
             if not isinstance(value, dict):
@@ -191,7 +190,7 @@ class Trainer:
             else:
                 for subkey, subvalue in value.items():
                     self.logger.debug(" final result =>  {}:{}: {}".format(str(key), str(subkey), subvalue))
-        self.outputs[0] = result
+        self.outputs[self.start_epoch] = result
         self.logger.info("evaluation done")
         # not saving final eval results anywhere...? todo
 
