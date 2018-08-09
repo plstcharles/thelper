@@ -62,17 +62,31 @@ class Trainer:
         self.use_tbx = False
         if "use_tbx" in config:
             self.use_tbx = thelper.utils.str2bool(config["use_tbx"])
+        writers = [None, None, None]
         if self.use_tbx:
-            self.tbx_dir = os.path.join(self.save_dir, "tbx_logs")
-            if not os.path.exists(self.tbx_dir):
-                os.mkdir(self.tbx_dir)
-            self.writer = SummaryWriter(log_dir=self.tbx_dir, comment=self.name)
-            self.logger.info("using tensorboard : tensorboard --logdir %s --port <your_port>" % self.tbx_dir)
+            self.tbx_root_dir = os.path.join(self.save_dir, "tbx_logs")
+            if not os.path.exists(self.tbx_root_dir):
+                os.mkdir(self.tbx_root_dir)
+            timestr = time.strftime("%Y%m%d-%H%M%S")
+            train_foldername = "train-%s-%s" % (platform.node(), timestr)
+            valid_foldername = "valid-%s-%s" % (platform.node(), timestr)
+            test_foldername = "test-%s-%s" % (platform.node(), timestr)
+            foldernames = [train_foldername, valid_foldername, test_foldername]
+            for idx, (loader, foldername) in enumerate(zip(loaders,foldernames)):
+                if loader:
+                    tbx_dir = os.path.join(self.tbx_root_dir, foldername)
+                    if os.path.exists(tbx_dir):
+                        raise AssertionError("tbx session paths should be unique")
+                    os.mkdir(tbx_dir)
+                    writers[idx] = SummaryWriter(log_dir=tbx_dir, comment=self.name)
+            self.logger.info("using tensorboard : tensorboard --logdir %s --port <your_port>" % self.tbx_root_dir)
+        self.train_writer, self.valid_writer, self.test_writer = writers
         self.outputs = {}
         self.model = model
         self.loss = loss
         self.train_metrics = deepcopy(metrics)
-        self.eval_metrics = deepcopy(metrics)
+        self.valid_metrics = deepcopy(metrics)
+        self.test_metrics = deepcopy(metrics)
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.config = config
@@ -134,11 +148,11 @@ class Trainer:
                 losses = {}
                 monitor_vals = {}
                 for key, value in result.items():
-                    if key == "train_metrics":
+                    if key == "train/metrics":
                         if self.monitor not in value:
                             raise AssertionError("not monitoring required variable '%s' in training metrics" % self.monitor)
                         monitor_vals["train"] = value[self.monitor]
-                    elif key == "valid_metrics":
+                    elif key == "valid/metrics":
                         if self.monitor not in value:
                             raise AssertionError("not monitoring required variable '%s' in validation metrics" % self.monitor)
                         monitor_vals["valid"] = value[self.monitor]
@@ -147,9 +161,9 @@ class Trainer:
                          (self.monitor_goal == thelper.optim.Metric.maximize and value[self.monitor] > self.monitor_best))):
                         self.monitor_best = value[self.monitor]
                         new_best = True
-                    if key == "train_loss":
+                    if key == "train/loss":
                         losses["train"] = value
-                    elif key == "valid_loss":
+                    elif key == "valid/loss":
                         losses["valid"] = value
                     if not isinstance(value, dict):
                         self.logger.debug(" epoch {} result =>  {}: {}".format(epoch, str(key), value))
@@ -158,9 +172,6 @@ class Trainer:
                             self.logger.debug(" epoch {} result =>  {}:{}: {}".format(epoch, str(key), str(subkey), subvalue))
                 if not monitor_vals or not losses:
                     raise AssertionError("training/validation did not produce required losses & monitoring variable '%s'" % self.monitor)
-                if self.use_tbx:
-                    self.writer.add_scalars("train_epoch/loss", losses, epoch)
-                    self.writer.add_scalars("train_epoch/" + self.monitor, monitor_vals, epoch)
                 self.outputs[epoch] = result
                 if new_best or (epoch % self.save_freq) == 0:
                     self._save(epoch, save_best=new_best)
@@ -318,16 +329,22 @@ class ImageClassifTrainer(Trainer):
                 )
             )
             if self.use_tbx:
-                self.writer.add_scalar("train/loss", loss.item(), self.current_iter)
-                self.writer.add_scalar("train/lr", self.current_lr, self.current_iter)
+                self.train_writer.add_scalar("iter/loss", loss.item(), self.current_iter)
+                self.train_writer.add_scalar("iter/lr", self.current_lr, self.current_iter)
                 for metric_name, metric in self.train_metrics.items():
-                    if hasattr(metric, "tbx_eval_iter") and metric.tbx_eval_iter:
-                        self.writer.add_scalar("train/%s" % metric_name, metric.eval(), self.current_iter)
+                    if metric.is_scalar():
+                        self.train_writer.add_scalar("iter/%s" % metric_name, metric.eval(), self.current_iter)
         metric_vals = {}
         for metric_name, metric in self.train_metrics.items():
             metric_vals[metric_name] = metric.eval()
-        result["train_loss"] = total_loss / epoch_size
-        result["train_metrics"] = metric_vals
+        result["train/loss"] = total_loss / epoch_size
+        result["train/metrics"] = metric_vals
+        if self.use_tbx:
+            self.train_writer.add_scalar("epoch/loss", total_loss / epoch_size, epoch)
+            self.train_writer.add_scalar("epoch/lr", self.current_lr, epoch)
+            for metric_name, metric in self.train_metrics.items():
+                if metric.is_scalar():
+                    self.train_writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
         return result
 
     def _eval_epoch(self, epoch, loader, eval_type="valid"):
@@ -337,10 +354,17 @@ class ImageClassifTrainer(Trainer):
             raise AssertionError("unexpected eval type")
         result = {}
         self.model.eval()
-        dev = self.valid_dev if eval_type == "valid" else self.test_dev
+        if eval_type == "valid":
+            dev = self.valid_dev
+            writer = self.valid_writer
+            metrics = self.valid_metrics
+        else:
+            dev = self.test_dev
+            writer = self.test_writer
+            metrics = self.test_metrics
         with torch.no_grad():
             total_loss = 0
-            for metric in self.eval_metrics.values():
+            for metric in metrics.values():
                 if hasattr(metric, "set_class_map") and callable(metric.set_class_map):
                     metric.set_class_map(self.class_map)
                 metric.reset()  # force reset here, we always evaluate from a clean state
@@ -350,7 +374,7 @@ class ImageClassifTrainer(Trainer):
                 pred = self.model(input)
                 loss = self.loss(pred, label)
                 total_loss += loss.item()
-                for metric in self.eval_metrics.values():
+                for metric in metrics.values():
                     metric.accumulate(pred.cpu(), label.cpu())
                 # set logger to output based on timer?
                 self.logger.info(
@@ -361,13 +385,22 @@ class ImageClassifTrainer(Trainer):
                         epoch_size,
                         (idx / epoch_size) * 100.0,
                         loss.item(),
-                        self.eval_metrics[self.monitor].name,
-                        self.eval_metrics[self.monitor].eval()
+                        metrics[self.monitor].name,
+                        metrics[self.monitor].eval()
                     )
                 )
             metric_vals = {}
-            for metric_name, metric in self.eval_metrics.items():
+            for metric_name, metric in metrics.items():
                 metric_vals[metric_name] = metric.eval()
-            result[eval_type + "_loss"] = total_loss / epoch_size
-            result[eval_type + "_metrics"] = metric_vals
+            result[eval_type + "/loss"] = total_loss / epoch_size
+            result[eval_type + "/metrics"] = metric_vals
+            if self.use_tbx:
+                if self.current_iter>0:
+                    writer.add_scalar("iter/loss", total_loss / epoch_size, self.current_iter)
+                writer.add_scalar("epoch/loss", total_loss / epoch_size, epoch)
+                for metric_name, metric in metrics.items():
+                    if metric.is_scalar():
+                        if self.current_iter > 0:
+                            writer.add_scalar("iter/%s" % metric_name, metric.eval(), self.current_iter)
+                        writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
         return result

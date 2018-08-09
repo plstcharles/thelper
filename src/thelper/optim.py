@@ -68,11 +68,10 @@ class Metric(ABC):
     minimize = float("-inf")
     maximize = float("inf")
 
-    def __init__(self, name, tbx_eval_iter=False):
+    def __init__(self, name):
         if not name:
             raise AssertionError("metric name must not be empty (lookup might fail)")
         self.name = name
-        self.tbx_eval_iter = tbx_eval_iter  # defines whether the metric can be evaluated each iter by tensorboard
 
     @abstractmethod
     def accumulate(self, pred, gt):
@@ -87,18 +86,22 @@ class Metric(ABC):
         raise NotImplementedError
 
     def needs_reset(self):
-        return True  # override and return false if reset not needed
+        return True  # override and return false if reset not needed between epochs
 
     @abstractmethod
     def goal(self):
-        # should return 'minimize' or 'maximize' only
+        # should return 'minimize' or 'maximize' if scalar, and None otherwise
         raise NotImplementedError
+
+    def is_scalar(self):
+        curr_goal = self.goal()
+        return curr_goal == Metric.minimize or curr_goal == Metric.maximize
 
 
 class CategoryAccuracy(Metric):
 
-    def __init__(self, top_k=1, max_accum=None, tbx_eval_iter=True):
-        super().__init__("CategoryAccuracy", tbx_eval_iter=tbx_eval_iter)
+    def __init__(self, top_k=1, max_accum=None):
+        super().__init__("CategoryAccuracy")
         self.top_k = top_k
         self.max_accum = max_accum
         self.correct = deque()
@@ -138,8 +141,8 @@ class CategoryAccuracy(Metric):
 
 class BinaryAccuracy(Metric):
 
-    def __init__(self, max_accum=None, tbx_eval_iter=True):
-        super().__init__("BinaryAccuracy", tbx_eval_iter=tbx_eval_iter)
+    def __init__(self, max_accum=None):
+        super().__init__("BinaryAccuracy")
         self.max_accum = max_accum
         self.correct = deque()
         self.total = deque()
@@ -179,23 +182,60 @@ class BinaryAccuracy(Metric):
 
 class ExternalMetric(Metric):
 
-    def __init__(self, metric_name, metric_params=None, target_name=None,
-                 target_label=None, class_map=None, max_accum=None, tbx_eval_iter=True):
+    def __init__(self, metric_name, metric_params, metric_type,
+                 target_name=None, target_label=None, goal=None,
+                 class_map=None, max_accum=None):
         name = str(metric_name).rsplit(".", 1)[-1]
         if target_name:
             name += "_" + str(target_name)
-        super().__init__(name, tbx_eval_iter=tbx_eval_iter)
-        self.metric_type = thelper.utils.import_class(metric_name)
+        super().__init__(name)
+        if not isinstance(metric_type,str) or (
+                metric_type != "classif_top1" and
+                metric_type != "classif_scores" and
+                metric_type != "regression"):
+            raise AssertionError("unknown metric type for '%s'" % self.name)
+        self.metric_goal = None
+        if goal is not None:
+            if isinstance(goal,str) and "max" in goal.lower():
+                self.metric_goal = Metric.maximize
+            elif isinstance(goal,str) and "min" in goal.lower():
+                self.metric_goal = Metric.minimize
+            else:
+                raise AssertionError("unexpected goal type for '%s'" % self.name)
+        self.metric_type = metric_type
+        self.metric = thelper.utils.import_class(metric_name)
         if metric_params:
             self.metric_params = thelper.utils.keyvals2dict(metric_params["params"])
         else:
             self.metric_params = {}
-        self.target_name = target_name
-        self.target_label = target_label
-        self.class_map = class_map
-        if class_map is not None and not isinstance(class_map, dict):
-            raise AssertionError("unexpected class map type")
-        if class_map is not None:
+        if "classif" in metric_type:
+            self.target_name = target_name
+            self.target_label = target_label
+            self.class_map = class_map
+            if class_map is not None and not isinstance(class_map, dict):
+                raise AssertionError("unexpected class map type")
+            if class_map is not None:
+                if self.target_label is not None and self.target_name is not None:
+                    if class_map[self.target_label] != self.target_name:
+                        raise AssertionError("target label '{}' did not match with name '{}' in class map".format(self.target_label, self.target_name))
+                elif self.target_name is None and self.target_label is not None:
+                    self.target_name = class_map[self.target_label]
+                elif self.target_label is None and self.target_name is not None:
+                    for tgt_lbl, tgt_name in class_map.items():
+                        if tgt_name == self.target_name:
+                            self.target_label = tgt_lbl
+                            break
+                    if self.target_label is None:
+                        raise AssertionError("could not find target name '%s' in provided class mapping" % self.target_name)
+        # elif "regression" in metric_type: missing impl for custom handling
+        self.max_accum = max_accum
+        self.pred = deque()
+        self.gt = deque()
+
+    def set_class_map(self, class_map):
+        if "classif" in self.metric_type:
+            if not isinstance(class_map, dict):
+                raise AssertionError("unexpected class map type")
             if self.target_label is not None and self.target_name is not None:
                 if class_map[self.target_label] != self.target_name:
                     raise AssertionError("target label '{}' did not match with name '{}' in class map".format(self.target_label, self.target_name))
@@ -208,59 +248,60 @@ class ExternalMetric(Metric):
                         break
                 if self.target_label is None:
                     raise AssertionError("could not find target name '%s' in provided class mapping" % self.target_name)
-        self.max_accum = max_accum
-        self.y_true = deque()
-        self.y_pred = deque()
-
-    def set_class_map(self, class_map):
-        if not isinstance(class_map, dict):
-            raise AssertionError("unexpected class map type")
-        if self.target_label is not None and self.target_name is not None:
-            if class_map[self.target_label] != self.target_name:
-                raise AssertionError("target label '{}' did not match with name '{}' in class map".format(self.target_label, self.target_name))
-        elif self.target_name is None and self.target_label is not None:
-            self.target_name = class_map[self.target_label]
-        elif self.target_label is None and self.target_name is not None:
-            for tgt_lbl, tgt_name in class_map.items():
-                if tgt_name == self.target_name:
-                    self.target_label = tgt_lbl
-                    break
-            if self.target_label is None:
-                raise AssertionError("could not find target name '%s' in provided class mapping" % self.target_name)
-        self.class_map = class_map
+            self.class_map = class_map
 
     def accumulate(self, pred, gt):
-        pred = pred.topk(1, 1)[1].view(len(gt))
-        if pred.size() != gt.size():
-            raise AssertionError("pred and gt should have similar size")
-        if self.target_name is not None and self.target_label is None:
-            raise AssertionError("could not map target name '%s' to target label, missing class map" % self.target_name)
-        elif self.target_label is not None:
-            must_keep = [y_pred == self.target_label or y_true == self.target_label for y_pred, y_true in zip(pred, gt)]
-            for idx in range(len(must_keep)):
-                if must_keep[idx]:
-                    self.y_true.append(gt[idx].item()==self.target_label)
-                    self.y_pred.append(pred[idx].item()==self.target_label)
+        if "classif" in self.metric_type:
+            if self.target_name is not None and self.target_label is None:
+                raise AssertionError("could not map target name '%s' to target label, missing class map" % self.target_name)
+            elif self.target_label is not None:
+                pred_label = pred.topk(1, 1)[1].view(len(gt))
+                y_true, y_pred = [], []
+                if self.metric_type == "classif_top1":
+                    must_keep = [y_pred == self.target_label or y_true == self.target_label for y_pred, y_true in zip(pred_label, gt)]
+                    for idx in range(len(must_keep)):
+                        if must_keep[idx]:
+                            y_true.append(gt[idx].item() == self.target_label)
+                            y_pred.append(pred_label[idx].item() == self.target_label)
+                else:  # self.metric_type == "classif_scores"
+                    for idx in range(len(gt)):
+                        y_true.append(gt[idx].item() == self.target_label)
+                        y_pred.append(pred[idx,self.target_label].item())
+                self.gt.append(y_true)
+                self.pred.append(y_pred)
+            else:
+                if self.metric_type == "classif_top1":
+                    self.gt.append([gt[idx].item() for idx in range(len(pred.numel()))])
+                    self.pred.append([pred[idx].item() for idx in range(len(pred.numel()))])
+                else:  # self.metric_type == "classif_scores"
+                    raise AssertionError("score-based classification analyses (e.g. roc auc) must specify target label")
+        elif self.metric_type == "regression":
+            raise NotImplementedError
         else:
-            for idx in range(len(pred.numel())):
-                self.y_true.append(gt[idx].item())
-                self.y_pred.append(pred[idx].item())
-        while self.max_accum and len(self.y_true) > self.max_accum:
-            self.y_true.popleft()
-            self.y_pred.popleft()
+            raise AssertionError("unknown metric type for '%s'" % self.name)
+        while self.max_accum and len(self.gt) > self.max_accum:
+            self.gt.popleft()
+            self.pred.popleft()
 
     def eval(self):
-        return self.metric_type(self.y_true, self.y_pred, **self.metric_params)
+        if "classif" in self.metric_type:
+            y_true = [label for labels in self.gt for label in labels]
+            y_pred = [label for labels in self.pred for label in labels]
+            if len(y_true) != len(y_pred):
+                raise AssertionError("list flattening failed")
+            return self.metric(y_true, y_pred, **self.metric_params)
+        else:
+            raise NotImplementedError
 
     def reset(self):
-        self.y_true = deque()
-        self.y_pred = deque()
+        self.gt = deque()
+        self.pred = deque()
 
     def needs_reset(self):
         return self.max_accum is None
 
     def goal(self):
-        return Metric.maximize
+        return self.metric_goal
 
     def summary(self):
         if self.target_name:
