@@ -1,10 +1,10 @@
 import logging
+import copy
 from collections import deque
 from abc import ABC, abstractmethod
 
 import torch
 import sklearn.metrics
-import pandas as pd
 
 import thelper.utils
 
@@ -364,31 +364,37 @@ class ClassifReport(Metric):
 
 class ConfusionMatrix(Metric):
 
-    def __init__(self, percentage=False, class_map=None):
+    def __init__(self, class_map=None):
         super().__init__("ConfusionMatrix")
 
-        def gen_matrix(y_true, y_pred, _class_map):
+        def gen_matrix(y_true, y_pred, _class_map, _class_list):
             if not _class_map:
-                res = pd.crosstab(pd.Series(y_true), pd.Series(y_pred), margins=True)
+                res = sklearn.metrics.confusion_matrix(y_true, y_pred)
             else:
-                _y_true = pd.Series([thelper.utils.truncstr(_class_map[classid]) for classid in y_true])
-                _y_pred = pd.Series([thelper.utils.truncstr(_class_map[classid]) if classid in _class_map else "<unset>" for classid in y_pred])
-                res = pd.crosstab(_y_true, _y_pred, rownames=["True"], colnames=["Predicted"], margins=True)
-            if percentage:
-                return "\n" + res.apply(lambda r: 100.0 * r / r.sum()).to_string()
-            return "\n" + res.to_string()
+                _y_true = [_class_map[classid] for classid in y_true]
+                _y_pred = [_class_map[classid] if classid in _class_map else "<unset>" for classid in y_pred]
+                res = sklearn.metrics.confusion_matrix(_y_true, _y_pred, labels=_class_list)
+            return res
 
         self.matrix = gen_matrix
-        self.class_map = class_map
-        if class_map and not isinstance(class_map, dict):
-            raise AssertionError("unexpected class map type")
+        self.class_map = None
+        self.class_list = None
+        if class_map is not None:
+            self.set_class_map(class_map)
         self.pred = None
         self.gt = None
 
     def set_class_map(self, class_map):
-        if class_map and not isinstance(class_map, dict):
+        if not isinstance(class_map, dict):
             raise AssertionError("unexpected class map type")
-        self.class_map = class_map
+        if len(class_map)<2:
+            raise AssertionError("class map should have at least two elements")
+        self.class_map = copy.copy(class_map)
+        nb_classes = max(class_map.keys()) + 1
+        self.class_map[nb_classes] = "<unset>"
+        self.class_list = ["<unknown>"] * nb_classes + ["<unset>"]
+        for idx,name in self.class_map.items():
+            self.class_list[idx] = name
 
     def accumulate(self, pred, gt):
         if self.pred is None:
@@ -399,7 +405,20 @@ class ConfusionMatrix(Metric):
             self.gt = torch.cat((self.gt, gt.view(len(gt))), 0)
 
     def eval(self):
-        return self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_map)
+        confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_map, self.class_list)
+        if self.class_list:
+            return "\n"+thelper.utils.stringify_confmat(confmat, self.class_list)
+        else:
+            return "\n"+str(confmat)
+
+    def get_tbx_image(self):
+        confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_map, self.class_list)
+        if self.class_list:
+            fig = thelper.utils.draw_confmat(confmat, self.class_list)
+            array = thelper.utils.fig2array(fig)
+            return array
+        else:
+            raise NotImplementedError
 
     def reset(self):
         self.pred = None

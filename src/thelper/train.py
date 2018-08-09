@@ -345,6 +345,8 @@ class ImageClassifTrainer(Trainer):
             for metric_name, metric in self.train_metrics.items():
                 if metric.is_scalar():
                     self.train_writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
+                elif hasattr(metric, "get_tbx_image") and callable(metric.get_tbx_image):
+                    self.train_writer.add_image("epoch/%s" % metric_name, metric.get_tbx_image(), epoch)
         return result
 
     def _eval_epoch(self, epoch, loader, eval_type="valid"):
@@ -403,4 +405,6 @@ class ImageClassifTrainer(Trainer):
                         if self.current_iter > 0:
                             writer.add_scalar("iter/%s" % metric_name, metric.eval(), self.current_iter)
                         writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
+                    elif hasattr(metric, "get_tbx_image") and callable(metric.get_tbx_image):
+                        writer.add_image("epoch/%s" % metric_name, metric.get_tbx_image(), epoch)
         return result
