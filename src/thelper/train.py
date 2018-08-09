@@ -72,7 +72,7 @@ class Trainer:
             valid_foldername = "valid-%s-%s" % (platform.node(), timestr)
             test_foldername = "test-%s-%s" % (platform.node(), timestr)
             foldernames = [train_foldername, valid_foldername, test_foldername]
-            for idx, (loader, foldername) in enumerate(zip(loaders,foldernames)):
+            for idx, (loader, foldername) in enumerate(zip(loaders, foldernames)):
                 if loader:
                     tbx_dir = os.path.join(self.tbx_root_dir, foldername)
                     if os.path.exists(tbx_dir):
@@ -133,7 +133,7 @@ class Trainer:
         if self.train_loader:
             for epoch in range(self.start_epoch, self.epochs + 1):
                 if self.scheduler:
-                    self.scheduler.step(epoch=(epoch-1))  # epoch idx is 1-based, scheduler expects 0-based
+                    self.scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
                     self.current_lr = self.scheduler.get_lr()[0]
                     self.logger.info("update learning rate to %.8f" % self.current_lr)
                 self.model = self.model.to(self.train_dev)
@@ -397,7 +397,7 @@ class ImageClassifTrainer(Trainer):
             result[eval_type + "/loss"] = total_loss / epoch_size
             result[eval_type + "/metrics"] = metric_vals
             if self.use_tbx:
-                if self.current_iter>0:
+                if self.current_iter > 0:
                     writer.add_scalar("iter/loss", total_loss / epoch_size, self.current_iter)
                 writer.add_scalar("epoch/loss", total_loss / epoch_size, epoch)
                 for metric_name, metric in metrics.items():

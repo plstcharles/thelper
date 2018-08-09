@@ -60,7 +60,6 @@ def load_transforms(config):
 
 
 class Compose(torchvision.transforms.Compose):
-
     """Composes several transforms together (with support for invert ops)."""
 
     def __init__(self, transforms):

@@ -189,16 +189,16 @@ class ExternalMetric(Metric):
         if target_name:
             name += "_" + str(target_name)
         super().__init__(name)
-        if not isinstance(metric_type,str) or (
+        if not isinstance(metric_type, str) or (
                 metric_type != "classif_top1" and
                 metric_type != "classif_scores" and
                 metric_type != "regression"):
             raise AssertionError("unknown metric type for '%s'" % self.name)
         self.metric_goal = None
         if goal is not None:
-            if isinstance(goal,str) and "max" in goal.lower():
+            if isinstance(goal, str) and "max" in goal.lower():
                 self.metric_goal = Metric.maximize
-            elif isinstance(goal,str) and "min" in goal.lower():
+            elif isinstance(goal, str) and "min" in goal.lower():
                 self.metric_goal = Metric.minimize
             else:
                 raise AssertionError("unexpected goal type for '%s'" % self.name)
@@ -266,7 +266,7 @@ class ExternalMetric(Metric):
                 else:  # self.metric_type == "classif_scores"
                     for idx in range(len(gt)):
                         y_true.append(gt[idx].item() == self.target_label)
-                        y_pred.append(pred[idx,self.target_label].item())
+                        y_pred.append(pred[idx, self.target_label].item())
                 self.gt.append(y_true)
                 self.pred.append(y_pred)
             else:
@@ -387,13 +387,13 @@ class ConfusionMatrix(Metric):
     def set_class_map(self, class_map):
         if not isinstance(class_map, dict):
             raise AssertionError("unexpected class map type")
-        if len(class_map)<2:
+        if len(class_map) < 2:
             raise AssertionError("class map should have at least two elements")
         self.class_map = copy.copy(class_map)
         nb_classes = max(class_map.keys()) + 1
         self.class_map[nb_classes] = "<unset>"
         self.class_list = ["<unknown>"] * nb_classes + ["<unset>"]
-        for idx,name in self.class_map.items():
+        for idx, name in self.class_map.items():
             self.class_list[idx] = name
 
     def accumulate(self, pred, gt):
@@ -407,9 +407,9 @@ class ConfusionMatrix(Metric):
     def eval(self):
         confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_map, self.class_list)
         if self.class_list:
-            return "\n"+thelper.utils.stringify_confmat(confmat, self.class_list)
+            return "\n" + thelper.utils.stringify_confmat(confmat, self.class_list)
         else:
-            return "\n"+str(confmat)
+            return "\n" + str(confmat)
 
     def get_tbx_image(self):
         confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_map, self.class_list)
