@@ -1,9 +1,10 @@
 import logging
+import random
 
 import Augmentor
 import cv2 as cv
 import numpy as np
-import PIL
+import PIL.Image
 import torchvision.transforms
 import torchvision.utils
 
@@ -12,13 +13,29 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-def fixup_augmentor_list(sample):
-    # augmentor sometimes returns single-element lists following some transforms...
-    if isinstance(sample, list):
-        if len(sample) != 1:
-            raise AssertionError("not the case we expected to catch here")
-        return sample[0]
-    return sample
+class AugmentorWrapper(object):
+    # interface wrapper last updated for augmentor v0.2.2
+    def __init__(self, pipeline):
+        self.pipeline = pipeline
+
+    def __call__(self, sample):
+        cvt_array = False
+        if isinstance(sample, np.ndarray):
+            sample = PIL.Image.fromarray(sample)
+            cvt_array = True
+        elif not isinstance(sample, PIL.Image.Image):
+            raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
+        sample = [sample]
+        for operation in self.pipeline.operations:
+            r = round(random.uniform(0, 1), 1)
+            if r <= operation.probability:
+                sample = operation.perform_operation(sample)
+        if not isinstance(sample, list) or len(sample)!=1:
+            raise AssertionError("not the fixup we expected to catch here")
+        sample = sample[0]
+        if cvt_array:
+            sample = np.asarray(sample)
+        return sample
 
 
 def load_transforms(config):
@@ -41,8 +58,7 @@ def load_transforms(config):
                 getattr(augp, stage_name)(**stage_config)
             if transform_config["input_tensor"]:
                 transforms.append(torchvision.transforms.ToPILImage())
-            transforms.append(augp.torch_transform())
-            transforms.append(fixup_augmentor_list)
+            transforms.append(AugmentorWrapper(augp))
             if transform_config["output_tensor"]:
                 transforms.append(torchvision.transforms.ToTensor())
         elif transform_name == "append":

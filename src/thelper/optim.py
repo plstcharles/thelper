@@ -398,7 +398,7 @@ class ConfusionMatrix(Metric):
             raise AssertionError("unexpected class map type")
         if len(class_map) < 2:
             raise AssertionError("class map should have at least two elements")
-        self.class_map = copy.copy(class_map)
+        self.class_map = copy.deepcopy(class_map)
         nb_classes = max(class_map.keys()) + 1
         self.class_map[nb_classes] = "<unset>"
         self.class_list = ["<unknown>"] * nb_classes + ["<unset>"]

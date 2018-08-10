@@ -1,8 +1,8 @@
 import logging
 import time
+import copy
 from abc import ABC, abstractmethod
 from collections import Counter
-from copy import copy
 
 import numpy as np
 import PIL
@@ -113,15 +113,15 @@ class DataConfig(object):
         for loader_idx, (idxs_map, datasets) in enumerate(zip([train_idxs, valid_idxs, test_idxs],
                                                               [train_data, valid_data, test_data])):
             for name, sample_idxs in idxs_map.items():
-                dataset = copy(dataset_templates[name])
+                dataset = copy.deepcopy(dataset_templates[name])
                 if loader_idx == 0 and self.train_augments:
                     if dataset.transforms is not None:
                         if self.train_augments_append:  # append or not
-                            dataset.transforms = thelper.transforms.Compose([dataset.transforms, copy(self.train_augments)])
+                            dataset.transforms = thelper.transforms.Compose([dataset.transforms, copy.deepcopy(self.train_augments)])
                         else:
-                            dataset.transforms = thelper.transforms.Compose([copy(self.train_augments), dataset.transforms])
+                            dataset.transforms = thelper.transforms.Compose([copy.deepcopy(self.train_augments), dataset.transforms])
                     else:
-                        dataset.transforms = copy(self.train_augments)
+                        dataset.transforms = copy.deepcopy(self.train_augments)
                 dataset.sampler = SubsetRandomSampler(sample_idxs)
                 datasets.append(dataset)
             if len(datasets) > 1:
