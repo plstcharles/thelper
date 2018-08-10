@@ -55,7 +55,7 @@ def load_model(config, task):
     return model
 
 
-def load_train_cfg(config, model):
+def load_train_cfg(config):
     logger = thelper.utils.get_func_logger()
     logger.debug("loading loss & metrics configurations")
     if "loss" not in config or not config["loss"]:
@@ -70,11 +70,7 @@ def load_train_cfg(config, model):
         if hasattr(metric, "summary"):
             logger.info("parsed metric category '%s'" % metric_name)
             metric.summary()
-    logger.debug("loading optimization & scheduler configurations")
-    if "optimization" not in config or not config["optimization"]:
-        raise AssertionError("config missing 'optimization' field")
-    optimizer, scheduler = thelper.optim.load_optimization(model, config["optimization"])
-    return loss, metrics, optimizer, scheduler
+    return loss, metrics
 
 
 def get_save_dir(out_root, session_name, config, resume=False):
@@ -134,10 +130,10 @@ def create_session(config, data_root, save_dir, display_graphs=False):
         data_sample = data_iter.next()
         thelper.utils.draw_sample(data_sample, block=True)
     model = load_model(config, task)
-    loss, metrics, optimizer, scheduler = load_train_cfg(config, model)
+    loss, metrics = load_train_cfg(config)
     loaders = (train_loader, valid_loader, test_loader)
-    trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loss,
-                                         metrics, optimizer, scheduler, loaders)
+    trainer = thelper.train.load_trainer(session_name, save_dir, config,
+                                         model, loss, metrics, loaders)
     logger.debug("starting trainer")
     trainer.train()
     logger.debug("all done")
@@ -467,12 +463,12 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, 
         data_sample = data_iter.next()
         thelper.utils.draw_sample(data_sample, block=True)
     model = load_model(config, task)
-    model.load_state_dict(ckptdata["state_dict"])
-    loss, metrics, optimizer, scheduler = load_train_cfg(config, model)
-    optimizer.load_state_dict(ckptdata["optimizer"])
+    loss, metrics = load_train_cfg(config)
     loaders = (None if eval_only else train_loader, valid_loader, test_loader)
-    trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loss,
-                                         metrics, optimizer, scheduler, loaders)
+    trainer = thelper.train.load_trainer(session_name, save_dir, config,
+                                         model, loss, metrics, loaders)
+    trainer.model.load_state_dict(ckptdata["state_dict"])
+    trainer.optimizer.load_state_dict(ckptdata["optimizer"])
     trainer.start_epoch = ckptdata["epoch"] + 1
     trainer.current_iter = ckptdata["iter"] if "iter" in ckptdata else 0
     trainer.monitor_best = ckptdata["monitor_best"]

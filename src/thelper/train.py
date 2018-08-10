@@ -16,8 +16,7 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-def load_trainer(session_name, save_dir, config, model, loss,
-                 metrics, optimizer, scheduler, loaders):
+def load_trainer(session_name, save_dir, config, model, loss, metrics, loaders):
     if "trainer" not in config or not config["trainer"]:
         raise AssertionError("config missing 'trainer' field")
     trainer_config = config["trainer"]
@@ -27,16 +26,23 @@ def load_trainer(session_name, save_dir, config, model, loss,
     if "params" not in trainer_config:
         raise AssertionError("trainer config missing 'params' field")
     params = thelper.utils.keyvals2dict(trainer_config["params"])
-    metapack = (model, loss, metrics, optimizer, scheduler)
-    trainer = trainer_type(session_name, save_dir, metapack, loaders, trainer_config, **params)
+    trainer = trainer_type(session_name, save_dir, model, loss, metrics, loaders, trainer_config, **params)
+    if loaders[0]:
+        # no need to load optimization stuff if not training (i.e. no train_loader)
+        logger.debug("loading optimization & scheduler configurations")
+        # loading optimization stuff after trainer since model needs to be on correct device
+        if "optimization" not in config or not config["optimization"]:
+            raise AssertionError("config missing 'optimization' field")
+        optimizer, scheduler = thelper.optim.load_optimization(trainer.model, config["optimization"])
+        trainer.optimizer = optimizer
+        trainer.scheduler = scheduler
     return trainer
 
 
 class Trainer:
 
-    def __init__(self, session_name, save_dir, metapack, loaders, config):
-        model, loss, metrics, optimizer, scheduler = metapack
-        if not model or not loss or not metrics or not optimizer or not config:
+    def __init__(self, session_name, save_dir, model, loss, metrics, loaders, config):
+        if not model or not loss or not metrics or not config:
             raise AssertionError("missing input args")
         train_loader, valid_loader, test_loader = loaders
         if not (train_loader or valid_loader or test_loader):
@@ -87,8 +93,8 @@ class Trainer:
         self.train_metrics = deepcopy(metrics)
         self.valid_metrics = deepcopy(metrics)
         self.test_metrics = deepcopy(metrics)
-        self.optimizer = optimizer
-        self.scheduler = scheduler
+        self.optimizer = None  # must be set externally once model is on correct device
+        self.scheduler = None  # must be set externally once model is on correct device
         self.config = config
         self.default_dev = "cpu"
         if torch.cuda.is_available():
@@ -117,15 +123,19 @@ class Trainer:
                         break
                 elif "cuda:" not in device:
                     raise AssertionError("expecting cuda device format to be 'cuda:X' (where X is device index)")
+                cuda_dev_count = torch.cuda.device_count()
                 cuda_dev_str = device.rsplit(":", 1)[-1]
                 if cuda_dev_str == "all":
                     if len(curr_devices) > 1:
                         raise AssertionError("use of 'cuda:all' must not be combined with other devices")
-                    devices[idx] = []  # will be interpreted as 'use all cuda devices' later
-                    break
+                    if cuda_dev_count==1:
+                        devices[idx] = self.default_dev
+                        break
+                    else:
+                        devices[idx] = []  # will be interpreted as 'use all cuda devices' later
+                        break
                 else:
                     cuda_dev_idx = int(device.rsplit(":", 1)[-1])
-                    cuda_dev_count = torch.cuda.device_count()
                     if cuda_dev_idx >= cuda_dev_count:
                         raise AssertionError("cuda device '%s' out of range (detected device count = %d)" % (device, cuda_dev_count))
                     if len(curr_devices) == 1:
@@ -162,9 +172,9 @@ class Trainer:
     def _upload_model(self, model, dev):
         if isinstance(dev, list):
             if len(dev) == 0:
-                return torch.nn.DataParallel(model)  # .cuda()?
+                return torch.nn.DataParallel(model).cuda()
             else:
-                return torch.nn.DataParallel(model, device_ids=dev)  # .cuda()?
+                return torch.nn.DataParallel(model, device_ids=dev).cuda(dev[0])
         else:
             return model.to(dev)
 
@@ -182,7 +192,7 @@ class Trainer:
             for epoch in range(self.start_epoch, self.epochs + 1):
                 if self.scheduler:
                     self.scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
-                    self.current_lr = self.scheduler.get_lr()[0]
+                    self.current_lr = self.scheduler.get_lr()[0]  # for debug/display purposes only
                     self.logger.info("learning rate at %.8f" % self.current_lr)
                 self.model = self._upload_model(self.model, self.train_dev)
                 result = self._train_epoch(epoch, self.train_loader)
@@ -264,11 +274,14 @@ class Trainer:
         raise NotImplementedError
 
     def _get_lr(self):
-        for param_group in self.optimizer.param_groups:
-            if "lr" in param_group:
-                return param_group["lr"]
+        if self.optimizer:
+            for param_group in self.optimizer.param_groups:
+                if "lr" in param_group:
+                    return param_group["lr"]
+        return 0.0
 
     def _save(self, epoch, save_best=False):
+        # logically, this should only be called during training (i.e. with a valid optimizer)
         fullconfig = None
         if self.config_backup_path and os.path.exists(self.config_backup_path):
             with open(self.config_backup_path, "r") as fd:
@@ -299,8 +312,8 @@ class Trainer:
 
 class ImageClassifTrainer(Trainer):
 
-    def __init__(self, session_name, save_dir, metapack, loaders, config):
-        super().__init__(session_name, save_dir, metapack, loaders, config)
+    def __init__(self, session_name, save_dir, model, loss, metrics, loaders, config):
+        super().__init__(session_name, save_dir, model, loss, metrics, loaders, config)
         if not isinstance(self.model.task, thelper.tasks.Classification):
             raise AssertionError("expected task to be classification")
         input_keys = self.model.task.get_input_key()
@@ -338,12 +351,10 @@ class ImageClassifTrainer(Trainer):
     def _train_epoch(self, epoch, loader):
         if not loader:
             raise AssertionError("no available data to load")
+        if not self.optimizer:
+            raise AssertionError("missing optimizer")
         result = {}
         self.model.train()
-        for state in self.optimizer.state.values():
-            for k, v in state.items():
-                if isinstance(v, torch.Tensor):
-                    state[k] = self._upload_tensor(v, self.train_dev)
         total_loss = 0
         epoch_size = len(loader)
         for metric in self.train_metrics.values():
