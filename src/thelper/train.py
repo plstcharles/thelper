@@ -135,7 +135,7 @@ class Trainer:
                 if self.scheduler:
                     self.scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
                     self.current_lr = self.scheduler.get_lr()[0]
-                    self.logger.info("update learning rate to %.8f" % self.current_lr)
+                    self.logger.info("learning rate at %.8f" % self.current_lr)
                 self.model = self.model.to(self.train_dev)
                 result = self._train_epoch(epoch, self.train_loader)
                 monitor_type_key = "train/metrics"
