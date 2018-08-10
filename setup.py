@@ -90,7 +90,7 @@ setuptools.setup(
         "torch>=0.4.0",
         "scikit-learn>=0.19.1",
         "torchvision>=0.2.1",
-        "tensorboardX>=1.2.0",
+        "tensorboardX==1.2.0",  # 1.4.0 causes issues with some image types?
     ],
     python_requires="~=3.5",
     extras_require={
