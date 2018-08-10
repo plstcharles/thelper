@@ -138,7 +138,7 @@ class Trainer:
                     summary_data_recall = {}
                     summary_data_f1 = {}
                     for iter, class_id in enumerate(data[0]):
-                        summary_data_precision[class_id]=float(data[1][iter])
+                        summary_data_precision[class_id] = float(data[1][iter])
                         summary_data_recall[class_id] = float(data[2][iter])
                         summary_data_f1[class_id] = float(data[3][iter])
                     self.writer.add_scalars('train_epoch/%s' % header[0],
