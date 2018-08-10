@@ -299,12 +299,14 @@ class ImageClassifTrainer(Trainer):
                 if isinstance(v, torch.Tensor):
                     state[k] = v.to(self.train_dev)
         total_loss = 0
+        epoch_size = len(loader)
         for metric in self.train_metrics.values():
             if hasattr(metric, "set_class_map") and callable(metric.set_class_map):
                 metric.set_class_map(self.class_map)
+            if hasattr(metric, "set_max_accum") and callable(metric.set_max_accum):
+                metric.set_max_accum(epoch_size)
             if metric.needs_reset():
                 metric.reset()
-        epoch_size = len(loader)
         for idx, sample in enumerate(loader):
             input, label = self._to_tensor(sample, self.train_dev)
             self.optimizer.zero_grad()

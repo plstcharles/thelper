@@ -132,6 +132,9 @@ class CategoryAccuracy(Metric):
     def needs_reset(self):
         return self.max_accum is None
 
+    def set_max_accum(self, max_accum):
+        self.max_accum = max_accum
+
     def goal(self):
         return Metric.maximize
 
@@ -172,6 +175,9 @@ class BinaryAccuracy(Metric):
 
     def needs_reset(self):
         return self.max_accum is None
+
+    def set_max_accum(self, max_accum):
+        self.max_accum = max_accum
 
     def goal(self):
         return Metric.maximize
@@ -299,6 +305,9 @@ class ExternalMetric(Metric):
 
     def needs_reset(self):
         return self.max_accum is None
+
+    def set_max_accum(self, max_accum):
+        self.max_accum = max_accum
 
     def goal(self):
         return self.metric_goal
