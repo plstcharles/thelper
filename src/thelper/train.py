@@ -93,19 +93,49 @@ class Trainer:
         self.default_dev = "cpu"
         if torch.cuda.is_available():
             self.default_dev = "cuda:0"
-        self.train_dev = str(config["train_device"]) if "train_device" in config else self.default_dev
-        self.valid_dev = str(config["valid_device"]) if "valid_device" in config else self.default_dev
-        self.test_dev = str(config["test_device"]) if "test_device" in config else self.default_dev
-        if not torch.cuda.is_available() and ("cuda" in self.train_dev or "cuda" in self.valid_dev):
-            raise AssertionError("cuda not available (according to pytorch), cannot use gpu for training/validation")
-        elif torch.cuda.is_available():
-            nb_cuda_dev = torch.cuda.device_count()
-            if "cuda:" in self.train_dev and int(self.train_dev.rsplit(":", 1)[1]) >= nb_cuda_dev:
-                raise AssertionError("cuda device '%s' not currently available" % self.train_dev)
-            if "cuda:" in self.valid_dev and int(self.valid_dev.rsplit(":", 1)[1]) >= nb_cuda_dev:
-                raise AssertionError("cuda device '%s' not currently available" % self.valid_dev)
-            if "cuda:" in self.test_dev and int(self.test_dev.rsplit(":", 1)[1]) >= nb_cuda_dev:
-                raise AssertionError("cuda device '%s' not currently available" % self.test_dev)
+        devices = [None] * 3
+        for idx, field in enumerate(["train_device", "valid_device", "test_device"]):
+            device_str = str(config[field]) if field in config and config[field] else self.default_dev
+            if not torch.cuda.is_available() and "cuda" in device_str:
+                raise AssertionError("cuda not available (according to pytorch), cannot use in '%s' field" % field)
+            curr_devices = device_str.split(",")
+            cuda_device_idxs = []
+            for dev_idx, device in enumerate(curr_devices):
+                if "cuda" not in device and "cpu" not in device:
+                    raise AssertionError("unknown device type '%s' for field '%s'" % (device, field))
+                elif device == "cpu":
+                    if len(curr_devices) > 1:
+                        raise AssertionError("cannot combine cpu with other devices in field '%s'" % field)
+                    else:
+                        devices[idx] = "cpu"
+                        break
+                elif device == "cuda":
+                    if len(curr_devices) > 1:
+                        raise AssertionError("must specify device index (e.g. 'cuda:0') if combining devices in '%s'" % field)
+                    else:
+                        devices[idx] = self.default_dev
+                        break
+                elif "cuda:" not in device:
+                    raise AssertionError("expecting cuda device format to be 'cuda:X' (where X is device index)")
+                cuda_dev_str = device.rsplit(":", 1)[-1]
+                if cuda_dev_str == "all":
+                    if len(curr_devices) > 1:
+                        raise AssertionError("use of 'cuda:all' must not be combined with other devices")
+                    devices[idx] = []  # will be interpreted as 'use all cuda devices' later
+                    break
+                else:
+                    cuda_dev_idx = int(device.rsplit(":", 1)[-1])
+                    cuda_dev_count = torch.cuda.device_count()
+                    if cuda_dev_idx >= cuda_dev_count:
+                        raise AssertionError("cuda device '%s' out of range (detected device count = %d)" % (device, cuda_dev_count))
+                    if len(curr_devices) == 1:
+                        devices[idx] = device
+                        break
+                    else:
+                        cuda_device_idxs.append(cuda_dev_idx)
+            if devices[idx] is None:
+                devices[idx] = cuda_device_idxs
+        self.train_dev, self.valid_dev, self.test_dev = tuple(devices)
         if "monitor" not in config or not config["monitor"]:
             raise AssertionError("missing 'monitor' field for trainer config")
         self.monitor = config["monitor"]
@@ -129,6 +159,24 @@ class Trainer:
         self.current_iter = 0
         self.start_epoch = 1
 
+    def _upload_model(self, model, dev):
+        if isinstance(dev, list):
+            if len(dev) == 0:
+                return torch.nn.DataParallel(model)  # .cuda()?
+            else:
+                return torch.nn.DataParallel(model, device_ids=dev)  # .cuda()?
+        else:
+            return model.to(dev)
+
+    def _upload_tensor(self, tensor, dev):
+        if isinstance(dev, list):
+            if len(dev) == 0:
+                return tensor.cuda()
+            else:
+                return tensor.cuda(dev[0])
+        else:
+            return tensor.to(dev)
+
     def train(self):
         if self.train_loader:
             for epoch in range(self.start_epoch, self.epochs + 1):
@@ -136,19 +184,17 @@ class Trainer:
                     self.scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
                     self.current_lr = self.scheduler.get_lr()[0]
                     self.logger.info("learning rate at %.8f" % self.current_lr)
-                self.model = self.model.to(self.train_dev)
+                self.model = self._upload_model(self.model, self.train_dev)
                 result = self._train_epoch(epoch, self.train_loader)
                 monitor_type_key = "train/metrics"
                 if self.valid_loader:
-                    self.model = self.model.to(self.valid_dev)
+                    self.model = self._upload_model(self.model, self.valid_dev)
                     result_valid = self._eval_epoch(epoch, self.valid_loader, "valid")
                     result = {**result, **result_valid}
                     monitor_type_key = "valid/metrics"
                 new_best = False
-
                 losses = {}
                 monitor_vals = {}
-
                 for key, value in result.items():
                     if key == "train/metrics":
                         if self.monitor not in value:
@@ -179,7 +225,7 @@ class Trainer:
                     self._save(epoch, save_best=new_best)
             self.logger.info("training done")
             if self.test_loader:
-                self.model = self.model.to(self.test_dev)
+                self.model = self._upload_model(self.model, self.test_dev)
                 result_test = self._eval_epoch(self.epochs, self.test_loader, "test")
                 self.outputs[self.epochs] = {**self.outputs[self.epochs], **result_test}
                 for key, value in self.outputs[self.epochs].items():
@@ -192,11 +238,11 @@ class Trainer:
             return
         result = {}
         if self.valid_loader:
-            self.model = self.model.to(self.valid_dev)
+            self.model = self._upload_model(self.model, self.valid_dev)
             result_valid = self._eval_epoch(self.start_epoch, self.valid_loader, "valid")
             result = {**result, **result_valid}
         if self.test_loader:
-            self.model = self.model.to(self.test_dev)
+            self.model = self._upload_model(self.model, self.test_dev)
             result_test = self._eval_epoch(self.start_epoch, self.test_loader, "test")
             result = {**result, **result_test}
         for key, value in result.items():
@@ -273,7 +319,7 @@ class ImageClassifTrainer(Trainer):
             self.label_keys = label_keys
         self.class_map = self.model.task.get_class_map()
 
-    def _to_tensor(self, sample, dev):
+    def _to_tensor(self, sample):
         if not isinstance(sample, dict):
             raise AssertionError("trainer expects samples to come in dicts for key-based usage")
         input, label = None, None
@@ -287,9 +333,7 @@ class ImageClassifTrainer(Trainer):
                 break
         if input is None or label is None:
             raise AssertionError("could not find input or label keys in sample dict")
-        input, label = torch.FloatTensor(input), torch.LongTensor(label)
-        input, label = input.to(dev), label.to(dev)
-        return input, label
+        return torch.FloatTensor(input), torch.LongTensor(label)
 
     def _train_epoch(self, epoch, loader):
         if not loader:
@@ -299,7 +343,7 @@ class ImageClassifTrainer(Trainer):
         for state in self.optimizer.state.values():
             for k, v in state.items():
                 if isinstance(v, torch.Tensor):
-                    state[k] = v.to(self.train_dev)
+                    state[k] = self._upload_tensor(v, self.train_dev)
         total_loss = 0
         epoch_size = len(loader)
         for metric in self.train_metrics.values():
@@ -310,7 +354,9 @@ class ImageClassifTrainer(Trainer):
             if metric.needs_reset():
                 metric.reset()
         for idx, sample in enumerate(loader):
-            input, label = self._to_tensor(sample, self.train_dev)
+            input, label = self._to_tensor(sample)
+            input = self._upload_tensor(input, self.train_dev)
+            label = self._upload_tensor(label, self.train_dev)
             self.optimizer.zero_grad()
             pred = self.model(input)
             loss = self.loss(pred, label)
@@ -376,7 +422,9 @@ class ImageClassifTrainer(Trainer):
                 metric.reset()  # force reset here, we always evaluate from a clean state
             epoch_size = len(loader)
             for idx, sample in enumerate(loader):
-                input, label = self._to_tensor(sample, dev)
+                input, label = self._to_tensor(sample)
+                input = self._upload_tensor(input, dev)
+                label = self._upload_tensor(label, dev)
                 pred = self.model(input)
                 loss = self.loss(pred, label)
                 total_loss += loss.item()
