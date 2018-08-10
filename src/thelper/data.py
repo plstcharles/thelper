@@ -1,6 +1,5 @@
 import logging
 import time
-import os
 from abc import ABC, abstractmethod
 from collections import Counter
 from copy import copy
@@ -23,8 +22,7 @@ logger = logging.getLogger(__name__)
 class DataConfig(object):
 
     def __init__(self, config):
-        self.logger = thelper.utils.get_class_logger()
-        self.logger.debug("loading data config")
+        logger.debug("loading data config")
         if not isinstance(config, dict):
             raise AssertionError("input config should be dict")
         if "batch_size" not in config or not config["batch_size"]:
@@ -67,7 +65,7 @@ class DataConfig(object):
                         "Dataset split for '%s' has a ratio sum less than 1; do you want to normalize the split?" % name)
                 if (normalize_ratios or usage > 1) and usage > 0:
                     if usage > 1:
-                        self.logger.warning("dataset split for '%s' sums to more than 1; will normalize..." % name)
+                        logger.warning("dataset split for '%s' sums to more than 1; will normalize..." % name)
                     if name in self.train_split:
                         self.train_split[name] /= usage
                     if name in self.valid_split:
@@ -76,7 +74,7 @@ class DataConfig(object):
                         self.test_split[name] /= usage
 
     def get_idx_split(self, dataset_map_size):
-        self.logger.debug("loading dataset split & normalizing ratios")
+        logger.debug("loading dataset split & normalizing ratios")
         for name in self.total_usage:
             if name not in dataset_map_size:
                 raise AssertionError("dataset '%s' does not exist" % name)
@@ -95,7 +93,7 @@ class DataConfig(object):
                     if count < 0:
                         raise AssertionError("ratios should be non-negative values!")
                     elif count < 1:
-                        self.logger.warning("split ratio for '%s' too small, sample set will be empty" % name)
+                        logger.warning("split ratio for '%s' too small, sample set will be empty" % name)
                     begidx = offsets[name]
                     endidx = min(begidx + count, dataset_map_size[name])
                     idxs_map[name] = indices[name][begidx:endidx]
@@ -147,7 +145,7 @@ class DataConfig(object):
         train_samples = len(train_loader) if train_loader else 0
         valid_samples = len(valid_loader) if valid_loader else 0
         test_samples = len(test_loader) if test_loader else 0
-        self.logger.info("initialized loaders with batch counts: train=%d, valid=%d, test=%d" % (train_samples, valid_samples, test_samples))
+        logger.info("initialized loaders with batch counts: train=%d, valid=%d, test=%d" % (train_samples, valid_samples, test_samples))
         return train_loader, valid_loader, test_loader
 
 
@@ -210,7 +208,6 @@ class Dataset(torch.utils.data.Dataset, ABC):
         self.root = root
         self.config = config
         self.transforms = transforms
-        self.logger = logging.getLogger(self._get_derived_name())
         self._sampler = None
         self.samples = None  # must be filled by the derived class
 
@@ -272,7 +269,7 @@ class ExternalDataset(Dataset):
 
     def __init__(self, name, root, dataset_type, task, config=None, transforms=None):
         super().__init__(name, root, config=config, transforms=transforms)
-        self.logger.info("instantiating external dataset '%s'..." % name)
+        logger.info("instantiating external dataset '%s'..." % name)
         if not dataset_type or not hasattr(dataset_type, "__getitem__") or not hasattr(dataset_type, "__len__"):
             raise AssertionError("external dataset type must implement '__getitem__' and '__len__' methods")
         if not issubclass(type(task), thelper.tasks.Task):
@@ -323,10 +320,10 @@ class ExternalDataset(Dataset):
         else:
             raise AssertionError("no clue how to transform given data sample")
         if warn_partial_transform and not self.warned_partial_transform:
-            self.logger.warning("blindly transforming sample parts for dataset '%s'; consider using a proper interface" % self.name)
+            logger.warning("blindly transforming sample parts for dataset '%s'; consider using a proper interface" % self.name)
             self.warned_partial_transform = True
         if warn_dictionary and not self.warned_dictionary:
-            self.logger.warning("dataset '%s' not returning samples as dictionaries; will blindly map elements to their indices" % self.name)
+            logger.warning("dataset '%s' not returning samples as dictionaries; will blindly map elements to their indices" % self.name)
             self.warned_dictionary = True
         return out_sample
 

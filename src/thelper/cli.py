@@ -8,7 +8,6 @@ import logging
 import os
 import sys
 import time
-from copy import copy
 
 import torch
 import numpy as np
@@ -74,8 +73,8 @@ def load_train_cfg(config, model):
     logger.debug("loading optimization & scheduler configurations")
     if "optimization" not in config or not config["optimization"]:
         raise AssertionError("config missing 'optimization' field")
-    optimizer, scheduler, schedstep = thelper.optim.load_optimization(model, config["optimization"])
-    return loss, metrics, optimizer, scheduler, schedstep
+    optimizer, scheduler = thelper.optim.load_optimization(model, config["optimization"])
+    return loss, metrics, optimizer, scheduler
 
 
 def get_save_dir(out_root, session_name, config, resume=False):
@@ -86,9 +85,8 @@ def get_save_dir(out_root, session_name, config, resume=False):
     save_dir = os.path.join(save_dir, session_name)
     if not resume:
         overwrite = False
-        if 'overwrite' in config:
-            overwrite = config['overwrite']
-
+        if "overwrite" in config:
+            overwrite = thelper.utils.str2bool(config["overwrite"])
         old_session_name = session_name
         time.sleep(0.5)  # to make sure all debug/info prints are done, and we see the question
         while os.path.exists(save_dir) and not overwrite:
@@ -114,6 +112,9 @@ def get_save_dir(out_root, session_name, config, resume=False):
                     logger.error("config mismatch with previous run; user aborted")
                     sys.exit(1)
         json.dump(config, open(config_backup_path, "w"), indent=4, sort_keys=False)
+    logs_dir = os.path.join(save_dir, "logs")
+    if not os.path.exists(logs_dir):
+        os.mkdir(logs_dir)
     return save_dir
 
 
@@ -123,24 +124,20 @@ def create_session(config, data_root, save_dir, display_graphs=False):
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
     save_dir = get_save_dir(save_dir, session_name, config)
-    save_dir_logs = os.path.join(save_dir, 'logs')
-    if not os.path.exists(save_dir_logs):
-        os.makedirs(save_dir_logs)
     logger.info("Creating new training session '%s'..." % session_name)
     task, train_loader, valid_loader, test_loader = load_datasets(config, data_root)
     if display_graphs and logger.isEnabledFor(logging.DEBUG):
         if not train_loader:
             raise AssertionError("cannot draw sample example graph, train loader is empty")
-        train_loader_copy = copy(train_loader)
-        data_iter = iter(train_loader_copy)
+        data_iter = iter(train_loader)
         # noinspection PyUnresolvedReferences
         data_sample = data_iter.next()
         thelper.utils.draw_sample(data_sample, block=True)
     model = load_model(config, task)
-    loss, metrics, optimizer, scheduler, schedstep = load_train_cfg(config, model)
+    loss, metrics, optimizer, scheduler = load_train_cfg(config, model)
     loaders = (train_loader, valid_loader, test_loader)
     trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loss,
-                                         metrics, optimizer, scheduler, schedstep, loaders)
+                                         metrics, optimizer, scheduler, loaders)
     logger.debug("starting trainer")
     trainer.train()
     logger.debug("all done")
@@ -465,19 +462,19 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, 
     if display_graphs and logger.isEnabledFor(logging.DEBUG):
         if not train_loader:
             raise AssertionError("cannot draw sample example graph, train loader is empty")
-        train_loader_copy = copy(train_loader)
-        data_iter = iter(train_loader_copy)
+        data_iter = iter(train_loader)
         # noinspection PyUnresolvedReferences
         data_sample = data_iter.next()
         thelper.utils.draw_sample(data_sample, block=True)
     model = load_model(config, task)
     model.load_state_dict(ckptdata["state_dict"])
-    loss, metrics, optimizer, scheduler, schedstep = load_train_cfg(config, model)
+    loss, metrics, optimizer, scheduler = load_train_cfg(config, model)
     optimizer.load_state_dict(ckptdata["optimizer"])
     loaders = (None if eval_only else train_loader, valid_loader, test_loader)
     trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loss,
-                                         metrics, optimizer, scheduler, schedstep, loaders)
+                                         metrics, optimizer, scheduler, loaders)
     trainer.start_epoch = ckptdata["epoch"] + 1
+    trainer.current_iter = ckptdata["iter"] if "iter" in ckptdata else 0
     trainer.monitor_best = ckptdata["monitor_best"]
     trainer.outputs = ckptdata["outputs"]
     logger.info("resuming training session '%s' @ epoch %d" % (trainer.name, trainer.start_epoch))

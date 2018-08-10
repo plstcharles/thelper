@@ -19,7 +19,6 @@ class Module(torch.nn.Module, ABC):
         super().__init__()
         self.task = task
         self.name = name
-        self.logger = logging.getLogger(self._get_derived_name())
 
     def _get_derived_name(self):
         dname = str(self.__class__.__qualname__)
@@ -34,15 +33,15 @@ class Module(torch.nn.Module, ABC):
     def summary(self):
         params = filter(lambda p: p.requires_grad, self.parameters())
         count = sum([np.prod(p.size()) for p in params])
-        self.logger.info("module '%s' parameter count: %d" % (self.name, count))
-        self.logger.info(self)
+        logger.info("module '%s' parameter count: %d" % (self.name, count))
+        logger.info(self)
 
 
 class ExternalModule(Module):
 
     def __init__(self, model_type, task, name=None, config=None):
         super().__init__(task, name=name)
-        self.logger.info("instantiating external module '%s'..." % name)
+        logger.info("instantiating external module '%s'..." % name)
         self.model_type = model_type
         self.task = task
         self.model = model_type(**config)
@@ -67,7 +66,7 @@ class ExternalClassifModule(ExternalModule):
             raise AssertionError("task passed to ExternalClassifModule should be 'thelper.tasks.Classification'")
         self.nb_classes = self.task.get_nb_classes()
         if hasattr(self.model, "fc"):
-            self.logger.info("reconnecting fc layer for outputting %d classes..." % self.nb_classes)
+            logger.info("reconnecting fc layer for outputting %d classes..." % self.nb_classes)
             nb_features = self.model.fc.in_features
             self.model.fc = torch.nn.Linear(nb_features, self.nb_classes)
         else:

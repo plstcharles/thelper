@@ -1,6 +1,9 @@
 import json
 import logging
 import os
+import time
+import platform
+from copy import deepcopy
 from abc import abstractmethod
 
 import torch
@@ -14,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def load_trainer(session_name, save_dir, config, model, loss,
-                 metrics, optimizer, scheduler, schedstep, loaders):
+                 metrics, optimizer, scheduler, loaders):
     if "trainer" not in config or not config["trainer"]:
         raise AssertionError("config missing 'trainer' field")
     trainer_config = config["trainer"]
@@ -24,7 +27,7 @@ def load_trainer(session_name, save_dir, config, model, loss,
     if "params" not in trainer_config:
         raise AssertionError("trainer config missing 'params' field")
     params = thelper.utils.keyvals2dict(trainer_config["params"])
-    metapack = (model, loss, metrics, optimizer, scheduler, schedstep)
+    metapack = (model, loss, metrics, optimizer, scheduler)
     trainer = trainer_type(session_name, save_dir, metapack, loaders, trainer_config, **params)
     return trainer
 
@@ -32,7 +35,7 @@ def load_trainer(session_name, save_dir, config, model, loss,
 class Trainer:
 
     def __init__(self, session_name, save_dir, metapack, loaders, config):
-        model, loss, metrics, optimizer, scheduler, schedstep = metapack
+        model, loss, metrics, optimizer, scheduler = metapack
         if not model or not loss or not metrics or not optimizer or not config:
             raise AssertionError("missing input args")
         train_loader, valid_loader, test_loader = loaders
@@ -57,25 +60,35 @@ class Trainer:
         if not os.path.exists(self.checkpoint_dir):
             os.mkdir(self.checkpoint_dir)
         self.use_tbx = False
-        if "use_tbx" not in config or not config["use_tbx"] or int(config["use_tbx"]) <= 0:
-            self.use_tbx = False
-        else:
-            self.use_tbx = config["use_tbx"]
+        if "use_tbx" in config:
+            self.use_tbx = thelper.utils.str2bool(config["use_tbx"])
+        writers = [None, None, None]
         if self.use_tbx:
-            self.tbx_dir = os.path.join(self.save_dir, "tbx_logs")
-            if not os.path.exists(self.tbx_dir):
-                os.mkdir(self.tbx_dir)
-            self.writer = SummaryWriter(log_dir=self.tbx_dir, comment=self.name)
-            logger.info('using tensorboard : tensorboard --logdir %s --port <your_port>' % self.tbx_dir)
-        self.current_iter = 0
-        self.current_lr= 0
+            self.tbx_root_dir = os.path.join(self.save_dir, "tbx_logs")
+            if not os.path.exists(self.tbx_root_dir):
+                os.mkdir(self.tbx_root_dir)
+            timestr = time.strftime("%Y%m%d-%H%M%S")
+            train_foldername = "train-%s-%s" % (platform.node(), timestr)
+            valid_foldername = "valid-%s-%s" % (platform.node(), timestr)
+            test_foldername = "test-%s-%s" % (platform.node(), timestr)
+            foldernames = [train_foldername, valid_foldername, test_foldername]
+            for idx, (loader, foldername) in enumerate(zip(loaders, foldernames)):
+                if loader:
+                    tbx_dir = os.path.join(self.tbx_root_dir, foldername)
+                    if os.path.exists(tbx_dir):
+                        raise AssertionError("tbx session paths should be unique")
+                    os.mkdir(tbx_dir)
+                    writers[idx] = SummaryWriter(log_dir=tbx_dir, comment=self.name)
+            self.logger.info("using tensorboard : tensorboard --logdir %s --port <your_port>" % self.tbx_root_dir)
+        self.train_writer, self.valid_writer, self.test_writer = writers
         self.outputs = {}
         self.model = model
         self.loss = loss
-        self.metrics = metrics
+        self.train_metrics = deepcopy(metrics)
+        self.valid_metrics = deepcopy(metrics)
+        self.test_metrics = deepcopy(metrics)
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self.schedstep = schedstep
         self.config = config
         self.default_dev = "cpu"
         if torch.cuda.is_available():
@@ -96,9 +109,9 @@ class Trainer:
         if "monitor" not in config or not config["monitor"]:
             raise AssertionError("missing 'monitor' field for trainer config")
         self.monitor = config["monitor"]
-        if self.monitor not in self.metrics:
-            raise AssertionError("monitored metric should be declared in 'metrics' field")
-        self.monitor_goal = self.metrics[self.monitor].goal()
+        if self.monitor not in self.train_metrics:
+            raise AssertionError("monitored metric with name '%s' should be declared in config 'metrics' field" % self.monitor)
+        self.monitor_goal = self.train_metrics[self.monitor].goal()
         self.monitor_best = None
         if self.monitor_goal == thelper.optim.Metric.minimize:
             self.monitor_best = thelper.optim.Metric.maximize
@@ -106,86 +119,64 @@ class Trainer:
             self.monitor_best = thelper.optim.Metric.minimize
         else:
             raise AssertionError("monitored metric does not return proper optimization goal")
-        self.start_epoch = 1
-        train_logger_path = os.path.join(self.save_dir, "train.log")
+        train_logger_path = os.path.join(self.save_dir, "logs", "train.log")
         train_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         train_logger_fh = logging.FileHandler(train_logger_path)
         train_logger_fh.setFormatter(train_logger_format)
         self.logger.addHandler(train_logger_fh)
         self.logger.info("created training log for session '%s'" % session_name)
+        self.current_lr = self._get_lr()  # for debug/display purposes only
+        self.current_iter = 0
+        self.start_epoch = 1
 
     def train(self):
         if self.train_loader:
             for epoch in range(self.start_epoch, self.epochs + 1):
+                if self.scheduler:
+                    self.scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
+                    self.current_lr = self.scheduler.get_lr()[0]
+                    self.logger.info("update learning rate to %.8f" % self.current_lr)
                 self.model = self.model.to(self.train_dev)
                 result = self._train_epoch(epoch, self.train_loader)
-                monitor_type_key = "train_metrics"
+                monitor_type_key = "train/metrics"
                 if self.valid_loader:
                     self.model = self.model.to(self.valid_dev)
                     result_valid = self._eval_epoch(epoch, self.valid_loader, "valid")
                     result = {**result, **result_valid}
-                    monitor_type_key = "valid_metrics"
-                monitor_val = None
+                    monitor_type_key = "valid/metrics"
                 new_best = False
 
-                if self.use_tbx:
-                    self.writer.add_scalars('train_epoch/loss', {'train': result['train_loss'], 'valid': result['valid_loss']}, epoch+1)
-                    self.writer.add_scalars('train_epoch/accuracy',
-                                           {'train': result['train_metrics']['accuracy'],
-                                            'valid': result['valid_metrics']['accuracy']}, epoch + 1)
-                    header, data, avg = thelper.utils.get_table_from_classification_report(result['train_metrics']['fullreport'])
-                    summary_data_precision = {}
-                    summary_data_recall = {}
-                    summary_data_f1 = {}
-                    for iter, class_id in enumerate(data[0]):
-                        summary_data_precision[class_id] = float(data[1][iter])
-                        summary_data_recall[class_id] = float(data[2][iter])
-                        summary_data_f1[class_id] = float(data[3][iter])
-                    self.writer.add_scalars('train_epoch/%s' % header[0],
-                                            summary_data_precision, epoch + 1)
-                    self.writer.add_scalars('train_epoch/%s' % header[1],
-                                            summary_data_recall, epoch + 1)
-                    self.writer.add_scalars('train_epoch/%s' % header[2],
-                                            summary_data_f1, epoch + 1)
-                    header, data, avg = thelper.utils.get_table_from_classification_report(
-                        result['valid_metrics']['fullreport'])
-                    summary_data_precision = {}
-                    summary_data_recall = {}
-                    summary_data_f1 = {}
-                    for iter, class_id in enumerate(data[0]):
-                        summary_data_precision[class_id] = float(data[1][iter])
-                        summary_data_recall[class_id] = float(data[2][iter])
-                        summary_data_f1[class_id] = float(data[3][iter])
-                    self.writer.add_scalars('valid_epoch/%s' % header[0],
-                                            summary_data_precision, epoch + 1)
-                    self.writer.add_scalars('valid_epoch/%s' % header[1],
-                                            summary_data_recall, epoch + 1)
-                    self.writer.add_scalars('valid_epoch/%s' % header[2],
-                                            summary_data_f1, epoch + 1)
+                losses = {}
+                monitor_vals = {}
 
                 for key, value in result.items():
-                    if key == monitor_type_key:
+                    if key == "train/metrics":
                         if self.monitor not in value:
-                            raise AssertionError("not monitoring required variable '%s' in metrics" % self.monitor)
-                        monitor_val = value[self.monitor]
-                        if ((self.monitor_goal == thelper.optim.Metric.minimize and monitor_val < self.monitor_best) or
-                                (self.monitor_goal == thelper.optim.Metric.maximize and monitor_val > self.monitor_best)):
-                            self.monitor_best = monitor_val
-                            new_best = True
+                            raise AssertionError("not monitoring required variable '%s' in training metrics" % self.monitor)
+                        monitor_vals["train"] = value[self.monitor]
+                    elif key == "valid/metrics":
+                        if self.monitor not in value:
+                            raise AssertionError("not monitoring required variable '%s' in validation metrics" % self.monitor)
+                        monitor_vals["valid"] = value[self.monitor]
+                    if (key == monitor_type_key and
+                        ((self.monitor_goal == thelper.optim.Metric.minimize and value[self.monitor] < self.monitor_best) or
+                         (self.monitor_goal == thelper.optim.Metric.maximize and value[self.monitor] > self.monitor_best))):
+                        self.monitor_best = value[self.monitor]
+                        new_best = True
+                    if key == "train/loss":
+                        losses["train"] = value
+                    elif key == "valid/loss":
+                        losses["valid"] = value
                     if not isinstance(value, dict):
                         self.logger.debug(" epoch {} result =>  {}: {}".format(epoch, str(key), value))
                     else:
                         for subkey, subvalue in value.items():
                             self.logger.debug(" epoch {} result =>  {}:{}: {}".format(epoch, str(key), str(subkey), subvalue))
-                if monitor_val == None:
-                    raise AssertionError("training/validation did not produce required monitoring variable '%s' in metrics" % self.monitor)
+                if not monitor_vals or not losses:
+                    raise AssertionError("training/validation did not produce required losses & monitoring variable '%s'" % self.monitor)
                 self.outputs[epoch] = result
                 if new_best or (epoch % self.save_freq) == 0:
                     self._save(epoch, save_best=new_best)
-                if self.scheduler and (epoch % self.schedstep) == 0:
-                    self.scheduler.step(epoch)
-                    lr = self.scheduler.get_lr()[0]
-                    self.logger.info("update learning rate to %.7f" % lr)
             self.logger.info("training done")
             if self.test_loader:
                 self.model = self.model.to(self.test_dev)
@@ -202,11 +193,11 @@ class Trainer:
         result = {}
         if self.valid_loader:
             self.model = self.model.to(self.valid_dev)
-            result_valid = self._eval_epoch(0, self.valid_loader, "valid")
+            result_valid = self._eval_epoch(self.start_epoch, self.valid_loader, "valid")
             result = {**result, **result_valid}
         if self.test_loader:
             self.model = self.model.to(self.test_dev)
-            result_test = self._eval_epoch(0, self.test_loader, "test")
+            result_test = self._eval_epoch(self.start_epoch, self.test_loader, "test")
             result = {**result, **result_test}
         for key, value in result.items():
             if not isinstance(value, dict):
@@ -214,7 +205,7 @@ class Trainer:
             else:
                 for subkey, subvalue in value.items():
                     self.logger.debug(" final result =>  {}:{}: {}".format(str(key), str(subkey), subvalue))
-        self.outputs[0] = result
+        self.outputs[self.start_epoch] = result
         self.logger.info("evaluation done")
         # not saving final eval results anywhere...? todo
 
@@ -226,22 +217,31 @@ class Trainer:
     def _eval_epoch(self, epoch, loader, eval_type="valid"):
         raise NotImplementedError
 
+    def _get_lr(self):
+        for param_group in self.optimizer.param_groups:
+            if "lr" in param_group:
+                return param_group["lr"]
+
     def _save(self, epoch, save_best=False):
         fullconfig = None
         if self.config_backup_path and os.path.exists(self.config_backup_path):
             with open(self.config_backup_path, "r") as fd:
                 fullconfig = json.load(fd)
+        timestr = time.strftime("%Y%m%d-%H%M%S")
         curr_state = {
             "name": self.name,
             "epoch": epoch,
+            "iter": self.current_iter,
+            "time": timestr,
+            "host": platform.node(),
             "outputs": self.outputs[epoch],
             "state_dict": self.model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "monitor_best": self.monitor_best,
             "config": fullconfig
         }
-        latest_loss = self.outputs[epoch]["train_loss"]
-        filename = os.path.join(self.checkpoint_dir, "ckpt.%04d.L%.3f.pth" % (epoch, latest_loss))
+        filename = "ckpt.%04d.%s.%s.pth" % (epoch, platform.node(), timestr)
+        filename = os.path.join(self.checkpoint_dir, filename)
         torch.save(curr_state, filename)
         if save_best:
             filename_best = os.path.join(self.checkpoint_dir, "ckpt.best.pth")
@@ -291,11 +291,6 @@ class ImageClassifTrainer(Trainer):
         input, label = input.to(dev), label.to(dev)
         return input, label
 
-    def get_lr(self):
-        for param_group in self.optimizer.param_groups:
-            if 'lr' in param_group:
-                return  param_group['lr']
-
     def _train_epoch(self, epoch, loader):
         if not loader:
             raise AssertionError("no available data to load")
@@ -305,14 +300,15 @@ class ImageClassifTrainer(Trainer):
             for k, v in state.items():
                 if isinstance(v, torch.Tensor):
                     state[k] = v.to(self.train_dev)
-
-        self.current_lr = self.get_lr()
-
         total_loss = 0
-        for metric in self.metrics.values():
+        epoch_size = len(loader)
+        for metric in self.train_metrics.values():
             if hasattr(metric, "set_class_map") and callable(metric.set_class_map):
                 metric.set_class_map(self.class_map)
-            metric.reset()
+            if hasattr(metric, "set_max_accum") and callable(metric.set_max_accum):
+                metric.set_max_accum(epoch_size)
+            if metric.needs_reset():
+                metric.reset()
         for idx, sample in enumerate(loader):
             input, label = self._to_tensor(sample, self.train_dev)
             self.optimizer.zero_grad()
@@ -321,32 +317,40 @@ class ImageClassifTrainer(Trainer):
             loss.backward()
             self.optimizer.step()
             total_loss += loss.item()
-            batch_size=len(loader)
             self.current_iter += 1
-            for metric in self.metrics.values():
+            for metric in self.train_metrics.values():
                 metric.accumulate(pred.cpu(), label.cpu())
             self.logger.info(
-                "train epoch: {} iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}: {:.2f}".format(
+                "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}: {:.2f}".format(
                     epoch,
                     self.current_iter,
                     idx,
-                    batch_size,
-                    (idx / batch_size) * 100.0,
+                    epoch_size,
+                    (idx / epoch_size) * 100.0,
                     loss.item(),
-                    self.metrics[self.monitor].name,
-                    self.metrics[self.monitor].eval()
+                    self.train_metrics[self.monitor].name,
+                    self.train_metrics[self.monitor].eval()
                 )
             )
             if self.use_tbx:
-                self.writer.add_scalar('train/%s' % self.metrics[self.monitor].name, self.metrics[self.monitor].eval(),  self.current_iter )
-                self.writer.add_scalar('train/lr', self.current_lr,  self.current_iter)
-                self.writer.add_scalar('train/loss', loss.item(),  self.current_iter)
-
+                self.train_writer.add_scalar("iter/loss", loss.item(), self.current_iter)
+                self.train_writer.add_scalar("iter/lr", self.current_lr, self.current_iter)
+                for metric_name, metric in self.train_metrics.items():
+                    if metric.is_scalar():
+                        self.train_writer.add_scalar("iter/%s" % metric_name, metric.eval(), self.current_iter)
         metric_vals = {}
-        for metric_name, metric in self.metrics.items():
+        for metric_name, metric in self.train_metrics.items():
             metric_vals[metric_name] = metric.eval()
-        result["train_loss"] = total_loss / batch_size
-        result["train_metrics"] = metric_vals
+        result["train/loss"] = total_loss / epoch_size
+        result["train/metrics"] = metric_vals
+        if self.use_tbx:
+            self.train_writer.add_scalar("epoch/loss", total_loss / epoch_size, epoch)
+            self.train_writer.add_scalar("epoch/lr", self.current_lr, epoch)
+            for metric_name, metric in self.train_metrics.items():
+                if metric.is_scalar():
+                    self.train_writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
+                elif hasattr(metric, "get_tbx_image") and callable(metric.get_tbx_image):
+                    self.train_writer.add_image("epoch/%s" % metric_name, metric.get_tbx_image(), epoch)
         return result
 
     def _eval_epoch(self, epoch, loader, eval_type="valid"):
@@ -356,19 +360,27 @@ class ImageClassifTrainer(Trainer):
             raise AssertionError("unexpected eval type")
         result = {}
         self.model.eval()
-        dev = self.valid_dev if eval_type == "valid" else self.test_dev
+        if eval_type == "valid":
+            dev = self.valid_dev
+            writer = self.valid_writer
+            metrics = self.valid_metrics
+        else:
+            dev = self.test_dev
+            writer = self.test_writer
+            metrics = self.test_metrics
         with torch.no_grad():
             total_loss = 0
-            for metric in self.metrics.values():
+            for metric in metrics.values():
                 if hasattr(metric, "set_class_map") and callable(metric.set_class_map):
                     metric.set_class_map(self.class_map)
-                metric.reset()
+                metric.reset()  # force reset here, we always evaluate from a clean state
+            epoch_size = len(loader)
             for idx, sample in enumerate(loader):
                 input, label = self._to_tensor(sample, dev)
                 pred = self.model(input)
                 loss = self.loss(pred, label)
                 total_loss += loss.item()
-                for metric in self.metrics.values():
+                for metric in metrics.values():
                     metric.accumulate(pred.cpu(), label.cpu())
                 # set logger to output based on timer?
                 self.logger.info(
@@ -376,16 +388,27 @@ class ImageClassifTrainer(Trainer):
                         eval_type,
                         epoch,
                         idx,
-                        len(loader),
-                        (idx / len(loader)) * 100.0,
+                        epoch_size,
+                        (idx / epoch_size) * 100.0,
                         loss.item(),
-                        self.metrics[self.monitor].name,
-                        self.metrics[self.monitor].eval()
+                        metrics[self.monitor].name,
+                        metrics[self.monitor].eval()
                     )
                 )
             metric_vals = {}
-            for metric_name, metric in self.metrics.items():
+            for metric_name, metric in metrics.items():
                 metric_vals[metric_name] = metric.eval()
-            result[eval_type + "_loss"] = total_loss / len(loader)
-            result[eval_type + "_metrics"] = metric_vals
+            result[eval_type + "/loss"] = total_loss / epoch_size
+            result[eval_type + "/metrics"] = metric_vals
+            if self.use_tbx:
+                if self.current_iter > 0:
+                    writer.add_scalar("iter/loss", total_loss / epoch_size, self.current_iter)
+                writer.add_scalar("epoch/loss", total_loss / epoch_size, epoch)
+                for metric_name, metric in metrics.items():
+                    if metric.is_scalar():
+                        if self.current_iter > 0:
+                            writer.add_scalar("iter/%s" % metric_name, metric.eval(), self.current_iter)
+                        writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
+                    elif hasattr(metric, "get_tbx_image") and callable(metric.get_tbx_image):
+                        writer.add_image("epoch/%s" % metric_name, metric.get_tbx_image(), epoch)
         return result

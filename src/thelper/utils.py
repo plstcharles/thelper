@@ -6,6 +6,7 @@ import math
 import os
 import re
 import sys
+import itertools
 
 import cv2 as cv
 import matplotlib.pyplot as plt
@@ -108,9 +109,11 @@ def str2bool(s):
     raise AssertionError("unrecognized input type")
 
 
-def truncstr(s, max=7):
-    if len(s) >= 10:
-        return s[:10]
+def clipstr(s, size, fill=" "):
+    if len(s) > size:
+        s = s[:size]
+    if len(s) < size:
+        s = fill * (size - len(s)) + s
     return s
 
 
@@ -329,6 +332,76 @@ def draw_errbars(labels, min, max, stddev, mean, xlabel="", ylabel="Raw Value"):
     fig.show()
 
 
+def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False):
+    if not isinstance(confmat, np.ndarray) or not isinstance(class_list, list):
+        raise AssertionError("invalid inputs")
+    if normalize:
+        confmat = confmat.astype("float") / confmat.sum(axis=1)[:, np.newaxis]
+        confmat = np.nan_to_num(confmat)
+    fig = plt.figure(num="confmat", figsize=size_inch, dpi=dpi, facecolor="w", edgecolor="k")
+    fig.clf()
+    ax = fig.add_subplot(1, 1, 1)
+    im = ax.imshow(confmat, cmap=plt.cm.hot)
+    labels = [clipstr(label, 9) for label in class_list]
+    tick_marks = np.arange(len(labels))
+    ax.set_xlabel("Predicted", fontsize=7)
+    ax.set_xticks(tick_marks)
+    c = ax.set_xticklabels(labels, fontsize=4, rotation=-90, ha="center")
+    ax.xaxis.set_label_position("bottom")
+    ax.xaxis.tick_bottom()
+    ax.set_ylabel("Real", fontsize=7)
+    ax.set_yticks(tick_marks)
+    ax.set_yticklabels(labels, fontsize=4, va="center")
+    ax.yaxis.set_label_position("left")
+    ax.yaxis.tick_left()
+    for i, j in itertools.product(range(confmat.shape[0]), range(confmat.shape[1])):
+        str = format(confmat[i, j], "d") if confmat[i, j] != 0 else "."
+        color = "blue" if i != j else "green"
+        ax.text(j, i, str, horizontalalignment="center", fontsize=3, verticalalignment="center", color=color)
+    fig.set_tight_layout(True)
+    return fig
+
+
+def stringify_confmat(confmat, class_list, hide_zeroes=False, hide_diagonal=False, hide_threshold=None):
+    if not isinstance(confmat, np.ndarray) or not isinstance(class_list, list):
+        raise AssertionError("invalid inputs")
+    columnwidth = 9
+    empty_cell = " " * columnwidth
+    fst_empty_cell = (columnwidth - 3) // 2 * " " + "t/p" + (columnwidth - 3) // 2 * " "
+    if len(fst_empty_cell) < len(empty_cell):
+        fst_empty_cell = " " * (len(empty_cell) - len(fst_empty_cell)) + fst_empty_cell
+    res = "\t" + fst_empty_cell + " "
+    for label in class_list:
+        res += ("%{0}s".format(columnwidth) % clipstr(label, columnwidth)) + " "
+    res += ("%{0}s".format(columnwidth) % "total") + "\n"
+    for idx_true, label in enumerate(class_list):
+        res += ("\t%{0}s".format(columnwidth) % clipstr(label, columnwidth)) + " "
+        for idx_pred, _ in enumerate(class_list):
+            cell = "%{0}d".format(columnwidth) % int(confmat[idx_true, idx_pred])
+            if hide_zeroes:
+                cell = cell if int(confmat[idx_true, idx_pred]) != 0 else empty_cell
+            if hide_diagonal:
+                cell = cell if idx_true != idx_pred else empty_cell
+            if hide_threshold:
+                cell = cell if confmat[idx_true, idx_pred] > hide_threshold else empty_cell
+            res += cell + " "
+        res += ("%{0}d".format(columnwidth) % int(confmat[idx_true, :].sum())) + "\n"
+    res += ("\t%{0}s".format(columnwidth) % "total") + " "
+    for idx_pred, _ in enumerate(class_list):
+        res += ("%{0}d".format(columnwidth) % int(confmat[:, idx_pred].sum())) + " "
+    res += ("%{0}d".format(columnwidth) % int(confmat.sum())) + "\n"
+    return res
+
+
+def fig2array(fig):  # will return figure as numpy-compatible RGBA array
+    fig.canvas.draw()
+    w, h = fig.canvas.get_width_height()
+    buf = np.fromstring(fig.canvas.tostring_argb(), dtype=np.uint8)
+    buf.shape = (w, h, 4)
+    buf = np.roll(buf, 3, axis=2)
+    return buf
+
+
 def get_glob_paths(input_glob_pattern, can_be_dir=False):
     glob_file_paths = glob.glob(input_glob_pattern)
     if not glob_file_paths:
@@ -363,14 +436,15 @@ def check_key(key, tdict, tdict_name, msg=''):
         else:
             raise AssertionError(msg)
 
+
 def get_table_from_classification_report(classification_report):
     lines = classification_report.splitlines()
     header = lines[1].split()
-    data=[]
-    for line in  lines[2:-1]:
+    data = []
+    for line in lines[2:-1]:
         els = line.split()
         if len(els):
             data.append(els)
     data = np.vstack(data).transpose()
-    avg = lines[len(lines)-1].split()
-    return (header,data, avg)
+    avg = lines[len(lines) - 1].split()
+    return (header, data, avg)
