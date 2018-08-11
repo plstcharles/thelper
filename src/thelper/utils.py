@@ -230,17 +230,18 @@ def draw_classifs(images, labels_gt, labels_pred=None, labels_map=None):
     if nb_imgs == 1:
         axes = np.array(axes)
     for ax_idx, ax in enumerate(axes.reshape(-1)):
-        if isinstance(images, list):
-            ax.imshow(images[ax_idx], interpolation='nearest')
-        else:
-            ax.imshow(images[ax_idx, ...], interpolation='nearest')
-        curr_label_gt = labels_map[labels_gt[ax_idx]] if labels_map else labels_gt[ax_idx]
-        if labels_pred is not None:
-            curr_label_pred = labels_map[labels_pred[ax_idx]] if labels_map else labels_pred[ax_idx]
-            xlabel = "GT={0}\nPred={1}".format(curr_label_gt, curr_label_pred)
-        else:
-            xlabel = "GT={0}".format(curr_label_gt)
-        ax.set_xlabel(xlabel)
+        if ax_idx < nb_imgs:
+            if isinstance(images, list):
+                ax.imshow(images[ax_idx], interpolation='nearest')
+            else:
+                ax.imshow(images[ax_idx, ...], interpolation='nearest')
+            curr_label_gt = labels_map[labels_gt[ax_idx]] if labels_map else labels_gt[ax_idx]
+            if labels_pred is not None:
+                curr_label_pred = labels_map[labels_pred[ax_idx]] if labels_map else labels_pred[ax_idx]
+                xlabel = "GT={0}\nPred={1}".format(curr_label_gt, curr_label_pred)
+            else:
+                xlabel = "GT={0}".format(curr_label_gt)
+            ax.set_xlabel(xlabel)
         ax.set_xticks([])
         ax.set_yticks([])
     fig.show()
