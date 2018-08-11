@@ -265,7 +265,7 @@ class RandomShift(object):
             raise AssertionError("unexpected min/max combo types")
         if self.max[0] < self.min[0] or self.max[1] < self.min[1]:
             raise AssertionError("bad min/max values")
-        if probability < 0 or probability < 1:
+        if probability < 0 or probability > 1:
             raise AssertionError("bad probability range")
         self.probability = probability
         self.flags = flags
