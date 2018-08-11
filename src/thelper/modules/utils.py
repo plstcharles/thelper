@@ -69,5 +69,9 @@ class ExternalClassifModule(ExternalModule):
             logger.info("reconnecting fc layer for outputting %d classes..." % self.nb_classes)
             nb_features = self.model.fc.in_features
             self.model.fc = torch.nn.Linear(nb_features, self.nb_classes)
+        elif hasattr(self.model, "classifier"):
+            logger.info("reconnecting classifier layer for outputting %d classes..." % self.nb_classes)
+            nb_features = self.model.classifier.in_features
+            self.model.classifier = torch.nn.Linear(nb_features, self.nb_classes)
         else:
             raise AssertionError("could not reconnect fully connected layer for new classes")
