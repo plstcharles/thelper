@@ -20,11 +20,11 @@
                 "torchvision.transforms.Resize": {
                     "size": [224, 224]
                 },
-                "thelper.transforms.NumpyNormalizeMinMax": {
+                "thelper.transforms.NormalizeMinMax": {
                     "min": 0,
                     "max": 255
                 },
-                "thelper.transforms.NumpyNormalizeZeroMeanUnitVar": {
+                "thelper.transforms.NormalizeZeroMeanUnitVar": {
                     "mean": [0.485, 0.456, 0.406],
                     "std": [0.229, 0.224, 0.225]
                 },
@@ -50,11 +50,11 @@
                 "torchvision.transforms.Resize": {
                     "size": [224, 224]
                 },
-                "thelper.transforms.NumpyNormalizeMinMax": {
+                "thelper.transforms.NormalizeMinMax": {
                     "min": 0,
                     "max": 255
                 },
-                "thelper.transforms.NumpyNormalizeZeroMeanUnitVar": {
+                "thelper.transforms.NormalizeZeroMeanUnitVar": {
                     "mean": [0.485, 0.456, 0.406],
                     "std": [0.229, 0.224, 0.225]
                 },

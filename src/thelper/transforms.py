@@ -30,7 +30,7 @@ class AugmentorWrapper(object):
             r = round(random.uniform(0, 1), 1)
             if r <= operation.probability:
                 sample = operation.perform_operation(sample)
-        if not isinstance(sample, list) or len(sample)!=1:
+        if not isinstance(sample, list) or len(sample) != 1:
             raise AssertionError("not the fixup we expected to catch here")
         sample = sample[0]
         if cvt_array:
@@ -89,7 +89,7 @@ class Compose(torchvision.transforms.Compose):
         return img
 
 
-class OpenCVCenterCrop(object):
+class CenterCrop(object):
 
     def __init__(self, size, bordertype=cv.BORDER_CONSTANT, borderval=0):
         if isinstance(size, (tuple, list)):
@@ -137,7 +137,7 @@ class OpenCVCenterCrop(object):
         return self.__class__.__name__ + "(size={0}, bordertype={1}, bordervalue={2})".format(self.size, self.bordertype, self.borderval)
 
 
-class OpenCVResize(object):
+class Resize(object):
 
     def __init__(self, dsize, fx=0, fy=0, interp=cv.INTER_LINEAR, buffer=False):
         self.interp = thelper.utils.import_class(interp) if isinstance(interp, str) else interp
@@ -188,7 +188,115 @@ class OpenCVResize(object):
         return self.__class__.__name__ + "(dsize={0}, fx={1}, fy={2}, interp={3})".format(self.dsize, self.fx, self.fy, self.interp)
 
 
-class NumpyTranspose(object):
+class Affine(object):
+
+    def __init__(self, transf, out_size=None, flags=None, border_mode=None, border_val=None):
+        if isinstance(transf, np.ndarray):
+            if transf.size != 6:
+                raise AssertionError("transformation matrix must be 2x3")
+            self.transf = transf.reshape((2, 3)).astype(np.float32)
+        elif isinstance(transf, list):
+            if not len(transf) == 6:
+                raise AssertionError("transformation matrix must be 6 elements (2x3)")
+            self.transf = np.asarray(transf).reshape((2, 3)).astype(np.float32)
+        else:
+            raise AssertionError("unexpected transformation matrix type")
+        self.out_size = None
+        if out_size is not None:
+            if isinstance(out_size, list):
+                if len(out_size) != 2:
+                    raise AssertionError("output image size should be 2-elem list or tuple")
+                self.out_size = tuple(out_size)
+            elif isinstance(out_size, tuple):
+                if len(out_size) != 2:
+                    raise AssertionError("output image size should be 2-elem list or tuple")
+                self.out_size = out_size
+            else:
+                raise AssertionError("unexpected output size type")
+        self.flags = flags
+        if self.flags is None:
+            self.flags = cv.INTER_LINEAR
+        self.border_mode = border_mode
+        if self.border_mode is None:
+            self.border_mode = cv.BORDER_CONSTANT
+        self.border_val = border_val
+        if self.border_val is None:
+            self.border_val = 0
+
+    def __call__(self, sample):
+        if isinstance(sample, PIL.Image.Image):
+            sample = np.asarray(sample)
+        out_size = self.out_size
+        if out_size is None:
+            out_size = (sample.shape[1], sample.shape[0])
+        return cv.warpAffine(sample, self.transf, dsize=out_size, flags=self.flags, borderMode=self.border_mode, borderValue=self.border_val)
+
+    def invert(self, sample):
+        if isinstance(sample, PIL.Image.Image):
+            sample = np.asarray(sample)
+        out_size = self.out_size
+        if out_size is None:
+            out_size = (sample.shape[1], sample.shape[0])
+        else:
+            raise AssertionError("unknown original image size, cannot invert affine transform")
+        return cv.warpAffine(sample, self.transf, dsize=out_size, flags=self.flags ^ cv.WARP_INVERSE_MAP, borderMode=self.border_mode, borderValue=self.border_val)
+
+    def __repr__(self):
+        return self.__class__.__name__ + "(transf={0}, out_size={1})".format(np.array2string(self.transf), self.out_size)
+
+
+class RandomShift(object):
+
+    def __init__(self, min, max, probability=0.5, flags=None, border_mode=None, border_val=None):
+        if isinstance(min, tuple) and isinstance(max, tuple):
+            if len(min) != len(max) or len(min) != 2:
+                raise AssertionError("min/max shift tuple must be 2-elem")
+            self.min = min
+            self.max = max
+        elif isinstance(min, list) and isinstance(max, list):
+            if len(min) != len(max) or len(min) != 2:
+                raise AssertionError("min/max shift list must be 2-elem")
+            self.min = tuple(min)
+            self.max = tuple(max)
+        elif isinstance(min, (int, float)) and isinstance(max, (int, float)):
+            self.min = (min, min)
+            self.max = (max, max)
+        else:
+            raise AssertionError("unexpected min/max combo types")
+        if self.max[0]<self.min[0] or self.max[1]<self.min[1]:
+            raise AssertionError("bad min/max values")
+        if probability < 0 or probability < 1:
+            raise AssertionError("bad probability range")
+        self.probability = probability
+        self.flags = flags
+        if self.flags is None:
+            self.flags = cv.INTER_LINEAR
+        self.border_mode = border_mode
+        if self.border_mode is None:
+            self.border_mode = cv.BORDER_CONSTANT
+        self.border_val = border_val
+        if self.border_val is None:
+            self.border_val = 0
+
+    def __call__(self, sample):
+        if isinstance(sample, PIL.Image.Image):
+            sample = np.asarray(sample)
+        if np.random.uniform(0, 1) > self.probability:
+            return sample
+        out_size = (sample.shape[1], sample.shape[0])
+        x_shift = np.random.uniform(self.min[0],self.max[0])
+        y_shift = np.random.uniform(self.min[1],self.max[1])
+        transf = np.float32([[1, 0, x_shift], [0, 1, y_shift]])
+        return cv.warpAffine(sample, transf, dsize=out_size, flags=self.flags, borderMode=self.border_mode, borderValue=self.border_val)
+
+    def invert(self, sample):
+        raise AssertionError("stochastic operation cannot be inverted")
+
+    def __repr__(self):
+        return self.__class__.__name__ + "(min={0}, max={1}, prob={2})".format(self.min, self.max, self.probability)
+
+
+class Transpose(object):
 
     def __init__(self, axes):
         axes = np.asarray(axes)
@@ -211,7 +319,7 @@ class NumpyTranspose(object):
         return self.__class__.__name__ + "(axes={0})".format(self.axes)
 
 
-class NumpyNormalizeZeroMeanUnitVar(object):
+class NormalizeZeroMeanUnitVar(object):
 
     def __init__(self, mean, std, out_type=np.float32):
         self.out_type = out_type
@@ -238,7 +346,7 @@ class NumpyNormalizeZeroMeanUnitVar(object):
         return self.__class__.__name__ + "(mean={0}, std={1}, out_type={2})".format(self.mean, self.std, self.out_type)
 
 
-class NumpyNormalizeMinMax(object):
+class NormalizeMinMax(object):
 
     def __init__(self, min, max, out_type=np.float32):
         self.out_type = out_type
