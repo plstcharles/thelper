@@ -15,7 +15,6 @@ import thelper.utils
 import thelper.tasks
 import thelper.transforms
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -80,7 +79,7 @@ class DataConfig(object):
                 raise AssertionError("dataset '%s' does not exist" % name)
         indices = {name: list(range(size)) for name, size in dataset_map_size.items()}
         if self.shuffle:
-            np.random.seed(self.test_seed) # test idxs will be picked first, then valid+train
+            np.random.seed(self.test_seed)  # test idxs will be picked first, then valid+train
             for idxs in indices.values():
                 np.random.shuffle(idxs)
         train_idxs, valid_idxs, test_idxs = {}, {}, {}
@@ -98,7 +97,7 @@ class DataConfig(object):
                     endidx = min(begidx + count, dataset_map_size[name])
                     idxs_map[name] = indices[name][begidx:endidx]
                     offsets[name] = endidx
-            if loader_idx==0 and self.shuffle:
+            if loader_idx == 0 and self.shuffle:
                 np.random.seed(self.valid_seed)  # all test idxs are now picked, reshuffle for train/valid
                 for name in self.total_usage.keys():
                     trainvalid_idxs = indices[name][offsets[name]:]

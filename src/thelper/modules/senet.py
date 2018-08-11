@@ -1,12 +1,11 @@
 import torch
 import torch.nn
-import torchvision
-import torchvision.models
 
 from .resnet import ResNet
 from .resnet import ResFullConvNet
 
 import thelper.modules
+
 
 class SqueezeExcitationLayer(torch.nn.Module):
 

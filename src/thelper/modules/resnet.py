@@ -3,10 +3,8 @@ import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
 
-
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152']
-
 
 model_urls = {
     'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
@@ -169,7 +167,7 @@ class ResFullConvNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fcc0 = nn.Conv2d(512, 256, kernel_size=1, stride=1, padding=0,
-                  bias=False)
+                              bias=False)
         self.fcc1 = nn.Conv2d(256, 128, kernel_size=1, stride=1, padding=0,
                               bias=False)
         self.bn2 = nn.BatchNorm2d(128)
@@ -287,6 +285,7 @@ def resnet18(pretrained=False, **kwargs):
     if pretrained:
         model.load_state_dict(model_zoo.load_url(model_urls['resnet18']))
     return model
+
 
 def resnet34(pretrained=False, **kwargs):
     """Constructs a ResNet-34 model.

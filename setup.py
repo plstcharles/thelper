@@ -23,8 +23,7 @@ if "TOXENV" in os.environ and "SETUPPY_CFLAGS" in os.environ:
     os.environ["CFLAGS"] = os.environ["SETUPPY_CFLAGS"]
 
 
-class optional_build_ext(build_ext):
-
+class OptionalBuildExt(build_ext):
     """Allow the building of C extensions to fail."""
 
     def run(self):
@@ -101,7 +100,7 @@ setuptools.setup(
             "thelper = thelper.cli:main",
         ]
     },
-    cmdclass={"build_ext": optional_build_ext},
+    cmdclass={"build_ext": OptionalBuildExt},
     ext_modules=[
         setuptools.Extension(
             os.path.splitext(os.path.relpath(path, "src").replace(os.sep, "."))[0],

@@ -448,6 +448,4 @@ def get_table_from_classification_report(classification_report):
             data.append(els)
     data = np.vstack(data).transpose()
     avg = lines[len(lines) - 1].split()
-    return (header, data, avg)
-
-
+    return header, data, avg

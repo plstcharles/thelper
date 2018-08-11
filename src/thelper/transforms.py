@@ -263,7 +263,7 @@ class RandomShift(object):
             self.max = (max, max)
         else:
             raise AssertionError("unexpected min/max combo types")
-        if self.max[0]<self.min[0] or self.max[1]<self.min[1]:
+        if self.max[0] < self.min[0] or self.max[1] < self.min[1]:
             raise AssertionError("bad min/max values")
         if probability < 0 or probability < 1:
             raise AssertionError("bad probability range")
@@ -284,8 +284,8 @@ class RandomShift(object):
         if np.random.uniform(0, 1) > self.probability:
             return sample
         out_size = (sample.shape[1], sample.shape[0])
-        x_shift = np.random.uniform(self.min[0],self.max[0])
-        y_shift = np.random.uniform(self.min[1],self.max[1])
+        x_shift = np.random.uniform(self.min[0], self.max[0])
+        y_shift = np.random.uniform(self.min[1], self.max[1])
         transf = np.float32([[1, 0, x_shift], [0, 1, y_shift]])
         return cv.warpAffine(sample, transf, dsize=out_size, flags=self.flags, borderMode=self.border_mode, borderValue=self.border_val)
 

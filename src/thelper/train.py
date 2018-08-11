@@ -128,7 +128,7 @@ class Trainer:
                 if cuda_dev_str == "all":
                     if len(curr_devices) > 1:
                         raise AssertionError("use of 'cuda:all' must not be combined with other devices")
-                    if cuda_dev_count==1:
+                    if cuda_dev_count == 1:
                         devices[idx] = self.default_dev
                         break
                     else:

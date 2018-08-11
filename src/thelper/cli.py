@@ -497,8 +497,7 @@ def main(args=None):
 
     cl_new_session_ap = subparsers.add_parser("gpucluster_new", help="creates a new session from a config file for the cluster")
     cl_new_session_ap.add_argument("cfg_path", type=str, help="path to the training configuration file")
-    cl_new_session_ap.add_argument("save_dir", type=str,
-                                help="path to the root directory where checkpoints should be saved")
+    cl_new_session_ap.add_argument("save_dir", type=str, help="path to the root directory where checkpoints should be saved")
     cl_new_session_ap.set_defaults(new_session=2)
 
     resume_session_ap = subparsers.add_parser("resume", help="resume a session from a checkpoint file")
@@ -544,9 +543,9 @@ def main(args=None):
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
         config = json.load(open(args.cfg_path))
         device_id = thelper.utils.test_cuda_device()
-        config['trainer']['trainer']['train_device'] = 'cuda:%i' % device_id
-        config['trainer']['trainer']['valid_device'] = 'cuda:%i' % device_id
-        config['trainer']['trainer']['test_device'] = 'cuda:%i' % device_id
+        config["trainer"]["trainer"]["train_device"] = "cuda:%i" % device_id
+        config["trainer"]["trainer"]["valid_device"] = "cuda:%i" % device_id
+        config["trainer"]["trainer"]["test_device"] = "cuda:%i" % device_id
         create_session(config, args.data_root, args.save_dir, display_graphs=args.display_graphs)
     elif args.new_session == 0:
         thelper.logger.debug("parsing checkpoint at '%s'" % args.ckpt_path)
