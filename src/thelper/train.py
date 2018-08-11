@@ -190,10 +190,10 @@ class Trainer:
     def train(self):
         if not self.train_loader:
             raise AssertionError("missing training data, invalid loader!")
+        if not self.optimizer:
+            raise AssertionError("missing optimizer!")
         model = None
         for epoch in range(self.start_epoch, self.epochs + 1):
-            if not self.optimizer:
-                raise AssertionError("missing optimizer")
             if self.scheduler:
                 self.scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
                 self.current_lr = self.scheduler.get_lr()[0]  # for debug/display purposes only
@@ -206,6 +206,7 @@ class Trainer:
             if self.valid_loader:
                 self.model.eval()
                 # here, we reuse the model on the train device, as switching may slow everything down hard
+                # todo: run eval in parallel (i.e. at the same time as training?)
                 result_valid = self._eval_epoch(model, epoch, self.valid_loader, "valid")
                 result = {**result, **result_valid}
                 monitor_type_key = "valid/metrics"
