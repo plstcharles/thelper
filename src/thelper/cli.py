@@ -473,8 +473,12 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, 
     trainer.current_iter = ckptdata["iter"] if "iter" in ckptdata else 0
     trainer.monitor_best = ckptdata["monitor_best"]
     trainer.outputs = ckptdata["outputs"]
-    logger.info("resuming training session '%s' @ epoch %d" % (trainer.name, trainer.start_epoch))
-    trainer.train()
+    if eval_only:
+        logger.info("evaluating session '%s' checkpoint @ epoch %d" % (trainer.name, trainer.start_epoch))
+        trainer.eval()
+    else:
+        logger.info("resuming training session '%s' @ epoch %d" % (trainer.name, trainer.start_epoch))
+        trainer.train()
     logger.debug("all done")
 
 
