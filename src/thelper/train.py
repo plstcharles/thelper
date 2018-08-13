@@ -369,6 +369,7 @@ class ImageClassifTrainer(Trainer):
         result = {}
         total_loss = 0
         epoch_size = len(loader)
+        writer = writer = self.train_writer if self.use_tbx else None
         for metric in self.train_metrics.values():
             if hasattr(metric, "set_class_map") and callable(metric.set_class_map):
                 metric.set_class_map(self.class_map)
@@ -402,24 +403,30 @@ class ImageClassifTrainer(Trainer):
                 )
             )
             if self.use_tbx:
-                self.train_writer.add_scalar("iter/loss", loss.item(), self.current_iter)
-                self.train_writer.add_scalar("iter/lr", self.current_lr, self.current_iter)
+                writer.add_scalar("iter/loss", loss.item(), self.current_iter)
+                writer.add_scalar("iter/lr", self.current_lr, self.current_iter)
                 for metric_name, metric in self.train_metrics.items():
                     if metric.is_scalar():
-                        self.train_writer.add_scalar("iter/%s" % metric_name, metric.eval(), self.current_iter)
+                        writer.add_scalar("iter/%s" % metric_name, metric.eval(), self.current_iter)
         metric_vals = {}
         for metric_name, metric in self.train_metrics.items():
             metric_vals[metric_name] = metric.eval()
         result["train/loss"] = total_loss / epoch_size
         result["train/metrics"] = metric_vals
         if self.use_tbx:
-            self.train_writer.add_scalar("epoch/loss", total_loss / epoch_size, epoch)
-            self.train_writer.add_scalar("epoch/lr", self.current_lr, epoch)
+            writer.add_scalar("epoch/loss", total_loss / epoch_size, epoch)
+            writer.add_scalar("epoch/lr", self.current_lr, epoch)
             for metric_name, metric in self.train_metrics.items():
                 if metric.is_scalar():
-                    self.train_writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
+                    writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
                 elif hasattr(metric, "get_tbx_image") and callable(metric.get_tbx_image):
-                    self.train_writer.add_image("epoch/%s" % metric_name, metric.get_tbx_image(), epoch)
+                    img = metric.get_tbx_image()
+                    if img is not None:
+                        writer.add_image("epoch/%s" % metric_name, img, epoch)
+                elif hasattr(metric, "get_tbx_text") and callable(metric.get_tbx_text):
+                    txt = metric.get_tbx_text()
+                    if txt:
+                        writer.add_text("epoch/%s" % metric_name, txt, epoch)
         return result
 
     def _eval_epoch(self, model, epoch, loader, eval_type="valid"):
@@ -480,5 +487,11 @@ class ImageClassifTrainer(Trainer):
                             writer.add_scalar("iter/%s" % metric_name, metric.eval(), self.current_iter)
                         writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
                     elif hasattr(metric, "get_tbx_image") and callable(metric.get_tbx_image):
-                        writer.add_image("epoch/%s" % metric_name, metric.get_tbx_image(), epoch)
+                        img = metric.get_tbx_image()
+                        if img is not None:
+                            writer.add_image("epoch/%s" % metric_name, img, epoch)
+                    elif hasattr(metric, "get_tbx_text") and callable(metric.get_tbx_text):
+                        txt = metric.get_tbx_text()
+                        if txt:
+                            writer.add_text("epoch/%s" % metric_name, txt, epoch)
         return result
