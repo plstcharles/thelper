@@ -468,7 +468,8 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, 
     trainer = thelper.train.load_trainer(session_name, save_dir, config,
                                          model, loss, metrics, loaders)
     trainer.model.load_state_dict(ckptdata["state_dict"])
-    trainer.optimizer.load_state_dict(ckptdata["optimizer"])
+    if trainer.optimizer is not None:
+        trainer.optimizer.load_state_dict(ckptdata["optimizer"])
     trainer.start_epoch = ckptdata["epoch"] + 1
     trainer.current_iter = ckptdata["iter"] if "iter" in ckptdata else 0
     trainer.monitor_best = ckptdata["monitor_best"]
