@@ -8,6 +8,13 @@ logger = logging.getLogger(__name__)
 
 class Task(ABC):
 
+    def __init__(self, meta_keys=None):
+        self.meta_keys = []
+        if meta_keys is not None:
+            if not isinstance(meta_keys, list):
+                raise AssertionError("meta keys should be provided as a list")
+            self.meta_keys = meta_keys
+
     @abstractmethod
     def get_input_key(self):
         raise NotImplementedError
@@ -16,10 +23,24 @@ class Task(ABC):
     def get_gt_key(self):
         raise NotImplementedError
 
+    def get_meta_keys(self):
+        return self.meta_keys
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return (self.get_input_key() == other.get_input_key() and
+                    self.get_gt_key() == other.get_gt_key() and
+                    self.get_meta_keys() == other.get_meta_keys())
+        return False
+
+    def __ne__(self, other):
+        return not (self == other)
+
 
 class Classification(Task):
 
-    def __init__(self, class_map, input_key, label_key=None):
+    def __init__(self, class_map, input_key, label_key=None, meta_keys=None):
+        super().__init__(meta_keys)
         self.class_map = class_map
         if isinstance(class_map, str) and os.path.exists(class_map):
             with open(class_map, "r") as fd:
@@ -43,13 +64,3 @@ class Classification(Task):
 
     def get_class_map(self):
         return self.class_map
-
-    def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            return self.__dict__ == other.__dict__
-        return False
-
-    def __ne__(self, other):
-        if isinstance(other, self.__class__):
-            return self.__dict__ != other.__dict__
-        return True
