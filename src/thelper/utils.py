@@ -9,6 +9,7 @@ import sys
 import itertools
 
 import cv2 as cv
+import sklearn.metrics
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -331,6 +332,41 @@ def draw_errbars(labels, min, max, stddev, mean, xlabel="", ylabel="Raw Value"):
         ax.tick_params(axis="x", labelsize="6", labelrotation=45)
     plt.tight_layout()
     fig.show()
+
+
+def draw_roc_curve(fpr, tpr, labels=None, size_inch=(5, 5), dpi=320):
+    if not isinstance(fpr, np.ndarray) or not isinstance(tpr, np.ndarray):
+        raise AssertionError("invalid inputs")
+    if fpr.shape != tpr.shape:
+        raise AssertionError("mismatched input sizes")
+    if fpr.ndim == 1:
+        fpr = np.expand_dims(fpr, 0)
+    if tpr.ndim == 1:
+        tpr = np.expand_dims(tpr, 0)
+    if labels is not None:
+        if isinstance(labels, str):
+            labels = [labels]
+        if len(labels) != fpr.shape[0]:
+            raise AssertionError("should have one label per curve")
+    else:
+        labels = [None] * fpr.shape[0]
+    fig = plt.figure(num="roc", figsize=size_inch, dpi=dpi, facecolor="w", edgecolor="k")
+    fig.clf()
+    ax = fig.add_subplot(1, 1, 1)
+    for idx,label in enumerate(labels):
+        auc = sklearn.metrics.auc(fpr[idx, ...], tpr[idx, ...])
+        if label is not None:
+            ax.plot(fpr[idx, ...], tpr[idx, ...], "b", label=("%s [auc = %0.3f]" % (label, auc)))
+        else:
+            ax.plot(fpr[idx, ...], tpr[idx, ...], "b", label=("auc = %0.3f" % auc))
+    ax.legend(loc="lower right")
+    ax.plot([0, 1], [0, 1], 'r--')
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_ylabel("True Positive Rate")
+    ax.set_xlabel("False Positive Rate")
+    fig.set_tight_layout(True)
+    return fig
 
 
 def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False):
