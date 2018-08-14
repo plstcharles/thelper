@@ -68,7 +68,7 @@ class Trainer:
         self.use_tbx = False
         if "use_tbx" in config:
             self.use_tbx = thelper.utils.str2bool(config["use_tbx"])
-        writers = [None, None, None]
+        writer_paths = [None, None, None]
         if self.use_tbx:
             self.tbx_root_dir = os.path.join(self.save_dir, "tbx_logs")
             if not os.path.exists(self.tbx_root_dir):
@@ -83,10 +83,9 @@ class Trainer:
                     tbx_dir = os.path.join(self.tbx_root_dir, foldername)
                     if os.path.exists(tbx_dir):
                         raise AssertionError("tbx session paths should be unique")
-                    os.mkdir(tbx_dir)
-                    writers[idx] = SummaryWriter(log_dir=tbx_dir, comment=self.name)
-            self.logger.info("using tensorboard : tensorboard --logdir %s --port <your_port>" % self.tbx_root_dir)
-        self.train_writer, self.valid_writer, self.test_writer = writers
+                    writer_paths[idx] = tbx_dir
+            self.logger.debug("tensorboard init : tensorboard --logdir %s --port <your_port>" % self.tbx_root_dir)
+        self.train_writer_path, self.valid_writer_path, self.test_writer_path = writer_paths
         self.outputs = {}
         self.model = model
         self.loss = loss
@@ -344,6 +343,7 @@ class ImageClassifTrainer(Trainer):
         else:
             self.label_keys = label_keys
         self.class_map = self.model.task.get_class_map()
+        self.meta_keys = self.model.task.get_meta_keys()
 
     def _to_tensor(self, sample):
         if not isinstance(sample, dict):
@@ -369,8 +369,12 @@ class ImageClassifTrainer(Trainer):
         result = {}
         total_loss = 0
         epoch_size = len(loader)
-        writer = writer = self.train_writer if self.use_tbx else None
-        for metric in self.train_metrics.values():
+        dev = self.train_dev
+        metrics = self.train_metrics
+        eval_type = "train"
+        writer_path = self.train_writer_path
+        writer = SummaryWriter(log_dir=writer_path, comment=self.name) if self.use_tbx else None
+        for metric in metrics.values():
             if hasattr(metric, "set_class_map") and callable(metric.set_class_map):
                 metric.set_class_map(self.class_map)
             if hasattr(metric, "set_max_accum") and callable(metric.set_max_accum):
@@ -379,8 +383,9 @@ class ImageClassifTrainer(Trainer):
                 metric.reset()
         for idx, sample in enumerate(loader):
             input, label = self._to_tensor(sample)
-            input = self._upload_tensor(input, self.train_dev)
-            label = self._upload_tensor(label, self.train_dev)
+            input = self._upload_tensor(input, dev)
+            label = self._upload_tensor(label, dev)
+            meta = {key: sample[key] for key in self.meta_keys}
             optimizer.zero_grad()
             pred = model(input)
             loss = self.loss(pred, label)
@@ -388,8 +393,8 @@ class ImageClassifTrainer(Trainer):
             optimizer.step()
             total_loss += loss.item()
             self.current_iter += 1
-            for metric in self.train_metrics.values():
-                metric.accumulate(pred.cpu(), label.cpu())
+            for metric in metrics.values():
+                metric.accumulate(pred.cpu(), label.cpu(), meta=meta)
             self.logger.info(
                 "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}: {:.2f}".format(
                     epoch,
@@ -398,35 +403,42 @@ class ImageClassifTrainer(Trainer):
                     epoch_size,
                     (idx / epoch_size) * 100.0,
                     loss.item(),
-                    self.train_metrics[self.monitor].name,
-                    self.train_metrics[self.monitor].eval()
+                    self.monitor,
+                    metrics[self.monitor].eval()
                 )
             )
             if self.use_tbx:
                 writer.add_scalar("iter/loss", loss.item(), self.current_iter)
                 writer.add_scalar("iter/lr", self.current_lr, self.current_iter)
-                for metric_name, metric in self.train_metrics.items():
+                for metric_name, metric in metrics.items():
                     if metric.is_scalar():
                         writer.add_scalar("iter/%s" % metric_name, metric.eval(), self.current_iter)
         metric_vals = {}
-        for metric_name, metric in self.train_metrics.items():
+        for metric_name, metric in metrics.items():
             metric_vals[metric_name] = metric.eval()
         result["train/loss"] = total_loss / epoch_size
         result["train/metrics"] = metric_vals
         if self.use_tbx:
             writer.add_scalar("epoch/loss", total_loss / epoch_size, epoch)
             writer.add_scalar("epoch/lr", self.current_lr, epoch)
-            for metric_name, metric in self.train_metrics.items():
+            for metric_name, metric in metrics.items():
                 if metric.is_scalar():
                     writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
-                elif hasattr(metric, "get_tbx_image") and callable(metric.get_tbx_image):
+                if hasattr(metric, "get_tbx_image") and callable(metric.get_tbx_image):
                     img = metric.get_tbx_image()
                     if img is not None:
-                        writer.add_image("epoch/%s" % metric_name, img, epoch)
-                elif hasattr(metric, "get_tbx_text") and callable(metric.get_tbx_text):
+                        writer.add_image("train/%s" % metric_name, img, epoch)
+                if hasattr(metric, "get_tbx_text") and callable(metric.get_tbx_text):
                     txt = metric.get_tbx_text()
                     if txt:
-                        writer.add_text("epoch/%s" % metric_name, txt, epoch)
+                        writer.add_text("train/%s" % metric_name, txt, epoch)
+                        # as backup, save raw text since tensorboardX can fail
+                        # see https://github.com/lanpa/tensorboardX/issues/134
+                        raw_filename = "%s-%s-%04d.txt" % (eval_type, metric_name, epoch)
+                        raw_filepath = os.path.join(writer_path, raw_filename)
+                        with open(raw_filepath, "w") as fd:
+                            fd.write(txt)
+            writer.close()
         return result
 
     def _eval_epoch(self, model, epoch, loader, eval_type="valid"):
@@ -437,11 +449,13 @@ class ImageClassifTrainer(Trainer):
         result = {}
         if eval_type == "valid":
             dev = self.valid_dev
-            writer = self.valid_writer
+            writer_path = self.valid_writer_path
+            writer = SummaryWriter(log_dir=writer_path, comment=self.name) if self.use_tbx else None
             metrics = self.valid_metrics
         else:
             dev = self.test_dev
-            writer = self.test_writer
+            writer_path = self.test_writer_path
+            writer = SummaryWriter(log_dir=writer_path, comment=self.name) if self.use_tbx else None
             metrics = self.test_metrics
         with torch.no_grad():
             total_loss = 0
@@ -454,12 +468,12 @@ class ImageClassifTrainer(Trainer):
                 input, label = self._to_tensor(sample)
                 input = self._upload_tensor(input, dev)
                 label = self._upload_tensor(label, dev)
+                meta = {key: sample[key] for key in self.meta_keys}
                 pred = model(input)
                 loss = self.loss(pred, label)
                 total_loss += loss.item()
                 for metric in metrics.values():
-                    metric.accumulate(pred.cpu(), label.cpu())
-                # set logger to output based on timer?
+                    metric.accumulate(pred.cpu(), label.cpu(), meta=meta)
                 self.logger.info(
                     "{} epoch: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}: {:.2f}".format(
                         eval_type,
@@ -468,7 +482,7 @@ class ImageClassifTrainer(Trainer):
                         epoch_size,
                         (idx / epoch_size) * 100.0,
                         loss.item(),
-                        metrics[self.monitor].name,
+                        self.monitor,
                         metrics[self.monitor].eval()
                     )
                 )
@@ -486,12 +500,20 @@ class ImageClassifTrainer(Trainer):
                         if self.current_iter > 0:
                             writer.add_scalar("iter/%s" % metric_name, metric.eval(), self.current_iter)
                         writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
-                    elif hasattr(metric, "get_tbx_image") and callable(metric.get_tbx_image):
+                    if hasattr(metric, "get_tbx_image") and callable(metric.get_tbx_image):
                         img = metric.get_tbx_image()
                         if img is not None:
-                            writer.add_image("epoch/%s" % metric_name, img, epoch)
-                    elif hasattr(metric, "get_tbx_text") and callable(metric.get_tbx_text):
+                            writer.add_image(eval_type + "/%s" % metric_name, img, epoch)
+                    if hasattr(metric, "get_tbx_text") and callable(metric.get_tbx_text):
                         txt = metric.get_tbx_text()
                         if txt:
-                            writer.add_text("epoch/%s" % metric_name, txt, epoch)
+                            writer.add_text(eval_type + "/%s" % metric_name, txt, epoch)
+                            # as backup, save raw text since tensorboardX can fail
+                            # see https://github.com/lanpa/tensorboardX/issues/134
+                            raw_filename = "%s-%s-%04d.txt" % (eval_type, metric_name, epoch)
+                            raw_filepath = os.path.join(writer_path, raw_filename)
+                            with open(raw_filepath,"w") as fd:
+                                fd.write(txt)
+
+                writer.close()
         return result

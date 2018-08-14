@@ -4,6 +4,8 @@ from collections import deque
 from abc import ABC, abstractmethod
 
 import torch
+import torch.nn
+import torch.nn.functional
 import sklearn.metrics
 
 import thelper.utils
@@ -68,13 +70,8 @@ class Metric(ABC):
     minimize = float("-inf")
     maximize = float("inf")
 
-    def __init__(self, name):
-        if not name:
-            raise AssertionError("metric name must not be empty (lookup might fail)")
-        self.name = name
-
     @abstractmethod
-    def accumulate(self, pred, gt):
+    def accumulate(self, pred, gt, meta=None):
         raise NotImplementedError
 
     @abstractmethod
@@ -101,14 +98,13 @@ class Metric(ABC):
 class CategoryAccuracy(Metric):
 
     def __init__(self, top_k=1, max_accum=None):
-        super().__init__("CategoryAccuracy")
         self.top_k = top_k
         self.max_accum = max_accum
         self.correct = deque()
         self.total = deque()
         self.warned_eval_bad = False
 
-    def accumulate(self, pred, gt):
+    def accumulate(self, pred, gt, meta=None):
         top_k = pred.topk(self.top_k, 1)[1]
         true_k = gt.view(len(gt), 1).expand_as(top_k)
         self.correct.append(top_k.eq(true_k).float().sum().item())
@@ -121,7 +117,7 @@ class CategoryAccuracy(Metric):
         if len(self.total) == 0 or sum(self.total) == 0:
             if not self.warned_eval_bad:
                 self.warned_eval_bad = True
-                logger.warning("metric '%s' eval result invalid (set as 0.0), no results accumulated" % self.name)
+                logger.warning("category accuracy eval result invalid (set as 0.0), no results accumulated")
             return 0.0
         return (float(sum(self.correct)) / float(sum(self.total))) * 100
 
@@ -138,20 +134,16 @@ class CategoryAccuracy(Metric):
     def goal(self):
         return Metric.maximize
 
-    def summary(self):
-        logger.info("metric '%s' with top_k=%d" % (self.name, self.top_k))
-
 
 class BinaryAccuracy(Metric):
 
     def __init__(self, max_accum=None):
-        super().__init__("BinaryAccuracy")
         self.max_accum = max_accum
         self.correct = deque()
         self.total = deque()
         self.warned_eval_bad = False
 
-    def accumulate(self, pred, gt):
+    def accumulate(self, pred, gt, meta=None):
         pred = pred.topk(1, 1)[1].view(len(gt))
         if pred.size() != gt.size():
             raise AssertionError("pred and gt should have similar size")
@@ -165,7 +157,7 @@ class BinaryAccuracy(Metric):
         if len(self.total) == 0 or sum(self.total) == 0:
             if not self.warned_eval_bad:
                 self.warned_eval_bad = True
-                logger.warning("metric '%s' eval result invalid (set as 0.0), no results accumulated" % self.name)
+                logger.warning("binary accuracy eval result invalid (set as 0.0), no results accumulated")
             return 0.0
         return (float(sum(self.correct)) / float(sum(self.total))) * 100
 
@@ -182,24 +174,17 @@ class BinaryAccuracy(Metric):
     def goal(self):
         return Metric.maximize
 
-    def summary(self):
-        logger.info("metric '%s'" % self.name)
-
 
 class ExternalMetric(Metric):
 
     def __init__(self, metric_name, metric_params, metric_type,
                  target_name=None, target_label=None, goal=None,
-                 class_map=None, max_accum=None):
-        name = str(metric_name).rsplit(".", 1)[-1]
-        if target_name:
-            name += "_" + str(target_name)
-        super().__init__(name)
+                 class_map=None, max_accum=None, force_softmax=True):
         if not isinstance(metric_type, str) or (
                 metric_type != "classif_top1" and
                 metric_type != "classif_scores" and
                 metric_type != "regression"):
-            raise AssertionError("unknown metric type for '%s'" % self.name)
+            raise AssertionError("unknown metric type '%s'" % str(metric_type))
         self.metric_goal = None
         if goal is not None:
             if isinstance(goal, str) and "max" in goal.lower():
@@ -207,7 +192,7 @@ class ExternalMetric(Metric):
             elif isinstance(goal, str) and "min" in goal.lower():
                 self.metric_goal = Metric.minimize
             else:
-                raise AssertionError("unexpected goal type for '%s'" % self.name)
+                raise AssertionError("unexpected goal type for '%s'" % str(metric_name))
         self.metric_type = metric_type
         self.metric = thelper.utils.import_class(metric_name)
         if metric_params:
@@ -217,22 +202,11 @@ class ExternalMetric(Metric):
         if "classif" in metric_type:
             self.target_name = target_name
             self.target_label = target_label
-            self.class_map = class_map
-            if class_map is not None and not isinstance(class_map, dict):
-                raise AssertionError("unexpected class map type")
+            self.class_map = None
             if class_map is not None:
-                if self.target_label is not None and self.target_name is not None:
-                    if class_map[self.target_label] != self.target_name:
-                        raise AssertionError("target label '{}' did not match with name '{}' in class map".format(self.target_label, self.target_name))
-                elif self.target_name is None and self.target_label is not None:
-                    self.target_name = class_map[self.target_label]
-                elif self.target_label is None and self.target_name is not None:
-                    for tgt_lbl, tgt_name in class_map.items():
-                        if tgt_name == self.target_name:
-                            self.target_label = tgt_lbl
-                            break
-                    if self.target_label is None:
-                        raise AssertionError("could not find target name '%s' in provided class mapping" % self.target_name)
+                self.set_class_map(class_map)
+            if metric_type == "classif_scores":
+                self.force_softmax = force_softmax  # only useful in this case
         # elif "regression" in metric_type: missing impl for custom handling
         self.max_accum = max_accum
         self.pred = deque()
@@ -242,9 +216,16 @@ class ExternalMetric(Metric):
         if "classif" in self.metric_type:
             if not isinstance(class_map, dict):
                 raise AssertionError("unexpected class map type")
-            if self.target_label is not None and self.target_name is not None:
-                if class_map[self.target_label] != self.target_name:
-                    raise AssertionError("target label '{}' did not match with name '{}' in class map".format(self.target_label, self.target_name))
+            if len(class_map) < 2:
+                raise AssertionError("not enough classes in provided class map")
+            if self.target_name is None and self.target_label is None:
+                raise AssertionError("if more than two classes, must provide target name or label")
+            if self.target_name is not None and self.target_name not in class_map.values():
+                raise AssertionError("could not find target name '%s' in class map values" % str(self.target_name))
+            if self.target_label is not None and self.target_label not in class_map:
+                raise AssertionError("could not find target name '%s' in class map values" % str(self.target_name))
+            if self.target_name is not None and self.target_label is not None and class_map[self.target_label] != self.target_name:
+                raise AssertionError("target label '{}' did not match with name '{}' in class map".format(self.target_label, self.target_name))
             elif self.target_name is None and self.target_label is not None:
                 self.target_name = class_map[self.target_label]
             elif self.target_label is None and self.target_name is not None:
@@ -255,8 +236,10 @@ class ExternalMetric(Metric):
                 if self.target_label is None:
                     raise AssertionError("could not find target name '%s' in provided class mapping" % self.target_name)
             self.class_map = class_map
+        else:
+            raise AssertionError("unexpected class map with metric type other than classif")
 
-    def accumulate(self, pred, gt):
+    def accumulate(self, pred, gt, meta=None):
         if "classif" in self.metric_type:
             if self.target_name is not None and self.target_label is None:
                 raise AssertionError("could not map target name '%s' to target label, missing class map" % self.target_name)
@@ -270,6 +253,8 @@ class ExternalMetric(Metric):
                             y_true.append(gt[idx].item() == self.target_label)
                             y_pred.append(pred_label[idx].item() == self.target_label)
                 else:  # self.metric_type == "classif_scores"
+                    if self.force_softmax:
+                        pred = torch.nn.functional.softmax(pred, dim=1)
                     for idx in range(len(gt)):
                         y_true.append(gt[idx].item() == self.target_label)
                         y_pred.append(pred[idx, self.target_label].item())
@@ -284,18 +269,18 @@ class ExternalMetric(Metric):
         elif self.metric_type == "regression":
             raise NotImplementedError
         else:
-            raise AssertionError("unknown metric type for '%s'" % self.name)
+            raise AssertionError("unknown metric type '%s'" % str(self.metric_type))
         while self.max_accum and len(self.gt) > self.max_accum:
             self.gt.popleft()
             self.pred.popleft()
 
     def eval(self):
         if "classif" in self.metric_type:
-            y_true = [label for labels in self.gt for label in labels]
-            y_pred = [label for labels in self.pred for label in labels]
-            if len(y_true) != len(y_pred):
+            y_gt = [gt for gts in self.gt for gt in gts]
+            y_pred = [pred for preds in self.pred for pred in preds]
+            if len(y_gt) != len(y_pred):
                 raise AssertionError("list flattening failed")
-            return self.metric(y_true, y_pred, **self.metric_params)
+            return self.metric(y_gt, y_pred, **self.metric_params)
         else:
             raise NotImplementedError
 
@@ -312,17 +297,10 @@ class ExternalMetric(Metric):
     def goal(self):
         return self.metric_goal
 
-    def summary(self):
-        if self.target_name:
-            logger.info("external metric '%s' for target = '%s'" % (self.name, self.target_name))
-        else:
-            logger.info("external metric '%s' for all targets" % self.name)
-
 
 class ClassifReport(Metric):
 
     def __init__(self, class_map=None, sample_weight=None, digits=2):
-        super().__init__("ClassifReport")
 
         def gen_report(y_true, y_pred, _class_map):
             if not _class_map:
@@ -349,7 +327,7 @@ class ClassifReport(Metric):
             raise AssertionError("unexpected class map type")
         self.class_map = class_map
 
-    def accumulate(self, pred, gt):
+    def accumulate(self, pred, gt, meta=None):
         if self.pred is None:
             self.pred = pred.topk(1, 1)[1].view(len(gt))
             self.gt = gt.view(len(gt)).clone()
@@ -367,14 +345,10 @@ class ClassifReport(Metric):
     def goal(self):
         return None  # means this class should not be used for monitoring
 
-    def summary(self):
-        logger.info("classification report '%s'" % self.name)
-
 
 class ConfusionMatrix(Metric):
 
     def __init__(self, class_map=None):
-        super().__init__("ConfusionMatrix")
 
         def gen_matrix(y_true, y_pred, _class_map, _class_list):
             if not _class_map:
@@ -405,7 +379,7 @@ class ConfusionMatrix(Metric):
         for idx, name in self.class_map.items():
             self.class_list[idx] = name
 
-    def accumulate(self, pred, gt):
+    def accumulate(self, pred, gt, meta=None):
         if self.pred is None:
             self.pred = pred.topk(1, 1)[1].view(len(gt))
             self.gt = gt.view(len(gt)).clone()
@@ -436,5 +410,170 @@ class ConfusionMatrix(Metric):
     def goal(self):
         return None  # means this class should not be used for monitoring
 
-    def summary(self):
-        logger.info("confusion matrix '%s'" % self.name)
+
+class ROCCurve(Metric):
+
+    def __init__(self, target_name=None, target_label=None, class_map=None, force_softmax=True,
+                 log_params=None, sample_weight=None, drop_intermediate=True):
+        self.target_name = target_name
+        self.target_label = target_label
+        self.class_map = None
+        if class_map is not None:
+            self.set_class_map(class_map)
+        self.force_softmax = force_softmax
+        self.log_params = log_params
+        if log_params is not None:
+            if not isinstance(log_params, dict):
+                raise AssertionError("unexpected log params type (expected dict)")
+            if "fpr_threshold" not in log_params and "tpr_threshold" not in log_params:
+                raise AssertionError("missing log 'fpr_threshold' or 'tpr_threshold' field for logging in params")
+            if "fpr_threshold" in log_params and "tpr_threshold" in log_params:
+                raise AssertionError("must specify only 'fpr_threshold' or 'tpr_threshold' field for logging in params")
+            if "fpr_threshold" in log_params:
+                self.log_fpr_threshold = float(log_params["fpr_threshold"])
+                if self.log_fpr_threshold < 0 or self.log_fpr_threshold > 1:
+                    raise AssertionError("bad log fpr threshold (should be in [0,1]")
+                self.log_tpr_threshold = None
+            elif "tpr_threshold" in log_params:
+                self.log_tpr_threshold = float(log_params["tpr_threshold"])
+                if self.log_tpr_threshold < 0 or self.log_tpr_threshold > 1:
+                    raise AssertionError("bad log tpr threshold (should be in [0,1]")
+                self.log_fpr_threshold = None
+            if "meta_keys" not in log_params:
+                raise AssertionError("missing log 'meta_keys' field for logging in params")
+            self.log_meta_keys = log_params["meta_keys"]
+            if not isinstance(self.log_meta_keys, list):
+                raise AssertionError("unexpected log meta keys params type (expected list)")
+
+        def gen_curve(y_true, y_score, _class_map, _target_label, _sample_weight=sample_weight, _drop_intermediate=drop_intermediate):
+            if _class_map is None or not _class_map:
+                if _target_label is not None:
+                    raise AssertionError("got positive label, but no class map (even at run time)")
+                res = sklearn.metrics.roc_curve(y_true, y_score, sample_weight=_sample_weight, drop_intermediate=_drop_intermediate)
+            else:
+                if _target_label is None:
+                    raise AssertionError("missing positive target label at run time")
+                _y_true = [classid == _target_label for classid in y_true]
+                _y_score = y_score[..., _target_label]
+                res = sklearn.metrics.roc_curve(_y_true, _y_score, sample_weight=sample_weight, drop_intermediate=drop_intermediate)
+            return res
+
+        def gen_auc(y_true, y_score, _class_map, _target_label, _sample_weight=sample_weight):
+            if _class_map is None or not _class_map:
+                if _target_label is not None:
+                    raise AssertionError("got positive label, but no class map (even at run time)")
+                res = sklearn.metrics.roc_auc_score(y_true, y_score, sample_weight=sample_weight)
+            else:
+                if _target_label is None:
+                    raise AssertionError("missing positive target label at run time")
+                _y_true = [classid == _target_label for classid in y_true]
+                _y_score = y_score[..., _target_label]
+                res = sklearn.metrics.roc_auc_score(_y_true, _y_score, sample_weight=sample_weight)
+            return res
+
+        self.curve = gen_curve
+        self.auc = gen_auc
+        self.score = None
+        self.true = None
+        self.meta = None  # needed if outputting tbx txt
+
+    def set_class_map(self, class_map):
+        if not isinstance(class_map, dict):
+            raise AssertionError("unexpected class map type")
+        if len(class_map) < 2:
+            raise AssertionError("not enough classes in provided class map")
+        if self.target_name is None and self.target_label is None:
+            raise AssertionError("if more than two classes, must provide target name or label")
+        if self.target_name is not None and self.target_name not in class_map.values():
+            raise AssertionError("could not find target name '%s' in class map values" % str(self.target_name))
+        if self.target_label is not None and self.target_label not in class_map:
+            raise AssertionError("could not find target name '%s' in class map values" % str(self.target_name))
+        if self.target_name is not None and self.target_label is not None and class_map[self.target_label] != self.target_name:
+            raise AssertionError("target label '{}' did not match with name '{}' in class map".format(self.target_label, self.target_name))
+        elif self.target_name is None and self.target_label is not None:
+            self.target_name = class_map[self.target_label]
+        elif self.target_label is None and self.target_name is not None:
+            for tgt_lbl, tgt_name in class_map.items():
+                if tgt_name == self.target_name:
+                    self.target_label = tgt_lbl
+                    break
+            if self.target_label is None:
+                raise AssertionError("could not find target name '%s' in provided class mapping" % self.target_name)
+        self.class_map = class_map
+
+    def accumulate(self, pred, gt, meta=None):
+        if self.force_softmax:
+            pred = torch.nn.functional.softmax(pred, dim=1)
+        if self.score is None:
+            self.score = pred.clone()
+            self.true = gt.clone()
+        else:
+            self.score = torch.cat((self.score, pred), 0)
+            self.true = torch.cat((self.true, gt), 0)
+        if self.log_params:  # do not log meta parameters unless requested
+            if meta is None or not meta:
+                raise AssertionError("sample metadata is required, logging is activated")
+            _meta = {key: meta[key] for key in self.log_meta_keys}
+            if self.meta is None:
+                self.meta = copy.deepcopy(_meta)
+            else:
+                for key in self.log_meta_keys:
+                    if isinstance(_meta[key], list):
+                        self.meta[key] += _meta[key]
+                    elif isinstance(_meta[key], torch.Tensor):
+                        self.meta[key] = torch.cat((self.meta[key], _meta[key]), 0)
+                    else:
+                        raise AssertionError("missing impl for meta concat w/ type '%s'" % str(type(_meta[key])))
+
+    def eval(self):
+        return self.auc(self.true.numpy(), self.score.numpy(), self.class_map, self.target_label)
+
+    def get_tbx_image(self):
+        fpr, tpr, t = self.curve(self.true.numpy(), self.score.numpy(), self.class_map, self.target_label)
+        fig = thelper.utils.draw_roc_curve(fpr, tpr)
+        array = thelper.utils.fig2array(fig)
+        return array
+
+    def get_tbx_text(self):
+        if self.log_params is None:
+            return None  # do not generate log text unless requested
+        if self.meta is None or not self.meta:
+            return None
+        if self.class_map is None or not self.class_map:
+            raise AssertionError("missing class map for logging, current impl only supports named outputs")
+        _fpr, _tpr, _t = self.curve(self.true.numpy(), self.score.numpy(), self.class_map, self.target_label, _drop_intermediate=False)
+        threshold = None
+        for fpr, tpr, t in zip(_fpr, _tpr, _t):
+            if self.log_fpr_threshold is not None and self.log_fpr_threshold <= fpr:
+                threshold = t
+                break
+            elif self.log_tpr_threshold is not None and self.log_tpr_threshold <= tpr:
+                threshold = t
+                break
+        if threshold is None:
+            raise AssertionError("bad fpr/tpr threshold, could not find cutoff for pred scores")
+        res = "sample_idx,classid,classname,pred_score"
+        for key in self.log_meta_keys:
+            res += "," + str(key)
+        res += "\n"
+        for sample_idx in range(self.true.numel()):
+            true = self.true[sample_idx].item() == self.target_label
+            score = self.score[sample_idx, self.target_label].item()
+            if true and score <= threshold:
+                res += "{:8d},{:4d},{:>10s},{:2.2f}".format(sample_idx, self.target_label, self.target_name, score)
+                for key in self.log_meta_keys:
+                    val = self.meta[key][sample_idx]
+                    if isinstance(val, torch.Tensor) and val.numel() == 1:
+                        res += "," + str(val.item())
+                    else:
+                        res += "," + str(val)
+                res += "\n"
+        return res
+
+    def reset(self):
+        self.score = None
+        self.true = None
+        self.meta = None
+
+    def goal(self):
+        return None  # means this class should not be used for monitoring
