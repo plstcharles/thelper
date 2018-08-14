@@ -300,7 +300,7 @@ class ExternalMetric(Metric):
 
 class ClassifReport(Metric):
 
-    def __init__(self, class_map=None, sample_weight=None, digits=2):
+    def __init__(self, class_map=None, sample_weight=None, digits=4):
 
         def gen_report(y_true, y_pred, _class_map):
             if not _class_map:
