@@ -254,7 +254,8 @@ class ExternalMetric(Metric):
                             y_pred.append(pred_label[idx].item() == self.target_label)
                 else:  # self.metric_type == "classif_scores"
                     if self.force_softmax:
-                        pred = torch.nn.functional.softmax(pred, dim=1)
+                        with torch.no_grad():
+                            pred = torch.nn.functional.softmax(pred, dim=1)
                     for idx in range(len(gt)):
                         y_true.append(gt[idx].item() == self.target_label)
                         y_pred.append(pred[idx, self.target_label].item())
@@ -503,7 +504,8 @@ class ROCCurve(Metric):
 
     def accumulate(self, pred, gt, meta=None):
         if self.force_softmax:
-            pred = torch.nn.functional.softmax(pred, dim=1)
+            with torch.no_grad():
+                pred = torch.nn.functional.softmax(pred, dim=1)
         if self.score is None:
             self.score = pred.clone()
             self.true = gt.clone()
@@ -560,7 +562,7 @@ class ROCCurve(Metric):
             true = self.true[sample_idx].item() == self.target_label
             score = self.score[sample_idx, self.target_label].item()
             if true and score <= threshold:
-                res += "{:8d},{:4d},{:>10s},{:2.2f}".format(sample_idx, self.target_label, self.target_name, score)
+                res += "{:8d},{:4d},{:>10s},{:2.4f}".format(sample_idx, self.target_label, self.target_name, score)
                 for key in self.log_meta_keys:
                     val = self.meta[key][sample_idx]
                     if isinstance(val, torch.Tensor) and val.numel() == 1:
