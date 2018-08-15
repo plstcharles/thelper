@@ -348,18 +348,17 @@ class ConfusionMatrix(Metric):
 
     def __init__(self, class_names=None):
 
-        def gen_matrix(y_true, y_pred, _class_names, _class_list):
+        def gen_matrix(y_true, y_pred, _class_names):
             if not _class_names:
                 res = sklearn.metrics.confusion_matrix(y_true, y_pred)
             else:
                 _y_true = [_class_names[classid] for classid in y_true]
                 _y_pred = [_class_names[classid] if (0 <= classid < len(_class_names)) else "<unset>" for classid in y_pred]
-                res = sklearn.metrics.confusion_matrix(_y_true, _y_pred, labels=_class_list)
+                res = sklearn.metrics.confusion_matrix(_y_true, _y_pred, labels=_class_names)
             return res
 
         self.matrix = gen_matrix
         self.class_names = None
-        self.class_list = None
         if class_names is not None:
             self.set_class_names(class_names)
         self.pred = None
@@ -382,16 +381,16 @@ class ConfusionMatrix(Metric):
             self.gt = torch.cat((self.gt, gt.view(len(gt))), 0)
 
     def eval(self):
-        confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_names, self.class_list)
-        if self.class_list:
-            return "\n" + thelper.utils.stringify_confmat(confmat, self.class_list)
+        confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_names)
+        if self.class_names:
+            return "\n" + thelper.utils.stringify_confmat(confmat, self.class_names)
         else:
             return "\n" + str(confmat)
 
     def get_tbx_image(self):
-        confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_names, self.class_list)
-        if self.class_list:
-            fig = thelper.utils.draw_confmat(confmat, self.class_list)
+        confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_names)
+        if self.class_names:
+            fig = thelper.utils.draw_confmat(confmat, self.class_names)
             array = thelper.utils.fig2array(fig)
             return array
         else:
