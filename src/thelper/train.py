@@ -70,9 +70,9 @@ class Trainer:
             self.use_tbx = thelper.utils.str2bool(config["use_tbx"])
         writer_paths = [None, None, None]
         if self.use_tbx:
-            self.tbx_root_dir = os.path.join(self.save_dir, "tbx_logs")
+            self.tbx_root_dir = os.path.join(self.save_dir, "tbx_logs", self.name)
             if not os.path.exists(self.tbx_root_dir):
-                os.mkdir(self.tbx_root_dir)
+                os.makedirs(self.tbx_root_dir)
             timestr = time.strftime("%Y%m%d-%H%M%S")
             train_foldername = "train-%s-%s" % (platform.node(), timestr)
             valid_foldername = "valid-%s-%s" % (platform.node(), timestr)
