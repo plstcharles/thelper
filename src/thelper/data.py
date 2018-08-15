@@ -73,7 +73,6 @@ class DataConfig(object):
                         self.test_split[name] /= usage
 
     def get_idx_split(self, dataset_map_size):
-        logger.debug("loading dataset split & normalizing ratios")
         for name in self.total_usage:
             if name not in dataset_map_size:
                 raise AssertionError("dataset '%s' does not exist" % name)
@@ -106,8 +105,45 @@ class DataConfig(object):
         return train_idxs, valid_idxs, test_idxs
 
     def get_data_split(self, dataset_templates):
-        dataset_size_map = {name: len(dataset) for name, dataset in dataset_templates.items()}
-        train_idxs, valid_idxs, test_idxs = self.get_idx_split(dataset_size_map)
+        dataset_size_map = {}
+        dataset_class_names, dataset_class_indices = None, None  # if remains none, task is not classif-related
+        for dataset_name, dataset in dataset_templates.items():
+            dataset_size_map[dataset_name] = len(dataset)
+            task = dataset.get_task()
+            if isinstance(task, thelper.tasks.Classification):
+                class_names = task.get_class_names()
+                if dataset_class_names is None:
+                    dataset_class_names = class_names
+                    dataset_class_indices = {dataset_name: task.get_class_indices(dataset.samples)}
+                else:
+                    if dataset_class_names != class_names:
+                        raise AssertionError("dataset '%s' class names mismatch with other datasets" % dataset_name)
+                    dataset_class_indices[dataset_name] = task.get_class_indices(dataset.samples)
+        logger.debug("splitting datasets with parsed sizes = %s" % str(dataset_size_map))
+        if dataset_class_names is None:
+            train_idxs, valid_idxs, test_idxs = self.get_idx_split(dataset_size_map)
+        else:
+            # parse config for oversampling here? todo
+            # note: with current impl, all classes will be shuffle the same way... (shouldnt matter, right?)
+            logger.debug("will split evenly over %d classes..." % len(dataset_class_names))
+            train_idxs, valid_idxs, test_idxs = {}, {}, {}
+            for class_idx, class_name in enumerate(dataset_class_names):
+                dataset_size_map = {}
+                for dataset_name in dataset_class_indices:
+                    dataset_size_map[dataset_name] = len(dataset_class_indices[dataset_name][class_idx])
+                logger.debug("class '%s' dataset distribution: %s" % (class_name, str(dataset_size_map)))
+                class_train_idxs, class_valid_idxs, class_test_idxs = self.get_idx_split(dataset_size_map)
+                for idxs_dict_list, class_idxs_dict_list in zip([train_idxs, valid_idxs, test_idxs],
+                                                                [class_train_idxs, class_valid_idxs, class_test_idxs]):
+                    for dataset_name in class_idxs_dict_list:
+                        if dataset_name in idxs_dict_list:
+                            idxs_dict_list[dataset_name] += class_idxs_dict_list[dataset_name]
+                        else:
+                            idxs_dict_list[dataset_name] = class_idxs_dict_list[dataset_name]
+            # one last intra-dataset shuffle for good mesure, samples of the same class should not be always fed consecutively
+            for dataset_name in dataset_class_indices:
+                for idxs_dict_list in [train_idxs, valid_idxs, test_idxs]:
+                    np.random.shuffle(idxs_dict_list[dataset_name])
         train_data, valid_data, test_data, loaders = [], [], [], []
         for loader_idx, (idxs_map, datasets) in enumerate(zip([train_idxs, valid_idxs, test_idxs],
                                                               [train_data, valid_data, test_data])):
@@ -164,6 +200,8 @@ def load_dataset_templates(config, root):
         if issubclass(dataset_type, Dataset):
             # assume that the dataset is derived from thelper.data.Dataset (it is fully sampling-ready)
             templates[dataset_name] = dataset_type(name=dataset_name, root=root, config=params, transforms=transforms)
+            if "task" in dataset_config:
+                logger.warning("'task' field detected in dataset config; will be ignored, since interface should itself define it")
         else:
             # assume that __getitem__ and __len__ are implemented, but we need to make it sampling-ready
             if "task" not in dataset_config or not dataset_config["task"]:
@@ -182,7 +220,7 @@ def load_dataset_templates(config, root):
         if task_out is None:
             task_out = templates[dataset_name].get_task()
         elif task_out != templates[dataset_name].get_task():
-            raise AssertionError("not all datasets have similar task, or sample input/gt keys")
+            raise AssertionError("not all datasets have similar task, or sample input/gt keys differ")
     return templates, task_out
 
 
@@ -208,7 +246,7 @@ class Dataset(torch.utils.data.Dataset, ABC):
         self.config = config
         self.transforms = transforms
         self._sampler = None
-        self.samples = None  # must be filled by the derived class
+        self.samples = None  # must be filled by the derived class as a list of dictionaries
 
     # todo: add method to reset sampler shuffling when epoch complete?
 
@@ -235,7 +273,7 @@ class Dataset(torch.utils.data.Dataset, ABC):
                 pass
         self._sampler = newsampler
 
-    def total_size(self):
+    def get_total_size(self):
         # bypasses sampler, if one is active
         return len(self.samples)
 
@@ -262,6 +300,21 @@ class Dataset(torch.utils.data.Dataset, ABC):
     def get_task(self):
         # the task is up to the derived class to specify (but it must be derived from the thelper.tasks.Task)
         raise NotImplementedError
+
+
+class ClassificationDataset(Dataset):
+
+    def __init__(self, name, root, class_names, input_key, label_key, meta_keys=None, config=None, transforms=None):
+        super().__init__(name, root, config=config, transforms=transforms)
+        self.task = thelper.tasks.Classification(class_names, input_key, label_key, meta_keys=meta_keys)
+
+    @abstractmethod
+    def __getitem__(self, idx):
+        # note: returned samples should be dictionaries (keys are used in config file to setup model i/o during training)
+        raise NotImplementedError
+
+    def get_task(self):
+        return self.task
 
 
 class ExternalDataset(Dataset):

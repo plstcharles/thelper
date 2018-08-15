@@ -179,7 +179,7 @@ class ExternalMetric(Metric):
 
     def __init__(self, metric_name, metric_params, metric_type,
                  target_name=None, target_label=None, goal=None,
-                 class_map=None, max_accum=None, force_softmax=True):
+                 class_names=None, max_accum=None, force_softmax=True):
         if not isinstance(metric_type, str) or (
                 metric_type != "classif_top1" and
                 metric_type != "classif_scores" and
@@ -202,9 +202,9 @@ class ExternalMetric(Metric):
         if "classif" in metric_type:
             self.target_name = target_name
             self.target_label = target_label
-            self.class_map = None
-            if class_map is not None:
-                self.set_class_map(class_map)
+            self.class_names = None
+            if class_names is not None:
+                self.set_class_names(class_names)
             if metric_type == "classif_scores":
                 self.force_softmax = force_softmax  # only useful in this case
         # elif "regression" in metric_type: missing impl for custom handling
@@ -212,37 +212,32 @@ class ExternalMetric(Metric):
         self.pred = deque()
         self.gt = deque()
 
-    def set_class_map(self, class_map):
+    def set_class_names(self, class_names):
         if "classif" in self.metric_type:
-            if not isinstance(class_map, dict):
-                raise AssertionError("unexpected class map type")
-            if len(class_map) < 2:
-                raise AssertionError("not enough classes in provided class map")
-            if self.target_name is None and self.target_label is None:
-                raise AssertionError("if more than two classes, must provide target name or label")
-            if self.target_name is not None and self.target_name not in class_map.values():
-                raise AssertionError("could not find target name '%s' in class map values" % str(self.target_name))
-            if self.target_label is not None and self.target_label not in class_map:
-                raise AssertionError("could not find target name '%s' in class map values" % str(self.target_name))
-            if self.target_name is not None and self.target_label is not None and class_map[self.target_label] != self.target_name:
-                raise AssertionError("target label '{}' did not match with name '{}' in class map".format(self.target_label, self.target_name))
+            if not isinstance(class_names, list):
+                raise AssertionError("expected list for class names")
+            if len(class_names) < 2:
+                raise AssertionError("not enough classes in provided class list")
+            if self.target_name is not None and self.target_name not in class_names:
+                raise AssertionError("could not find target name '%s' in class names list" % str(self.target_name))
+            if self.target_label is not None and not isinstance(self.target_label, int):
+                raise AssertionError("expected target label type to be int")
+            if self.target_label is not None and (self.target_label < 0 or self.target_label >= len(class_names)):
+                raise AssertionError("target label '%d' is out of range for given class names list" % int(self.target_label))
+            if self.target_name is not None and self.target_label is not None and class_names[self.target_label] != self.target_name:
+                raise AssertionError("target label '{}' did not match with name '{}' in class names list".format(self.target_label, self.target_name))
             elif self.target_name is None and self.target_label is not None:
-                self.target_name = class_map[self.target_label]
+                self.target_name = class_names[self.target_label]
             elif self.target_label is None and self.target_name is not None:
-                for tgt_lbl, tgt_name in class_map.items():
-                    if tgt_name == self.target_name:
-                        self.target_label = tgt_lbl
-                        break
-                if self.target_label is None:
-                    raise AssertionError("could not find target name '%s' in provided class mapping" % self.target_name)
-            self.class_map = class_map
+                self.target_label = class_names.index(self.target_name)
+            self.class_names = class_names
         else:
-            raise AssertionError("unexpected class map with metric type other than classif")
+            raise AssertionError("unexpected class list with metric type other than classif")
 
     def accumulate(self, pred, gt, meta=None):
         if "classif" in self.metric_type:
             if self.target_name is not None and self.target_label is None:
-                raise AssertionError("could not map target name '%s' to target label, missing class map" % self.target_name)
+                raise AssertionError("could not map target name '%s' to target label, missing class list" % self.target_name)
             elif self.target_label is not None:
                 pred_label = pred.topk(1, 1)[1].view(len(gt))
                 y_true, y_pred = [], []
@@ -301,32 +296,34 @@ class ExternalMetric(Metric):
 
 class ClassifReport(Metric):
 
-    def __init__(self, class_map=None, sample_weight=None, digits=4):
+    def __init__(self, class_names=None, sample_weight=None, digits=4):
 
-        def gen_report(y_true, y_pred, _class_map):
-            if not _class_map:
+        def gen_report(y_true, y_pred, _class_names):
+            if not _class_names:
                 res = sklearn.metrics.classification_report(y_true, y_pred,
                                                             sample_weight=sample_weight,
                                                             digits=digits)
             else:
-                _y_true = [_class_map[classid] for classid in y_true]
-                _y_pred = [_class_map[classid] if classid in _class_map else "<unset>" for classid in y_pred]
+                _y_true = [_class_names[classid] for classid in y_true]
+                _y_pred = [_class_names[classid] if (0 <= classid < len(_class_names)) else "<unset>" for classid in y_pred]
                 res = sklearn.metrics.classification_report(_y_true, _y_pred,
                                                             sample_weight=sample_weight,
                                                             digits=digits)
             return "\n" + res
 
         self.report = gen_report
-        self.class_map = class_map
-        if class_map and not isinstance(class_map, dict):
-            raise AssertionError("unexpected class map type")
+        self.class_names = class_names
+        if class_names and not isinstance(class_names, list):
+            raise AssertionError("expected class names to be list")
         self.pred = None
         self.gt = None
 
-    def set_class_map(self, class_map):
-        if class_map and not isinstance(class_map, dict):
-            raise AssertionError("unexpected class map type")
-        self.class_map = class_map
+    def set_class_names(self, class_names):
+        if class_names and not isinstance(class_names, list):
+            raise AssertionError("expected class names to be list")
+        if len(class_names) < 2:
+            raise AssertionError("class list should have at least two elements")
+        self.class_names = class_names
 
     def accumulate(self, pred, gt, meta=None):
         if self.pred is None:
@@ -337,7 +334,7 @@ class ClassifReport(Metric):
             self.gt = torch.cat((self.gt, gt.view(len(gt))), 0)
 
     def eval(self):
-        return self.report(self.gt.numpy(), self.pred.numpy(), self.class_map)
+        return self.report(self.gt.numpy(), self.pred.numpy(), self.class_names)
 
     def reset(self):
         self.pred = None
@@ -349,36 +346,32 @@ class ClassifReport(Metric):
 
 class ConfusionMatrix(Metric):
 
-    def __init__(self, class_map=None):
+    def __init__(self, class_names=None):
 
-        def gen_matrix(y_true, y_pred, _class_map, _class_list):
-            if not _class_map:
+        def gen_matrix(y_true, y_pred, _class_names, _class_list):
+            if not _class_names:
                 res = sklearn.metrics.confusion_matrix(y_true, y_pred)
             else:
-                _y_true = [_class_map[classid] for classid in y_true]
-                _y_pred = [_class_map[classid] if classid in _class_map else "<unset>" for classid in y_pred]
+                _y_true = [_class_names[classid] for classid in y_true]
+                _y_pred = [_class_names[classid] if (0 <= classid < len(_class_names)) else "<unset>" for classid in y_pred]
                 res = sklearn.metrics.confusion_matrix(_y_true, _y_pred, labels=_class_list)
             return res
 
         self.matrix = gen_matrix
-        self.class_map = None
+        self.class_names = None
         self.class_list = None
-        if class_map is not None:
-            self.set_class_map(class_map)
+        if class_names is not None:
+            self.set_class_names(class_names)
         self.pred = None
         self.gt = None
 
-    def set_class_map(self, class_map):
-        if not isinstance(class_map, dict):
-            raise AssertionError("unexpected class map type")
-        if len(class_map) < 2:
-            raise AssertionError("class map should have at least two elements")
-        self.class_map = copy.deepcopy(class_map)
-        nb_classes = max(class_map.keys()) + 1
-        self.class_map[nb_classes] = "<unset>"
-        self.class_list = ["<unknown>"] * nb_classes + ["<unset>"]
-        for idx, name in self.class_map.items():
-            self.class_list[idx] = name
+    def set_class_names(self, class_names):
+        if not isinstance(class_names, list):
+            raise AssertionError("expected class names to be list")
+        if len(class_names) < 2:
+            raise AssertionError("class list should have at least two elements")
+        self.class_names = copy.deepcopy(class_names)
+        self.class_names.append("<unset>")
 
     def accumulate(self, pred, gt, meta=None):
         if self.pred is None:
@@ -389,14 +382,14 @@ class ConfusionMatrix(Metric):
             self.gt = torch.cat((self.gt, gt.view(len(gt))), 0)
 
     def eval(self):
-        confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_map, self.class_list)
+        confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_names, self.class_list)
         if self.class_list:
             return "\n" + thelper.utils.stringify_confmat(confmat, self.class_list)
         else:
             return "\n" + str(confmat)
 
     def get_tbx_image(self):
-        confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_map, self.class_list)
+        confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_names, self.class_list)
         if self.class_list:
             fig = thelper.utils.draw_confmat(confmat, self.class_list)
             array = thelper.utils.fig2array(fig)
@@ -414,13 +407,13 @@ class ConfusionMatrix(Metric):
 
 class ROCCurve(Metric):
 
-    def __init__(self, target_name=None, target_label=None, class_map=None, force_softmax=True,
+    def __init__(self, target_name=None, target_label=None, class_names=None, force_softmax=True,
                  log_params=None, sample_weight=None, drop_intermediate=True):
         self.target_name = target_name
         self.target_label = target_label
-        self.class_map = None
-        if class_map is not None:
-            self.set_class_map(class_map)
+        self.class_names = None
+        if class_names is not None:
+            self.set_class_names(class_names)
         self.force_softmax = force_softmax
         self.log_params = log_params
         if log_params is not None:
@@ -446,10 +439,10 @@ class ROCCurve(Metric):
             if not isinstance(self.log_meta_keys, list):
                 raise AssertionError("unexpected log meta keys params type (expected list)")
 
-        def gen_curve(y_true, y_score, _class_map, _target_label, _sample_weight=sample_weight, _drop_intermediate=drop_intermediate):
-            if _class_map is None or not _class_map:
+        def gen_curve(y_true, y_score, _class_names, _target_label, _sample_weight=sample_weight, _drop_intermediate=drop_intermediate):
+            if _class_names is None or not _class_names:
                 if _target_label is not None:
-                    raise AssertionError("got positive label, but no class map (even at run time)")
+                    raise AssertionError("got positive label, but no class list (even at run time)")
                 res = sklearn.metrics.roc_curve(y_true, y_score, sample_weight=_sample_weight, drop_intermediate=_drop_intermediate)
             else:
                 if _target_label is None:
@@ -459,10 +452,10 @@ class ROCCurve(Metric):
                 res = sklearn.metrics.roc_curve(_y_true, _y_score, sample_weight=sample_weight, drop_intermediate=drop_intermediate)
             return res
 
-        def gen_auc(y_true, y_score, _class_map, _target_label, _sample_weight=sample_weight):
-            if _class_map is None or not _class_map:
+        def gen_auc(y_true, y_score, _class_names, _target_label, _sample_weight=sample_weight):
+            if _class_names is None or not _class_names:
                 if _target_label is not None:
-                    raise AssertionError("got positive label, but no class map (even at run time)")
+                    raise AssertionError("got positive label, but no class list (even at run time)")
                 res = sklearn.metrics.roc_auc_score(y_true, y_score, sample_weight=sample_weight)
             else:
                 if _target_label is None:
@@ -478,29 +471,24 @@ class ROCCurve(Metric):
         self.true = None
         self.meta = None  # needed if outputting tbx txt
 
-    def set_class_map(self, class_map):
-        if not isinstance(class_map, dict):
-            raise AssertionError("unexpected class map type")
-        if len(class_map) < 2:
-            raise AssertionError("not enough classes in provided class map")
-        if self.target_name is None and self.target_label is None:
-            raise AssertionError("if more than two classes, must provide target name or label")
-        if self.target_name is not None and self.target_name not in class_map.values():
-            raise AssertionError("could not find target name '%s' in class map values" % str(self.target_name))
-        if self.target_label is not None and self.target_label not in class_map:
-            raise AssertionError("could not find target name '%s' in class map values" % str(self.target_name))
-        if self.target_name is not None and self.target_label is not None and class_map[self.target_label] != self.target_name:
-            raise AssertionError("target label '{}' did not match with name '{}' in class map".format(self.target_label, self.target_name))
+    def set_class_names(self, class_names):
+        if not isinstance(class_names, list):
+            raise AssertionError("expected list for class names")
+        if len(class_names) < 2:
+            raise AssertionError("not enough classes in provided class list")
+        if self.target_name is not None and self.target_name not in class_names:
+            raise AssertionError("could not find target name '%s' in class names list" % str(self.target_name))
+        if self.target_label is not None and not isinstance(self.target_label, int):
+            raise AssertionError("expected target label type to be int")
+        if self.target_label is not None and (self.target_label < 0 or self.target_label >= len(class_names)):
+            raise AssertionError("target label '%d' is out of range for given class names list" % int(self.target_label))
+        if self.target_name is not None and self.target_label is not None and class_names[self.target_label] != self.target_name:
+            raise AssertionError("target label '{}' did not match with name '{}' in class names list".format(self.target_label, self.target_name))
         elif self.target_name is None and self.target_label is not None:
-            self.target_name = class_map[self.target_label]
+            self.target_name = class_names[self.target_label]
         elif self.target_label is None and self.target_name is not None:
-            for tgt_lbl, tgt_name in class_map.items():
-                if tgt_name == self.target_name:
-                    self.target_label = tgt_lbl
-                    break
-            if self.target_label is None:
-                raise AssertionError("could not find target name '%s' in provided class mapping" % self.target_name)
-        self.class_map = class_map
+            self.target_label = class_names.index(self.target_name)
+        self.class_names = class_names
 
     def accumulate(self, pred, gt, meta=None):
         if self.force_softmax:
@@ -528,10 +516,10 @@ class ROCCurve(Metric):
                         raise AssertionError("missing impl for meta concat w/ type '%s'" % str(type(_meta[key])))
 
     def eval(self):
-        return self.auc(self.true.numpy(), self.score.numpy(), self.class_map, self.target_label)
+        return self.auc(self.true.numpy(), self.score.numpy(), self.class_names, self.target_label)
 
     def get_tbx_image(self):
-        fpr, tpr, t = self.curve(self.true.numpy(), self.score.numpy(), self.class_map, self.target_label)
+        fpr, tpr, t = self.curve(self.true.numpy(), self.score.numpy(), self.class_names, self.target_label)
         fig = thelper.utils.draw_roc_curve(fpr, tpr)
         array = thelper.utils.fig2array(fig)
         return array
@@ -541,9 +529,9 @@ class ROCCurve(Metric):
             return None  # do not generate log text unless requested
         if self.meta is None or not self.meta:
             return None
-        if self.class_map is None or not self.class_map:
-            raise AssertionError("missing class map for logging, current impl only supports named outputs")
-        _fpr, _tpr, _t = self.curve(self.true.numpy(), self.score.numpy(), self.class_map, self.target_label, _drop_intermediate=False)
+        if self.class_names is None or not self.class_names:
+            raise AssertionError("missing class list for logging, current impl only supports named outputs")
+        _fpr, _tpr, _t = self.curve(self.true.numpy(), self.score.numpy(), self.class_names, self.target_label, _drop_intermediate=False)
         threshold = None
         for fpr, tpr, t in zip(_fpr, _tpr, _t):
             if self.log_fpr_threshold is not None and self.log_fpr_threshold <= fpr:

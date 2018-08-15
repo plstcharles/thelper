@@ -39,17 +39,17 @@ class Task(ABC):
 
 class Classification(Task):
 
-    def __init__(self, class_map, input_key, label_key=None, meta_keys=None):
+    def __init__(self, class_names, input_key, label_key, meta_keys=None):
         super().__init__(meta_keys)
-        self.class_map = class_map
-        if isinstance(class_map, str) and os.path.exists(class_map):
-            with open(class_map, "r") as fd:
-                self.class_map = json.load(fd)
-        if not isinstance(self.class_map, dict):
-            raise AssertionError("expected class map to be dict (idx->name)")
-        if len(self.class_map) < 2:
+        self.class_names = class_names
+        if isinstance(class_names, str) and os.path.exists(class_names):
+            with open(class_names, "r") as fd:
+                self.class_names = json.load(fd)
+        if not isinstance(self.class_names, list):
+            raise AssertionError("expected class names to be provided as a list")
+        if len(self.class_names) < 2:
             raise AssertionError("should have at least two classes!")
-        self.binary = len(self.class_map) == 2
+        self.binary = len(self.class_names) == 2
         self.input_key = input_key
         self.label_key = label_key
 
@@ -60,7 +60,34 @@ class Classification(Task):
         return self.label_key
 
     def get_nb_classes(self):
-        return len(self.class_map)
+        return len(self.class_names)
 
-    def get_class_map(self):
-        return self.class_map
+    def get_class_sizes(self, samples):
+        # bypasses sampler, if one is active
+        class_idxs_list = self.get_class_indices(samples)
+        return [len(class_idxs) for class_idxs in class_idxs_list]
+
+    def get_class_indices(self, samples):
+        # bypasses sampler, if one is active
+        if samples is None or not samples:
+            raise AssertionError("provided invalid sample list")
+        elif not isinstance(samples, list) or not isinstance(samples[0], dict):
+            raise AssertionError("dataset samples should be given as list of dictionaries")
+        class_idxs_list = [[] for _ in range(len(self.class_names))]
+        label_keys = self.label_key if isinstance(self.label_key, list) else [self.label_key]
+        for sample_idx in range(len(samples)):
+            sample = samples[sample_idx]
+            label_idx = None
+            for key in label_keys:
+                if key in sample:
+                    label_idx = sample[key]
+                    break  # by default, stop after finding first key hit
+            if label_idx is None:
+                raise AssertionError("could not find label key in sample dict")
+            if label_idx >= len(self.class_names):
+                raise AssertionError("label index too large for total number of classes")
+            class_idxs_list[label_idx].append(sample_idx)
+        return class_idxs_list
+
+    def get_class_names(self):
+        return self.class_names

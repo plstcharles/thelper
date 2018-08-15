@@ -328,21 +328,11 @@ class ImageClassifTrainer(Trainer):
         super().__init__(session_name, save_dir, model, loss, metrics, loaders, config)
         if not isinstance(self.model.task, thelper.tasks.Classification):
             raise AssertionError("expected task to be classification")
-        input_keys = self.model.task.get_input_key()
-        if isinstance(input_keys, str):
-            self.input_keys = [input_keys]
-        elif not isinstance(input_keys, list):
-            raise AssertionError("input keys must be provided as a list of string")
-        else:
-            self.input_keys = input_keys
-        label_keys = self.model.task.get_gt_key()
-        if isinstance(label_keys, str):
-            self.label_keys = [label_keys]
-        elif not isinstance(label_keys, list):
-            raise AssertionError("input keys must be provided as a list of string")
-        else:
-            self.label_keys = label_keys
-        self.class_map = self.model.task.get_class_map()
+        input_key = self.model.task.get_input_key()
+        self.input_keys = input_key if isinstance(input_key, list) else [input_key]
+        label_key = self.model.task.get_gt_key()
+        self.label_keys = label_key if isinstance(label_key, list) else [label_key]
+        self.class_names = self.model.task.get_class_names()
         self.meta_keys = self.model.task.get_meta_keys()
 
     def _to_tensor(self, sample):
@@ -352,13 +342,13 @@ class ImageClassifTrainer(Trainer):
         for key in self.input_keys:
             if key in sample:
                 input = sample[key]
-                break
+                break  # by default, stop after finding first key hit
         for key in self.label_keys:
             if key in sample:
                 label = sample[key]
-                break
+                break  # by default, stop after finding first key hit
         if input is None or label is None:
-            raise AssertionError("could not find input or label keys in sample dict")
+            raise AssertionError("could not find input or label key in sample dict")
         return torch.FloatTensor(input), torch.LongTensor(label)
 
     def _train_epoch(self, model, optimizer, epoch, loader):
@@ -375,8 +365,8 @@ class ImageClassifTrainer(Trainer):
         writer_path = self.train_writer_path
         writer = SummaryWriter(log_dir=writer_path, comment=self.name) if self.use_tbx else None
         for metric in metrics.values():
-            if hasattr(metric, "set_class_map") and callable(metric.set_class_map):
-                metric.set_class_map(self.class_map)
+            if hasattr(metric, "set_class_names") and callable(metric.set_class_names):
+                metric.set_class_names(self.class_names)
             if hasattr(metric, "set_max_accum") and callable(metric.set_max_accum):
                 metric.set_max_accum(epoch_size)
             if metric.needs_reset():
@@ -460,8 +450,8 @@ class ImageClassifTrainer(Trainer):
         with torch.no_grad():
             total_loss = 0
             for metric in metrics.values():
-                if hasattr(metric, "set_class_map") and callable(metric.set_class_map):
-                    metric.set_class_map(self.class_map)
+                if hasattr(metric, "set_class_names") and callable(metric.set_class_names):
+                    metric.set_class_names(self.class_names)
                 metric.reset()  # force reset here, we always evaluate from a clean state
             epoch_size = len(loader)
             for idx, sample in enumerate(loader):
