@@ -84,7 +84,7 @@ class Classification(Task):
                     break  # by default, stop after finding first key hit
             if label_idx is None:
                 raise AssertionError("could not find label key in sample dict")
-            if label_idx >= len(self.class_names):
+            if label_idx >= len(self.class_names) or label_idx < 0:
                 raise AssertionError("label index too large for total number of classes")
             class_idxs_list[label_idx].append(sample_idx)
         return class_idxs_list

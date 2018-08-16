@@ -72,11 +72,11 @@ class DataConfig(object):
                     if name in self.test_split:
                         self.test_split[name] /= usage
 
-    def get_idx_split(self, dataset_map_size):
+    def get_idx_split(self, indices):
         for name in self.total_usage:
-            if name not in dataset_map_size:
+            if name not in indices:
                 raise AssertionError("dataset '%s' does not exist" % name)
-        indices = {name: list(range(size)) for name, size in dataset_map_size.items()}
+        indices = {name: copy.deepcopy(indices) for name, indices in indices.items()}
         if self.shuffle:
             np.random.seed(self.test_seed)  # test idxs will be picked first, then valid+train
             for idxs in indices.values():
@@ -87,13 +87,13 @@ class DataConfig(object):
                                                                [self.test_split, self.valid_split, self.train_split])):
             for name in self.total_usage.keys():
                 if name in ratio_map:
-                    count = int(round(ratio_map[name] * dataset_map_size[name]))
+                    count = int(round(ratio_map[name] * len(indices[name])))
                     if count < 0:
                         raise AssertionError("ratios should be non-negative values!")
                     elif count < 1:
                         logger.warning("split ratio for '%s' too small, sample set will be empty" % name)
                     begidx = offsets[name]
-                    endidx = min(begidx + count, dataset_map_size[name])
+                    endidx = min(begidx + count, len(indices[name]))
                     idxs_map[name] = indices[name][begidx:endidx]
                     offsets[name] = endidx
             if loader_idx == 0 and self.shuffle:
@@ -105,10 +105,10 @@ class DataConfig(object):
         return train_idxs, valid_idxs, test_idxs
 
     def get_data_split(self, dataset_templates):
-        dataset_size_map = {}
+        dataset_sizes = {}
         dataset_class_names, dataset_class_indices = None, None  # if remains none, task is not classif-related
         for dataset_name, dataset in dataset_templates.items():
-            dataset_size_map[dataset_name] = len(dataset)
+            dataset_sizes[dataset_name] = len(dataset)
             task = dataset.get_task()
             if isinstance(task, thelper.tasks.Classification):
                 class_names = task.get_class_names()
@@ -119,29 +119,37 @@ class DataConfig(object):
                     if dataset_class_names != class_names:
                         raise AssertionError("dataset '%s' class names mismatch with other datasets" % dataset_name)
                     dataset_class_indices[dataset_name] = task.get_class_indices(dataset.samples)
-        logger.debug("splitting datasets with parsed sizes = %s" % str(dataset_size_map))
+        logger.debug("splitting datasets with parsed sizes = %s" % str(dataset_sizes))
         if dataset_class_names is None:
-            train_idxs, valid_idxs, test_idxs = self.get_idx_split(dataset_size_map)
+            dataset_indices = {}
+            for dataset_name in dataset_templates:
+                dataset_indices[dataset_name] = list(range(dataset_sizes[dataset_name]))
+            train_idxs, valid_idxs, test_idxs = self.get_idx_split(dataset_indices)
         else:
             # parse config for oversampling here? todo
             # note: with current impl, all classes will be shuffle the same way... (shouldnt matter, right?)
             logger.debug("will split evenly over %d classes..." % len(dataset_class_names))
             train_idxs, valid_idxs, test_idxs = {}, {}, {}
             for class_idx, class_name in enumerate(dataset_class_names):
-                dataset_size_map = {}
-                for dataset_name in dataset_class_indices:
-                    dataset_size_map[dataset_name] = len(dataset_class_indices[dataset_name][class_idx])
-                logger.debug("class '%s' dataset distribution: %s" % (class_name, str(dataset_size_map)))
-                class_train_idxs, class_valid_idxs, class_test_idxs = self.get_idx_split(dataset_size_map)
+                curr_dataset_class_indices = {}
+                for dataset_name in dataset_templates:
+                    curr_dataset_class_indices[dataset_name] = dataset_class_indices[dataset_name][class_idx]
+                    curr_dataset_class_size = len(curr_dataset_class_indices[dataset_name])
+                    logger.debug("dataset '{}' class '{}' sample count: {} ({}%)".format(
+                        dataset_name,
+                        class_name,
+                        curr_dataset_class_size,
+                        int(100*curr_dataset_class_size/dataset_sizes[dataset_name])))
+                class_train_idxs, class_valid_idxs, class_test_idxs = self.get_idx_split(curr_dataset_class_indices)
                 for idxs_dict_list, class_idxs_dict_list in zip([train_idxs, valid_idxs, test_idxs],
                                                                 [class_train_idxs, class_valid_idxs, class_test_idxs]):
-                    for dataset_name in class_idxs_dict_list:
+                    for dataset_name in dataset_templates:
                         if dataset_name in idxs_dict_list:
                             idxs_dict_list[dataset_name] += class_idxs_dict_list[dataset_name]
                         else:
                             idxs_dict_list[dataset_name] = class_idxs_dict_list[dataset_name]
             # one last intra-dataset shuffle for good mesure, samples of the same class should not be always fed consecutively
-            for dataset_name in dataset_class_indices:
+            for dataset_name in dataset_templates:
                 for idxs_dict_list in [train_idxs, valid_idxs, test_idxs]:
                     np.random.shuffle(idxs_dict_list[dataset_name])
         train_data, valid_data, test_data, loaders = [], [], [], []
