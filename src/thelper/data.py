@@ -118,11 +118,11 @@ class DataConfig(object):
     def get_data_split(self, datasets, task):
         dataset_sizes = {dataset_name: len(dataset) for dataset_name, dataset in datasets.items()}
         global_size = sum(len(dataset) for dataset in datasets.values())
-        logger.debug("splitting datasets with parsed sizes = %s" % str(dataset_sizes))
+        logger.info("splitting datasets with parsed sizes = %s" % str(dataset_sizes))
         if isinstance(task, thelper.tasks.Classification):
-            logger.debug("will split evenly over %d classes..." % len(dataset_sizes))
             # note: with current impl, all classes will be shuffle the same way... (shouldnt matter, right?)
             global_class_names = task.get_class_names()
+            logger.info("will split evenly over %d classes..." % len(global_class_names))
             dataset_class_sample_maps = {dataset_name: task.get_class_sample_map(dataset.samples) for dataset_name, dataset in datasets.items()}
             train_idxs, valid_idxs, test_idxs = {}, {}, {}
             for class_name in global_class_names:
