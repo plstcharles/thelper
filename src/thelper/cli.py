@@ -32,7 +32,7 @@ def load_datasets(config, data_root):
     logger.debug("loading datasets templates")
     if not isinstance(datasets_config, dict):
         raise AssertionError("invalid datasets config type")
-    dataset_templates, task = thelper.data.load_dataset_templates(datasets_config, data_root)
+    datasets, task = thelper.data.load_datasets(datasets_config, data_root)
     logger.debug("loading data usage config")
     if "data_config" not in config or not config["data_config"]:
         raise AssertionError("config missing 'data_config' field")
@@ -40,7 +40,7 @@ def load_datasets(config, data_root):
     # if hasattr(data_config,"summary"):
     #     data_config.summary()
     logger.debug("splitting datasets and creating loaders")
-    train_loader, valid_loader, test_loader = data_config.get_data_split(dataset_templates)
+    train_loader, valid_loader, test_loader = data_config.get_data_split(datasets, task)
     return task, train_loader, valid_loader, test_loader
 
 
@@ -173,7 +173,7 @@ def extract(config,resume,data_root,display_graphs=False):
     logger.debug("loading datasets templates")
     if not isinstance(datasets_config,dict):
         raise AssertionError("invalid datasets config type")
-    dataset_templates,task = thelper.data.load_dataset_templates(datasets_config,data_root)
+    datasets,task = thelper.data.load_datasets(datasets_config,data_root)
     logger.debug("loading data usage cofrom tqdm import tqdmnfig")
     thelper.utils.check_key("data_config", config, 'config')
     data_config = thelper.data.DataConfig(config["data_config"])
@@ -181,7 +181,7 @@ def extract(config,resume,data_root,display_graphs=False):
     # if hasattr(data_config,"summary"):
     #     data_config.summary()
     logger.debug("splitting datasets and creating loaders")
-    data_loader,valid_loader,test_loader = data_config.get_data_split(dataset_templates)
+    data_loader,valid_loader,test_loader = data_config.get_data_split(datasets,task)
 
     logger.debug("loading model")
     thelper.utils.check_key("model", config, 'config')

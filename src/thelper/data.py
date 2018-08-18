@@ -33,6 +33,17 @@ class DataConfig(object):
         self.workers = config["workers"] if "workers" in config and config["workers"] >= 0 else 1
         self.pin_memory = thelper.utils.str2bool(config["pin_memory"]) if "pin_memory" in config else False
         self.drop_last = thelper.utils.str2bool(config["drop_last"]) if "drop_last" in config else False
+        self.sampler_type = None
+        if "sampler" in config:
+            sampler_config = config["sampler"]
+            if sampler_config and "type" in sampler_config:
+                self.sampler_type = thelper.utils.import_class(sampler_config["type"])
+                self.sampler_params = thelper.utils.keyvals2dict(sampler_config["params"]) if "params" in sampler_config else None
+                self.sampler_pass_labels = thelper.utils.str2bool(sampler_config["pass_labels"]) if "pass_labels" in sampler_config else False
+                apply_train = thelper.utils.str2bool(sampler_config["apply_train"]) if "apply_train" in sampler_config else True
+                apply_valid = thelper.utils.str2bool(sampler_config["apply_valid"]) if "apply_valid" in sampler_config else False
+                apply_test = thelper.utils.str2bool(sampler_config["apply_test"]) if "apply_test" in sampler_config else False
+                self.sampler_apply = [apply_train, apply_valid, apply_test]
         self.train_augments = None
         self.train_augments_append = False
         if "train_augments" in config and config["train_augments"]:
@@ -104,81 +115,87 @@ class DataConfig(object):
                     indices[name][offsets[name]:] = trainvalid_idxs
         return train_idxs, valid_idxs, test_idxs
 
-    def get_data_split(self, dataset_templates):
-        dataset_sizes = {}
-        dataset_class_names, dataset_class_indices = None, None  # if remains none, task is not classif-related
-        for dataset_name, dataset in dataset_templates.items():
-            dataset_sizes[dataset_name] = len(dataset)
-            task = dataset.get_task()
-            if isinstance(task, thelper.tasks.Classification):
-                class_names = task.get_class_names()
-                if dataset_class_names is None:
-                    dataset_class_names = class_names
-                    dataset_class_indices = {dataset_name: task.get_class_indices(dataset.samples)}
-                else:
-                    if dataset_class_names != class_names:
-                        raise AssertionError("dataset '%s' class names mismatch with other datasets" % dataset_name)
-                    dataset_class_indices[dataset_name] = task.get_class_indices(dataset.samples)
+    def get_data_split(self, datasets, task):
+        dataset_sizes = {dataset_name: len(dataset) for dataset_name, dataset in datasets.items()}
+        global_size = sum(len(dataset) for dataset in datasets.values())
         logger.debug("splitting datasets with parsed sizes = %s" % str(dataset_sizes))
-        if dataset_class_names is None:
-            dataset_indices = {}
-            for dataset_name in dataset_templates:
-                dataset_indices[dataset_name] = list(range(dataset_sizes[dataset_name]))
-            train_idxs, valid_idxs, test_idxs = self.get_idx_split(dataset_indices)
-        else:
-            # parse config for oversampling here? todo
+        if isinstance(task, thelper.tasks.Classification):
+            logger.debug("will split evenly over %d classes..." % len(dataset_sizes))
             # note: with current impl, all classes will be shuffle the same way... (shouldnt matter, right?)
-            logger.debug("will split evenly over %d classes..." % len(dataset_class_names))
+            global_class_names = task.get_class_names()
+            dataset_class_sample_maps = {dataset_name: task.get_class_sample_map(dataset.samples) for dataset_name, dataset in datasets.items()}
             train_idxs, valid_idxs, test_idxs = {}, {}, {}
-            for class_idx, class_name in enumerate(dataset_class_names):
-                curr_dataset_class_indices = {}
-                for dataset_name in dataset_templates:
-                    curr_dataset_class_indices[dataset_name] = dataset_class_indices[dataset_name][class_idx]
-                    curr_dataset_class_size = len(curr_dataset_class_indices[dataset_name])
-                    logger.debug("dataset '{}' class '{}' sample count: {} ({}%)".format(
+            for class_name in global_class_names:
+                curr_class_samples, curr_class_size = {}, {}
+                for dataset_name, dataset in datasets.items():
+                    class_samples = dataset_class_sample_maps[dataset_name][class_name] if class_name in dataset_class_sample_maps[dataset_name] else []
+                    samples_pairs = list(zip(class_samples, [class_name] * len(class_samples)))
+                    curr_class_samples[dataset_name] = samples_pairs
+                    curr_class_size[dataset_name] = len(curr_class_samples[dataset_name])
+                    logger.debug("dataset '{}' class '{}' sample count: {} ({}% of local, {}% of total)".format(
                         dataset_name,
                         class_name,
-                        curr_dataset_class_size,
-                        int(100*curr_dataset_class_size/dataset_sizes[dataset_name])))
-                class_train_idxs, class_valid_idxs, class_test_idxs = self.get_idx_split(curr_dataset_class_indices)
+                        curr_class_size[dataset_name],
+                        int(100 * curr_class_size[dataset_name] / dataset_sizes[dataset_name]),
+                        int(100 * curr_class_size[dataset_name] / global_size)))
+                class_train_idxs, class_valid_idxs, class_test_idxs = self.get_idx_split(curr_class_samples)
                 for idxs_dict_list, class_idxs_dict_list in zip([train_idxs, valid_idxs, test_idxs],
                                                                 [class_train_idxs, class_valid_idxs, class_test_idxs]):
-                    for dataset_name in dataset_templates:
+                    for dataset_name in datasets:
                         if dataset_name in idxs_dict_list:
                             idxs_dict_list[dataset_name] += class_idxs_dict_list[dataset_name]
                         else:
                             idxs_dict_list[dataset_name] = class_idxs_dict_list[dataset_name]
             # one last intra-dataset shuffle for good mesure, samples of the same class should not be always fed consecutively
-            for dataset_name in dataset_templates:
+            for dataset_name in datasets:
                 for idxs_dict_list in [train_idxs, valid_idxs, test_idxs]:
                     np.random.shuffle(idxs_dict_list[dataset_name])
-        train_data, valid_data, test_data, loaders = [], [], [], []
-        for loader_idx, (idxs_map, datasets) in enumerate(zip([train_idxs, valid_idxs, test_idxs],
-                                                              [train_data, valid_data, test_data])):
-            for name, sample_idxs in idxs_map.items():
-                dataset = copy.deepcopy(dataset_templates[name])
+        else:  # task is not classif-related, no balancing to be done
+            dataset_indices = {}
+            for dataset_name in datasets:
+                # note: all indices paired with 'None' below as class is ignored; used for compatibility with code above
+                dataset_indices[dataset_name] = list(zip(list(range(dataset_sizes[dataset_name])), [None] * len(dataset_sizes[dataset_name])))
+            train_idxs, valid_idxs, test_idxs = self.get_idx_split(dataset_indices)
+        loaders = []
+        for loader_idx, idxs_map in enumerate([train_idxs, valid_idxs, test_idxs]):
+            loader_sample_idx_offset = 0
+            loader_sample_classes = []
+            loader_sample_idxs = []
+            loader_datasets = []
+            for dataset_name, sample_idxs in idxs_map.items():
+                dataset = copy.deepcopy(datasets[dataset_name])
                 if loader_idx == 0 and self.train_augments:
+                    train_augs_copy = copy.deepcopy(self.train_augments)
                     if dataset.transforms is not None:
-                        if self.train_augments_append:  # append or not
-                            dataset.transforms = thelper.transforms.Compose([dataset.transforms, copy.deepcopy(self.train_augments)])
+                        if self.train_augments_append:
+                            dataset.transforms = thelper.transforms.Compose([dataset.transforms, train_augs_copy])
                         else:
-                            dataset.transforms = thelper.transforms.Compose([copy.deepcopy(self.train_augments), dataset.transforms])
+                            dataset.transforms = thelper.transforms.Compose([train_augs_copy, dataset.transforms])
                     else:
-                        dataset.transforms = copy.deepcopy(self.train_augments)
-                dataset.sampler = SubsetRandomSampler(sample_idxs)
-                datasets.append(dataset)
-            if len(datasets) > 1:
-                dataset = torch.utils.data.ConcatDataset(datasets)
-                sampler = torch.utils.data.sampler.RandomSampler(dataset)
+                        dataset.transforms = train_augs_copy
+                for sample_idx_idx in range(len(sample_idxs)):
+                    loader_sample_idxs.append(sample_idxs[sample_idx_idx][0] + loader_sample_idx_offset)
+                    loader_sample_classes.append(sample_idxs[sample_idx_idx][1])  # values were paired earlier, 0=idx, 1=label
+                loader_sample_idx_offset += len(dataset)
+                loader_datasets.append(dataset)
+            if len(loader_datasets) > 0:
+                dataset = torch.utils.data.ConcatDataset(loader_datasets) if len(loader_datasets) > 1 else loader_datasets[0]
+                if self.sampler_type is not None and self.sampler_apply[loader_idx]:
+                    if self.sampler_pass_labels:
+                        if self.sampler_params is not None:
+                            sampler = self.sampler_type(loader_sample_idxs, loader_sample_classes, **self.sampler_params)
+                        else:
+                            sampler = self.sampler_type(loader_sample_idxs, loader_sample_classes)
+                    else:
+                        if self.sampler_params is not None:
+                            sampler = self.sampler_type(loader_sample_idxs, **self.sampler_params)
+                        else:
+                            sampler = self.sampler_type(loader_sample_idxs)
+                else:
+                    sampler = torch.utils.data.sampler.SubsetRandomSampler(loader_sample_idxs)
                 loaders.append(torch.utils.data.DataLoader(dataset,
                                                            batch_size=self.batch_size,
                                                            sampler=sampler,
-                                                           num_workers=self.workers,
-                                                           pin_memory=self.pin_memory,
-                                                           drop_last=self.drop_last))
-            elif len(datasets) == 1:
-                loaders.append(torch.utils.data.DataLoader(datasets[0],
-                                                           batch_size=self.batch_size,
                                                            num_workers=self.workers,
                                                            pin_memory=self.pin_memory,
                                                            drop_last=self.drop_last))
@@ -192,9 +209,10 @@ class DataConfig(object):
         return train_loader, valid_loader, test_loader
 
 
-def load_dataset_templates(config, root):
-    templates = {}
-    task_out = None
+def load_datasets(config, root):
+    datasets = {}
+    tasks = []
+    global_class_names = None  # if remains none, task is not classif-related
     for dataset_name, dataset_config in config.items():
         if "type" not in dataset_config:
             raise AssertionError("missing field 'type' for instantiation of dataset '%s'" % dataset_name)
@@ -207,7 +225,7 @@ def load_dataset_templates(config, root):
             transforms, _ = thelper.transforms.load_transforms(dataset_config["transforms"])
         if issubclass(dataset_type, Dataset):
             # assume that the dataset is derived from thelper.data.Dataset (it is fully sampling-ready)
-            templates[dataset_name] = dataset_type(name=dataset_name, root=root, config=params, transforms=transforms)
+            dataset = dataset_type(name=dataset_name, root=root, config=params, transforms=transforms)
             if "task" in dataset_config:
                 logger.warning("'task' field detected in dataset config; will be ignored, since interface should itself define it")
         else:
@@ -224,23 +242,95 @@ def load_dataset_templates(config, root):
             task = task_type(**task_params)
             if not issubclass(task_type, thelper.tasks.Task):
                 raise AssertionError("the task type for dataset '%s' must be derived from 'thelper.tasks.Task'" % dataset_name)
-            templates[dataset_name] = ExternalDataset(dataset_name, root, dataset_type, task, config=params, transforms=transforms)
-        if task_out is None:
-            task_out = templates[dataset_name].get_task()
-        elif task_out != templates[dataset_name].get_task():
+            dataset = ExternalDataset(dataset_name, root, dataset_type, task, config=params, transforms=transforms)
+        task = dataset.get_task()
+        if len(tasks) > 0 and task != tasks[0]:
             raise AssertionError("not all datasets have similar task, or sample input/gt keys differ")
-    return templates, task_out
+        if isinstance(task, thelper.tasks.Classification):
+            class_names = task.get_class_names()
+            if global_class_names is None:
+                if len(datasets) > 0:
+                    raise AssertionError("cannot handle mixed classification and non-classification tasks in datasets")
+                global_class_names = class_names
+            else:
+                for class_name in class_names:
+                    if class_name not in global_class_names:
+                        global_class_names.append(class_name)
+        elif global_class_names is not None:
+            raise AssertionError("cannot handle mixed classification and non-classification tasks in datasets")
+        tasks.append(task)
+        datasets[dataset_name] = dataset
+    if global_class_names is not None:
+        global_task = thelper.tasks.Classification(global_class_names, tasks[0].input_key, tasks[0].label_key, meta_keys=tasks[0].meta_keys)
+        return datasets, global_task
+    return datasets, tasks[0]
 
 
-class SubsetRandomSampler(torch.utils.data.sampler.SubsetRandomSampler):
+class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
 
-    def __init__(self, indices):
-        # the difference between this class and pytorch's default one is the __getitem__ member that provides raw indices
-        super().__init__(indices)
+    def __init__(self, indices, labels, stype="uniform", scale=1.0):
+        super().__init__(None)
+        if not isinstance(indices, list) or not isinstance(labels, list):
+            raise AssertionError("expected indices and labels to be provided as lists")
+        if len(indices) == 0 or len(indices) != len(labels):
+            raise AssertionError("invalid indices/labels list size")
+        if not isinstance(scale, float) or scale < 0:
+            raise AssertionError("invalid scale parameter; should be in [0,1]")
+        self.nb_samples = int(round(len(indices) * scale))
+        if self.nb_samples < 1:
+            raise AssertionError("scale factor too small, no samples left to use")
+        self.label_groups = {}
+        if not isinstance(stype, str) or (stype not in ["uniform", "random"] and "root" not in stype):
+            raise AssertionError("unexpected sampling type")
+        if "root" in stype:
+            self.pow = 1.0/int(stype.split("root", 1)[1])  # will be the inverse power to use for rooting weights
+            self.stype = "root"
+        else:
+            self.stype = stype
+        self.indices = copy.deepcopy(indices)
+        for idx, label in enumerate(labels):
+            if label in self.label_groups:
+                self.label_groups[label].append(indices[idx])
+            else:
+                self.label_groups[label] = [indices[idx]]
+        if self.stype == "random":
+            self.weights = [1.0 / len(self.label_groups[label]) for label in labels]
+        else:
+            if self.stype == "uniform":
+                self.label_weights = {label: 1.0 / len(self.label_groups) for label in self.label_groups}
+            else:  # self.stype == "root"
+                self.label_weights = {label: (len(idxs) / len(labels)) ** self.pow for label, idxs in self.label_groups.items()}
+                tot_weight = sum([w for w in self.label_weights.values()])
+                self.label_weights = {label: weight / tot_weight for label, weight in self.label_weights.items()}
+            self.label_counts = {}
+            curr_nb_samples, max_sample_label = 0, None
+            for label_idx, (label, indices) in enumerate(self.label_groups.items()):
+                self.label_counts[label] = int(self.nb_samples * self.label_weights[label])
+                curr_nb_samples += self.label_counts[label]
+                if max_sample_label is None or len(self.label_groups[label]) > len(self.label_groups[max_sample_label]):
+                    max_sample_label = label
+            if curr_nb_samples != self.nb_samples:
+                self.label_counts[max_sample_label] += self.nb_samples - curr_nb_samples
 
-    def __getitem__(self, idx):
-        # we do not reshuffle here, as we cannot know when the cycle is 'reset'; indices should thus come in pre-shuffled
-        return self.indices[idx]
+    def __iter__(self):
+        if self.stype == "random":
+            return (self.indices[idx] for idx in torch.multinomial(self.weights, self.nb_samples, replacement=True))
+        elif self.stype == "uniform" or self.stype == "root":
+            indices = []
+            for label, count in self.label_counts.items():
+                max_samples = len(self.label_groups[label])
+                while count > 0:
+                    subidxs = torch.randperm(max_samples)
+                    for subidx in range(min(count, max_samples)):
+                        indices.append(self.label_groups[label][subidxs[subidx]])
+                    count -= max_samples
+            np.random.shuffle(indices)  # to make sure labels are still mixed up
+            if len(indices) != self.nb_samples:
+                raise AssertionError("messed up something internally...")
+            return iter(indices)
+
+    def __len__(self):
+        return self.nb_samples
 
 
 class Dataset(torch.utils.data.Dataset, ABC):
@@ -253,10 +343,7 @@ class Dataset(torch.utils.data.Dataset, ABC):
         self.root = root
         self.config = config
         self.transforms = transforms
-        self._sampler = None
         self.samples = None  # must be filled by the derived class as a list of dictionaries
-
-    # todo: add method to reset sampler shuffling when epoch complete?
 
     def _get_derived_name(self):
         dname = str(self.__class__.__qualname__)
@@ -264,40 +351,12 @@ class Dataset(torch.utils.data.Dataset, ABC):
             dname += "." + self.name
         return dname
 
-    @property
-    def sampler(self):
-        return self._sampler
-
-    @sampler.setter
-    def sampler(self, newsampler):
-        if newsampler is not None:
-            sample_iter = iter(newsampler)
-            try:
-                while True:
-                    sample_idx = next(sample_iter)
-                    if sample_idx < 0 or sample_idx > len(self.samples):
-                        raise AssertionError("sampler provides oob indices for assigned dataset")
-            except StopIteration:
-                pass
-        self._sampler = newsampler
-
-    def get_total_size(self):
-        # bypasses sampler, if one is active
-        return len(self.samples)
-
     def __len__(self):
-        # if a sampler is active, return its subset size
-        if self.sampler is not None:
-            return len(self.sampler)
         return len(self.samples)
 
     def __iter__(self):
-        if not self.sampler:
-            for idx in range(len(self.samples)):
-                yield self[idx]
-        else:
-            for idx in self.sampler:
-                yield self[idx]
+        for idx in range(len(self.samples)):
+            yield self[idx]
 
     @abstractmethod
     def __getitem__(self, idx):
@@ -348,37 +407,37 @@ class ExternalDataset(Dataset):
         return dname
 
     def __getitem__(self, idx):
-        if self.sampler is not None:
-            idx = self.sampler[idx]
         sample = self.samples[idx]
+        if sample is None:
+            # since might have provided an invalid sample count before, it's dangerous to skip empty samples here
+            raise AssertionError("invalid sample received in external dataset impl")
         # we will only transform sample contents that are nparrays, PIL images, or torch tensors (might cause issues...)
-        if not self.transforms or sample is None:
-            return sample
         warn_partial_transform = False
         warn_dictionary = False
         if isinstance(sample, (list, tuple)):
             out_sample_list = []
             for idx, subs in enumerate(sample):
                 if isinstance(subs, (np.ndarray, PIL.Image.Image, torch.Tensor)):
-                    out_sample_list.append(self.transforms(subs))
+                    out_sample_list.append(self.transforms(subs) if self.transforms else subs)
                 else:
                     out_sample_list.append(subs)  # don't transform it, it will probably fail
-                    warn_partial_transform = True
+                    warn_partial_transform = bool(self.transforms)
             out_sample = {str(idx): out_sample_list[idx] for idx in range(len(out_sample_list))}
             warn_dictionary = True
         elif isinstance(sample, dict):
             out_sample = {}
             for key, subs in sample.keys():
                 if isinstance(subs, (np.ndarray, PIL.Image.Image, torch.Tensor)):
-                    out_sample[key] = self.transforms(subs)
+                    out_sample[key] = self.transforms(subs) if self.transforms else subs
                 else:
                     out_sample[key] = subs  # don't transform it, it will probably fail
-                    warn_partial_transform = True
+                    warn_partial_transform = bool(self.transforms)
         elif isinstance(sample, (np.ndarray, PIL.Image.Image, torch.Tensor)):
-            out_sample = {"0": self.transforms(sample)}
+            out_sample = {"0": self.transforms(sample) if self.transforms else sample}
             warn_dictionary = True
         else:
-            raise AssertionError("no clue how to transform given data sample")
+            # could add checks to see if the sample already behaves like a dict? todo
+            raise AssertionError("no clue how to convert given data sample into dictionary")
         if warn_partial_transform and not self.warned_partial_transform:
             logger.warning("blindly transforming sample parts for dataset '%s'; consider using a proper interface" % self.name)
             self.warned_partial_transform = True

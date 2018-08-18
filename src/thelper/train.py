@@ -334,6 +334,7 @@ class ImageClassifTrainer(Trainer):
         self.label_keys = label_key if isinstance(label_key, list) else [label_key]
         self.class_names = self.model.task.get_class_names()
         self.meta_keys = self.model.task.get_meta_keys()
+        self.class_idxs_map = self.model.task.get_class_idxs_map()
 
     def _to_tensor(self, sample):
         if not isinstance(sample, dict):
@@ -349,7 +350,14 @@ class ImageClassifTrainer(Trainer):
                 break  # by default, stop after finding first key hit
         if input is None or label is None:
             raise AssertionError("could not find input or label key in sample dict")
-        return torch.FloatTensor(input), torch.LongTensor(label)
+        label_idx = []
+        for class_name in label:
+            if not isinstance(class_name, str):
+                raise AssertionError("expected label to be in str format (task will convert to proper index)")
+            if class_name not in self.class_names:
+                raise AssertionError("got unexpected label '%s' for a sample (unknown class)" % class_name)
+            label_idx.append(self.class_idxs_map[class_name])
+        return torch.FloatTensor(input), torch.LongTensor(label_idx)
 
     def _train_epoch(self, model, optimizer, epoch, loader):
         if not loader:
