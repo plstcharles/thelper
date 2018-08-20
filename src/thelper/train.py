@@ -200,13 +200,13 @@ class Trainer:
             self.model.train()
             if model is None:
                 model = self._upload_model(self.model, self.train_dev)
-            result = self._train_epoch(model, self.optimizer, epoch, self.train_loader)
+            result, self.current_iter = self._train_epoch(model, self.optimizer, epoch, self.current_iter, self.train_loader)
             monitor_type_key = "train/metrics"
             if self.valid_loader:
                 self.model.eval()
                 # here, we reuse the model on the train device, as switching may slow everything down hard
                 # todo: run eval in parallel (i.e. at the same time as training?)
-                result_valid = self._eval_epoch(model, epoch, self.valid_loader, "valid")
+                result_valid = self._eval_epoch(model, epoch, self.current_iter, self.valid_loader, "valid")
                 result = {**result, **result_valid}
                 monitor_type_key = "valid/metrics"
             new_best = False
@@ -242,11 +242,22 @@ class Trainer:
                 self._save(epoch, save_best=new_best)
         self.logger.info("training done")
         if self.test_loader:
+            # reload 'best' model checkpoint on cpu (will remap to current device setup)
+            filename_best = os.path.join(self.checkpoint_dir, "ckpt.best.pth")
+            ckptdata = torch.load(filename_best, map_location="cpu")
+            if self.config_backup_path and os.path.exists(self.config_backup_path):
+                with open(self.config_backup_path, "r") as fd:
+                    config_backup = json.load(fd)
+                    if config_backup["model"] != ckptdata["config"]["model"]:
+                        raise AssertionError("could not load compatible best checkpoint to run test eval")
+            self.model.load_state_dict(ckptdata["state_dict"])
+            best_epoch = ckptdata["epoch"]
+            best_iter = ckptdata["iter"] if "iter" in ckptdata else None
             self.model.eval()
             model = self._upload_model(self.model, self.test_dev)
-            result_test = self._eval_epoch(model, self.epochs, self.test_loader, "test")
-            self.outputs[self.epochs] = {**self.outputs[self.epochs], **result_test}
-            for key, value in self.outputs[self.epochs].items():
+            result_test = self._eval_epoch(model, best_epoch, best_iter, self.test_loader, "test")
+            self.outputs[best_epoch] = {**ckptdata["outputs"], **result_test}
+            for key, value in self.outputs[best_epoch].items():
                 if not isinstance(value, dict):
                     self.logger.debug(" final result =>  {}: {}".format(str(key), value))
                 else:
@@ -259,14 +270,14 @@ class Trainer:
             raise AssertionError("missing validation/test data, invalid loaders!")
         result = {}
         self.model.eval()
-        if self.valid_loader:
-            model = self._upload_model(self.model, self.valid_dev)
-            result_valid = self._eval_epoch(model, self.start_epoch, self.valid_loader, "valid")
-            result = {**result, **result_valid}
         if self.test_loader:
             model = self._upload_model(self.model, self.test_dev)
-            result_test = self._eval_epoch(model, self.start_epoch, self.test_loader, "test")
+            result_test = self._eval_epoch(model, self.start_epoch, self.current_iter, self.test_loader, "test")
             result = {**result, **result_test}
+        elif self.valid_loader:
+            model = self._upload_model(self.model, self.valid_dev)
+            result_valid = self._eval_epoch(model, self.start_epoch, self.current_iter, self.valid_loader, "valid")
+            result = {**result, **result_valid}
         for key, value in result.items():
             if not isinstance(value, dict):
                 self.logger.debug(" final result =>  {}: {}".format(str(key), value))
@@ -278,11 +289,11 @@ class Trainer:
         # not saving final eval results anywhere...? todo
 
     @abstractmethod
-    def _train_epoch(self, model, optimizer, epoch, loader):
+    def _train_epoch(self, model, optimizer, epoch, iter, loader):
         raise NotImplementedError
 
     @abstractmethod
-    def _eval_epoch(self, model, epoch, loader, eval_type="valid"):
+    def _eval_epoch(self, model, epoch, iter, loader, eval_type="valid"):
         raise NotImplementedError
 
     def _get_lr(self):
@@ -359,7 +370,7 @@ class ImageClassifTrainer(Trainer):
             label_idx.append(self.class_idxs_map[class_name])
         return torch.FloatTensor(input), torch.LongTensor(label_idx)
 
-    def _train_epoch(self, model, optimizer, epoch, loader):
+    def _train_epoch(self, model, optimizer, epoch, iter, loader):
         if not loader:
             raise AssertionError("no available data to load")
         if not optimizer:
@@ -390,13 +401,14 @@ class ImageClassifTrainer(Trainer):
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
-            self.current_iter += 1
+            if iter is not None:
+                iter += 1
             for metric in metrics.values():
                 metric.accumulate(pred.cpu(), label.cpu(), meta=meta)
             self.logger.info(
                 "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}: {:.2f}".format(
                     epoch,
-                    self.current_iter,
+                    iter,
                     idx,
                     epoch_size,
                     (idx / epoch_size) * 100.0,
@@ -405,12 +417,12 @@ class ImageClassifTrainer(Trainer):
                     metrics[self.monitor].eval()
                 )
             )
-            if self.use_tbx:
-                writer.add_scalar("iter/loss", loss.item(), self.current_iter)
-                writer.add_scalar("iter/lr", self.current_lr, self.current_iter)
+            if self.use_tbx and iter is not None:
+                writer.add_scalar("iter/loss", loss.item(), iter)
+                writer.add_scalar("iter/lr", self.current_lr, iter)
                 for metric_name, metric in metrics.items():
                     if metric.is_scalar():
-                        writer.add_scalar("iter/%s" % metric_name, metric.eval(), self.current_iter)
+                        writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
         metric_vals = {}
         for metric_name, metric in metrics.items():
             metric_vals[metric_name] = metric.eval()
@@ -437,9 +449,9 @@ class ImageClassifTrainer(Trainer):
                         with open(raw_filepath, "w") as fd:
                             fd.write(txt)
             writer.close()
-        return result
+        return result, iter
 
-    def _eval_epoch(self, model, epoch, loader, eval_type="valid"):
+    def _eval_epoch(self, model, epoch, iter, loader, eval_type="valid"):
         if not loader:
             raise AssertionError("no available data to load")
         if eval_type != "valid" and eval_type != "test":
@@ -490,13 +502,13 @@ class ImageClassifTrainer(Trainer):
             result[eval_type + "/loss"] = total_loss / epoch_size
             result[eval_type + "/metrics"] = metric_vals
             if self.use_tbx:
-                if self.current_iter > 0:
-                    writer.add_scalar("iter/loss", total_loss / epoch_size, self.current_iter)
+                if iter is not None and iter > 0:
+                    writer.add_scalar("iter/loss", total_loss / epoch_size, iter)
                 writer.add_scalar("epoch/loss", total_loss / epoch_size, epoch)
                 for metric_name, metric in metrics.items():
                     if metric.is_scalar():
-                        if self.current_iter > 0:
-                            writer.add_scalar("iter/%s" % metric_name, metric.eval(), self.current_iter)
+                        if iter is not None and iter > 0:
+                            writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
                         writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
                     if hasattr(metric, "get_tbx_image") and callable(metric.get_tbx_image):
                         img = metric.get_tbx_image()
