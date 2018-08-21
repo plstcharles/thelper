@@ -16,7 +16,7 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-def load_trainer(session_name, save_dir, config, model, loaders):
+def load_trainer(session_name, save_dir, config, model, loaders, ckptdata=None):
     if "trainer" not in config or not config["trainer"]:
         raise AssertionError("config missing 'trainer' field")
     trainer_config = config["trainer"]
@@ -26,12 +26,12 @@ def load_trainer(session_name, save_dir, config, model, loaders):
     if "params" not in trainer_config:
         raise AssertionError("trainer config missing 'params' field")
     params = thelper.utils.keyvals2dict(trainer_config["params"])
-    return trainer_type(session_name, save_dir, model, loaders, trainer_config, **params)
+    return trainer_type(session_name, save_dir, model, loaders, trainer_config, ckptdata=ckptdata, **params)
 
 
 class Trainer:
 
-    def __init__(self, session_name, save_dir, model, loaders, config):
+    def __init__(self, session_name, save_dir, model, loaders, config, ckptdata=None):
         if not model or not loaders or not config:
             raise AssertionError("missing input args")
         train_loader, valid_loader, test_loader = loaders
@@ -81,7 +81,6 @@ class Trainer:
                     writer_paths[idx] = tbx_dir
             self.logger.debug("tensorboard init : tensorboard --logdir %s --port <your_port>" % self.tbx_root_dir)
         self.train_writer_path, self.valid_writer_path, self.test_writer_path = writer_paths
-        self.outputs = {}
         self.model = model
         if "loss" not in config or not config["loss"]:
             raise AssertionError("trainer config missing 'loss' field")
@@ -171,8 +170,18 @@ class Trainer:
         self.logger.addHandler(train_logger_fh)
         self.logger.info("created training log for session '%s'" % session_name)
         self.current_lr = self._get_lr()  # for debug/display purposes only
-        self.current_iter = 0
-        self.start_epoch = 1
+        if ckptdata is not None:
+            self.monitor_best = ckptdata["monitor_best"]
+            self.model.load_state_dict(ckptdata["state_dict"])
+            self.optimizer_state = ckptdata["optimizer"]
+            self.current_iter = ckptdata["iter"] if "iter" in ckptdata else 0
+            self.current_epoch = ckptdata["epoch"]
+            self.outputs = ckptdata["outputs"]
+        else:
+            self.optimizer_state = None
+            self.current_iter = 0
+            self.current_epoch = 0
+            self.outputs = {}
 
     def _upload_model(self, model, dev):
         if isinstance(dev, list):
@@ -197,9 +206,10 @@ class Trainer:
             raise AssertionError("missing training data, invalid loader!")
         model = self._upload_model(self.model, self.train_dev)
         self.optimizer, self.scheduler = thelper.optim.load_optimization(model, self.optimization_config)
-        if not self.optimizer:
-            raise AssertionError("missing optimizer!")
-        for epoch in range(self.start_epoch, self.epochs + 1):
+        if self.optimizer_state is not None:
+            self.optimizer.load_state_dict(self.optimizer_state)
+        start_epoch = self.current_epoch + 1
+        for epoch in range(start_epoch, self.epochs + 1):
             if self.scheduler:
                 self.scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
                 self.current_lr = self.scheduler.get_lr()[0]  # for debug/display purposes only
@@ -249,6 +259,7 @@ class Trainer:
         if self.test_loader:
             # reload 'best' model checkpoint on cpu (will remap to current device setup)
             filename_best = os.path.join(self.checkpoint_dir, "ckpt.best.pth")
+            self.logger.info("loading best model & initializing final test run")
             ckptdata = torch.load(filename_best, map_location="cpu")
             if self.config_backup_path and os.path.exists(self.config_backup_path):
                 with open(self.config_backup_path, "r") as fd:
@@ -277,12 +288,12 @@ class Trainer:
         if self.test_loader:
             model = self._upload_model(self.model, self.test_dev)
             model.eval()
-            result_test = self._eval_epoch(model, self.start_epoch, self.current_iter, self.test_loader, "test")
+            result_test = self._eval_epoch(model, self.current_epoch, self.current_iter, self.test_loader, "test")
             result = {**result, **result_test}
         elif self.valid_loader:
             model = self._upload_model(self.model, self.valid_dev)
             model.eval()
-            result_valid = self._eval_epoch(model, self.start_epoch, self.current_iter, self.valid_loader, "valid")
+            result_valid = self._eval_epoch(model, self.current_epoch, self.current_iter, self.valid_loader, "valid")
             result = {**result, **result_valid}
         for key, value in result.items():
             if not isinstance(value, dict):
@@ -290,7 +301,7 @@ class Trainer:
             else:
                 for subkey, subvalue in value.items():
                     self.logger.debug(" final result =>  {}:{}: {}".format(str(key), str(subkey), subvalue))
-        self.outputs[self.start_epoch] = result
+        self.outputs[self.current_epoch] = result
         self.logger.info("evaluation done")
         # not saving final eval results anywhere...? todo
 
@@ -342,8 +353,8 @@ class Trainer:
 
 class ImageClassifTrainer(Trainer):
 
-    def __init__(self, session_name, save_dir, model, loaders, config):
-        super().__init__(session_name, save_dir, model, loaders, config)
+    def __init__(self, session_name, save_dir, model, loaders, config, ckptdata=None):
+        super().__init__(session_name, save_dir, model, loaders, config, ckptdata=ckptdata)
         if not isinstance(self.model.task, thelper.tasks.Classification):
             raise AssertionError("expected task to be classification")
         input_key = self.model.task.get_input_key()

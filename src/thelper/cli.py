@@ -446,19 +446,12 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, 
         thelper.utils.draw_sample(data_sample, block=True)
     model = load_model(config, task)
     loaders = (None if eval_only else train_loader, valid_loader, test_loader)
-    trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loaders)
-    trainer.model.load_state_dict(ckptdata["state_dict"])
-    if trainer.optimizer is not None:
-        trainer.optimizer.load_state_dict(ckptdata["optimizer"])
-    trainer.start_epoch = ckptdata["epoch"] + 1
-    trainer.current_iter = ckptdata["iter"] if "iter" in ckptdata else 0
-    trainer.monitor_best = ckptdata["monitor_best"]
-    trainer.outputs = ckptdata["outputs"]
+    trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loaders, ckptdata=ckptdata)
     if eval_only:
-        logger.info("evaluating session '%s' checkpoint @ epoch %d" % (trainer.name, trainer.start_epoch))
+        logger.info("evaluating session '%s' checkpoint @ epoch %d" % (trainer.name, trainer.current_epoch))
         trainer.eval()
     else:
-        logger.info("resuming training session '%s' @ epoch %d" % (trainer.name, trainer.start_epoch))
+        logger.info("resuming training session '%s' @ epoch %d" % (trainer.name, trainer.current_epoch))
         trainer.train()
     logger.debug("all done")
 
