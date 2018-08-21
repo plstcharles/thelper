@@ -77,7 +77,7 @@ setuptools.setup(
         "Operating System :: POSIX",
         "Operating System :: Microsoft :: Windows",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",  # we assume dict insert order will be kept intact... (>=3.6)
         "Programming Language :: Python :: Implementation :: CPython",
     ],
     keywords=["pytorch", "trainer", "loader"],
