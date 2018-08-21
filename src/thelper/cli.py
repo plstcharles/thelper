@@ -37,8 +37,6 @@ def load_datasets(config, data_root):
     if "data_config" not in config or not config["data_config"]:
         raise AssertionError("config missing 'data_config' field")
     data_config = thelper.data.DataConfig(config["data_config"])
-    # if hasattr(data_config,"summary"):
-    #     data_config.summary()
     logger.debug("splitting datasets and creating loaders")
     train_loader, valid_loader, test_loader = data_config.get_data_split(datasets, task)
     return task, train_loader, valid_loader, test_loader
@@ -53,24 +51,6 @@ def load_model(config, task):
     if hasattr(model, "summary"):
         model.summary()
     return model
-
-
-def load_train_cfg(config):
-    logger = thelper.utils.get_func_logger()
-    logger.debug("loading loss & metrics configurations")
-    if "loss" not in config or not config["loss"]:
-        raise AssertionError("config missing 'loss' field")
-    loss = thelper.optim.load_loss(config["loss"])
-    if hasattr(loss, "summary"):
-        loss.summary()
-    if "metrics" not in config or not config["metrics"]:
-        raise AssertionError("config missing 'metrics' field")
-    metrics = thelper.optim.load_metrics(config["metrics"])
-    for metric_name, metric in metrics.items():
-        if hasattr(metric, "summary"):
-            logger.info("parsed metric category '%s'" % metric_name)
-            metric.summary()
-    return loss, metrics
 
 
 def get_save_dir(out_root, session_name, config, resume=False):
@@ -130,10 +110,8 @@ def create_session(config, data_root, save_dir, display_graphs=False):
         data_sample = data_iter.next()
         thelper.utils.draw_sample(data_sample, block=True)
     model = load_model(config, task)
-    loss, metrics = load_train_cfg(config)
     loaders = (train_loader, valid_loader, test_loader)
-    trainer = thelper.train.load_trainer(session_name, save_dir, config,
-                                         model, loss, metrics, loaders)
+    trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loaders)
     logger.debug("starting trainer")
     trainer.train()
     logger.debug("all done")
@@ -467,10 +445,8 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, 
         data_sample = data_iter.next()
         thelper.utils.draw_sample(data_sample, block=True)
     model = load_model(config, task)
-    loss, metrics = load_train_cfg(config)
     loaders = (None if eval_only else train_loader, valid_loader, test_loader)
-    trainer = thelper.train.load_trainer(session_name, save_dir, config,
-                                         model, loss, metrics, loaders)
+    trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loaders)
     trainer.model.load_state_dict(ckptdata["state_dict"])
     if trainer.optimizer is not None:
         trainer.optimizer.load_state_dict(ckptdata["optimizer"])

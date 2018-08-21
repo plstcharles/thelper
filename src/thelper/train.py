@@ -16,7 +16,7 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-def load_trainer(session_name, save_dir, config, model, loss, metrics, loaders):
+def load_trainer(session_name, save_dir, config, model, loaders):
     if "trainer" not in config or not config["trainer"]:
         raise AssertionError("config missing 'trainer' field")
     trainer_config = config["trainer"]
@@ -26,23 +26,13 @@ def load_trainer(session_name, save_dir, config, model, loss, metrics, loaders):
     if "params" not in trainer_config:
         raise AssertionError("trainer config missing 'params' field")
     params = thelper.utils.keyvals2dict(trainer_config["params"])
-    trainer = trainer_type(session_name, save_dir, model, loss, metrics, loaders, trainer_config, **params)
-    if loaders[0]:
-        # no need to load optimization stuff if not training (i.e. no train_loader)
-        logger.debug("loading optimization & scheduler configurations")
-        # loading optimization stuff after trainer since model needs to be on correct device
-        if "optimization" not in config or not config["optimization"]:
-            raise AssertionError("config missing 'optimization' field")
-        optimizer, scheduler = thelper.optim.load_optimization(trainer.model, config["optimization"])
-        trainer.optimizer = optimizer
-        trainer.scheduler = scheduler
-    return trainer
+    return trainer_type(session_name, save_dir, model, loaders, trainer_config, **params)
 
 
 class Trainer:
 
-    def __init__(self, session_name, save_dir, model, loss, metrics, loaders, config):
-        if not model or not loss or not metrics or not config:
+    def __init__(self, session_name, save_dir, model, loaders, config):
+        if not model or not loaders or not config:
             raise AssertionError("missing input args")
         train_loader, valid_loader, test_loader = loaders
         if not (train_loader or valid_loader or test_loader):
@@ -56,6 +46,11 @@ class Trainer:
             raise AssertionError("bad trainer config epoch count")
         if train_loader:
             self.epochs = int(config["epochs"])
+            # no need to load optimization stuff if not training (i.e. no train_loader)
+            # loading optimization stuff later since model needs to be on correct device
+            if "optimization" not in config or not config["optimization"]:
+                raise AssertionError("trainer config missing 'optimization' field")
+            self.optimization_config = config["optimization"]
         else:
             self.epochs = 1
             self.logger.info("no training data provided, will run a single epoch on valid/test data")
@@ -88,12 +83,23 @@ class Trainer:
         self.train_writer_path, self.valid_writer_path, self.test_writer_path = writer_paths
         self.outputs = {}
         self.model = model
-        self.loss = loss
+        if "loss" not in config or not config["loss"]:
+            raise AssertionError("trainer config missing 'loss' field")
+        self.loss = thelper.optim.load_loss(config["loss"])
+        if hasattr(self.loss, "summary"):
+            self.loss.summary()
+        if "metrics" not in config or not config["metrics"]:
+            raise AssertionError("trainer config missing 'metrics' field")
+        metrics = thelper.optim.load_metrics(config["metrics"])
+        for metric_name, metric in metrics.items():
+            if hasattr(metric, "summary"):
+                logger.info("parsed metric category '%s'" % metric_name)
+                metric.summary()
         self.train_metrics = deepcopy(metrics)
         self.valid_metrics = deepcopy(metrics)
         self.test_metrics = deepcopy(metrics)
-        self.optimizer = None  # must be set externally once model is on correct device
-        self.scheduler = None  # must be set externally once model is on correct device
+        self.optimizer = None
+        self.scheduler = None
         self.config = config
         self.default_dev = "cpu"
         if torch.cuda.is_available():
@@ -189,21 +195,20 @@ class Trainer:
     def train(self):
         if not self.train_loader:
             raise AssertionError("missing training data, invalid loader!")
+        model = self._upload_model(self.model, self.train_dev)
+        self.optimizer, self.scheduler = thelper.optim.load_optimization(model, self.optimization_config)
         if not self.optimizer:
             raise AssertionError("missing optimizer!")
-        model = None
         for epoch in range(self.start_epoch, self.epochs + 1):
             if self.scheduler:
                 self.scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
                 self.current_lr = self.scheduler.get_lr()[0]  # for debug/display purposes only
                 self.logger.info("learning rate at %.8f" % self.current_lr)
-            self.model.train()
-            if model is None:
-                model = self._upload_model(self.model, self.train_dev)
+            model.train()
             result, self.current_iter = self._train_epoch(model, self.optimizer, epoch, self.current_iter, self.train_loader)
             monitor_type_key = "train/metrics"
             if self.valid_loader:
-                self.model.eval()
+                model.eval()
                 # here, we reuse the model on the train device, as switching may slow everything down hard
                 # todo: run eval in parallel (i.e. at the same time as training?)
                 result_valid = self._eval_epoch(model, epoch, self.current_iter, self.valid_loader, "valid")
@@ -253,8 +258,8 @@ class Trainer:
             self.model.load_state_dict(ckptdata["state_dict"])
             best_epoch = ckptdata["epoch"]
             best_iter = ckptdata["iter"] if "iter" in ckptdata else None
-            self.model.eval()
             model = self._upload_model(self.model, self.test_dev)
+            model.eval()
             result_test = self._eval_epoch(model, best_epoch, best_iter, self.test_loader, "test")
             self.outputs[best_epoch] = {**ckptdata["outputs"], **result_test}
             for key, value in self.outputs[best_epoch].items():
@@ -269,13 +274,14 @@ class Trainer:
         if not self.valid_loader and not self.test_loader:
             raise AssertionError("missing validation/test data, invalid loaders!")
         result = {}
-        self.model.eval()
         if self.test_loader:
             model = self._upload_model(self.model, self.test_dev)
+            model.eval()
             result_test = self._eval_epoch(model, self.start_epoch, self.current_iter, self.test_loader, "test")
             result = {**result, **result_test}
         elif self.valid_loader:
             model = self._upload_model(self.model, self.valid_dev)
+            model.eval()
             result_valid = self._eval_epoch(model, self.start_epoch, self.current_iter, self.valid_loader, "valid")
             result = {**result, **result_valid}
         for key, value in result.items():
@@ -336,8 +342,8 @@ class Trainer:
 
 class ImageClassifTrainer(Trainer):
 
-    def __init__(self, session_name, save_dir, model, loss, metrics, loaders, config):
-        super().__init__(session_name, save_dir, model, loss, metrics, loaders, config)
+    def __init__(self, session_name, save_dir, model, loaders, config):
+        super().__init__(session_name, save_dir, model, loaders, config)
         if not isinstance(self.model.task, thelper.tasks.Classification):
             raise AssertionError("expected task to be classification")
         input_key = self.model.task.get_input_key()
