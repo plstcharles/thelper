@@ -455,6 +455,10 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, 
     save_dir = get_save_dir(save_dir, session_name, config, resume=True)
     logger.info("loading training session '%s' objects..." % session_name)
     task, train_loader, valid_loader, test_loader = load_datasets(config, data_root)
+    if "task" not in ckptdata:
+        logger.warning("cannot verify that checkpoint task is same as current task, might cause key or class mapping issues")
+    elif task != ckptdata["task"]:
+        raise AssertionError("checkpoint task mismatch with current task")
     if display_graphs and logger.isEnabledFor(logging.DEBUG):
         if not train_loader:
             raise AssertionError("cannot draw sample example graph, train loader is empty")

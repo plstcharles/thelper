@@ -95,3 +95,11 @@ class Classification(Task):
 
     def get_class_names(self):
         return self.class_names
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return (self.get_input_key() == other.get_input_key() and
+                    self.get_gt_key() == other.get_gt_key() and
+                    self.get_meta_keys() == other.get_meta_keys() and
+                    self.get_class_names() == other.get_class_names())
+        return False

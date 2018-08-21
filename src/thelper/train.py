@@ -316,6 +316,7 @@ class Trainer:
             "iter": self.current_iter,
             "time": timestr,
             "host": platform.node(),
+            "task": self.model.task,
             "outputs": self.outputs[epoch],
             "state_dict": self.model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
