@@ -13,13 +13,34 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-def load_loss(config):
+def load_loss(config, task, dataset):
     if "type" not in config or not config["type"]:
         raise AssertionError("loss config missing 'type' field")
     loss_type = thelper.utils.import_class(config["type"])
     if "params" not in config:
         raise AssertionError("loss config missing 'params' field")
     params = thelper.utils.keyvals2dict(config["params"])
+    if isinstance(task, thelper.tasks.Classification) and "weight_classes" in config:
+        weight_classes = thelper.utils.str2bool(config["weight_classes"])
+        if weight_classes:
+            weight_param_name = "weight"
+            if "weight_param_name" in config:
+                weight_param_name = config["weight_param_name"]
+            weight_distribution = "uniform"
+            if "weight_distribution" in config:
+                weight_distribution = config["weight_distribution"]
+            if not isinstance(weight_distribution, str) or (weight_distribution != "uniform" and "root" not in weight_distribution):
+                raise AssertionError("unexpected weight distribution strategy")
+            class_sizes = task.get_class_sizes(dataset.samples)
+            class_weights = None
+            if "root" in weight_distribution:
+                pow = 1.0 / int(weight_distribution.split("root", 1)[1])  # will be the inverse power to use for rooting weights
+                tot_samples = sum(class_sizes.values())
+                class_weights = [(len(class_sizes[label]) / tot_samples) ** pow for label in class_sizes]
+                class_weights = [class_weight / sum(class_weights) for class_weight in class_weights]
+            elif weight_distribution == "uniform":
+                class_weights = [1.0 / len(class_sizes) for _ in class_sizes]
+            params[weight_param_name] = class_weights
     loss = loss_type(**params)
     return loss
 
