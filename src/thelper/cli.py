@@ -16,41 +16,6 @@ import thelper
 logging.basicConfig(level=logging.INFO)
 
 
-def load_datasets(config, data_root):
-    logger = thelper.utils.get_func_logger()
-    logger.debug("loading datasets config")
-    if "datasets" not in config or not config["datasets"]:
-        raise AssertionError("config missing 'datasets' field (can be dict or str)")
-    datasets_config = config["datasets"]
-    if isinstance(datasets_config, str):
-        if os.path.isfile(datasets_config) and os.path.splitext(datasets_config)[1] == ".json":
-            datasets_config = json.load(open(datasets_config))
-        else:
-            raise AssertionError("'datasets' string should point to valid json file")
-    logger.debug("loading datasets templates")
-    if not isinstance(datasets_config, dict):
-        raise AssertionError("invalid datasets config type")
-    datasets, task = thelper.data.load_datasets(datasets_config, data_root)
-    logger.debug("loading data usage config")
-    if "data_config" not in config or not config["data_config"]:
-        raise AssertionError("config missing 'data_config' field")
-    data_config = thelper.data.DataConfig(config["data_config"])
-    logger.debug("splitting datasets and creating loaders")
-    train_loader, valid_loader, test_loader = data_config.get_data_split(datasets, task)
-    return task, train_loader, valid_loader, test_loader
-
-
-def load_model(config, task):
-    logger = thelper.utils.get_func_logger()
-    logger.debug("loading model")
-    if "model" not in config or not config["model"]:
-        raise AssertionError("config missing 'model' field")
-    model = thelper.modules.load_model(config["model"], task)
-    if hasattr(model, "summary"):
-        model.summary()
-    return model
-
-
 def create_session(config, data_root, save_dir, display_graphs=False):
     logger = thelper.utils.get_func_logger()
     if "name" not in config or not config["name"]:
@@ -58,7 +23,7 @@ def create_session(config, data_root, save_dir, display_graphs=False):
     session_name = config["name"]
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
     logger.info("Creating new training session '%s'..." % session_name)
-    task, train_loader, valid_loader, test_loader = load_datasets(config, data_root)
+    task, train_loader, valid_loader, test_loader = thelper.data.load(config, data_root, save_dir)
     if display_graphs and logger.isEnabledFor(logging.DEBUG):
         if not train_loader:
             raise AssertionError("cannot draw sample example graph, train loader is empty")
@@ -66,7 +31,7 @@ def create_session(config, data_root, save_dir, display_graphs=False):
         # noinspection PyUnresolvedReferences
         data_sample = data_iter.next()
         thelper.utils.draw_sample(data_sample, block=True)
-    model = load_model(config, task)
+    model = thelper.modules.load_model(config, task, save_dir)
     loaders = (train_loader, valid_loader, test_loader)
     trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loaders)
     logger.debug("starting trainer")
@@ -118,11 +83,7 @@ def extract(config,resume,data_root,display_graphs=False):
     logger.debug("splitting datasets and creating loaders")
     data_loader,valid_loader,test_loader = data_config.get_data_split(datasets,task)
 
-    logger.debug("loading model")
-    thelper.utils.check_key("model", config, 'config')
-    model = thelper.modules.load_model(config["model"],task)
-    if hasattr(model,"summary"):
-        model.summary()
+    model = thelper.modules.load_model(config,task)
 
     save_dir=os.path.join(config['visualizer']['save_dir'], 'features/%s/features' % config['model']['type'])
 
@@ -389,7 +350,7 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, 
     session_name = config["name"]
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config, resume=True)
     logger.info("loading training session '%s' objects..." % session_name)
-    task, train_loader, valid_loader, test_loader = load_datasets(config, data_root)
+    task, train_loader, valid_loader, test_loader = thelper.data.load(config, data_root, save_dir)
     if "task" not in ckptdata:
         logger.warning("cannot verify that checkpoint task is same as current task, might cause key or class mapping issues")
     elif task != ckptdata["task"]:
@@ -401,7 +362,7 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, 
         # noinspection PyUnresolvedReferences
         data_sample = data_iter.next()
         thelper.utils.draw_sample(data_sample, block=True)
-    model = load_model(config, task)
+    model = thelper.modules.load_model(config, task, save_dir)
     loaders = (None if eval_only else train_loader, valid_loader, test_loader)
     trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loaders, ckptdata=ckptdata)
     if eval_only:
