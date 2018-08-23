@@ -2,6 +2,7 @@ import logging
 import time
 import copy
 import os
+import json
 from abc import ABC, abstractmethod
 from collections import Counter
 
@@ -26,7 +27,7 @@ def load(config, data_root, save_dir=None):
         data_logger_fh = logging.FileHandler(data_logger_path)
         data_logger_fh.setFormatter(data_logger_format)
         thelper.data.logger.addHandler(data_logger_fh)
-        thelper.data.logger.info("created data log for session '%s'" % config["session_name"])
+        thelper.data.logger.info("created data log for session '%s'" % config["name"])
     thelper.data.logger.info("parsing datasets configuration")
     if "datasets" not in config or not config["datasets"]:
         raise AssertionError("config missing 'datasets' field (can be dict or str)")

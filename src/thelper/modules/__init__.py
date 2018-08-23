@@ -1,3 +1,4 @@
+import os
 import logging
 
 import thelper.modules.utils
@@ -15,7 +16,7 @@ def load_model(config, task, save_dir=None):
         modules_logger_fh = logging.FileHandler(modules_logger_path)
         modules_logger_fh.setFormatter(modules_logger_format)
         thelper.modules.logger.addHandler(modules_logger_fh)
-        thelper.modules.logger.info("created modules log for session '%s'" % config["session_name"])
+        thelper.modules.logger.info("created modules log for session '%s'" % config["name"])
     thelper.modules.logger.debug("loading model")
     if "model" not in config or not config["model"]:
         raise AssertionError("config missing 'model' field")
