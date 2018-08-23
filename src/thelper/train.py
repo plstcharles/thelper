@@ -84,7 +84,7 @@ class Trainer:
         self.model = model
         if "loss" not in config or not config["loss"]:
             raise AssertionError("trainer config missing 'loss' field")
-        self.loss = thelper.optim.load_loss(config["loss"], self.model.task, next(iter(loaders)).dataset)
+        self.loss = thelper.optim.load_loss(config["loss"], self.model.task, next((loader for loader in loaders if loader is not None)).dataset)
         if hasattr(self.loss, "summary"):
             self.loss.summary()
         if "metrics" not in config or not config["metrics"]:
