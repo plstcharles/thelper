@@ -3,9 +3,11 @@ import importlib
 import inspect
 import logging
 import math
+import json
 import os
 import re
 import sys
+import time
 import itertools
 
 import cv2 as cv
@@ -191,6 +193,47 @@ def query_string(question, default=None, allow_empty=False):
             return answer
         else:
             sys.stdout.write("Please respond with a non-empty string.\n")
+
+
+def get_save_dir(out_root, session_name, config, resume=False):
+    logger = get_func_logger()
+    save_dir = out_root
+    if not os.path.exists(save_dir):
+        os.mkdir(save_dir)
+    save_dir = os.path.join(save_dir, session_name)
+    if not resume:
+        overwrite = False
+        if "overwrite" in config:
+            overwrite = str2bool(config["overwrite"])
+        old_session_name = session_name
+        time.sleep(0.5)  # to make sure all debug/info prints are done, and we see the question
+        while os.path.exists(save_dir) and not overwrite:
+            overwrite = query_yes_no("Training session at '%s' already exists; overwrite?" % save_dir)
+            if not overwrite:
+                session_name = query_string("Please provide a new session name (old=%s):" % old_session_name)
+                save_dir = os.path.join(save_dir, session_name)
+        if not os.path.exists(save_dir):
+            os.mkdir(save_dir)
+        config_backup_path = os.path.join(save_dir, "config.json")
+        json.dump(config, open(config_backup_path, "w"), indent=4, sort_keys=False)
+    else:
+        if not os.path.exists(save_dir):
+            os.mkdir(save_dir)
+        config_backup_path = os.path.join(save_dir, "config.json")
+        if os.path.exists(config_backup_path):
+            config_backup = json.load(open(config_backup_path, "r"))
+            if config_backup != config:
+                answer = query_yes_no("Config backup in '%s' differs from config loaded through checkpoint; overwrite?" % config_backup_path)
+                if answer:
+                    logger.warning("config mismatch with previous run; will overwrite backup in save directory")
+                else:
+                    logger.error("config mismatch with previous run; user aborted")
+                    sys.exit(1)
+        json.dump(config, open(config_backup_path, "w"), indent=4, sort_keys=False)
+    logs_dir = os.path.join(save_dir, "logs")
+    if not os.path.exists(logs_dir):
+        os.mkdir(logs_dir)
+    return save_dir
 
 
 def draw_histogram(data, bins=50, xlabel="", ylabel="Proportion"):

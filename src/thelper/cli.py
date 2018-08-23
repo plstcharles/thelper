@@ -6,8 +6,6 @@ import argparse
 import json
 import logging
 import os
-import sys
-import time
 
 import torch
 import numpy as np
@@ -53,53 +51,12 @@ def load_model(config, task):
     return model
 
 
-def get_save_dir(out_root, session_name, config, resume=False):
-    logger = thelper.utils.get_func_logger()
-    save_dir = out_root
-    if not os.path.exists(save_dir):
-        os.mkdir(save_dir)
-    save_dir = os.path.join(save_dir, session_name)
-    if not resume:
-        overwrite = False
-        if "overwrite" in config:
-            overwrite = thelper.utils.str2bool(config["overwrite"])
-        old_session_name = session_name
-        time.sleep(0.5)  # to make sure all debug/info prints are done, and we see the question
-        while os.path.exists(save_dir) and not overwrite:
-            overwrite = thelper.utils.query_yes_no("Training session at '%s' already exists; overwrite?" % save_dir)
-            if not overwrite:
-                session_name = thelper.utils.query_string("Please provide a new session name (old=%s):" % old_session_name)
-                save_dir = os.path.join(save_dir, session_name)
-        if not os.path.exists(save_dir):
-            os.mkdir(save_dir)
-        config_backup_path = os.path.join(save_dir, "config.json")
-        json.dump(config, open(config_backup_path, "w"), indent=4, sort_keys=False)
-    else:
-        if not os.path.exists(save_dir):
-            os.mkdir(save_dir)
-        config_backup_path = os.path.join(save_dir, "config.json")
-        if os.path.exists(config_backup_path):
-            config_backup = json.load(open(config_backup_path, "r"))
-            if config_backup != config:
-                answer = thelper.utils.query_yes_no("Config backup in '%s' differs from config loaded through checkpoint; overwrite?" % config_backup_path)
-                if answer:
-                    logger.warning("config mismatch with previous run; will overwrite backup in save directory")
-                else:
-                    logger.error("config mismatch with previous run; user aborted")
-                    sys.exit(1)
-        json.dump(config, open(config_backup_path, "w"), indent=4, sort_keys=False)
-    logs_dir = os.path.join(save_dir, "logs")
-    if not os.path.exists(logs_dir):
-        os.mkdir(logs_dir)
-    return save_dir
-
-
 def create_session(config, data_root, save_dir, display_graphs=False):
     logger = thelper.utils.get_func_logger()
     if "name" not in config or not config["name"]:
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
-    save_dir = get_save_dir(save_dir, session_name, config)
+    save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
     logger.info("Creating new training session '%s'..." % session_name)
     task, train_loader, valid_loader, test_loader = load_datasets(config, data_root)
     if display_graphs and logger.isEnabledFor(logging.DEBUG):
@@ -430,7 +387,7 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, 
     if "name" not in config or not config["name"]:
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
-    save_dir = get_save_dir(save_dir, session_name, config, resume=True)
+    save_dir = thelper.utils.get_save_dir(save_dir, session_name, config, resume=True)
     logger.info("loading training session '%s' objects..." % session_name)
     task, train_loader, valid_loader, test_loader = load_datasets(config, data_root)
     if "task" not in ckptdata:
