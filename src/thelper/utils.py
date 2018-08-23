@@ -1,3 +1,8 @@
+"""General utilities module.
+
+This module only contains non-ML specific functions, i/o helpers,
+and matplotlib/pyplot drawing calls.
+"""
 import glob
 import importlib
 import inspect
@@ -19,32 +24,41 @@ import torch
 logger = logging.getLogger(__name__)
 
 
-def test_cuda_device():
+def test_cuda_device(nb_devices=2):
     """
-    work around for gpu identification on cluster
-    :return:
-    """
-    device_id = -1
-    try:
-        device_id = 0
-        torch.cuda.set_device(device_id)
-        a = torch.cuda.FloatTensor(1)
-        logger.info('Setting to device: 0')
-    except:
-        try:
-            device_id = 1
-            torch.cuda.set_device(device_id)
-            a = torch.cuda.FloatTensor(1)
-            logger.info('Setting to device: 1')
-        except:
-            device_id = -1
-            logger.warning("No cuda device available!")
+    Workaround for runtime gpu identification for cluster ops.
 
-    torch.cuda.empty_cache()
-    return device_id
+    Returns:
+        The id (integer) of an available cuda device.
+    """
+    def try_device(_device_id):
+        try:
+            torch.cuda.set_device(_device_id)
+            a = torch.cuda.FloatTensor(1)
+            logger.info("Device '%d' is available" % _device_id)
+            return True
+        except Exception:
+            logger.info("Device '%d' is NOT available" % _device_id)
+            return False
+    device_id = 0
+    while device_id < nb_devices:
+        if try_device(device_id):
+            torch.cuda.empty_cache()
+            return device_id
+    logger.error("No cuda device available!")
+    return -1
 
 
 def import_class(fullname):
+    """
+    General-purpose runtime class importer.
+
+    Args:
+        fullname: the fully qualified class name to be imported.
+
+    Returns:
+        The imported class.
+    """
     modulename, classname = fullname.rsplit('.', 1)
     module = importlib.import_module(modulename)
     return getattr(module, classname)
@@ -62,25 +76,25 @@ def get_func_logger(skip=0):
 
 def get_caller_name(skip=2):
     # source: https://gist.github.com/techtonik/2151727
-    """Get a name of a caller in the format module.class.method
+    """Returns the name of a caller in the format module.class.method.
 
-       `skip` specifies how many levels of stack to skip while getting caller
-       name. skip=1 means "who calls me", skip=2 "who calls my caller" etc.
+    Args:
+        skip: specifies how many levels of stack to skip while getting the caller.
 
-       An empty string is returned if skipped levels exceed stack height
+    Returns:
+        An empty string is returned if skipped levels exceed stack height; otherwise,
+        returns the requested caller name.
     """
-
     def stack_(frame):
         framelist = []
         while frame:
             framelist.append(frame)
             frame = frame.f_back
         return framelist
-
     stack = stack_(sys._getframe(1))
     start = 0 + skip
     if len(stack) < start + 1:
-        return ''
+        return ""
     parentframe = stack[start]
     name = []
     module = inspect.getmodule(parentframe)
@@ -89,19 +103,24 @@ def get_caller_name(skip=2):
     if module:
         name.append(module.__name__)
     # detect classname
-    if 'self' in parentframe.f_locals:
+    if "self" in parentframe.f_locals:
         # I don't know any way to detect call from the object method
         # XXX: there seems to be no way to detect static method call - it will
         #      be just a function call
-        name.append(parentframe.f_locals['self'].__class__.__name__)
+        name.append(parentframe.f_locals["self"].__class__.__name__)
     codename = parentframe.f_code.co_name
-    if codename != '<module>':  # top level usually
+    if codename != "<module>":  # top level usually
         name.append(codename)  # function or a method
     del parentframe
     return ".".join(name)
 
 
 def str2bool(s):
+    """Converts a string to a boolean.
+
+    If the lower case version of the provided string matches any of 'true',
+    '1', or 'yes', then the function returns True.
+    """
     if isinstance(s, bool):
         return s
     if isinstance(s, (int, float)):
@@ -113,6 +132,7 @@ def str2bool(s):
 
 
 def clipstr(s, size, fill=" "):
+    """Clips a string to a specific length, with an optional fill character."""
     if len(s) > size:
         s = s[:size]
     if len(s) < size:
@@ -121,10 +141,19 @@ def clipstr(s, size, fill=" "):
 
 
 def lreplace(string, old_prefix, new_prefix):
+    """Replaces a single occurrence of `old_prefix` in the given string by `new_prefix`."""
     return re.sub(r'^(?:%s)+' % re.escape(old_prefix), lambda m: new_prefix * (m.end() // len(old_prefix)), string)
 
 
 def keyvals2dict(keyvals):
+    """Returns a dictionary of key-value parameter pairs.
+
+    Args:
+        keyvals: a list of 2-element dictionaries to be parsed.
+
+    Returns:
+         A dictionary of all flattened parameters.
+    """
     if not isinstance(keyvals, list):
         raise AssertionError("expected key-value pair vector")
     out = {}
@@ -139,14 +168,15 @@ def keyvals2dict(keyvals):
 
 
 def query_yes_no(question, default=None):
-    """
-    Asks the user a yes/no question and returns the answer.
+    """Asks the user a yes/no question and returns the answer.
 
-    :param question: the string that is presented to the user.
-    :param default: the presumed answer if the user just hits <Enter>.
-        It must be "yes" (the default), "no" or None (meaning
-        an answer is required of the user).
-    :returns: True for "yes" or False for "no".
+    Args:
+        question: the string that is presented to the user.
+        default: the presumed answer if the user just hits `<Enter>`. It
+            must be 'yes', 'no', or `None` (meaning an answer is required).
+
+    Returns:
+        True for 'yes', or False for 'no' (or their respective variations).
     """
     valid = {"yes": True, "ye": True, "y": True, "no": False, "n": False}
     if default is None:
@@ -171,13 +201,16 @@ def query_yes_no(question, default=None):
 
 
 def query_string(question, default=None, allow_empty=False):
-    """
-    Asks the user a question and returns the answer (a generic string).
+    """Asks the user a question and returns the answer (a generic string).
 
-    :param question: the string that is presented to the user.
-    :param default: the presumed answer if the user just hits <Enter>.
-    :param allow_empty: defines if empty string should be accepted.
-    :returns: The string entered by the user.
+    Args:
+        question: the string that is presented to the user.
+        default: the presumed answer if the user just hits `<Enter>`. If None,
+            then an answer is required to continue.
+        allow_empty: defines whether an empty answer should be accepted.
+
+    Returns:
+        The string entered by the user.
     """
     sys.stdout.flush()
     sys.stderr.flush()
@@ -195,41 +228,61 @@ def query_string(question, default=None, allow_empty=False):
             sys.stdout.write("Please respond with a non-empty string.\n")
 
 
-def get_save_dir(out_root, session_name, config, resume=False):
+def get_save_dir(out_root, dir_name, config=None, resume=False):
+    """Returns a directory path in which the app can save its data.
+
+    If a folder with name `dir_name` already exists in the directory `out_root`, then the user will be
+    asked to pick a new name. If the user refuses, `sys.exit(1)` is called. If config is not None, it will
+    be saved to the output directory as a json file. Finally, a 'logs' directory will also be created in
+    the output directory for writing logger files.
+
+    Args:
+        out_root: path to the directory root where the save directory should be created.
+        dir_name: name of the save directory to create. If it already exists, a new one will be requested.
+        config: dictionary of app configuration parameters. Used to overwrite i/o queries, and will be
+            written to the save directory in json format to test writing. Default is `None`.
+        resume: specifies whether this session is new, or resumed from an older one (in the latter
+            case, overwriting is allowed, and the user will never have to choose a new folder)
+
+    Returns:
+        The path to the created save directory for this session.
+    """
     logger = get_func_logger()
     save_dir = out_root
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
-    save_dir = os.path.join(save_dir, session_name)
+    save_dir = os.path.join(save_dir, dir_name)
     if not resume:
         overwrite = False
-        if "overwrite" in config:
+        if config is not None and "overwrite" in config:
             overwrite = str2bool(config["overwrite"])
-        old_session_name = session_name
+        old_dir_name = dir_name
         time.sleep(0.5)  # to make sure all debug/info prints are done, and we see the question
         while os.path.exists(save_dir) and not overwrite:
             overwrite = query_yes_no("Training session at '%s' already exists; overwrite?" % save_dir)
             if not overwrite:
-                session_name = query_string("Please provide a new session name (old=%s):" % old_session_name)
-                save_dir = os.path.join(save_dir, session_name)
+                dir_name = query_string("Please provide a new directory name (old=%s):" % old_dir_name)
+                save_dir = os.path.join(save_dir, dir_name)
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
-        config_backup_path = os.path.join(save_dir, "config.json")
-        json.dump(config, open(config_backup_path, "w"), indent=4, sort_keys=False)
+        if config is not None:
+            config_backup_path = os.path.join(save_dir, "config.json")
+            json.dump(config, open(config_backup_path, "w"), indent=4, sort_keys=False)
     else:
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
-        config_backup_path = os.path.join(save_dir, "config.json")
-        if os.path.exists(config_backup_path):
-            config_backup = json.load(open(config_backup_path, "r"))
-            if config_backup != config:
-                answer = query_yes_no("Config backup in '%s' differs from config loaded through checkpoint; overwrite?" % config_backup_path)
-                if answer:
-                    logger.warning("config mismatch with previous run; will overwrite backup in save directory")
-                else:
-                    logger.error("config mismatch with previous run; user aborted")
-                    sys.exit(1)
-        json.dump(config, open(config_backup_path, "w"), indent=4, sort_keys=False)
+        if config is not None:
+            config_backup_path = os.path.join(save_dir, "config.json")
+            if os.path.exists(config_backup_path):
+                config_backup = json.load(open(config_backup_path, "r"))
+                if config_backup != config:
+                    answer = query_yes_no("Config backup in '%s' differs from config loaded through checkpoint; overwrite?" % config_backup_path)
+                    if answer:
+                        logger.warning("config mismatch with previous run; will overwrite backup in save directory")
+                    else:
+                        logger.error("config mismatch with previous run; user aborted")
+                        sys.exit(1)
+            json.dump(config, open(config_backup_path, "w"), indent=4, sort_keys=False)
     logs_dir = os.path.join(save_dir, "logs")
     if not os.path.exists(logs_dir):
         os.mkdir(logs_dir)
@@ -237,6 +290,7 @@ def get_save_dir(out_root, session_name, config, resume=False):
 
 
 def draw_histogram(data, bins=50, xlabel="", ylabel="Proportion"):
+    """Draws and returns a histogram figure using pyplot."""
     fig, ax = plt.subplots()
     ax.hist(data, density=True, bins=bins)
     if len(ylabel) > 0:
@@ -245,9 +299,11 @@ def draw_histogram(data, bins=50, xlabel="", ylabel="Proportion"):
         ax.set_xlabel(xlabel)
     ax.set_xlim(xmin=0)
     fig.show()
+    return fig
 
 
 def draw_popbars(labels, counts, xlabel="", ylabel="Pop. Count"):
+    """Draws and returns a bar histogram figure using pyplot."""
     fig, ax = plt.subplots()
     xrange = range(len(labels))
     ax.bar(xrange, counts, align="center")
@@ -259,9 +315,11 @@ def draw_popbars(labels, counts, xlabel="", ylabel="Pop. Count"):
     ax.set_xticklabels(labels)
     ax.tick_params(axis="x", labelsize="8", labelrotation=45)
     fig.show()
+    return fig
 
 
 def draw_classifs(images, labels_gt, labels_pred=None, labels_map=None):
+    """Draws and returns a figure of classification results using pyplot."""
     nb_imgs = len(images) if isinstance(images, list) else images.shape[images.ndim - 1]
     if nb_imgs < 1:
         return
@@ -289,9 +347,11 @@ def draw_classifs(images, labels_gt, labels_pred=None, labels_map=None):
         ax.set_xticks([])
         ax.set_yticks([])
     fig.show()
+    return fig
 
 
 def draw_sample(sample, pred=None, image_key="image", label_key="label", block=False):
+    """Draws and returns a figure of image samples using pyplot."""
     if not isinstance(sample, dict):
         raise AssertionError("expected dict-based sample")
     if image_key not in sample or label_key not in sample:
@@ -343,14 +403,16 @@ def draw_sample(sample, pred=None, image_key="image", label_key="label", block=F
         image_normalized = np.empty_like(image, dtype=np.uint8).copy()  # copy needed here due to ocv 3.3 bug
         cv.normalize(image, image_normalized, 0, 255, cv.NORM_MINMAX, dtype=cv.CV_8U)
         image_list.append(image_normalized)
-    draw_classifs(image_list, labels, labels_pred=pred)  # normalize & pass mask to draw func also? todo
+    fig = draw_classifs(image_list, labels, labels_pred=pred)  # normalize & pass mask to draw func also? todo
     if block:
         plt.show(block=block)
     else:
         plt.pause(0.01)
+    return fig
 
 
 def draw_errbars(labels, min, max, stddev, mean, xlabel="", ylabel="Raw Value"):
+    """Draws and returns an error bar histogram figure using pyplot."""
     if min.shape != max.shape or min.shape != stddev.shape or min.shape != mean.shape:
         raise AssertionError("input dim mismatch")
     if len(min.shape) != 1 and len(min.shape) != 2:
@@ -375,9 +437,11 @@ def draw_errbars(labels, min, max, stddev, mean, xlabel="", ylabel="Raw Value"):
         ax.tick_params(axis="x", labelsize="6", labelrotation=45)
     plt.tight_layout()
     fig.show()
+    return fig
 
 
 def draw_roc_curve(fpr, tpr, labels=None, size_inch=(5, 5), dpi=320):
+    """Draws and returns an ROC curve figure using pyplot."""
     if not isinstance(fpr, np.ndarray) or not isinstance(tpr, np.ndarray):
         raise AssertionError("invalid inputs")
     if fpr.shape != tpr.shape:
@@ -413,6 +477,7 @@ def draw_roc_curve(fpr, tpr, labels=None, size_inch=(5, 5), dpi=320):
 
 
 def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False):
+    """Draws and returns an a confusion matrix figure using pyplot."""
     if not isinstance(confmat, np.ndarray) or not isinstance(class_list, list):
         raise AssertionError("invalid inputs")
     if normalize:
@@ -443,6 +508,7 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
 
 
 def stringify_confmat(confmat, class_list, hide_zeroes=False, hide_diagonal=False, hide_threshold=None):
+    """Transforms a confusion matrix array obtained in list or numpy format into a printable string."""
     if not isinstance(confmat, np.ndarray) or not isinstance(class_list, list):
         raise AssertionError("invalid inputs")
     columnwidth = 9
@@ -473,7 +539,8 @@ def stringify_confmat(confmat, class_list, hide_zeroes=False, hide_diagonal=Fals
     return res
 
 
-def fig2array(fig):  # will return figure as numpy-compatible RGBA array
+def fig2array(fig):
+    """Transforms a pyplot figure into a numpy-compatible RGBA array."""
     fig.canvas.draw()
     w, h = fig.canvas.get_width_height()
     buf = np.fromstring(fig.canvas.tostring_argb(), dtype=np.uint8)
@@ -483,6 +550,7 @@ def fig2array(fig):  # will return figure as numpy-compatible RGBA array
 
 
 def get_glob_paths(input_glob_pattern, can_be_dir=False):
+    """Parse a wildcard-compatible file name pattern for valid file paths."""
     glob_file_paths = glob.glob(input_glob_pattern)
     if not glob_file_paths:
         raise AssertionError("invalid input glob pattern '%s'" % input_glob_pattern)
@@ -492,16 +560,17 @@ def get_glob_paths(input_glob_pattern, can_be_dir=False):
     return glob_file_paths
 
 
-def get_dataset_file_paths(input_path, dataset_root, allow_glob=False, can_be_dir=False):
+def get_file_paths(input_path, data_root, allow_glob=False, can_be_dir=False):
+    """Parse a wildcard-compatible file name pattern at a given root level for valid file paths."""
     if os.path.isabs(input_path):
         if '*' in input_path and allow_glob:
             return get_glob_paths(input_path)
         elif not os.path.isfile(input_path) and not (can_be_dir and os.path.isdir(input_path)):
             raise AssertionError("invalid input file at absolute path '%s'" % input_path)
     else:
-        if not os.path.isdir(dataset_root):
-            raise AssertionError("invalid dataset root directory at '%s'" % dataset_root)
-        input_path = os.path.join(dataset_root, input_path)
+        if not os.path.isdir(data_root):
+            raise AssertionError("invalid dataset root directory at '%s'" % data_root)
+        input_path = os.path.join(data_root, input_path)
         if '*' in input_path and allow_glob:
             return get_glob_paths(input_path)
         elif not os.path.isfile(input_path) and not (can_be_dir and os.path.isdir(input_path)):
@@ -510,21 +579,9 @@ def get_dataset_file_paths(input_path, dataset_root, allow_glob=False, can_be_di
 
 
 def check_key(key, tdict, tdict_name, msg=''):
+    """Verifies that a key is inside a given dictionary; throws if the key is missing."""
     if key not in tdict:
         if msg == '':
             raise AssertionError("%s missing '%s' field" % (tdict_name, key))
         else:
             raise AssertionError(msg)
-
-
-def get_table_from_classification_report(classification_report):
-    lines = classification_report.splitlines()
-    header = lines[1].split()
-    data = []
-    for line in lines[2:-1]:
-        els = line.split()
-        if len(els):
-            data.append(els)
-    data = np.vstack(data).transpose()
-    avg = lines[len(lines) - 1].split()
-    return header, data, avg
