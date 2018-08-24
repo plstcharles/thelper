@@ -137,11 +137,11 @@ class DataConfig(object):
         self.valid_seed = config["valid_seed"] if "valid_seed" in config and isinstance(config["valid_seed"], (int, str)) else None
         if self.shuffle and self.test_seed is None:
             np.random.seed()
-            self.test_seed = np.random.randint(2**32)
+            self.test_seed = np.random.randint(2**16)
             logger.debug("setting test seed to %d" % self.test_seed)
         if self.shuffle and self.valid_seed is None:
             np.random.seed()
-            self.valid_seed = np.random.randint(2**32)
+            self.valid_seed = np.random.randint(2**16)
             logger.debug("setting valid seed to %d" % self.valid_seed)
         self.workers = config["workers"] if "workers" in config and config["workers"] >= 0 else 1
         self.pin_memory = thelper.utils.str2bool(config["pin_memory"]) if "pin_memory" in config else False
