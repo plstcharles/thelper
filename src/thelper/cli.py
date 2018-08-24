@@ -16,7 +16,7 @@ import thelper
 logging.basicConfig(level=logging.INFO)
 
 
-def create_session(config, data_root, save_dir, display_graphs=False):
+def create_session(config, data_root, save_dir):
     logger = thelper.utils.get_func_logger()
     if "name" not in config or not config["name"]:
         raise AssertionError("config missing 'name' field")
@@ -24,22 +24,16 @@ def create_session(config, data_root, save_dir, display_graphs=False):
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
     logger.info("Creating new training session '%s'..." % session_name)
     task, train_loader, valid_loader, test_loader = thelper.data.load(config, data_root, save_dir)
-    if display_graphs and logger.isEnabledFor(logging.DEBUG):
-        if not train_loader:
-            raise AssertionError("cannot draw sample example graph, train loader is empty")
-        data_iter = iter(train_loader)
-        # noinspection PyUnresolvedReferences
-        data_sample = data_iter.next()
-        thelper.utils.draw_sample(data_sample, block=True)
     model = thelper.modules.load_model(config, task, save_dir)
     loaders = (train_loader, valid_loader, test_loader)
     trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loaders)
     logger.debug("starting trainer")
     trainer.train()
     logger.debug("all done")
+    return 0
 
 
-def extract(config,resume,data_root,display_graphs=False):
+def extract(config, resume, data_root):
     from tqdm import tqdm
     import pickle as pkl
     import bz2
@@ -126,7 +120,7 @@ def extract(config,resume,data_root,display_graphs=False):
     logger.debug("all done")
 
 
-def compute_features_pca(config,resume,data_root,display_graphs=False):
+def compute_features_pca(config, resume, data_root):
     from tqdm import tqdm
     import pickle as pkl
     import bz2
@@ -215,8 +209,7 @@ def compute_features_pca(config,resume,data_root,display_graphs=False):
     plt.ylabel('Eigen values')
     plt.xlabel('Features')
     legend = ax.legend(loc='center right', shadow=True)
-    if display_graphs:
-        plt.show()
+    plt.show()
 
     gofn = os.path.join(ofdir, '%s.png' % basename)
     fig.savefig(gofn)
@@ -225,7 +218,7 @@ def compute_features_pca(config,resume,data_root,display_graphs=False):
     logger.debug("all done")
 
 
-def features_visualization(config,resume,data_root,display_graphs=False):
+def features_visualization(config, resume, data_root):
     from tqdm import tqdm
     import pickle as pkl
     import bz2
@@ -339,7 +332,7 @@ def features_visualization(config,resume,data_root,display_graphs=False):
     return
 
 
-def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, display_graphs=False):
+def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False):
     logger = thelper.utils.get_func_logger()
     if not config:
         if "config" not in ckptdata or not ckptdata["config"]:
@@ -355,13 +348,6 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, 
         logger.warning("cannot verify that checkpoint task is same as current task, might cause key or class mapping issues")
     elif task != ckptdata["task"]:
         raise AssertionError("checkpoint task mismatch with current task")
-    if display_graphs and logger.isEnabledFor(logging.DEBUG):
-        if not train_loader:
-            raise AssertionError("cannot draw sample example graph, train loader is empty")
-        data_iter = iter(train_loader)
-        # noinspection PyUnresolvedReferences
-        data_sample = data_iter.next()
-        thelper.utils.draw_sample(data_sample, block=True)
     model = thelper.modules.load_model(config, task, save_dir)
     loaders = (None if eval_only else train_loader, valid_loader, test_loader)
     trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loaders, ckptdata=ckptdata)
@@ -372,33 +358,29 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False, 
         logger.info("resuming training session '%s' @ epoch %d" % (trainer.name, trainer.current_epoch))
         trainer.train()
     logger.debug("all done")
+    return 0
 
 
 def main(args=None):
     ap = argparse.ArgumentParser(description='thelper model trainer application')
     ap.add_argument("--version", default=False, action="store_true", help="prints the version of the library and exits")
-    ap.add_argument("-l", "--log", default="thelper.log", type=str, help="path to the output log file (default: './thelper.log')")
+    ap.add_argument("-l", "--log", default="thelper.log", type=str, help="path to the top-level log file (default: 'thelper.log')")
     ap.add_argument("-v", "--verbose", action="count", default=0, help="set logging terminal verbosity level (additive)")
-    ap.add_argument("-g", "--display-graphs", action="store_true", default=False, help="toggles whether graphs should be displayed or not")
     ap.add_argument("-d", "--data-root", default=None, type=str, help="path to the root directory passed to dataset interfaces for parsing")
-    subparsers = ap.add_subparsers(title="Operating mode")
+    subparsers = ap.add_subparsers(title="Operating mode", dest="mode")
     new_session_ap = subparsers.add_parser("new", help="creates a new session from a config file")
     new_session_ap.add_argument("cfg_path", type=str, help="path to the training configuration file")
     new_session_ap.add_argument("save_dir", type=str, help="path to the root directory where checkpoints should be saved")
-    new_session_ap.set_defaults(new_session=1)
-
-    cl_new_session_ap = subparsers.add_parser("gpucluster_new", help="creates a new session from a config file for the cluster")
+    cl_new_session_ap = subparsers.add_parser("cl_new", help="creates a new session from a config file for the cluster")
     cl_new_session_ap.add_argument("cfg_path", type=str, help="path to the training configuration file")
     cl_new_session_ap.add_argument("save_dir", type=str, help="path to the root directory where checkpoints should be saved")
-    cl_new_session_ap.set_defaults(new_session=2)
-
+    cl_new_session_ap.add_argument("-n", "--nb-devices", default=2, type=int, help="number of devices to test for availability on cluster")
     resume_session_ap = subparsers.add_parser("resume", help="resume a session from a checkpoint file")
     resume_session_ap.add_argument("ckpt_path", type=str, help="path to the checkpoint to resume training from")
     resume_session_ap.add_argument("-s", "--save-dir", default=None, type=str, help="path to the root directory where checkpoints should be saved")
     resume_session_ap.add_argument("-m", "--map-location", default=None, help="map location for loading data (default=None)")
     resume_session_ap.add_argument("-c", "--override-cfg", default=None, help="override config file path (default=None)")
     resume_session_ap.add_argument("-e", "--eval-only", default=False, action="store_true", help="only run evaluation pass (valid+test)")
-    resume_session_ap.set_defaults(new_session=0)
     args = ap.parse_args(args=args)
     if args.verbose > 2:
         log_level = logging.NOTSET
@@ -410,7 +392,10 @@ def main(args=None):
         log_level = logging.WARNING
     if args.version:
         print(thelper.__version__)
-        return
+        return 0
+    if args.mode is None:
+        ap.print_help()
+        return 1
     logging.getLogger().setLevel(logging.NOTSET)
     thelper.logger.propagate = 0
     logger_format = logging.Formatter("[%(asctime)s - %(name)s - %(process)s:%(thread)s] %(levelname)s : %(message)s")
@@ -427,19 +412,22 @@ def main(args=None):
         thelper.logger.debug("checking dataset root '%s'..." % args.data_root)
         if not os.path.exists(args.data_root) or not os.path.isdir(args.data_root):
             raise AssertionError("invalid data root folder at '%s'; please specify a valid path via --data-root=PATH")
-    if args.new_session == 1:
+    if args.mode == "new":
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
         config = json.load(open(args.cfg_path))
-        create_session(config, args.data_root, args.save_dir, display_graphs=args.display_graphs)
-    elif args.new_session == 2:
+        return create_session(config, args.data_root, args.save_dir)
+    elif args.mode == "cl_new":
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
         config = json.load(open(args.cfg_path))
-        device_id = thelper.utils.test_cuda_device()
+        nb_devices = args.nb_devices
+        device_id = thelper.utils.test_cuda_device(nb_devices)
+        if device_id < 0 or device_id >= nb_devices:
+            raise AssertionError("no cuda device available")
         config["trainer"]["trainer"]["train_device"] = "cuda:%i" % device_id
         config["trainer"]["trainer"]["valid_device"] = "cuda:%i" % device_id
         config["trainer"]["trainer"]["test_device"] = "cuda:%i" % device_id
-        create_session(config, args.data_root, args.save_dir, display_graphs=args.display_graphs)
-    elif args.new_session == 0:
+        return create_session(config, args.data_root, args.save_dir)
+    elif args.mode == "resume":
         thelper.logger.debug("parsing checkpoint at '%s'" % args.ckpt_path)
         ckptdata = torch.load(args.ckpt_path, map_location=args.map_location)
         override_config = None
@@ -449,4 +437,4 @@ def main(args=None):
         save_dir = args.save_dir
         if save_dir is None:
             save_dir = os.path.abspath(os.path.join(os.path.dirname(args.ckpt_path), "../.."))
-        resume_session(ckptdata, args.data_root, save_dir, config=override_config, eval_only=args.eval_only, display_graphs=args.display_graphs)
+        return resume_session(ckptdata, args.data_root, save_dir, config=override_config, eval_only=args.eval_only)

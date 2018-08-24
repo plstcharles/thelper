@@ -24,7 +24,7 @@ import torch
 logger = logging.getLogger(__name__)
 
 
-def test_cuda_device(nb_devices=2):
+def test_cuda_device(nb_devices):
     """
     Workaround for runtime gpu identification for cluster ops.
 
@@ -34,7 +34,7 @@ def test_cuda_device(nb_devices=2):
     def try_device(_device_id):
         try:
             torch.cuda.set_device(_device_id)
-            a = torch.cuda.FloatTensor(1)
+            _ = torch.cuda.FloatTensor(1)
             logger.info("Device '%d' is available" % _device_id)
             return True
         except Exception:
