@@ -255,7 +255,7 @@ class Trainer:
             self.outputs[epoch] = result
             if new_best or (epoch % self.save_freq) == 0:
                 self._save(epoch, save_best=new_best)
-        self.logger.info("training done")
+        self.logger.info("training for session '%s' done" % self.name)
         if self.test_loader:
             # reload 'best' model checkpoint on cpu (will remap to current device setup)
             filename_best = os.path.join(self.checkpoint_dir, "ckpt.best.pth")
@@ -279,7 +279,7 @@ class Trainer:
                 else:
                     for subkey, subvalue in value.items():
                         self.logger.debug(" final result =>  {}:{}: {}".format(str(key), str(subkey), subvalue))
-            self.logger.info("evaluation done")
+            self.logger.info("evaluation for session '%s' done" % self.name)
 
     def eval(self):
         if not self.valid_loader and not self.test_loader:
@@ -302,8 +302,7 @@ class Trainer:
                 for subkey, subvalue in value.items():
                     self.logger.debug(" final result =>  {}:{}: {}".format(str(key), str(subkey), subvalue))
         self.outputs[self.current_epoch] = result
-        self.logger.info("evaluation done")
-        # not saving final eval results anywhere...? todo
+        self.logger.info("evaluation for session '%s' done" % self.name)
 
     @abstractmethod
     def _train_epoch(self, model, optimizer, epoch, iter, loader):

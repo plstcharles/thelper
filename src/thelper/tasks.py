@@ -36,6 +36,13 @@ class Task(ABC):
     def __ne__(self, other):
         return not (self == other)
 
+    def __repr__(self):
+        return self.__class__.__name__ + ": " + str({
+            "input": self.get_input_key(),
+            "gt": self.get_gt_key(),
+            "meta": self.get_meta_keys()
+        })
+
 
 class Classification(Task):
 
@@ -103,3 +110,11 @@ class Classification(Task):
                     self.get_meta_keys() == other.get_meta_keys() and
                     self.get_class_names() == other.get_class_names())
         return False
+
+    def __repr__(self):
+        return self.__class__.__name__ + ": " + str({
+            "input": self.get_input_key(),
+            "gt": self.get_gt_key(),
+            "meta": self.get_meta_keys(),
+            "classes": self.get_class_names()
+        })

@@ -15,6 +15,7 @@ import torch.utils.data.sampler
 
 import thelper.utils
 import thelper.tasks
+import thelper.samplers
 import thelper.transforms
 
 logger = logging.getLogger(__name__)
@@ -26,9 +27,9 @@ def load(config, data_root, save_dir=None):
         data_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         data_logger_fh = logging.FileHandler(data_logger_path)
         data_logger_fh.setFormatter(data_logger_format)
-        thelper.data.logger.addHandler(data_logger_fh)
-        thelper.data.logger.info("created data log for session '%s'" % config["name"])
-    thelper.data.logger.info("parsing datasets configuration")
+        logger.addHandler(data_logger_fh)
+        logger.info("created data log for session '%s'" % config["name"])
+    logger.info("parsing datasets configuration")
     if "datasets" not in config or not config["datasets"]:
         raise AssertionError("config missing 'datasets' field (can be dict or str)")
     datasets_config = config["datasets"]
@@ -37,15 +38,27 @@ def load(config, data_root, save_dir=None):
             datasets_config = json.load(open(datasets_config))
         else:
             raise AssertionError("'datasets' string should point to valid json file")
-    thelper.data.logger.debug("loading datasets templates")
+    logger.debug("loading datasets templates")
     if not isinstance(datasets_config, dict):
         raise AssertionError("invalid datasets config type")
     datasets, task = load_datasets(datasets_config, data_root)
-    thelper.data.logger.debug("loading data usage config")
+    logger.info("task info: %s" % str(task))
+    if save_dir is not None:
+        with open(os.path.join(save_dir, "logs", "task.log"), "w") as fd:
+            fd.write(str(task) + "\n")
+    for dataset_name, dataset in datasets.items():
+        logger.info("dataset '%s' info: %s" % (dataset_name, str(dataset)))
+        if save_dir is not None:
+            with open(os.path.join(save_dir, "logs", dataset_name + ".log"), "w") as fd:
+                fd.write(str(dataset) + "\n")
+                if hasattr(dataset, "samples") and isinstance(dataset.samples, list):
+                    for idx, sample in enumerate(dataset.samples):
+                        fd.write("%d: %s\n" % (idx, str(sample)))
+    logger.debug("loading data usage config")
     if "data_config" not in config or not config["data_config"]:
         raise AssertionError("config missing 'data_config' field")
     data_config = thelper.data.DataConfig(config["data_config"])
-    thelper.data.logger.debug("splitting datasets and creating loaders")
+    logger.debug("splitting datasets and creating loaders")
     train_loader, valid_loader, test_loader = data_config.get_data_split(datasets, task)
     return task, train_loader, valid_loader, test_loader
 
@@ -116,27 +129,48 @@ class DataConfig(object):
         if "batch_size" not in config or not config["batch_size"]:
             raise AssertionError("data config missing 'batch_size' field")
         self.batch_size = config["batch_size"]
+        logger.debug("loaders will use batch size = %d" % self.batch_size)
         self.shuffle = thelper.utils.str2bool(config["shuffle"]) if "shuffle" in config else False
+        if self.shuffle:
+            logger.debug("dataset samples will be shuffled according to predefined seeds")
         self.test_seed = config["test_seed"] if "test_seed" in config and isinstance(config["test_seed"], (int, str)) else None
         self.valid_seed = config["valid_seed"] if "valid_seed" in config and isinstance(config["valid_seed"], (int, str)) else None
+        if self.shuffle and self.test_seed is None:
+            np.random.seed()
+            self.test_seed = np.random.randint(2**32)
+            logger.debug("setting test seed to %d" % self.test_seed)
+        if self.shuffle and self.valid_seed is None:
+            np.random.seed()
+            self.valid_seed = np.random.randint(2**32)
+            logger.debug("setting valid seed to %d" % self.valid_seed)
         self.workers = config["workers"] if "workers" in config and config["workers"] >= 0 else 1
         self.pin_memory = thelper.utils.str2bool(config["pin_memory"]) if "pin_memory" in config else False
         self.drop_last = thelper.utils.str2bool(config["drop_last"]) if "drop_last" in config else False
+        if self.drop_last:
+            logger.debug("loaders will drop last batch if sample count not multiple of %d" % self.batch_size)
         self.sampler_type = None
         if "sampler" in config:
             sampler_config = config["sampler"]
-            if sampler_config and "type" in sampler_config:
+            if sampler_config:
+                if "type" not in sampler_config or not sampler_config["type"]:
+                    raise AssertionError("missing 'type' field for sampler config")
                 self.sampler_type = thelper.utils.import_class(sampler_config["type"])
                 self.sampler_params = thelper.utils.keyvals2dict(sampler_config["params"]) if "params" in sampler_config else None
+                logger.debug("will use global sampler with type '%s' and config : %s" % (str(self.sampler_type), str(self.sampler_params)))
                 self.sampler_pass_labels = thelper.utils.str2bool(sampler_config["pass_labels"]) if "pass_labels" in sampler_config else False
                 apply_train = thelper.utils.str2bool(sampler_config["apply_train"]) if "apply_train" in sampler_config else True
                 apply_valid = thelper.utils.str2bool(sampler_config["apply_valid"]) if "apply_valid" in sampler_config else False
                 apply_test = thelper.utils.str2bool(sampler_config["apply_test"]) if "apply_test" in sampler_config else False
                 self.sampler_apply = [apply_train, apply_valid, apply_test]
+                logger.debug("global sampler will be applied to loaders: %s" % str(self.sampler_apply))
         self.train_augments = None
         self.train_augments_append = False
         if "train_augments" in config and config["train_augments"]:
             self.train_augments, self.train_augments_append = thelper.transforms.load_transforms(config["train_augments"])
+            if self.train_augments_append:
+                logger.debug("will append train augmentations: %s" % str(self.train_augments))
+            else:
+                logger.debug("will prepend train augmentations: %s" % str(self.train_augments))
 
         def get_split(prefix, config):
             key = prefix + "_split"
@@ -296,73 +330,6 @@ class DataConfig(object):
         test_samples = len(test_loader) if test_loader else 0
         logger.info("initialized loaders with batch counts: train=%d, valid=%d, test=%d" % (train_samples, valid_samples, test_samples))
         return train_loader, valid_loader, test_loader
-
-
-class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
-
-    def __init__(self, indices, labels, stype="uniform", scale=1.0):
-        super().__init__(None)
-        if not isinstance(indices, list) or not isinstance(labels, list):
-            raise AssertionError("expected indices and labels to be provided as lists")
-        if len(indices) == 0 or len(indices) != len(labels):
-            raise AssertionError("invalid indices/labels list size")
-        if not isinstance(scale, float) or scale < 0:
-            raise AssertionError("invalid scale parameter; should be in [0,1]")
-        self.nb_samples = int(round(len(indices) * scale))
-        if self.nb_samples < 1:
-            raise AssertionError("scale factor too small, no samples left to use")
-        self.label_groups = {}
-        if not isinstance(stype, str) or (stype not in ["uniform", "random"] and "root" not in stype):
-            raise AssertionError("unexpected sampling type")
-        if "root" in stype:
-            self.pow = 1.0/int(stype.split("root", 1)[1])  # will be the inverse power to use for rooting weights
-            self.stype = "root"
-        else:
-            self.stype = stype
-        self.indices = copy.deepcopy(indices)
-        for idx, label in enumerate(labels):
-            if label in self.label_groups:
-                self.label_groups[label].append(indices[idx])
-            else:
-                self.label_groups[label] = [indices[idx]]
-        if self.stype == "random":
-            self.weights = [1.0 / len(self.label_groups[label]) for label in labels]
-        else:
-            if self.stype == "uniform":
-                self.label_weights = {label: 1.0 / len(self.label_groups) for label in self.label_groups}
-            else:  # self.stype == "root"
-                self.label_weights = {label: (len(idxs) / len(labels)) ** self.pow for label, idxs in self.label_groups.items()}
-                tot_weight = sum([w for w in self.label_weights.values()])
-                self.label_weights = {label: weight / tot_weight for label, weight in self.label_weights.items()}
-            self.label_counts = {}
-            curr_nb_samples, max_sample_label = 0, None
-            for label_idx, (label, indices) in enumerate(self.label_groups.items()):
-                self.label_counts[label] = int(self.nb_samples * self.label_weights[label])
-                curr_nb_samples += self.label_counts[label]
-                if max_sample_label is None or len(self.label_groups[label]) > len(self.label_groups[max_sample_label]):
-                    max_sample_label = label
-            if curr_nb_samples != self.nb_samples:
-                self.label_counts[max_sample_label] += self.nb_samples - curr_nb_samples
-
-    def __iter__(self):
-        if self.stype == "random":
-            return (self.indices[idx] for idx in torch.multinomial(self.weights, self.nb_samples, replacement=True))
-        elif self.stype == "uniform" or self.stype == "root":
-            indices = []
-            for label, count in self.label_counts.items():
-                max_samples = len(self.label_groups[label])
-                while count > 0:
-                    subidxs = torch.randperm(max_samples)
-                    for subidx in range(min(count, max_samples)):
-                        indices.append(self.label_groups[label][subidxs[subidx]])
-                    count -= max_samples
-            np.random.shuffle(indices)  # to make sure labels are still mixed up
-            if len(indices) != self.nb_samples:
-                raise AssertionError("messed up something internally...")
-            return iter(indices)
-
-    def __len__(self):
-        return self.nb_samples
 
 
 class Dataset(torch.utils.data.Dataset, ABC):
