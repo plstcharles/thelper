@@ -82,21 +82,6 @@ class Trainer:
             self.logger.debug("tensorboard init : tensorboard --logdir %s --port <your_port>" % self.tbx_root_dir)
         self.train_writer_path, self.valid_writer_path, self.test_writer_path = writer_paths
         self.model = model
-        if "loss" not in config or not config["loss"]:
-            raise AssertionError("trainer config missing 'loss' field")
-        self.loss = thelper.optim.load_loss(config["loss"], self.model.task, next((loader for loader in loaders if loader is not None)).dataset)
-        if hasattr(self.loss, "summary"):
-            self.loss.summary()
-        if "metrics" not in config or not config["metrics"]:
-            raise AssertionError("trainer config missing 'metrics' field")
-        metrics = thelper.optim.load_metrics(config["metrics"])
-        for metric_name, metric in metrics.items():
-            if hasattr(metric, "summary"):
-                logger.info("parsed metric category '%s'" % metric_name)
-                metric.summary()
-        self.train_metrics = deepcopy(metrics)
-        self.valid_metrics = deepcopy(metrics)
-        self.test_metrics = deepcopy(metrics)
         self.optimizer = None
         self.scheduler = None
         self.config = config
@@ -150,6 +135,21 @@ class Trainer:
             if devices[idx] is None:
                 devices[idx] = cuda_device_idxs
         self.train_dev, self.valid_dev, self.test_dev = tuple(devices)
+        if "loss" not in config or not config["loss"]:
+            raise AssertionError("trainer config missing 'loss' field")
+        self.loss = self._load_loss(config["loss"], next((loader for loader in loaders if loader is not None)).dataset)
+        if hasattr(self.loss, "summary"):
+            self.loss.summary()
+        if "metrics" not in config or not config["metrics"]:
+            raise AssertionError("trainer config missing 'metrics' field")
+        metrics = self._load_metrics(config["metrics"])
+        for metric_name, metric in metrics.items():
+            if hasattr(metric, "summary"):
+                logger.info("parsed metric category '%s'" % metric_name)
+                metric.summary()
+        self.train_metrics = deepcopy(metrics)
+        self.valid_metrics = deepcopy(metrics)
+        self.test_metrics = deepcopy(metrics)
         if "monitor" not in config or not config["monitor"]:
             raise AssertionError("missing 'monitor' field for trainer config")
         self.monitor = config["monitor"]
@@ -201,11 +201,102 @@ class Trainer:
         else:
             return tensor.to(dev)
 
+    def _load_loss(self, config, dataset):
+        if "type" not in config or not config["type"]:
+            raise AssertionError("loss config missing 'type' field")
+        loss_type = thelper.utils.import_class(config["type"])
+        if "params" not in config:
+            raise AssertionError("loss config missing 'params' field")
+        params = thelper.utils.keyvals2dict(config["params"])
+        if isinstance(self.model.task, thelper.tasks.Classification) and "weight_classes" in config:
+            weight_classes = thelper.utils.str2bool(config["weight_classes"])
+            if weight_classes:
+                weight_param_name = "weight"
+                if "weight_param_name" in config:
+                    weight_param_name = config["weight_param_name"]
+                weight_param_pass_tensor = True
+                if "weight_param_pass_tensor" in config:
+                    weight_param_pass_tensor = thelper.utils.str2bool(config["weight_param_pass_tensor"])
+                weight_distribution = "uniform"
+                if "weight_distribution" in config:
+                    weight_distribution = config["weight_distribution"]
+                    if not isinstance(weight_distribution, str) or (
+                        weight_distribution != "uniform" and "root" not in weight_distribution):
+                        raise AssertionError("unexpected weight distribution strategy")
+                weight_max = float("inf")
+                if "weight_max" in config:
+                    weight_max = float(config["weight_max"])
+                weight_norm = True
+                if "weight_norm" in config:
+                    weight_norm = thelper.utils.str2bool(config["weight_norm"])
+                class_sizes = self.model.task.get_class_sizes(dataset.samples)
+                tot_samples = sum(class_sizes.values())
+                class_weights = None
+                pow = 1
+                if "root" in weight_distribution:
+                    pow = 1.0 / int(weight_distribution.split("root", 1)[
+                                        1])  # will be the inverse power to use for rooting weights
+                class_weights = {label: (size / tot_samples) ** pow for label, size in class_sizes.items()}
+                class_weights = {label: max(class_weights.values()) / weight for label, weight in class_weights.items()}
+                class_weights = {label: min(weight, weight_max) for label, weight in class_weights.items()}
+                if weight_norm:
+                    avg_weight = sum(class_weights.values()) / len(class_weights)
+                    class_weights = {label: weight / avg_weight for label, weight in class_weights.items()}
+                if weight_param_pass_tensor:
+                    params[weight_param_name] = self._upload_tensor(torch.FloatTensor(list(class_weights.values())), dev=self.train_dev)
+                else:
+                    params[weight_param_name] = class_weights
+        loss = loss_type(**params)
+        return loss
+
+    @staticmethod
+    def _load_metrics(config):
+        if not isinstance(config, dict):
+            raise AssertionError("metrics config should be provided as dict")
+        metrics = {}
+        for name, metric_config in config.items():
+            if "type" not in metric_config or not metric_config["type"]:
+                raise AssertionError("metric config missing 'type' field")
+            metric_type = thelper.utils.import_class(metric_config["type"])
+            if "params" not in metric_config:
+                raise AssertionError("metric config missing 'params' field")
+            params = thelper.utils.keyvals2dict(metric_config["params"])
+            metric = metric_type(**params)
+            goal = getattr(metric, "goal", None)
+            if not callable(goal):
+                raise AssertionError("expected metric to define 'goal' based on parent interface")
+            metrics[name] = metric
+        return metrics
+
+    @staticmethod
+    def _load_optimization(model, config):
+        if not isinstance(config, dict):
+            raise AssertionError("optimization config should be provided as dict")
+        if "optimizer" not in config or not config["optimizer"]:
+            raise AssertionError("optimization config missing 'optimizer' field")
+        optimizer_config = config["optimizer"]
+        if "type" not in optimizer_config or not optimizer_config["type"]:
+            raise AssertionError("optimizer config missing 'type' field")
+        optimizer_type = thelper.utils.import_class(optimizer_config["type"])
+        optimizer_params = thelper.utils.keyvals2dict(
+            optimizer_config["params"]) if "params" in optimizer_config else None
+        optimizer = optimizer_type(filter(lambda p: p.requires_grad, model.parameters()), **optimizer_params)
+        scheduler = None
+        if "scheduler" in config and config["scheduler"]:
+            scheduler_config = config["scheduler"]
+            if "type" not in scheduler_config or not scheduler_config["type"]:
+                raise AssertionError("scheduler config missing 'type' field")
+            scheduler_type = thelper.utils.import_class(scheduler_config["type"])
+            scheduler_params = thelper.utils.keyvals2dict(
+                scheduler_config["params"]) if "params" in scheduler_config else None
+            scheduler = scheduler_type(optimizer, **scheduler_params)
+        return optimizer, scheduler
+
     def train(self):
         if not self.train_loader:
             raise AssertionError("missing training data, invalid loader!")
         model = self._upload_model(self.model, self.train_dev)
-        self.optimizer, self.scheduler = thelper.optim.load_optimization(model, self.optimization_config)
+        self.optimizer, self.scheduler = self._load_optimization(model, self.optimization_config)
         if self.optimizer_state is not None:
             self.optimizer.load_state_dict(self.optimizer_state)
         start_epoch = self.current_epoch + 1
@@ -485,7 +576,6 @@ class ImageClassifTrainer(Trainer):
             writer = SummaryWriter(log_dir=writer_path, comment=self.name) if self.use_tbx else None
             metrics = self.test_metrics
         with torch.no_grad():
-            total_loss = 0
             for metric in metrics.values():
                 if hasattr(metric, "set_class_names") and callable(metric.set_class_names):
                     metric.set_class_names(self.class_names)
@@ -497,18 +587,15 @@ class ImageClassifTrainer(Trainer):
                 label = self._upload_tensor(label, dev)
                 meta = {key: sample[key] for key in self.meta_keys}
                 pred = model(input)
-                loss = self.loss(pred, label)
-                total_loss += loss.item()
                 for metric in metrics.values():
                     metric.accumulate(pred.cpu(), label.cpu(), meta=meta)
                 self.logger.info(
-                    "{} epoch: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}: {:.2f}".format(
+                    "{} epoch: {}   batch: {}/{} ({:.0f}%)   {}: {:.2f}".format(
                         eval_type,
                         epoch,
                         idx,
                         epoch_size,
                         (idx / epoch_size) * 100.0,
-                        loss.item(),
                         self.monitor,
                         metrics[self.monitor].eval()
                     )
@@ -516,12 +603,8 @@ class ImageClassifTrainer(Trainer):
             metric_vals = {}
             for metric_name, metric in metrics.items():
                 metric_vals[metric_name] = metric.eval()
-            result[eval_type + "/loss"] = total_loss / epoch_size
             result[eval_type + "/metrics"] = metric_vals
             if self.use_tbx:
-                if iter is not None and iter > 0:
-                    writer.add_scalar("iter/loss", total_loss / epoch_size, iter)
-                writer.add_scalar("epoch/loss", total_loss / epoch_size, epoch)
                 for metric_name, metric in metrics.items():
                     if metric.is_scalar():
                         if iter is not None and iter > 0:
