@@ -129,6 +129,10 @@ class AugmentorWrapper(object):
             sample = np.asarray(sample)
         return sample
 
+    def __repr__(self):
+        """Create a print-friendly representation of inner augmentation stages."""
+        return "AugmentorWrapper: " + str([str(op) for op in self.pipeline.operations])
+
 
 class Compose(torchvision.transforms.Compose):
     """Composes several transforms together (with support for invert ops).
