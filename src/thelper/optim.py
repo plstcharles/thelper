@@ -125,9 +125,8 @@ class BinaryAccuracy(Metric):
 
 class ExternalMetric(Metric):
 
-    def __init__(self, metric_name, metric_params, metric_type,
-                 target_name=None, target_label=None, goal=None,
-                 class_names=None, max_accum=None, force_softmax=True):
+    def __init__(self, metric_name, metric_params, metric_type, target_name=None,
+                 goal=None, class_names=None, max_accum=None, force_softmax=True):
         if not isinstance(metric_type, str) or (
                 metric_type != "classif_top1" and
                 metric_type != "classif_scores" and
@@ -149,7 +148,7 @@ class ExternalMetric(Metric):
             self.metric_params = {}
         if "classif" in metric_type:
             self.target_name = target_name
-            self.target_label = target_label
+            self.target_idx = None
             self.class_names = None
             if class_names is not None:
                 self.set_class_names(class_names)
@@ -166,42 +165,34 @@ class ExternalMetric(Metric):
                 raise AssertionError("expected list for class names")
             if len(class_names) < 2:
                 raise AssertionError("not enough classes in provided class list")
-            if self.target_name is not None and self.target_name not in class_names:
-                raise AssertionError("could not find target name '%s' in class names list" % str(self.target_name))
-            if self.target_label is not None and not isinstance(self.target_label, int):
-                raise AssertionError("expected target label type to be int")
-            if self.target_label is not None and (self.target_label < 0 or self.target_label >= len(class_names)):
-                raise AssertionError("target label '%d' is out of range for given class names list" % int(self.target_label))
-            if self.target_name is not None and self.target_label is not None and class_names[self.target_label] != self.target_name:
-                raise AssertionError("target label '{}' did not match with name '{}' in class names list".format(self.target_label, self.target_name))
-            elif self.target_name is None and self.target_label is not None:
-                self.target_name = class_names[self.target_label]
-            elif self.target_label is None and self.target_name is not None:
-                self.target_label = class_names.index(self.target_name)
+            if self.target_name is not None:
+                if self.target_name not in class_names:
+                    raise AssertionError("could not find target name '%s' in class names list" % str(self.target_name))
+                self.target_idx = class_names.index(self.target_name)
             self.class_names = class_names
         else:
             raise AssertionError("unexpected class list with metric type other than classif")
 
     def accumulate(self, pred, gt, meta=None):
         if "classif" in self.metric_type:
-            if self.target_name is not None and self.target_label is None:
-                raise AssertionError("could not map target name '%s' to target label, missing class list" % self.target_name)
-            elif self.target_label is not None:
+            if self.target_name is not None and self.target_idx is None:
+                raise AssertionError("could not map target name '%s' to target idx, missing class list" % self.target_name)
+            elif self.target_idx is not None:
                 pred_label = pred.topk(1, 1)[1].view(len(gt))
                 y_true, y_pred = [], []
                 if self.metric_type == "classif_top1":
-                    must_keep = [y_pred == self.target_label or y_true == self.target_label for y_pred, y_true in zip(pred_label, gt)]
+                    must_keep = [y_pred == self.target_idx or y_true == self.target_idx for y_pred, y_true in zip(pred_label, gt)]
                     for idx in range(len(must_keep)):
                         if must_keep[idx]:
-                            y_true.append(gt[idx].item() == self.target_label)
-                            y_pred.append(pred_label[idx].item() == self.target_label)
+                            y_true.append(gt[idx].item() == self.target_idx)
+                            y_pred.append(pred_label[idx].item() == self.target_idx)
                 else:  # self.metric_type == "classif_scores"
                     if self.force_softmax:
                         with torch.no_grad():
                             pred = torch.nn.functional.softmax(pred, dim=1)
                     for idx in range(len(gt)):
-                        y_true.append(gt[idx].item() == self.target_label)
-                        y_pred.append(pred[idx, self.target_label].item())
+                        y_true.append(gt[idx].item() == self.target_idx)
+                        y_pred.append(pred[idx, self.target_idx].item())
                 self.gt.append(y_true)
                 self.pred.append(y_pred)
             else:
@@ -354,10 +345,21 @@ class ConfusionMatrix(Metric):
 
 class ROCCurve(Metric):
 
-    def __init__(self, target_name=None, target_label=None, class_names=None, force_softmax=True,
+    def __init__(self, target_name, class_names=None, force_softmax=True,
                  log_params=None, sample_weight=None, drop_intermediate=True):
-        self.target_name = target_name
-        self.target_label = target_label
+        if target_name is None:
+            raise AssertionError("must provide a target (class) name for ROC metric")
+        if isinstance(target_name, str):
+            self.target_name = target_name.split(",")
+        elif isinstance(target_name, list):
+            if not target_name:
+                raise AssertionError("missing target name for ROC metric")
+            if not isinstance(target_name[0], str):
+                raise AssertionError("expected target names to be strings")
+            self.target_name = target_name
+        else:
+            raise AssertionError("expected target name to be string or list of string")
+        self.target_idx = None
         self.class_names = None
         if class_names is not None:
             self.set_class_names(class_names)
@@ -386,30 +388,24 @@ class ROCCurve(Metric):
             if not isinstance(self.log_meta_keys, list):
                 raise AssertionError("unexpected log meta keys params type (expected list)")
 
-        def gen_curve(y_true, y_score, _class_names, _target_label, _sample_weight=sample_weight, _drop_intermediate=drop_intermediate):
-            if _class_names is None or not _class_names:
-                if _target_label is not None:
-                    raise AssertionError("got positive label, but no class list (even at run time)")
-                res = sklearn.metrics.roc_curve(y_true, y_score, sample_weight=_sample_weight, drop_intermediate=_drop_intermediate)
-            else:
-                if _target_label is None:
-                    raise AssertionError("missing positive target label at run time")
-                _y_true = [classid == _target_label for classid in y_true]
-                _y_score = y_score[..., _target_label]
-                res = sklearn.metrics.roc_curve(_y_true, _y_score, sample_weight=sample_weight, drop_intermediate=drop_intermediate)
+        def gen_curve(y_true, y_score, _target_idx, _sample_weight=sample_weight, _drop_intermediate=drop_intermediate):
+            if _target_idx is None or not _target_idx:
+                raise AssertionError("missing positive target idx at run time")
+            _y_true, _y_score = [], []
+            for sample_idx, label_idx in enumerate(y_true):
+                _y_true.append(label_idx in _target_idx)
+                _y_score.append(y_score[sample_idx, label_idx])
+            res = sklearn.metrics.roc_curve(_y_true, _y_score, sample_weight=sample_weight, drop_intermediate=drop_intermediate)
             return res
 
-        def gen_auc(y_true, y_score, _class_names, _target_label, _sample_weight=sample_weight):
-            if _class_names is None or not _class_names:
-                if _target_label is not None:
-                    raise AssertionError("got positive label, but no class list (even at run time)")
-                res = sklearn.metrics.roc_auc_score(y_true, y_score, sample_weight=sample_weight)
-            else:
-                if _target_label is None:
-                    raise AssertionError("missing positive target label at run time")
-                _y_true = [classid == _target_label for classid in y_true]
-                _y_score = y_score[..., _target_label]
-                res = sklearn.metrics.roc_auc_score(_y_true, _y_score, sample_weight=sample_weight)
+        def gen_auc(y_true, y_score, _target_idx, _sample_weight=sample_weight):
+            if _target_idx is None or not _target_idx:
+                raise AssertionError("missing positive target idx at run time")
+            _y_true, _y_score = [], []
+            for sample_idx, label_idx in enumerate(y_true):
+                _y_true.append(label_idx in _target_idx)
+                _y_score.append(y_score[sample_idx, label_idx])
+            res = sklearn.metrics.roc_auc_score(_y_true, _y_score, sample_weight=sample_weight)
             return res
 
         self.curve = gen_curve
@@ -423,18 +419,11 @@ class ROCCurve(Metric):
             raise AssertionError("expected list for class names")
         if len(class_names) < 2:
             raise AssertionError("not enough classes in provided class list")
-        if self.target_name is not None and self.target_name not in class_names:
-            raise AssertionError("could not find target name '%s' in class names list" % str(self.target_name))
-        if self.target_label is not None and not isinstance(self.target_label, int):
-            raise AssertionError("expected target label type to be int")
-        if self.target_label is not None and (self.target_label < 0 or self.target_label >= len(class_names)):
-            raise AssertionError("target label '%d' is out of range for given class names list" % int(self.target_label))
-        if self.target_name is not None and self.target_label is not None and class_names[self.target_label] != self.target_name:
-            raise AssertionError("target label '{}' did not match with name '{}' in class names list".format(self.target_label, self.target_name))
-        elif self.target_name is None and self.target_label is not None:
-            self.target_name = class_names[self.target_label]
-        elif self.target_label is None and self.target_name is not None:
-            self.target_label = class_names.index(self.target_name)
+        self.target_idx = []
+        for name in self.target_name:
+            if name not in class_names:
+                raise AssertionError("could not find target name '%s' in class names list" % str(name))
+            self.target_idx.append(class_names.index(name))
         self.class_names = class_names
 
     def accumulate(self, pred, gt, meta=None):
@@ -463,10 +452,10 @@ class ROCCurve(Metric):
                         raise AssertionError("missing impl for meta concat w/ type '%s'" % str(type(_meta[key])))
 
     def eval(self):
-        return self.auc(self.true.numpy(), self.score.numpy(), self.class_names, self.target_label)
+        return self.auc(self.true.numpy(), self.score.numpy(), self.target_idx)
 
     def get_tbx_image(self):
-        fpr, tpr, t = self.curve(self.true.numpy(), self.score.numpy(), self.class_names, self.target_label)
+        fpr, tpr, t = self.curve(self.true.numpy(), self.score.numpy(), self.target_idx)
         fig = thelper.utils.draw_roc_curve(fpr, tpr)
         array = thelper.utils.fig2array(fig)
         return array
@@ -478,7 +467,7 @@ class ROCCurve(Metric):
             return None
         if self.class_names is None or not self.class_names:
             raise AssertionError("missing class list for logging, current impl only supports named outputs")
-        _fpr, _tpr, _t = self.curve(self.true.numpy(), self.score.numpy(), self.class_names, self.target_label, _drop_intermediate=False)
+        _fpr, _tpr, _t = self.curve(self.true.numpy(), self.score.numpy(), self.target_idx, _drop_intermediate=False)
         threshold = None
         for fpr, tpr, t in zip(_fpr, _tpr, _t):
             if self.log_fpr_threshold is not None and self.log_fpr_threshold <= fpr:
@@ -489,15 +478,26 @@ class ROCCurve(Metric):
                 break
         if threshold is None:
             raise AssertionError("bad fpr/tpr threshold, could not find cutoff for pred scores")
-        res = "sample_idx,classid,classname,pred_score"
+        res = "sample_idx,gt_label_idx,gt_label_name,gt_label_score,pred_label_idx,pred_label_name,pred_label_score"
         for key in self.log_meta_keys:
             res += "," + str(key)
         res += "\n"
         for sample_idx in range(self.true.numel()):
-            true = self.true[sample_idx].item() == self.target_label
-            score = self.score[sample_idx, self.target_label].item()
-            if true and score <= threshold:
-                res += "{:8d},{:4d},{:>10s},{:2.4f}".format(sample_idx, self.target_label, self.target_name, score)
+            gt_label_idx = self.true[sample_idx].item()
+            scores = self.score[sample_idx, :].tolist()
+            gt_label_score = scores[gt_label_idx]
+            if gt_label_idx in self.target_idx and gt_label_score <= threshold:
+                pred_label_score = max(scores)
+                pred_label_idx = scores.index(pred_label_score)
+                res += "{},{},{},{:2.4f},{},{},{:2.4f}".format(
+                    sample_idx,
+                    gt_label_idx,
+                    self.class_names[gt_label_idx],
+                    gt_label_score,
+                    pred_label_idx,
+                    self.class_names[pred_label_idx],
+                    pred_label_score,
+                )
                 for key in self.log_meta_keys:
                     val = self.meta[key][sample_idx]
                     if isinstance(val, torch.Tensor) and val.numel() == 1:
