@@ -1,5 +1,6 @@
 import logging
 import copy
+import bisect
 from collections import deque
 from abc import ABC, abstractmethod
 
@@ -11,6 +12,54 @@ import sklearn.metrics
 import thelper.utils
 
 logger = logging.getLogger(__name__)
+
+
+class CustomStepLR(torch.optim.lr_scheduler._LRScheduler):
+    """Sets the learning rate of each parameter group using a dictionary of preset scaling
+    factors for epoch-based milestones. When last_epoch=-1, sets initial lr as lr.
+
+    Args:
+        optimizer (Optimizer): Wrapped optimizer.
+        milestones (dict): Epoch indices tied to scaling factors. Keys must be increasing.
+        last_epoch (int): The index of last epoch. Default: -1.
+
+    Example:
+        >>> # Assuming the optimizer uses lr = 0.05, we apply a warm startup...
+        >>> # lr = 0.00625   if epoch < 2        (warm startup, 1/8)
+        >>> # lr = 0.0125    if 2 <= epoch < 3   (warm startup, 1/4)
+        >>> # lr = 0.025     if 3 <= epoch < 4   (warm startup, 1/2)
+        >>> # lr = 0.05      if 4 <= epoch < 30  (back to default)
+        >>> # lr = 0.005     if 30 <= epoch < 80 (scale, 1/10 past 30)
+        >>> # lr = 0.0005    if epoch >= 80      (scale, 1/100 past 80)
+        >>> scheduler = CustomStepLR(optimizer, milestone_map={
+        >>>   1: 1/8, 2: 1/4, 3: 1/2, 4: 1, 30: 0.1, 80: 0.01
+        >>> })
+        >>> for epoch in range(100):
+        >>>     scheduler.step(epoch)
+        >>>     train(...)
+        >>>     validate(...)
+    """
+
+    def __init__(self, optimizer, milestones, last_epoch=-1):
+        if not isinstance(milestones, dict) or not milestones:
+            raise AssertionError("milestones should be provided as a (non-empty) dictionary")
+        if isinstance(list(milestones.keys())[0], str):  # fixup for json-based config loaders
+            self.stages = [int(key) for key in milestones.keys()]
+        elif isinstance(list(milestones.keys())[0], int):
+            self.stages = list(milestones.keys())
+        else:
+            raise AssertionError("milestone stages should be epoch indices (integers)")
+        if self.stages != sorted(self.stages):
+            raise AssertionError("milestone stages should be increasing integers")
+        if not isinstance(list(milestones.values())[0], (float, int)):
+            raise AssertionError("milestone scaling factors should be int/float")
+        self.scales = [float(scale) for scale in milestones.values()]
+        self.milestones = milestones
+        super().__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        stage = bisect.bisect_right(self.stages, self.last_epoch)
+        return [base_lr * self.scales[stage] for base_lr in self.base_lrs]
 
 
 class Metric(ABC):
