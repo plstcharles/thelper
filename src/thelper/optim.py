@@ -398,16 +398,12 @@ class ROCCurve(Metric):
                  log_params=None, sample_weight=None, drop_intermediate=True):
         if target_name is None:
             raise AssertionError("must provide a target (class) name for ROC metric")
-        if isinstance(target_name, str):
-            self.target_name = target_name.split(",")
-        elif isinstance(target_name, list):
-            if not target_name:
-                raise AssertionError("missing target name for ROC metric")
-            if not isinstance(target_name[0], str):
-                raise AssertionError("expected target names to be strings")
-            self.target_name = target_name
+        self.target_inv = False
+        if isinstance(target_name, str) and target_name[0] == "!":
+            self.target_inv = True
+            self.target_name = target_name.split("!", 1)[1]
         else:
-            raise AssertionError("expected target name to be string or list of string")
+            self.target_name = target_name
         self.target_idx = None
         self.class_names = None
         if class_names is not None:
@@ -437,23 +433,23 @@ class ROCCurve(Metric):
             if not isinstance(self.log_meta_keys, list):
                 raise AssertionError("unexpected log meta keys params type (expected list)")
 
-        def gen_curve(y_true, y_score, _target_idx, _sample_weight=sample_weight, _drop_intermediate=drop_intermediate):
-            if _target_idx is None or not _target_idx:
+        def gen_curve(y_true, y_score, _target_idx, _target_inv, _sample_weight=sample_weight, _drop_intermediate=drop_intermediate):
+            if _target_idx is None:
                 raise AssertionError("missing positive target idx at run time")
             _y_true, _y_score = [], []
             for sample_idx, label_idx in enumerate(y_true):
-                _y_true.append(label_idx in _target_idx)
-                _y_score.append(y_score[sample_idx, label_idx])
+                _y_true.append(label_idx != _target_idx if _target_inv else label_idx == _target_idx)
+                _y_score.append(1 - y_score[sample_idx, label_idx] if _target_inv else y_score[sample_idx, label_idx])
             res = sklearn.metrics.roc_curve(_y_true, _y_score, sample_weight=sample_weight, drop_intermediate=drop_intermediate)
             return res
 
-        def gen_auc(y_true, y_score, _target_idx, _sample_weight=sample_weight):
-            if _target_idx is None or not _target_idx:
+        def gen_auc(y_true, y_score, _target_idx, _target_inv, _sample_weight=sample_weight):
+            if _target_idx is None:
                 raise AssertionError("missing positive target idx at run time")
             _y_true, _y_score = [], []
             for sample_idx, label_idx in enumerate(y_true):
-                _y_true.append(label_idx in _target_idx)
-                _y_score.append(y_score[sample_idx, label_idx])
+                _y_true.append(label_idx != _target_idx if _target_inv else label_idx == _target_idx)
+                _y_score.append(1 - y_score[sample_idx, label_idx] if _target_inv else y_score[sample_idx, label_idx])
             res = sklearn.metrics.roc_auc_score(_y_true, _y_score, sample_weight=sample_weight)
             return res
 
@@ -468,11 +464,9 @@ class ROCCurve(Metric):
             raise AssertionError("expected list for class names")
         if len(class_names) < 2:
             raise AssertionError("not enough classes in provided class list")
-        self.target_idx = []
-        for name in self.target_name:
-            if name not in class_names:
-                raise AssertionError("could not find target name '%s' in class names list" % str(name))
-            self.target_idx.append(class_names.index(name))
+        if self.target_name not in class_names:
+            raise AssertionError("could not find target name '%s' in class names list" % str(self.target_name))
+        self.target_idx = class_names.index(self.target_name)
         self.class_names = class_names
 
     def accumulate(self, pred, gt, meta=None):
@@ -501,10 +495,10 @@ class ROCCurve(Metric):
                         raise AssertionError("missing impl for meta concat w/ type '%s'" % str(type(_meta[key])))
 
     def eval(self):
-        return self.auc(self.true.numpy(), self.score.numpy(), self.target_idx)
+        return self.auc(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv)
 
     def get_tbx_image(self):
-        fpr, tpr, t = self.curve(self.true.numpy(), self.score.numpy(), self.target_idx)
+        fpr, tpr, t = self.curve(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv)
         fig = thelper.utils.draw_roc_curve(fpr, tpr)
         array = thelper.utils.fig2array(fig)
         return array
@@ -516,7 +510,7 @@ class ROCCurve(Metric):
             return None
         if self.class_names is None or not self.class_names:
             raise AssertionError("missing class list for logging, current impl only supports named outputs")
-        _fpr, _tpr, _t = self.curve(self.true.numpy(), self.score.numpy(), self.target_idx, _drop_intermediate=False)
+        _fpr, _tpr, _t = self.curve(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv, _drop_intermediate=False)
         threshold = None
         for fpr, tpr, t in zip(_fpr, _tpr, _t):
             if self.log_fpr_threshold is not None and self.log_fpr_threshold <= fpr:
@@ -535,7 +529,8 @@ class ROCCurve(Metric):
             gt_label_idx = self.true[sample_idx].item()
             scores = self.score[sample_idx, :].tolist()
             gt_label_score = scores[gt_label_idx]
-            if gt_label_idx in self.target_idx and gt_label_score <= threshold:
+            if ((self.target_inv and gt_label_idx != self.target_idx and (1 - gt_label_score) <= threshold) or
+                    (not self.target_inv and gt_label_idx == self.target_idx and gt_label_score <= threshold)):
                 pred_label_score = max(scores)
                 pred_label_idx = scores.index(pred_label_score)
                 res += "{},{},{},{:2.4f},{},{},{:2.4f}".format(
