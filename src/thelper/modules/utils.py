@@ -17,6 +17,8 @@ class Module(torch.nn.Module, ABC):
 
     def __init__(self, task, name=None):
         super().__init__()
+        if task is None or not isinstance(task, thelper.tasks.Task):
+            raise AssertionError("task must derive from thelper.tasks.Task")
         self.task = task
         self.name = name
 
