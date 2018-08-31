@@ -79,6 +79,8 @@ def load_datasets(config, root, base_transforms=None):
             transforms, append = thelper.transforms.load_transforms(dataset_config["transforms"])
             if base_transforms is not None:
                 transforms = thelper.transforms.Compose([base_transforms, transforms] if append else [transforms, base_transforms])
+        elif base_transforms is not None:
+            transforms = base_transforms
         if issubclass(dataset_type, Dataset):
             # assume that the dataset is derived from thelper.data.Dataset (it is fully sampling-ready)
             dataset = dataset_type(name=dataset_name, root=root, config=params, transforms=transforms)
