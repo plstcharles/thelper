@@ -10,6 +10,7 @@ import Augmentor
 import cv2 as cv
 import numpy as np
 import PIL.Image
+import torch
 import torchvision.transforms
 import torchvision.utils
 
@@ -154,6 +155,47 @@ class Compose(torchvision.transforms.Compose):
                 raise AssertionError("missing invert op for transform = %s" % repr(t))
             sample = t.invert(sample)
         return sample
+
+
+class ToNumpy(object):
+    """Converts and returns an image in numpy format from a torch.Tensor or PIL.Image format.
+
+    This operation is deterministic. The returns image will always be encoded as HxWxC, where
+    if the input has three channels, the ordering might be optionally changed.
+
+    Attributes:
+        reorder_BGR: specifies whether the channels should be reordered in OpenCV format.
+    """
+
+    def __init__(self, reorder_BGR=False):
+        """Initializes transformation parameters."""
+        self.reorder_BGR = reorder_BGR
+
+    def __call__(self, sample):
+        """Converts and returns an image in numpy format.
+
+        Args:
+            sample: the image to convert; should be a tensor, numpy array, or PIL image.
+
+        Returns:
+            The numpy-converted image.
+        """
+        if isinstance(sample, np.ndarray):
+            pass  # no transform needed, channel reordering done at end
+        elif isinstance(sample, torch.Tensor):
+            sample = np.transpose(sample.cpu().numpy(), [1, 2, 0])  # CxHxW to HxWxC
+        elif isinstance(sample, PIL.Image.Image):
+            sample = np.array(sample)
+        else:
+            raise AssertionError("unknown image type, cannot process sample")
+        if self.reorder_BGR:
+            return sample[..., ::-1]  # assumes channels already in last dim
+        else:
+            return sample
+
+    def invert(self, sample):
+        """Specifies that this operation cannot be inverted, as the original data type is unknown."""
+        raise AssertionError("cannot be inverted")
 
 
 class CenterCrop(object):
