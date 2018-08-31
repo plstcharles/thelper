@@ -29,6 +29,10 @@ def load(config, data_root, save_dir=None):
         data_logger_fh.setFormatter(data_logger_format)
         logger.addHandler(data_logger_fh)
         logger.info("created data log for session '%s'" % config["name"])
+    logger.debug("loading data usage config")
+    if "data_config" not in config or not config["data_config"]:
+        raise AssertionError("config missing 'data_config' field")
+    data_config = thelper.data.DataConfig(config["data_config"])
     logger.info("parsing datasets configuration")
     if "datasets" not in config or not config["datasets"]:
         raise AssertionError("config missing 'datasets' field (can be dict or str)")
@@ -41,7 +45,7 @@ def load(config, data_root, save_dir=None):
     logger.debug("loading datasets templates")
     if not isinstance(datasets_config, dict):
         raise AssertionError("invalid datasets config type")
-    datasets, task = load_datasets(datasets_config, data_root)
+    datasets, task = load_datasets(datasets_config, data_root, data_config.get_base_transforms())
     logger.info("task info: %s" % str(task))
     if save_dir is not None:
         with open(os.path.join(save_dir, "logs", "task.log"), "w") as fd:
@@ -54,16 +58,12 @@ def load(config, data_root, save_dir=None):
                 if hasattr(dataset, "samples") and isinstance(dataset.samples, list):
                     for idx, sample in enumerate(dataset.samples):
                         fd.write("%d: %s\n" % (idx, str(sample)))
-    logger.debug("loading data usage config")
-    if "data_config" not in config or not config["data_config"]:
-        raise AssertionError("config missing 'data_config' field")
-    data_config = thelper.data.DataConfig(config["data_config"])
     logger.debug("splitting datasets and creating loaders")
     train_loader, valid_loader, test_loader = data_config.get_data_split(datasets, task)
     return task, train_loader, valid_loader, test_loader
 
 
-def load_datasets(config, root):
+def load_datasets(config, root, base_transforms=None):
     datasets = {}
     tasks = []
     global_class_names = None  # if remains none, task is not classif-related
@@ -76,7 +76,9 @@ def load_datasets(config, root):
         params = thelper.utils.keyvals2dict(dataset_config["params"])
         transforms = None
         if "transforms" in dataset_config and dataset_config["transforms"]:
-            transforms, _ = thelper.transforms.load_transforms(dataset_config["transforms"])
+            transforms, append = thelper.transforms.load_transforms(dataset_config["transforms"])
+            if base_transforms is not None:
+                transforms = thelper.transforms.Compose([base_transforms, transforms] if append else [transforms, base_transforms])
         if issubclass(dataset_type, Dataset):
             # assume that the dataset is derived from thelper.data.Dataset (it is fully sampling-ready)
             dataset = dataset_type(name=dataset_name, root=root, config=params, transforms=transforms)
@@ -171,6 +173,9 @@ class DataConfig(object):
                 logger.debug("will append train augmentations: %s" % str(self.train_augments))
             else:
                 logger.debug("will prepend train augmentations: %s" % str(self.train_augments))
+        self.base_transforms = None
+        if "base_transforms" in config and config["base_transforms"]:
+            self.base_transforms, _ = thelper.transforms.load_transforms(config["base_transforms"])
 
         def get_split(prefix, config):
             key = prefix + "_split"
@@ -330,6 +335,9 @@ class DataConfig(object):
         test_samples = len(test_loader) if test_loader else 0
         logger.info("initialized loaders with batch counts: train=%d, valid=%d, test=%d" % (train_samples, valid_samples, test_samples))
         return train_loader, valid_loader, test_loader
+
+    def get_base_transforms(self):
+        return self.base_transforms
 
 
 class Dataset(torch.utils.data.Dataset, ABC):
