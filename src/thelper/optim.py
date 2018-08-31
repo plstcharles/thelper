@@ -439,7 +439,7 @@ class ROCCurve(Metric):
             _y_true, _y_score = [], []
             for sample_idx, label_idx in enumerate(y_true):
                 _y_true.append(label_idx != _target_idx if _target_inv else label_idx == _target_idx)
-                _y_score.append(1 - y_score[sample_idx, label_idx] if _target_inv else y_score[sample_idx, label_idx])
+                _y_score.append(1 - y_score[sample_idx, _target_idx] if _target_inv else y_score[sample_idx, _target_idx])
             res = sklearn.metrics.roc_curve(_y_true, _y_score, sample_weight=sample_weight, drop_intermediate=drop_intermediate)
             return res
 
@@ -449,7 +449,7 @@ class ROCCurve(Metric):
             _y_true, _y_score = [], []
             for sample_idx, label_idx in enumerate(y_true):
                 _y_true.append(label_idx != _target_idx if _target_inv else label_idx == _target_idx)
-                _y_score.append(1 - y_score[sample_idx, label_idx] if _target_inv else y_score[sample_idx, label_idx])
+                _y_score.append(1 - y_score[sample_idx, _target_idx] if _target_inv else y_score[sample_idx, _target_idx])
             res = sklearn.metrics.roc_auc_score(_y_true, _y_score, sample_weight=sample_weight)
             return res
 
