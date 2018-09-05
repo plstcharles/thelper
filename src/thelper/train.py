@@ -9,7 +9,8 @@ from abc import abstractmethod
 import torch
 import torch.optim
 
-from tensorboardX import SummaryWriter
+import tensorboardX
+import cv2 as cv
 
 import thelper.utils
 
@@ -147,6 +148,7 @@ class Trainer:
             if hasattr(metric, "summary"):
                 logger.info("parsed metric category '%s'" % metric_name)
                 metric.summary()
+        # later, we could use different metrics for each usage type
         self.train_metrics = deepcopy(metrics)
         self.valid_metrics = deepcopy(metrics)
         self.test_metrics = deepcopy(metrics)
@@ -300,21 +302,44 @@ class Trainer:
         if self.optimizer_state is not None:
             self.optimizer.load_state_dict(self.optimizer_state)
         start_epoch = self.current_epoch + 1
+        train_writer, valid_writer, test_writer = None, None, None
         for epoch in range(start_epoch, self.epochs + 1):
             if self.scheduler:
                 self.scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
                 self.current_lr = self.scheduler.get_lr()[0]  # for debug/display purposes only
                 self.logger.info("learning rate at %.8f" % self.current_lr)
             model.train()
-            result, self.current_iter = self._train_epoch(model, self.optimizer, epoch, self.current_iter, self.train_loader)
-            monitor_type_key = "train/metrics"
+            if self.use_tbx and not train_writer:
+                train_writer = tensorboardX.SummaryWriter(log_dir=self.train_writer_path, comment=self.name)
+                setattr(train_writer, "path", self.train_writer_path)  # for external usage, if needed
+                setattr(train_writer, "prefix", "train")  # to prefix data added to tbx logs (if needed)
+            for metric in self.train_metrics.values():
+                if hasattr(metric, "set_max_accum") and callable(metric.set_max_accum):
+                    metric.set_max_accum(len(self.train_loader))  # used to make scalar metric evals smoother between epochs
+                if metric.needs_reset():
+                    metric.reset()  # if a metric needs to be reset between two epochs, do it here
+            loss, self.current_iter = self._train_epoch(model, epoch, self.current_iter, self.train_dev, self.optimizer,
+                                                        self.train_loader, self.train_metrics, train_writer)
+            self._write_epoch_metrics(epoch, self.train_metrics, train_writer)
+            train_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.train_metrics.items()}
+            result = {"train/loss": loss, "train/metrics": train_metric_vals}
+            monitor_type_key = "train/metrics"  # if we cannot run validation, will monitor progression on training metrics
             if self.valid_loader:
                 model.eval()
                 # here, we reuse the model on the train device, as switching may slow everything down hard
                 # todo: run eval in parallel (i.e. at the same time as training?)
-                result_valid = self._eval_epoch(model, epoch, self.current_iter, self.valid_loader, "valid")
-                result = {**result, **result_valid}
-                monitor_type_key = "valid/metrics"
+                if self.use_tbx and not valid_writer:
+                    valid_writer = tensorboardX.SummaryWriter(log_dir=self.valid_writer_path, comment=self.name)
+                    setattr(valid_writer, "path", self.valid_writer_path)  # for external usage, if needed
+                    setattr(valid_writer, "prefix", "valid")  # to prefix data added to tbx logs (if needed)
+                for metric in self.valid_metrics.values():
+                    metric.reset()  # force reset here, we always evaluate from a clean state
+                self._eval_epoch(model, epoch, self.current_iter, self.valid_dev,
+                                 self.valid_loader, self.valid_metrics, valid_writer)
+                self._write_epoch_metrics(epoch, self.valid_metrics, valid_writer)
+                valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()}
+                result = {**result, "valid/metrics": valid_metric_vals}
+                monitor_type_key = "valid/metrics"  # since validation is available, use that to monitor progression
             new_best = False
             losses = {}
             monitor_vals = {}
@@ -362,8 +387,17 @@ class Trainer:
             best_iter = ckptdata["iter"] if "iter" in ckptdata else None
             model = self._upload_model(self.model, self.test_dev)
             model.eval()
-            result_test = self._eval_epoch(model, best_epoch, best_iter, self.test_loader, "test")
-            self.outputs[best_epoch] = {**ckptdata["outputs"], **result_test}
+            if self.use_tbx and not test_writer:
+                test_writer = tensorboardX.SummaryWriter(log_dir=self.test_writer_path, comment=self.name)
+                setattr(test_writer, "path", self.test_writer_path)  # for external usage, if needed
+                setattr(test_writer, "prefix", "test")  # to prefix data added to tbx logs (if needed)
+            for metric in self.test_metrics.values():
+                metric.reset()  # force reset here, we always evaluate from a clean state
+            self._eval_epoch(model, best_epoch, best_iter, self.test_dev,
+                             self.test_loader, self.test_metrics, test_writer)
+            self._write_epoch_metrics(best_epoch, self.test_metrics, test_writer)
+            test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
+            self.outputs[best_epoch] = {**ckptdata["outputs"], "test/metrics": test_metric_vals}
             for key, value in self.outputs[best_epoch].items():
                 if not isinstance(value, dict):
                     self.logger.debug(" final result =>  {}: {}".format(str(key), value))
@@ -376,16 +410,35 @@ class Trainer:
         if not self.valid_loader and not self.test_loader:
             raise AssertionError("missing validation/test data, invalid loaders!")
         result = {}
+        valid_writer, test_writer = None, None
         if self.test_loader:
             model = self._upload_model(self.model, self.test_dev)
             model.eval()
-            result_test = self._eval_epoch(model, self.current_epoch, self.current_iter, self.test_loader, "test")
-            result = {**result, **result_test}
+            if self.use_tbx and not test_writer:
+                test_writer = tensorboardX.SummaryWriter(log_dir=self.test_writer_path, comment=self.name)
+                setattr(test_writer, "path", self.test_writer_path)  # for external usage, if needed
+                setattr(test_writer, "prefix", "test")  # to prefix data added to tbx logs (if needed)
+            for metric in self.test_metrics.values():
+                metric.reset()  # force reset here, we always evaluate from a clean state
+            self._eval_epoch(model, self.current_epoch, self.current_iter, self.test_dev,
+                             self.test_loader, self.test_metrics, test_writer)
+            self._write_epoch_metrics(self.current_epoch, self.test_metrics, test_writer)
+            test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
+            result = {**result, **test_metric_vals}
         elif self.valid_loader:
             model = self._upload_model(self.model, self.valid_dev)
             model.eval()
-            result_valid = self._eval_epoch(model, self.current_epoch, self.current_iter, self.valid_loader, "valid")
-            result = {**result, **result_valid}
+            if self.use_tbx and not valid_writer:
+                valid_writer = tensorboardX.SummaryWriter(log_dir=self.valid_writer_path, comment=self.name)
+                setattr(valid_writer, "path", self.valid_writer_path)  # for external usage, if needed
+                setattr(valid_writer, "prefix", "valid")  # to prefix data added to tbx logs (if needed)
+            for metric in self.valid_metrics.values():
+                metric.reset()  # force reset here, we always evaluate from a clean state
+            self._eval_epoch(model, self.current_epoch, self.current_iter, self.valid_dev,
+                             self.valid_loader, self.valid_metrics, valid_writer)
+            self._write_epoch_metrics(self.current_epoch, self.valid_metrics, valid_writer)
+            valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()}
+            result = {**result, **valid_metric_vals}
         for key, value in result.items():
             if not isinstance(value, dict):
                 self.logger.debug(" final result =>  {}: {}".format(str(key), value))
@@ -396,11 +449,11 @@ class Trainer:
         self.logger.info("evaluation for session '%s' done" % self.name)
 
     @abstractmethod
-    def _train_epoch(self, model, optimizer, epoch, iter, loader):
+    def _train_epoch(self, model, epoch, iter, dev, optimizer, loader, metrics, writer=None):
         raise NotImplementedError
 
     @abstractmethod
-    def _eval_epoch(self, model, epoch, iter, loader, eval_type="valid"):
+    def _eval_epoch(self, model, epoch, iter, dev, loader, metrics, writer=None):
         raise NotImplementedError
 
     def _get_lr(self):
@@ -409,6 +462,30 @@ class Trainer:
                 if "lr" in param_group:
                     return param_group["lr"]
         return 0.0
+
+    def _write_epoch_metrics(self, epoch, metrics, writer):
+        if not self.use_tbx or writer is None:
+            return
+        for metric_name, metric in metrics.items():
+            if metric.is_scalar():
+                writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
+            if hasattr(metric, "get_tbx_image") and callable(metric.get_tbx_image):
+                img = metric.get_tbx_image()
+                if img is not None:
+                    writer.add_image(writer.prefix + "/%s" % metric_name, img, epoch)
+                    raw_filename = "%s-%s-%04d.png" % (writer.prefix, metric_name, epoch)
+                    raw_filepath = os.path.join(writer.path, raw_filename)
+                    cv.imwrite(raw_filepath, img[..., [2, 1, 0]])
+            if hasattr(metric, "get_tbx_text") and callable(metric.get_tbx_text):
+                txt = metric.get_tbx_text()
+                if txt:
+                    writer.add_text(writer.prefix + "/%s" % metric_name, txt, epoch)
+                    # as backup, save raw text since tensorboardX can fail
+                    # see https://github.com/lanpa/tensorboardX/issues/134
+                    raw_filename = "%s-%s-%04d.txt" % (writer.prefix, metric_name, epoch)
+                    raw_filepath = os.path.join(writer.path, raw_filename)
+                    with open(raw_filepath, "w") as fd:
+                        fd.write(txt)
 
     def _save(self, epoch, save_best=False):
         # logically, this should only be called during training (i.e. with a valid optimizer)
@@ -454,6 +531,10 @@ class ImageClassifTrainer(Trainer):
         self.class_names = self.model.task.get_class_names()
         self.meta_keys = self.model.task.get_meta_keys()
         self.class_idxs_map = self.model.task.get_class_idxs_map()
+        metrics = list(self.train_metrics.values()) + list(self.valid_metrics.values()) + list(self.test_metrics.values())
+        for metric in metrics:  # check all metrics for classification-specific attributes, and set them
+            if hasattr(metric, "set_class_names") and callable(metric.set_class_names):
+                metric.set_class_names(self.class_names)
 
     def _to_tensor(self, sample):
         if not isinstance(sample, dict):
@@ -478,26 +559,15 @@ class ImageClassifTrainer(Trainer):
             label_idx.append(self.class_idxs_map[class_name])
         return torch.FloatTensor(input), torch.LongTensor(label_idx)
 
-    def _train_epoch(self, model, optimizer, epoch, iter, loader):
-        if not loader:
-            raise AssertionError("no available data to load")
+    def _train_epoch(self, model, epoch, iter, dev, optimizer, loader, metrics, writer=None):
         if not optimizer:
             raise AssertionError("missing optimizer")
-        result = {}
+        if not loader:
+            raise AssertionError("no available data to load")
+        if not isinstance(metrics, dict):
+            raise AssertionError("expect metrics as dict object")
         total_loss = 0
         epoch_size = len(loader)
-        dev = self.train_dev
-        metrics = self.train_metrics
-        eval_type = "train"
-        writer_path = self.train_writer_path
-        writer = SummaryWriter(log_dir=writer_path, comment=self.name) if self.use_tbx else None
-        for metric in metrics.values():
-            if hasattr(metric, "set_class_names") and callable(metric.set_class_names):
-                metric.set_class_names(self.class_names)
-            if hasattr(metric, "set_max_accum") and callable(metric.set_max_accum):
-                metric.set_max_accum(epoch_size)
-            if metric.needs_reset():
-                metric.reset()
         for idx, sample in enumerate(loader):
             input, label = self._to_tensor(sample)
             input = self._upload_tensor(input, dev)
@@ -507,7 +577,7 @@ class ImageClassifTrainer(Trainer):
             pred = model(input)
             loss = self.loss(pred, label)
             loss.backward()
-            optimizer.step()
+            optimizer.step(epoch)
             total_loss += loss.item()
             if iter is not None:
                 iter += 1
@@ -525,61 +595,21 @@ class ImageClassifTrainer(Trainer):
                     metrics[self.monitor].eval()
                 )
             )
-            if self.use_tbx and iter is not None:
+            if writer and iter is not None:
                 writer.add_scalar("iter/loss", loss.item(), iter)
                 writer.add_scalar("iter/lr", self.current_lr, iter)
                 for metric_name, metric in metrics.items():
-                    if metric.is_scalar():
+                    if metric.is_scalar():  # only useful assuming that scalar metrics are smoothed...
                         writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
-        metric_vals = {}
-        for metric_name, metric in metrics.items():
-            metric_vals[metric_name] = metric.eval()
-        result["train/loss"] = total_loss / epoch_size
-        result["train/metrics"] = metric_vals
-        if self.use_tbx:
+        if writer:
             writer.add_scalar("epoch/loss", total_loss / epoch_size, epoch)
             writer.add_scalar("epoch/lr", self.current_lr, epoch)
-            for metric_name, metric in metrics.items():
-                if metric.is_scalar():
-                    writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
-                if hasattr(metric, "get_tbx_image") and callable(metric.get_tbx_image):
-                    img = metric.get_tbx_image()
-                    if img is not None:
-                        writer.add_image("train/%s" % metric_name, img, epoch)
-                if hasattr(metric, "get_tbx_text") and callable(metric.get_tbx_text):
-                    txt = metric.get_tbx_text()
-                    if txt:
-                        writer.add_text("train/%s" % metric_name, txt, epoch)
-                        # as backup, save raw text since tensorboardX can fail
-                        # see https://github.com/lanpa/tensorboardX/issues/134
-                        raw_filename = "%s-%s-%04d.txt" % (eval_type, metric_name, epoch)
-                        raw_filepath = os.path.join(writer_path, raw_filename)
-                        with open(raw_filepath, "w") as fd:
-                            fd.write(txt)
-            writer.close()
-        return result, iter
+        return total_loss / epoch_size, iter
 
-    def _eval_epoch(self, model, epoch, iter, loader, eval_type="valid"):
+    def _eval_epoch(self, model, epoch, iter, dev, loader, metrics, writer=None):
         if not loader:
             raise AssertionError("no available data to load")
-        if eval_type != "valid" and eval_type != "test":
-            raise AssertionError("unexpected eval type")
-        result = {}
-        if eval_type == "valid":
-            dev = self.valid_dev
-            writer_path = self.valid_writer_path
-            writer = SummaryWriter(log_dir=writer_path, comment=self.name) if self.use_tbx else None
-            metrics = self.valid_metrics
-        else:
-            dev = self.test_dev
-            writer_path = self.test_writer_path
-            writer = SummaryWriter(log_dir=writer_path, comment=self.name) if self.use_tbx else None
-            metrics = self.test_metrics
         with torch.no_grad():
-            for metric in metrics.values():
-                if hasattr(metric, "set_class_names") and callable(metric.set_class_names):
-                    metric.set_class_names(self.class_names)
-                metric.reset()  # force reset here, we always evaluate from a clean state
             epoch_size = len(loader)
             for idx, sample in enumerate(loader):
                 input, label = self._to_tensor(sample)
@@ -590,8 +620,7 @@ class ImageClassifTrainer(Trainer):
                 for metric in metrics.values():
                     metric.accumulate(pred.cpu(), label.cpu(), meta=meta)
                 self.logger.info(
-                    "{} epoch: {}   batch: {}/{} ({:.0f}%)   {}: {:.2f}".format(
-                        eval_type,
+                    "eval epoch: {}   batch: {}/{} ({:.0f}%)   {}: {:.2f}".format(
                         epoch,
                         idx,
                         epoch_size,
@@ -600,30 +629,3 @@ class ImageClassifTrainer(Trainer):
                         metrics[self.monitor].eval()
                     )
                 )
-            metric_vals = {}
-            for metric_name, metric in metrics.items():
-                metric_vals[metric_name] = metric.eval()
-            result[eval_type + "/metrics"] = metric_vals
-            if self.use_tbx:
-                for metric_name, metric in metrics.items():
-                    if metric.is_scalar():
-                        if iter is not None and iter > 0:
-                            writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
-                        writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
-                    if hasattr(metric, "get_tbx_image") and callable(metric.get_tbx_image):
-                        img = metric.get_tbx_image()
-                        if img is not None:
-                            writer.add_image(eval_type + "/%s" % metric_name, img, epoch)
-                    if hasattr(metric, "get_tbx_text") and callable(metric.get_tbx_text):
-                        txt = metric.get_tbx_text()
-                        if txt:
-                            writer.add_text(eval_type + "/%s" % metric_name, txt, epoch)
-                            # as backup, save raw text since tensorboardX can fail
-                            # see https://github.com/lanpa/tensorboardX/issues/134
-                            raw_filename = "%s-%s-%04d.txt" % (eval_type, metric_name, epoch)
-                            raw_filepath = os.path.join(writer_path, raw_filename)
-                            with open(raw_filepath,"w") as fd:
-                                fd.write(txt)
-
-                writer.close()
-        return result
