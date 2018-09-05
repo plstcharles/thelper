@@ -577,7 +577,7 @@ class ImageClassifTrainer(Trainer):
             pred = model(input)
             loss = self.loss(pred, label)
             loss.backward()
-            optimizer.step(epoch)
+            optimizer.step()
             total_loss += loss.item()
             if iter is not None:
                 iter += 1
