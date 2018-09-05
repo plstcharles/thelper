@@ -266,19 +266,19 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
         if config is not None:
-            config_backup_path = os.path.join(save_dir, "config.json")
+            config_backup_path = os.path.join(save_dir, "config.latest.json")
             json.dump(config, open(config_backup_path, "w"), indent=4, sort_keys=False)
     else:
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
         if config is not None:
-            config_backup_path = os.path.join(save_dir, "config.json")
+            config_backup_path = os.path.join(save_dir, "config.latest.json")
             if os.path.exists(config_backup_path):
                 config_backup = json.load(open(config_backup_path, "r"))
                 if config_backup != config:
                     answer = query_yes_no("Config backup in '%s' differs from config loaded through checkpoint; overwrite?" % config_backup_path)
                     if answer:
-                        logger.warning("config mismatch with previous run; will overwrite backup in save directory")
+                        logger.warning("config mismatch with previous run; will overwrite latest backup in save directory")
                     else:
                         logger.error("config mismatch with previous run; user aborted")
                         sys.exit(1)

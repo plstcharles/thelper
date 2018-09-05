@@ -24,10 +24,7 @@ def load_trainer(session_name, save_dir, config, model, loaders, ckptdata=None):
     if "type" not in trainer_config or not trainer_config["type"]:
         raise AssertionError("trainer config missing 'type' field")
     trainer_type = thelper.utils.import_class(trainer_config["type"])
-    if "params" not in trainer_config:
-        raise AssertionError("trainer config missing 'params' field")
-    params = thelper.utils.keyvals2dict(trainer_config["params"])
-    return trainer_type(session_name, save_dir, model, loaders, trainer_config, ckptdata=ckptdata, **params)
+    return trainer_type(session_name, save_dir, model, loaders, config, ckptdata=ckptdata)
 
 
 class Trainer:
@@ -38,32 +35,34 @@ class Trainer:
         train_loader, valid_loader, test_loader = loaders
         if not (train_loader or valid_loader or test_loader):
             raise AssertionError("must provide at least one loader with available data")
+        if "trainer" not in config or not config["trainer"]:
+            raise AssertionError("config missing 'trainer' field")
+        trainer_config = config["trainer"]
         self.logger = thelper.utils.get_class_logger()
         self.name = session_name
         self.train_loader = train_loader
         self.valid_loader = valid_loader
         self.test_loader = test_loader
-        if "epochs" not in config or not config["epochs"] or int(config["epochs"]) <= 0:
+        if "epochs" not in trainer_config or not trainer_config["epochs"] or int(trainer_config["epochs"]) <= 0:
             raise AssertionError("bad trainer config epoch count")
         if train_loader:
-            self.epochs = int(config["epochs"])
+            self.epochs = int(trainer_config["epochs"])
             # no need to load optimization stuff if not training (i.e. no train_loader)
             # loading optimization stuff later since model needs to be on correct device
-            if "optimization" not in config or not config["optimization"]:
+            if "optimization" not in trainer_config or not trainer_config["optimization"]:
                 raise AssertionError("trainer config missing 'optimization' field")
-            self.optimization_config = config["optimization"]
+            self.optimization_config = trainer_config["optimization"]
         else:
             self.epochs = 1
             self.logger.info("no training data provided, will run a single epoch on valid/test data")
-        self.save_freq = int(config["save_freq"]) if "save_freq" in config else 1
+        self.save_freq = int(trainer_config["save_freq"]) if "save_freq" in trainer_config else 1
         self.save_dir = save_dir
         self.checkpoint_dir = os.path.join(self.save_dir, "checkpoints")
-        self.config_backup_path = os.path.join(self.save_dir, "config.json")  # this file is created in cli.get_save_dir
         if not os.path.exists(self.checkpoint_dir):
             os.mkdir(self.checkpoint_dir)
         self.use_tbx = False
-        if "use_tbx" in config:
-            self.use_tbx = thelper.utils.str2bool(config["use_tbx"])
+        if "use_tbx" in trainer_config:
+            self.use_tbx = thelper.utils.str2bool(trainer_config["use_tbx"])
         writer_paths = [None, None, None]
         if self.use_tbx:
             self.tbx_root_dir = os.path.join(self.save_dir, "tbx_logs", self.name)
@@ -91,7 +90,7 @@ class Trainer:
             self.default_dev = "cuda:0"
         devices = [None] * 3
         for idx, field in enumerate(["train_device", "valid_device", "test_device"]):
-            device_str = str(config[field]) if field in config and config[field] else self.default_dev
+            device_str = str(trainer_config[field]) if field in trainer_config and trainer_config[field] else self.default_dev
             if not torch.cuda.is_available() and "cuda" in device_str:
                 raise AssertionError("cuda not available (according to pytorch), cannot use in '%s' field" % field)
             curr_devices = device_str.split(",")
@@ -136,14 +135,14 @@ class Trainer:
             if devices[idx] is None:
                 devices[idx] = cuda_device_idxs
         self.train_dev, self.valid_dev, self.test_dev = tuple(devices)
-        if "loss" not in config or not config["loss"]:
+        if "loss" not in trainer_config or not trainer_config["loss"]:
             raise AssertionError("trainer config missing 'loss' field")
-        self.loss = self._load_loss(config["loss"], next((loader for loader in loaders if loader is not None)).dataset)
+        self.loss = self._load_loss(trainer_config["loss"], next((loader for loader in loaders if loader is not None)).dataset)
         if hasattr(self.loss, "summary"):
             self.loss.summary()
-        if "metrics" not in config or not config["metrics"]:
+        if "metrics" not in trainer_config or not trainer_config["metrics"]:
             raise AssertionError("trainer config missing 'metrics' field")
-        metrics = self._load_metrics(config["metrics"])
+        metrics = self._load_metrics(trainer_config["metrics"])
         for metric_name, metric in metrics.items():
             if hasattr(metric, "summary"):
                 logger.info("parsed metric category '%s'" % metric_name)
@@ -152,9 +151,9 @@ class Trainer:
         self.train_metrics = deepcopy(metrics)
         self.valid_metrics = deepcopy(metrics)
         self.test_metrics = deepcopy(metrics)
-        if "monitor" not in config or not config["monitor"]:
+        if "monitor" not in trainer_config or not trainer_config["monitor"]:
             raise AssertionError("missing 'monitor' field for trainer config")
-        self.monitor = config["monitor"]
+        self.monitor = trainer_config["monitor"]
         if self.monitor not in self.train_metrics:
             raise AssertionError("monitored metric with name '%s' should be declared in config 'metrics' field" % self.monitor)
         self.monitor_goal = self.train_metrics[self.monitor].goal()
@@ -377,11 +376,8 @@ class Trainer:
             filename_best = os.path.join(self.checkpoint_dir, "ckpt.best.pth")
             self.logger.info("loading best model & initializing final test run")
             ckptdata = torch.load(filename_best, map_location="cpu")
-            if self.config_backup_path and os.path.exists(self.config_backup_path):
-                with open(self.config_backup_path, "r") as fd:
-                    config_backup = json.load(fd)
-                    if config_backup["model"] != ckptdata["config"]["model"]:
-                        raise AssertionError("could not load compatible best checkpoint to run test eval")
+            if self.config != ckptdata["config"]["model"]:  # todo: dig into members and check only critical ones
+                raise AssertionError("could not load compatible best checkpoint to run test eval")
             self.model.load_state_dict(ckptdata["state_dict"])
             best_epoch = ckptdata["epoch"]
             best_iter = ckptdata["iter"] if "iter" in ckptdata else None
@@ -489,10 +485,6 @@ class Trainer:
 
     def _save(self, epoch, save_best=False):
         # logically, this should only be called during training (i.e. with a valid optimizer)
-        fullconfig = None
-        if self.config_backup_path and os.path.exists(self.config_backup_path):
-            with open(self.config_backup_path, "r") as fd:
-                fullconfig = json.load(fd)
         timestr = time.strftime("%Y%m%d-%H%M%S")
         curr_state = {
             "name": self.name,
@@ -505,7 +497,7 @@ class Trainer:
             "state_dict": self.model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "monitor_best": self.monitor_best,
-            "config": fullconfig
+            "config": self.config  # note: this is the global app config
         }
         filename = "ckpt.%04d.%s.%s.pth" % (epoch, platform.node(), timestr)
         filename = os.path.join(self.checkpoint_dir, filename)
