@@ -75,7 +75,8 @@ def extract(config, resume, data_root):
     # if hasattr(data_config,"summary"):
     #     data_config.summary()
     logger.debug("splitting datasets and creating loaders")
-    data_loader,valid_loader,test_loader = data_config.get_data_split(datasets,task)
+    train_idxs, valid_idxs, test_idxs = data_config.get_split(datasets, task)
+    data_loader, valid_loader, test_loader = data_config.get_loaders(datasets, train_idxs, valid_idxs, test_idxs)
 
     model = thelper.modules.load_model(config,task)
 

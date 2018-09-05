@@ -1,7 +1,8 @@
 import logging
-import time
 import copy
 import os
+import time
+import platform
 import json
 from abc import ABC, abstractmethod
 from collections import Counter
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def load(config, data_root, save_dir=None):
+    logstamp = str(platform.node()) + "-" + time.strftime("%Y%m%d-%H%M%S")
     if save_dir is not None:
         data_logger_path = os.path.join(save_dir, "logs", "data.log")
         data_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
@@ -29,6 +31,8 @@ def load(config, data_root, save_dir=None):
         data_logger_fh.setFormatter(data_logger_format)
         logger.addHandler(data_logger_fh)
         logger.info("created data log for session '%s'" % config["name"])
+        config_backup_path = os.path.join(save_dir, "config." + logstamp + ".json")
+        json.dump(config, open(config_backup_path, "w"), indent=4, sort_keys=False)
     logger.debug("loading data usage config")
     if "data_config" not in config or not config["data_config"]:
         raise AssertionError("config missing 'data_config' field")
@@ -48,18 +52,27 @@ def load(config, data_root, save_dir=None):
     datasets, task = load_datasets(datasets_config, data_root, data_config.get_base_transforms())
     logger.info("task info: %s" % str(task))
     if save_dir is not None:
-        with open(os.path.join(save_dir, "logs", "task.log"), "w") as fd:
+        with open(os.path.join(save_dir, "logs", "task.log"), "a+") as fd:
+            fd.write("session: %s-%s\n" % (config["name"], logstamp))
             fd.write(str(task) + "\n")
     for dataset_name, dataset in datasets.items():
         logger.info("dataset '%s' info: %s" % (dataset_name, str(dataset)))
         if save_dir is not None:
-            with open(os.path.join(save_dir, "logs", dataset_name + ".log"), "w") as fd:
+            with open(os.path.join(save_dir, "logs", dataset_name + ".log"), "a+") as fd:
+                fd.write("session: %s-%s\n" % (config["name"], logstamp))
                 fd.write(str(dataset) + "\n")
                 if hasattr(dataset, "samples") and isinstance(dataset.samples, list):
                     for idx, sample in enumerate(dataset.samples):
                         fd.write("%d: %s\n" % (idx, str(sample)))
     logger.debug("splitting datasets and creating loaders")
-    train_loader, valid_loader, test_loader = data_config.get_data_split(datasets, task)
+    train_idxs, valid_idxs, test_idxs = data_config.get_split(datasets, task)
+    if save_dir is not None:
+        with open(os.path.join(save_dir, "logs", "split.log"), "a+") as fd:
+            fd.write("session: %s-%s\n" % (config["name"], logstamp))
+            fd.write("train:\n" + str(train_idxs) + "\n")
+            fd.write("valid:\n" + str(valid_idxs) + "\n")
+            fd.write("test:\n" + str(test_idxs) + "\n")
+    train_loader, valid_loader, test_loader = data_config.get_loaders(datasets, train_idxs, valid_idxs, test_idxs)
     return task, train_loader, valid_loader, test_loader
 
 
@@ -137,16 +150,15 @@ class DataConfig(object):
         self.shuffle = thelper.utils.str2bool(config["shuffle"]) if "shuffle" in config else False
         if self.shuffle:
             logger.debug("dataset samples will be shuffled according to predefined seeds")
+            np.random.seed()
         self.test_seed = config["test_seed"] if "test_seed" in config and isinstance(config["test_seed"], (int, str)) else None
         self.valid_seed = config["valid_seed"] if "valid_seed" in config and isinstance(config["valid_seed"], (int, str)) else None
         if self.shuffle and self.test_seed is None:
-            np.random.seed()
             self.test_seed = np.random.randint(2**16)
-            logger.debug("setting test seed to %d" % self.test_seed)
+            logger.info("setting test seed to %d" % self.test_seed)
         if self.shuffle and self.valid_seed is None:
-            np.random.seed()
             self.valid_seed = np.random.randint(2**16)
-            logger.debug("setting valid seed to %d" % self.valid_seed)
+            logger.info("setting valid seed to %d" % self.valid_seed)
         self.workers = config["workers"] if "workers" in config and config["workers"] >= 0 else 1
         self.pin_memory = thelper.utils.str2bool(config["pin_memory"]) if "pin_memory" in config else False
         self.drop_last = thelper.utils.str2bool(config["drop_last"]) if "drop_last" in config else False
@@ -179,7 +191,7 @@ class DataConfig(object):
         if "base_transforms" in config and config["base_transforms"]:
             self.base_transforms, _ = thelper.transforms.load_transforms(config["base_transforms"])
 
-        def get_split(prefix, config):
+        def get_ratios_split(prefix, config):
             key = prefix + "_split"
             if key not in config or not config[key]:
                 return {}
@@ -188,9 +200,9 @@ class DataConfig(object):
                 raise AssertionError("split ratios in '%s' must be in [0,1]" % key)
             return split
 
-        self.train_split = get_split("train", config)
-        self.valid_split = get_split("valid", config)
-        self.test_split = get_split("test", config)
+        self.train_split = get_ratios_split("train", config)
+        self.valid_split = get_ratios_split("valid", config)
+        self.test_split = get_ratios_split("test", config)
         if not self.train_split and not self.valid_split and not self.test_split:
             raise AssertionError("data config must define a split for at least one loader type (train/valid/test)")
         self.total_usage = Counter(self.train_split) + Counter(self.valid_split) + Counter(self.test_split)
@@ -213,7 +225,7 @@ class DataConfig(object):
                     if name in self.test_split:
                         self.test_split[name] /= usage
 
-    def get_idx_split(self, indices):
+    def _get_raw_split(self, indices):
         for name in self.total_usage:
             if name not in indices:
                 raise AssertionError("dataset '%s' does not exist" % name)
@@ -245,7 +257,7 @@ class DataConfig(object):
                     indices[name][offsets[name]:] = trainvalid_idxs
         return train_idxs, valid_idxs, test_idxs
 
-    def get_data_split(self, datasets, task):
+    def get_split(self, datasets, task):
         dataset_sizes = {dataset_name: len(dataset) for dataset_name, dataset in datasets.items()}
         global_size = sum(len(dataset) for dataset in datasets.values())
         logger.info("splitting datasets with parsed sizes = %s" % str(dataset_sizes))
@@ -268,7 +280,7 @@ class DataConfig(object):
                         curr_class_size[dataset_name],
                         int(100 * curr_class_size[dataset_name] / dataset_sizes[dataset_name]),
                         int(100 * curr_class_size[dataset_name] / global_size)))
-                class_train_idxs, class_valid_idxs, class_test_idxs = self.get_idx_split(curr_class_samples)
+                class_train_idxs, class_valid_idxs, class_test_idxs = self._get_raw_split(curr_class_samples)
                 for idxs_dict_list, class_idxs_dict_list in zip([train_idxs, valid_idxs, test_idxs],
                                                                 [class_train_idxs, class_valid_idxs, class_test_idxs]):
                     for dataset_name in datasets:
@@ -285,7 +297,10 @@ class DataConfig(object):
             for dataset_name in datasets:
                 # note: all indices paired with 'None' below as class is ignored; used for compatibility with code above
                 dataset_indices[dataset_name] = list(zip(list(range(dataset_sizes[dataset_name])), [None] * len(dataset_sizes[dataset_name])))
-            train_idxs, valid_idxs, test_idxs = self.get_idx_split(dataset_indices)
+            train_idxs, valid_idxs, test_idxs = self._get_raw_split(dataset_indices)
+        return train_idxs, valid_idxs, test_idxs
+
+    def get_loaders(self, datasets, train_idxs, valid_idxs, test_idxs):
         loaders = []
         for loader_idx, idxs_map in enumerate([train_idxs, valid_idxs, test_idxs]):
             loader_sample_idx_offset = 0
