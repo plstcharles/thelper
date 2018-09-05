@@ -31,7 +31,7 @@ def load(config, data_root, save_dir=None):
         data_logger_fh.setFormatter(data_logger_format)
         logger.addHandler(data_logger_fh)
         logger.info("created data log for session '%s'" % config["name"])
-        config_backup_path = os.path.join(save_dir, "config." + logstamp + ".json")
+        config_backup_path = os.path.join(save_dir, "logs", "config." + logstamp + ".json")
         json.dump(config, open(config_backup_path, "w"), indent=4, sort_keys=False)
     logger.debug("loading data usage config")
     if "data_config" not in config or not config["data_config"]:
