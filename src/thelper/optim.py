@@ -394,7 +394,7 @@ class ConfusionMatrix(Metric):
 
 class ROCCurve(Metric):
 
-    def __init__(self, target_name, class_names=None, force_softmax=True,
+    def __init__(self, target_name, target_tpr=None, class_names=None, force_softmax=True,
                  log_params=None, sample_weight=None, drop_intermediate=True):
         if target_name is None:
             raise AssertionError("must provide a target (class) name for ROC metric")
@@ -404,6 +404,13 @@ class ROCCurve(Metric):
             self.target_name = target_name.split("!", 1)[1]
         else:
             self.target_name = target_name
+        self.target_tpr = None
+        if target_tpr is not None:
+            if not isinstance(target_tpr, float):
+                raise AssertionError("expected float type for target operating point tpr")
+            if target_tpr <= 0 or target_tpr > 1:
+                raise AssertionError("invalid target operation point tpr")
+            self.target_tpr = target_tpr
         self.target_idx = None
         self.class_names = None
         if class_names is not None:
@@ -495,7 +502,15 @@ class ROCCurve(Metric):
                         raise AssertionError("missing impl for meta concat w/ type '%s'" % str(type(_meta[key])))
 
     def eval(self):
-        return self.auc(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv)
+        # if we did not specify a target operating point in terms of true positive rate, return AUC
+        if self.target_tpr is None:
+            return self.auc(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv)
+        # otherwise, find the false positive rate at the requested target operating point
+        _fpr, _tpr, _ = self.curve(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv, _drop_intermediate=False)
+        for fpr, tpr in zip(_fpr, _tpr):
+            if tpr >= self.target_tpr:
+                return fpr
+        return 1.0  # if we did not find a proper fpr match above, return 100%
 
     def get_tbx_image(self):
         fpr, tpr, t = self.curve(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv)
