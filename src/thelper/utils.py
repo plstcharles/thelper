@@ -253,9 +253,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
         os.mkdir(save_dir)
     save_dir = os.path.join(save_dir, dir_name)
     if not resume:
-        overwrite = False
-        if config is not None and "overwrite" in config:
-            overwrite = str2bool(config["overwrite"])
+        overwrite = str2bool(config["overwrite"]) if config is not None and "overwrite" in config else False
         old_dir_name = dir_name
         time.sleep(0.5)  # to make sure all debug/info prints are done, and we see the question
         while os.path.exists(save_dir) and not overwrite:

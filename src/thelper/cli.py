@@ -4,6 +4,7 @@ Command-line module, for use with __main__ entrypoint or external apps.
 
 import argparse
 import json
+import glob
 import logging
 import os
 
@@ -377,7 +378,7 @@ def main(args=None):
     cl_new_session_ap.add_argument("save_dir", type=str, help="path to the root directory where checkpoints should be saved")
     cl_new_session_ap.add_argument("-n", "--nb-devices", default=2, type=int, help="number of devices to test for availability on cluster")
     resume_session_ap = subparsers.add_parser("resume", help="resume a session from a checkpoint file")
-    resume_session_ap.add_argument("ckpt_path", type=str, help="path to the checkpoint to resume training from")
+    resume_session_ap.add_argument("ckpt_path", type=str, help="path to the checkpoint (or save directory) to resume training from")
     resume_session_ap.add_argument("-s", "--save-dir", default=None, type=str, help="path to the root directory where checkpoints should be saved")
     resume_session_ap.add_argument("-m", "--map-location", default=None, help="map location for loading data (default=None)")
     resume_session_ap.add_argument("-c", "--override-cfg", default=None, help="override config file path (default=None)")
@@ -429,6 +430,29 @@ def main(args=None):
         config["trainer"]["trainer"]["test_device"] = "cuda:%i" % device_id
         return create_session(config, args.data_root, args.save_dir)
     elif args.mode == "resume":
+        if os.path.isdir(args.ckpt_path):
+            thelper.logger.debug("will search directory '%s' for a checkpoint to load..." % args.ckpt_path)
+            search_ckpt_dir = os.path.join(args.ckpt_path, "checkpoints")
+            if os.path.isdir(search_ckpt_dir):
+                search_dir = search_ckpt_dir
+            else:
+                search_dir = args.ckpt_path
+            ckpt_paths = glob.glob(os.path.join(search_dir, "ckpt.*.pth"))
+            if not ckpt_paths:
+                raise AssertionError("could not find any valid checkpoint files in directory '%s'" % search_dir)
+            latest_checkpoint_epoch = 0
+            for ckpt_path in ckpt_paths:
+                # note: the 2nd field in the name should be the epoch index, or 'best' if final checkpoint
+                tag = os.path.basename(ckpt_path).split(".")[1]
+                if tag == "best" and args.eval_only:  # if eval-only, always pick the best checkpoint
+                    args.ckpt_path = ckpt_path
+                    break
+                elif tag != "best" and int(tag) > latest_checkpoint_epoch:  # otherwise, pick latest
+                    # note: if several sessions are merged, this will pick the latest checkpoint of the first...
+                    args.ckpt_path = ckpt_path
+                    latest_checkpoint_epoch = int(tag)
+        if not os.path.isfile(args.ckpt_path):
+            raise AssertionError("invalid checkpoint at '%s'" % args.ckpt_path)
         thelper.logger.debug("parsing checkpoint at '%s'" % args.ckpt_path)
         ckptdata = torch.load(args.ckpt_path, map_location=args.map_location)
         override_config = None
