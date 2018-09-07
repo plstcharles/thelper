@@ -370,6 +370,8 @@ class Trainer:
             self.outputs[epoch] = result
             if new_best or (epoch % self.save_freq) == 0:
                 self._save(epoch, save_best=new_best)
+            else:
+                self.logger.info("(previous best checkpoint had %s = %s" % (str(self.monitor), str(self.monitor_best)))
         self.logger.info("training for session '%s' done" % self.name)
         if self.test_loader:
             # reload 'best' model checkpoint on cpu (will remap to current device setup)
