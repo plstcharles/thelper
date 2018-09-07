@@ -96,6 +96,7 @@ class AugmentorWrapper(object):
     Attributes:
         pipeline: the augmentor pipeline instance to apply to images.
     """
+
     def __init__(self, pipeline):
         """Receives and stores an augmentor pipeline for later use.
 
@@ -103,36 +104,123 @@ class AugmentorWrapper(object):
         """
         self.pipeline = pipeline
 
-    def __call__(self, sample):
-        """Transforms a single image using the augmentor pipeline.
+    def __call__(self, samples):
+        """Transforms a single image (or a list of images) using the augmentor pipeline.
 
         Args:
-            sample: the image to transform. Should be a numpy array or a PIL image.
+            samples: the image(s) to transform. Should be a numpy array or a PIL image (or a list of).
 
         Returns:
-            The transformed image, with the same type as the input (numpy array or PIL image).
+            The transformed image(s), with the same type as the input.
         """
+        in_list = True
+        if samples is not None and not isinstance(samples, list):
+            in_list = False
+            samples = [samples]
+        elif not samples:
+            return samples
         cvt_array = False
-        if isinstance(sample, np.ndarray):
-            sample = PIL.Image.fromarray(sample)
+        if isinstance(samples[0], np.ndarray):
+            for idx in range(len(samples)):
+                samples[idx] = PIL.Image.fromarray(samples[idx])
             cvt_array = True
-        elif not isinstance(sample, PIL.Image.Image):
+        elif not isinstance(samples[0], PIL.Image.Image):
             raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
-        sample = [sample]
         for operation in self.pipeline.operations:
             r = round(random.uniform(0, 1), 1)
             if r <= operation.probability:
-                sample = operation.perform_operation(sample)
-        if not isinstance(sample, list) or len(sample) != 1:
-            raise AssertionError("not the fixup we expected to catch here")
-        sample = sample[0]
+                samples = operation.perform_operation(samples)
         if cvt_array:
-            sample = np.asarray(sample)
-        return sample
+            for idx in range(len(samples)):
+                samples[idx] = np.asarray(samples[idx])
+        if not in_list and len(samples) == 1:
+            samples = samples[0]
+        return samples
 
     def __repr__(self):
         """Create a print-friendly representation of inner augmentation stages."""
         return "AugmentorWrapper: " + str([str(op) for op in self.pipeline.operations])
+
+
+class ImageTransformWrapper(object):
+    """Image tranform wrapper that allows operations on lists.
+
+    Can be used to wrap the operations in thelper.transforms or in torchvision.transforms that
+    only accept images as their input.
+
+    WARNING: STOCHASTIC TRANSFORMS (e.g. torchvision.transforms.RandomCrop) WILL TREAT EACH
+    IMAGE IN A LIST DIFFERENTLY. If the same operations are to be applied to all images, you
+    should consider using a series non-stochastic operations wrapped inside an instance of
+    torchvision.transforms.RandomApply, or simply provide the probability of applying the
+    transforms to this wrapper's constructor.
+
+    Attributes:
+        operation: the wrapped operation (callable object or class name string to import).
+        parameters: the parameters that are passed to the operation when init'd or called.
+        probability: the probability that the wrapped operation will be applied.
+    """
+
+    def __init__(self, operation, parameters=None, probability=1):
+        """Receives and stores a torchvision transform operation for later use.
+
+        If the operation is given as a string, it is assumed to be a class name and it will
+        be imported. The parameters (if any) will then be given to the constructor of that
+        class. Otherwise, the operation is assumed to be a callable object, and its parameters
+        (if any) will be provided at call-time.
+
+        Args:
+            operation: the wrapped operation (callable object or class name string to import).
+            parameters: the parameters that are passed to the operation when init'd or called.
+            probability: the probability that the wrapped operation will be applied.
+        """
+        if parameters is not None and not isinstance(parameters, dict):
+            raise AssertionError("expected parameters to be passed in as a dictionary")
+        if isinstance(operation, str):
+            operation_type = thelper.utils.import_class(operation)
+            self.operation = operation_type(**parameters)
+            self.parameters = {}
+        else:
+            self.operation = operation
+            self.parameters = parameters if parameters is not None else {}
+        if probability < 0 or probability > 1:
+            raise AssertionError("invalid probability value (range is [0,1]")
+        self.probability = probability
+
+    def __call__(self, samples):
+        """Transforms a single image (or a list of images) using the torchvision operation.
+
+        Args:
+            samples: the image(s) to transform. Should be a numpy array or a PIL image (or a list of).
+
+        Returns:
+            The transformed image(s), with the same type as the input.
+        """
+        in_list = True
+        if samples is not None and not isinstance(samples, list):
+            in_list = False
+            samples = [samples]
+        elif not samples:
+            return samples
+        cvt_array = False
+        if isinstance(samples[0], np.ndarray):
+            cvt_array = True
+        elif not isinstance(samples[0], PIL.Image.Image):
+            raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
+        if self.probability >= 1 or round(random.uniform(0, 1), 1) <= self.probability:
+            # we either apply the op on all samples, or on none
+            for idx in range(len(samples)):
+                if cvt_array:
+                    samples[idx] = PIL.Image.fromarray(samples[idx])
+                samples[idx] = self.operation(samples[idx], **self.parameters)
+                if cvt_array:
+                    samples[idx] = np.asarray(samples[idx])
+        if not in_list and len(samples) == 1:
+            samples = samples[0]
+        return samples
+
+    def __repr__(self):
+        """Create a print-friendly representation of inner augmentation stages."""
+        return "ImageTransformWrapper: [prob=%f => %s]" % (self.probability, str(self.operation))
 
 
 class Compose(torchvision.transforms.Compose):
@@ -185,7 +273,7 @@ class ToNumpy(object):
         elif isinstance(sample, torch.Tensor):
             sample = np.transpose(sample.cpu().numpy(), [1, 2, 0])  # CxHxW to HxWxC
         elif isinstance(sample, PIL.Image.Image):
-            sample = np.array(sample)
+            sample = np.asarray(sample)
         else:
             raise AssertionError("unknown image type, cannot process sample")
         if self.reorder_BGR:
