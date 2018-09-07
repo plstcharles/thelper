@@ -340,38 +340,32 @@ class Trainer:
                 result = {**result, "valid/metrics": valid_metric_vals}
                 monitor_type_key = "valid/metrics"  # since validation is available, use that to monitor progression
             new_best = False
-            losses = {}
-            monitor_vals = {}
+            monitor_val = None
             for key, value in result.items():
-                if key == "train/metrics":
+                if key == monitor_type_key:
                     if self.monitor not in value:
-                        raise AssertionError("not monitoring required variable '%s' in training metrics" % self.monitor)
-                    monitor_vals["train"] = value[self.monitor]
-                elif key == "valid/metrics":
-                    if self.monitor not in value:
-                        raise AssertionError("not monitoring required variable '%s' in validation metrics" % self.monitor)
-                    monitor_vals["valid"] = value[self.monitor]
-                if (key == monitor_type_key and
-                    ((self.monitor_goal == thelper.optim.Metric.minimize and value[self.monitor] < self.monitor_best) or
-                     (self.monitor_goal == thelper.optim.Metric.maximize and value[self.monitor] > self.monitor_best))):
-                    self.monitor_best = value[self.monitor]
-                    new_best = True
-                if key == "train/loss":
-                    losses["train"] = value
-                elif key == "valid/loss":
-                    losses["valid"] = value
+                        raise AssertionError("not monitoring required variable '%s' in metrics" % self.monitor)
+                    monitor_val = value[self.monitor]
+                    if ((self.monitor_goal == thelper.optim.Metric.minimize and monitor_val < self.monitor_best) or
+                        (self.monitor_goal == thelper.optim.Metric.maximize and monitor_val > self.monitor_best)):
+                        self.monitor_best = monitor_val
+                        new_best = True
                 if not isinstance(value, dict):
                     self.logger.debug(" epoch {} result =>  {}: {}".format(epoch, str(key), value))
                 else:
                     for subkey, subvalue in value.items():
                         self.logger.debug(" epoch {} result =>  {}:{}: {}".format(epoch, str(key), str(subkey), subvalue))
-            if not monitor_vals or not losses:
-                raise AssertionError("training/validation did not produce required losses & monitoring variable '%s'" % self.monitor)
+            if monitor_val is None:
+                raise AssertionError("training/validation did not produce required monitoring variable '%s'" % self.monitor)
             self.outputs[epoch] = result
-            if new_best or (epoch % self.save_freq) == 0:
-                self._save(epoch, save_best=new_best)
+            self.logger.info("epoch %d, %s = %s" % (epoch, self.monitor, self.monitor_best))
+            if new_best:
+                self.logger.info("(new best checkpoint)")
             else:
-                self.logger.info("(previous best checkpoint had %s = %s" % (str(self.monitor), str(self.monitor_best)))
+                self.logger.info("(previous best checkpoint had %s = %s)" % (self.monitor, self.monitor_best))
+            if new_best or (epoch % self.save_freq) == 0:
+                self.logger.info("saving checkpoint @ epoch %d" % epoch)
+                self._save(epoch, save_best=new_best)
         self.logger.info("training for session '%s' done" % self.name)
         if self.test_loader:
             # reload 'best' model checkpoint on cpu (will remap to current device setup)
@@ -507,9 +501,6 @@ class Trainer:
         if save_best:
             filename_best = os.path.join(self.checkpoint_dir, "ckpt.best.pth")
             torch.save(curr_state, filename_best)
-            self.logger.info("saving new best checkpoint @ epoch %d" % epoch)
-        else:
-            self.logger.info("saving checkpoint @ epoch %d" % epoch)
 
 
 class ImageClassifTrainer(Trainer):
