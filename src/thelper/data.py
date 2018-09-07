@@ -392,6 +392,9 @@ class Dataset(torch.utils.data.Dataset, ABC):
         # the task is up to the derived class to specify (but it must be derived from the thelper.tasks.Task)
         raise NotImplementedError
 
+    def __repr__(self):
+        return self._get_derived_name() + " : size=%s, transforms=%s" % (str(len(self)), str(self.transforms))
+
 
 class ClassificationDataset(Dataset):
 
