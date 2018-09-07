@@ -161,7 +161,7 @@ class ImageTransformWrapper(object):
     """Image tranform wrapper that allows operations on lists.
 
     Can be used to wrap the operations in thelper.transforms or in torchvision.transforms that
-    only accept images as their input.
+    only accept images as their input. Will optionally force-convert the images to PIL format.
 
     WARNING: STOCHASTIC TRANSFORMS (e.g. torchvision.transforms.RandomCrop) WILL TREAT EACH
     IMAGE IN A LIST DIFFERENTLY. If the same operations are to be applied to all images, you
@@ -173,9 +173,10 @@ class ImageTransformWrapper(object):
         operation: the wrapped operation (callable object or class name string to import).
         parameters: the parameters that are passed to the operation when init'd or called.
         probability: the probability that the wrapped operation will be applied.
+        force_convert: specifies whether images should be forced into PIL format or not.
     """
 
-    def __init__(self, operation, parameters=None, probability=1):
+    def __init__(self, operation, parameters=None, probability=1, force_convert=True):
         """Receives and stores a torchvision transform operation for later use.
 
         If the operation is given as a string, it is assumed to be a class name and it will
@@ -187,12 +188,13 @@ class ImageTransformWrapper(object):
             operation: the wrapped operation (callable object or class name string to import).
             parameters: the parameters that are passed to the operation when init'd or called.
             probability: the probability that the wrapped operation will be applied.
+            force_convert: specifies whether images should be forced into PIL format or not.
         """
         if parameters is not None and not isinstance(parameters, dict):
             raise AssertionError("expected parameters to be passed in as a dictionary")
         if isinstance(operation, str):
             operation_type = thelper.utils.import_class(operation)
-            self.operation = operation_type(**parameters)
+            self.operation = operation_type(**parameters) if parameters is not None else operation_type()
             self.parameters = {}
         else:
             self.operation = operation
@@ -200,6 +202,7 @@ class ImageTransformWrapper(object):
         if probability < 0 or probability > 1:
             raise AssertionError("invalid probability value (range is [0,1]")
         self.probability = probability
+        self.force_convert = force_convert
 
     def __call__(self, samples):
         """Transforms a single image (or a list of images) using the torchvision operation.
@@ -218,7 +221,10 @@ class ImageTransformWrapper(object):
             return samples
         cvt_array = False
         if isinstance(samples[0], np.ndarray):
-            cvt_array = True
+            if self.force_convert:
+                # PIL is pretty bad, it can't handle 3-channel float images...
+                # ... but hey, if your op only supports that, have fun!
+                cvt_array = True
         elif not isinstance(samples[0], PIL.Image.Image):
             raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
         if self.probability >= 1 or round(random.uniform(0, 1), 1) <= self.probability:
