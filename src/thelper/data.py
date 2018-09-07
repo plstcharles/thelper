@@ -308,7 +308,10 @@ class DataConfig(object):
             loader_sample_idxs = []
             loader_datasets = []
             for dataset_name, sample_idxs in idxs_map.items():
-                dataset = copy.deepcopy(datasets[dataset_name])
+                if datasets[dataset_name].bypass_deepcopy:
+                    dataset = datasets[dataset_name]
+                else:
+                    dataset = copy.deepcopy(datasets[dataset_name])
                 if loader_idx == 0 and self.train_augments:
                     train_augs_copy = copy.deepcopy(self.train_augments)
                     if dataset.transforms is not None:
@@ -359,7 +362,7 @@ class DataConfig(object):
 
 class Dataset(torch.utils.data.Dataset, ABC):
 
-    def __init__(self, name, root, config=None, transforms=None):
+    def __init__(self, name, root, config=None, transforms=None, bypass_deepcopy=False):
         super().__init__()
         if not name:
             raise AssertionError("dataset name must not be empty (lookup might fail)")
@@ -367,6 +370,7 @@ class Dataset(torch.utils.data.Dataset, ABC):
         self.root = root
         self.config = config
         self.transforms = transforms
+        self.bypass_deepcopy = bypass_deepcopy  # will determine if we deepcopy in each loader
         self.samples = None  # must be filled by the derived class as a list of dictionaries
 
     def _get_derived_name(self):
@@ -398,8 +402,8 @@ class Dataset(torch.utils.data.Dataset, ABC):
 
 class ClassificationDataset(Dataset):
 
-    def __init__(self, name, root, class_names, input_key, label_key, meta_keys=None, config=None, transforms=None):
-        super().__init__(name, root, config=config, transforms=transforms)
+    def __init__(self, name, root, class_names, input_key, label_key, meta_keys=None, config=None, transforms=None, bypass_deepcopy=False):
+        super().__init__(name, root, config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
         self.task = thelper.tasks.Classification(class_names, input_key, label_key, meta_keys=meta_keys)
 
     @abstractmethod
@@ -413,8 +417,8 @@ class ClassificationDataset(Dataset):
 
 class ExternalDataset(Dataset):
 
-    def __init__(self, name, root, dataset_type, task, config=None, transforms=None):
-        super().__init__(name, root, config=config, transforms=transforms)
+    def __init__(self, name, root, dataset_type, task, config=None, transforms=None, bypass_deepcopy=False):
+        super().__init__(name, root, config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
         logger.info("instantiating external dataset '%s'..." % name)
         if not dataset_type or not hasattr(dataset_type, "__getitem__") or not hasattr(dataset_type, "__len__"):
             raise AssertionError("external dataset type must implement '__getitem__' and '__len__' methods")
