@@ -311,6 +311,42 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
     return save_dir
 
 
+def safe_crop(image, tl, br, bordertype=cv.BORDER_CONSTANT, borderval=0):
+    """Safely crops a region from within an image, padding borders if needed.
+
+    Args:
+        image: the image to crop (provided as a numpy array).
+        tl: a tuple or list specifying the (x,y) coordinates of the top-left crop corner.
+        br: a tuple or list specifying the (x,y) coordinates of the bottom-right crop corner.
+        bordertype: border copy type to use when the image is too small for the required crop size.
+            See cv2.copyMakeBorder for more information.
+        borderval: border value to use when the image is too small for the required crop size. See
+            cv2.copyMakeBorder for more information.
+
+    Returns:
+        The cropped image.
+    """
+    if not isinstance(image, np.ndarray):
+        raise AssertionError("expected input image to be numpy array")
+    if isinstance(tl, tuple):
+        tl = list(tl)
+    if isinstance(br, tuple):
+        br = list(br)
+    if not isinstance(tl, list) or not isinstance(br, list):
+        raise AssertionError("expected tl/br coords to be provided as tuple or list")
+    if tl[0] < 0 or tl[1] < 0 or br[0] > image.shape[1] or br[1] > image.shape[0]:
+        image = cv.copyMakeBorder(image, max(-tl[1], 0), max(br[1] - image.shape[0], 0),
+                                  max(-tl[0], 0), max(br[0] - image.shape[1], 0),
+                                  borderType=bordertype, value=borderval)
+        if tl[0] < 0:
+            br[0] -= tl[0]
+            tl[0] = 0
+        if tl[1] < 0:
+            br[1] -= tl[1]
+            tl[1] = 0
+    return image[tl[1]:br[1], tl[0]:br[0], ...]
+
+
 def draw_histogram(data, bins=50, xlabel="", ylabel="Proportion"):
     """Draws and returns a histogram figure using pyplot."""
     fig, ax = plt.subplots()

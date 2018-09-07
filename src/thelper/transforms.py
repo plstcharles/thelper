@@ -367,17 +367,7 @@ class CenterCrop(object):
         crop_width = int(round(self.size[0] * sample.shape[1])) if self.relative else self.size[0]
         tl = [sample.shape[1] // 2 - crop_width // 2, sample.shape[0] // 2 - crop_height // 2]
         br = [tl[0] + crop_width, tl[1] + crop_height]
-        if tl[0] < 0 or tl[1] < 0 or br[0] > sample.shape[1] or br[1] > sample.shape[0]:
-            sample = cv.copyMakeBorder(sample, max(-tl[1], 0), max(br[1] - sample.shape[0], 0),
-                                       max(-tl[0], 0), max(br[0] - sample.shape[1], 0),
-                                       borderType=self.bordertype, value=self.borderval)
-            if tl[0] < 0:
-                br[0] -= tl[0]
-                tl[0] = 0
-            if tl[1] < 0:
-                br[1] -= tl[1]
-                tl[1] = 0
-        return sample[tl[1]:br[1], tl[0]:br[0], ...]
+        return thelper.utils.safe_crop(sample, tl, br, self.bordertype, self.borderval)
 
     def invert(self, sample):
         """Specifies that this operation cannot be inverted, as data loss is incurred during image transformation."""
