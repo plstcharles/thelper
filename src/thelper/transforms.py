@@ -19,68 +19,83 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-def load_transforms(config):
-    """Loads a torchvision-compatible transformation pipeline from a dictionary of stages.
+def load_transforms(stages):
+    """Loads a transformation pipeline from a list of stages.
 
-    Each entry in the provided dictionary will be considered a stage in the pipeline. The ordering
-    of the stages is important, as some transformations might not be compatible if taken out of order.
+    Each entry in the provided list will be considered a stage in the pipeline. The ordering of the stages
+    is important, as some transformations might not be compatible if taken out of order. The entries must
+    each be dictionaries that define an operation, its parameters, and some meta-parameters (detailed below).
 
-    The key of each stage in the dictionary will be used to dynamically import a specific type of data
-    transformation. Some unique keys have special handling discussed below. The imported transform type
-    will be instantiated and given its corresponding dictionary values as parameters.
+    The 'operation' field of each stage will be used to dynamically import a specific type of operation to
+    apply. The 'parameters' field of each stage will then be used to pass parameters to the constructor of
+    this operation. If an operation is identified as 'Augmentor.Pipeline', it will be specially handled as
+    an Augmentor pipeline, and its parameters will be parsed further (a dictionary is expected). Three
+    fields are required in this dictionary: 'input_tensor' (bool) which specifies whether the previous stage
+    provides a torch.Tensor to the augmentor pipeline; 'output_tensor' (bool) which specifies whether the
+    output of the augmentor pipeline should be converted into a torch.Tensor; and 'operations' (dict) which
+    specifies the Augmentor pipeline operation names and parameters (as a dictionary).
 
-    If a stage is identified by the 'Augmentor.Pipeline' key, it will be handled as an Augmentor pipeline,
-    and its value will be parsed further (a dictionary is expected). Three fields are required in this
-    dictionary: 'input_tensor' (bool) which specifies whether the previous stage provides a torch.Tensor
-    to the augmentor pipeline; 'output_tensor' (bool) which specifies whether the output of the augmentor
-    pipeline should be converted into a torch.Tensor; and 'stages' (dict) which specifies the Augmentor
-    pipeline stage names and parameters.
-
-    Finally, if an entry possesses the 'append' key, its value should be a bool, and it will be used to
-    specify whether the transformation pipeline should be appended or prepended to other transformations.
-    If no 'append' key is provided, the pipeline will be returned with `append_transf=True`.
+    Finally, if a stage possesses the 'append' key, its value should be a bool, and it will be used to
+    specify whether the whole pipeline should be appended or prepended to other transformations. If no
+    'append' key is provided, the pipeline will be returned with `append_ops=True` by default.
 
     Args:
-        config: a dictionary containing a list of transformations to apply as a single pipeline.
+        stages: a list defining a series of transformations to apply as a single pipeline.
 
     Returns:
         A tuple that consists of a pipeline compatible with the torchvision.transforms interfaces, and
-        a boolean specifying whether this pipeline should be appended or prefixed to other transforms.
+        a bool specifying whether this pipeline should be appended or prefixed to other transforms.
     """
-    logger.debug("loading transforms from config")
-    transforms = []
-    append_transf = True
-    for transform_name, transform_config in config.items():
-        if transform_name == "Augmentor.Pipeline":
+    if not isinstance(stages, list):
+        raise AssertionError("expected stages to be provided as a list")
+    logger.debug("loading transforms stages...")
+    if not stages:
+        return None, True  # no-op transform, and dont-care append
+    if not isinstance(stages[0], dict):
+        raise AssertionError("expected each stage to be provided as a dictionary")
+    operations = []
+    append_ops = None
+    for stage_idx, stage in enumerate(stages):
+        if "operation" not in stage or not stage["operation"]:
+            raise AssertionError("stage #%d is missing its operation field" % stage_idx)
+        operation_name = stage["operation"]
+        if "parameters" in stage and not isinstance(stage["parameters"], dict):
+            raise AssertionError("stage #%d parameters are not provided as a dictionary" % stage_idx)
+        operation_params = stage["parameters"] if "parameters" in stage else {}
+        if operation_name == "Augmentor.Pipeline":
             augp = Augmentor.Pipeline()
-            if "input_tensor" not in transform_config:
+            if "input_tensor" not in operation_params:
                 raise AssertionError("missing mandatory augmentor pipeline config 'input_tensor' field")
-            if "output_tensor" not in transform_config:
+            if "output_tensor" not in operation_params:
                 raise AssertionError("missing mandatory augmentor pipeline config 'output_tensor' field")
-            if "stages" not in transform_config:
-                raise AssertionError("missing mandatory augmentor pipeline config 'stages' field")
-            stages = transform_config["stages"]
-            if not isinstance(stages, dict):
-                raise AssertionError("augmentor pipeline 'stages' field should contain dictionary")
-            for stage_name, stage_config in stages.items():
-                getattr(augp, stage_name)(**stage_config)
-            if transform_config["input_tensor"]:
-                transforms.append(torchvision.transforms.ToPILImage())
-            transforms.append(AugmentorWrapper(augp))
-            if transform_config["output_tensor"]:
-                transforms.append(torchvision.transforms.ToTensor())
-        elif transform_name == "append":
-            append_transf = thelper.utils.str2bool(transform_config)
+            if "operations" not in operation_params:
+                raise AssertionError("missing mandatory augmentor pipeline config 'operations' field")
+            augp_operations = operation_params["operations"]
+            if not isinstance(augp_operations, dict):
+                raise AssertionError("augmentor pipeline 'operations' field should contain dictionary")
+            for augp_op_name, augp_op_params in augp_operations.items():
+                getattr(augp, augp_op_name)(**augp_op_params)
+            if operation_params["input_tensor"]:
+                operations.append(torchvision.transforms.ToPILImage())
+            operations.append(AugmentorWrapper(augp))
+            if operation_params["output_tensor"]:
+                operations.append(torchvision.transforms.ToTensor())
         else:
-            transform_type = thelper.utils.import_class(transform_name)
-            transform = transform_type(**transform_config)
-            transforms.append(transform)
-    if len(transforms) > 1:
-        return thelper.transforms.Compose(transforms), append_transf
-    elif len(transforms) == 1:
-        return transforms[0], append_transf
+            operation_type = thelper.utils.import_class(operation_name)
+            operation = operation_type(**operation_params)
+            operations.append(operation)
+        if "append" in stage:
+            if append_ops is not None:
+                raise AssertionError("found 'append' definitions in multiple stages (one covers all)")
+            append_ops = thelper.utils.str2bool(stage["append"])
+    if append_ops is None:
+        append_ops = True
+    if len(operations) > 1:
+        return thelper.transforms.Compose(operations), append_ops
+    elif len(operations) == 1:
+        return operations[0], append_ops
     else:
-        return None, False
+        return None, append_ops
 
 
 class AugmentorWrapper(object):
