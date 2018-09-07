@@ -238,7 +238,7 @@ class Trainer:
                     pow = 1.0 / int(weight_distribution.split("root", 1)[
                                         1])  # will be the inverse power to use for rooting weights
                 class_weights = {label: (size / tot_samples) ** pow for label, size in class_sizes.items()}
-                class_weights = {label: max(class_weights.values()) / weight for label, weight in class_weights.items()}
+                class_weights = {label: max(class_weights.values()) / max(weight, 1e-6) for label, weight in class_weights.items()}
                 class_weights = {label: min(weight, weight_max) for label, weight in class_weights.items()}
                 if weight_norm:
                     avg_weight = sum(class_weights.values()) / len(class_weights)
