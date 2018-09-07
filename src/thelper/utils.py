@@ -24,6 +24,13 @@ import torch
 logger = logging.getLogger(__name__)
 
 
+class Struct(object):
+    """Generic runtime-defined C-like data structure (maps constructor elems to fields)."""
+    def __init__(self, **kwargs):
+        for key, val in kwargs.items():
+            setattr(self, key, val)
+
+
 def test_cuda_device(nb_devices):
     """
     Workaround for runtime gpu identification for cluster ops.
