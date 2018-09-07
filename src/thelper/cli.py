@@ -34,6 +34,39 @@ def create_session(config, data_root, save_dir):
     return 0
 
 
+def visualize_data(config, data_root):
+    logger = thelper.utils.get_func_logger()
+    logger.info("creating visualization session...")
+    task, train_loader, valid_loader, test_loader = thelper.data.load(config, data_root)
+    if not isinstance(task, thelper.tasks.Classification):
+        raise AssertionError("missing impl, viz mode expects images + labels")
+    loader_map = {
+        "train": train_loader,
+        "valid": valid_loader,
+        "test": test_loader
+    }
+    choice = thelper.utils.query_string("Which loader would you like to visualize?", choices=list(loader_map.keys()), default="train")
+    loader = loader_map[choice]
+    if loader is None:
+        logger.info("loader is empty, all done")
+        return 0
+    image_key = task.get_input_key()
+    label_key = task.get_gt_key()
+    batch_count = len(loader)
+    logger.info("initializing '%s' loader with %d batches..." % (choice, batch_count))
+    for batch_idx, samples in enumerate(loader):
+        logger.debug("at batch = %d / %d" % (batch_idx, batch_count))
+        if "idx" in samples:
+            indices = samples["idx"]
+            if isinstance(indices, torch.Tensor):
+                logger.debug("(indices = %s)" % indices.tolist())
+            else:
+                logger.debug("(indices = %s)" % indices)
+        thelper.utils.draw_sample(samples, image_key=image_key, label_key=label_key, block=True)
+    logger.info("all done")
+    return 0
+
+
 def extract(config, resume, data_root):
     from tqdm import tqdm
     import pickle as pkl
@@ -383,6 +416,8 @@ def main(args=None):
     resume_session_ap.add_argument("-m", "--map-location", default=None, help="map location for loading data (default=None)")
     resume_session_ap.add_argument("-c", "--override-cfg", default=None, help="override config file path (default=None)")
     resume_session_ap.add_argument("-e", "--eval-only", default=False, action="store_true", help="only run evaluation pass (valid+test)")
+    viz_session_ap = subparsers.add_parser("viz", help="visualize the loaded data for a training/eval session")
+    viz_session_ap.add_argument("cfg_path", type=str, help="path to the training configuration file (or session save directory)")
     args = ap.parse_args(args=args)
     if args.verbose > 2:
         log_level = logging.NOTSET
@@ -463,3 +498,21 @@ def main(args=None):
         if save_dir is None:
             save_dir = os.path.abspath(os.path.join(os.path.dirname(args.ckpt_path), "../.."))
         return resume_session(ckptdata, args.data_root, save_dir, config=override_config, eval_only=args.eval_only)
+    elif args.mode == "viz":
+        if os.path.isdir(args.cfg_path):
+            thelper.logger.debug("will search directory '%s' for a config to load..." % args.cfg_path)
+            search_cfg_names = ["config.json", "config.latest.json", "test.json"]
+            cfg_path = None
+            for search_cfg_name in search_cfg_names:
+                search_cfg_path = os.path.join(args.cfg_path, search_cfg_name)
+                if os.path.isfile(search_cfg_path):
+                    cfg_path = search_cfg_path
+                    break
+            if cfg_path is None or not os.path.isfile(cfg_path):
+                raise AssertionError("no valid config found in dir '%s'" % args.cfg_path)
+            config = json.load(open(cfg_path))
+        else:
+            if not os.path.isfile(args.cfg_path):
+                raise AssertionError("no config file found at path '%s'" % args.cfg_path)
+            config = json.load(open(args.cfg_path))
+        return visualize_data(config, args.data_root)
