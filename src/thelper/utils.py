@@ -26,9 +26,13 @@ logger = logging.getLogger(__name__)
 
 class Struct(object):
     """Generic runtime-defined C-like data structure (maps constructor elems to fields)."""
+
     def __init__(self, **kwargs):
         for key, val in kwargs.items():
             setattr(self, key, val)
+
+    def __repr__(self):
+        return self.__class__.__name__ + ": " + str(self.__dict__)
 
 
 def test_cuda_device(nb_devices):
@@ -38,6 +42,7 @@ def test_cuda_device(nb_devices):
     Returns:
         The id (integer) of an available cuda device.
     """
+
     def try_device(_device_id):
         try:
             torch.cuda.set_device(_device_id)
@@ -47,6 +52,7 @@ def test_cuda_device(nb_devices):
         except Exception:
             logger.info("Device '%d' is NOT available" % _device_id)
             return False
+
     device_id = 0
     while device_id < nb_devices:
         if try_device(device_id):
@@ -92,12 +98,14 @@ def get_caller_name(skip=2):
         An empty string is returned if skipped levels exceed stack height; otherwise,
         returns the requested caller name.
     """
+
     def stack_(frame):
         framelist = []
         while frame:
             framelist.append(frame)
             frame = frame.f_back
         return framelist
+
     stack = stack_(sys._getframe(1))
     start = 0 + skip
     if len(stack) < start + 1:
@@ -207,11 +215,13 @@ def query_yes_no(question, default=None):
             sys.stdout.write("Please respond with 'yes/y' or 'no/n'.\n")
 
 
-def query_string(question, default=None, allow_empty=False):
+def query_string(question, choices=None, default=None, allow_empty=False):
     """Asks the user a question and returns the answer (a generic string).
 
     Args:
         question: the string that is presented to the user.
+        choices: a list of predefined choices that the user can pick from. If
+            None, then whatever the user types will be accepted.
         default: the presumed answer if the user just hits `<Enter>`. If None,
             then an answer is required to continue.
         allow_empty: defines whether an empty answer should be accepted.
@@ -222,17 +232,24 @@ def query_string(question, default=None, allow_empty=False):
     sys.stdout.flush()
     sys.stderr.flush()
     while True:
+        msg = question
+        if choices is not None:
+            msg += "\n\t(choices=%s)" % str(choices)
         if default is not None:
-            sys.stdout.write(question + " (default=" + default + ")")
-        else:
-            sys.stdout.write(question)
+            msg += "\n\t(default=%s)" % default
+        sys.stdout.write(msg + "\n")
         answer = input()
-        if answer == "" and default is not None:
-            return default
-        elif answer == "" and allow_empty:
-            return answer
+        if answer == "":
+            if default is not None:
+                return default
+            elif allow_empty:
+                return answer
+        elif choices is not None:
+            if answer in choices:
+                return answer
         else:
-            sys.stdout.write("Please respond with a non-empty string.\n")
+            return answer
+        sys.stdout.write("Please respond with a valid string.\n")
 
 
 def get_save_dir(out_root, dir_name, config=None, resume=False):
@@ -465,7 +482,7 @@ def draw_roc_curve(fpr, tpr, labels=None, size_inch=(5, 5), dpi=320):
     fig = plt.figure(num="roc", figsize=size_inch, dpi=dpi, facecolor="w", edgecolor="k")
     fig.clf()
     ax = fig.add_subplot(1, 1, 1)
-    for idx,label in enumerate(labels):
+    for idx, label in enumerate(labels):
         auc = sklearn.metrics.auc(fpr[idx, ...], tpr[idx, ...])
         if label is not None:
             ax.plot(fpr[idx, ...], tpr[idx, ...], "b", label=("%s [auc = %0.3f]" % (label, auc)))
