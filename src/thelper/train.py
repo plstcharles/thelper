@@ -303,6 +303,7 @@ class Trainer:
         start_epoch = self.current_epoch + 1
         train_writer, valid_writer, test_writer = None, None, None
         for epoch in range(start_epoch, self.epochs + 1):
+            self.logger.debug("launching training epoch %d for '%s' (dev=%s)" % (epoch, self.name, str(self.train_dev)))
             if self.scheduler:
                 self.scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
                 self.current_lr = self.scheduler.get_lr()[0]  # for debug/display purposes only
@@ -358,11 +359,9 @@ class Trainer:
             if monitor_val is None:
                 raise AssertionError("training/validation did not produce required monitoring variable '%s'" % self.monitor)
             self.outputs[epoch] = result
-            self.logger.info("epoch %d, %s = %s" % (epoch, self.monitor, self.monitor_best))
+            self.logger.info("epoch %d, %s = %s  (best = %s)" % (epoch, self.monitor, monitor_val, self.monitor_best))
             if new_best:
                 self.logger.info("(new best checkpoint)")
-            else:
-                self.logger.info("(previous best checkpoint had %s = %s)" % (self.monitor, self.monitor_best))
             if new_best or (epoch % self.save_freq) == 0:
                 self.logger.info("saving checkpoint @ epoch %d" % epoch)
                 self._save(epoch, save_best=new_best)
