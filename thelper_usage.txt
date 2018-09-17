@@ -1,0 +1,52 @@
+
+=================================================================
+                  USAGE GUIDELINES FOR THELPER
+=================================================================
+  v0.0.0 (pre-release) ce0579126195f3ef694b6270f79d276dce6ad4ce
+
+--------------------------
+Non-standard dependencies:
+--------------------------
+  - pytorch (tested with v0.4.0 only)
+  - torchvision (should be compatible with the pytorch version)
+  - numpy (latest)
+  - tensorboard (latest; might require full tensorflow install)
+  - matplotlib (latest)
+  - opencv (tested with latest stable, v3.4.1)
+  - tensorboardX (v1.2; later versions have unfixed issues)
+  - scikit-learn (latest)
+  - augmentor (latest)
+
+(see provided attachments for conda environment configuration)
+
+---------------------
+thelper installation:
+---------------------
+  While in the activated conda environment terminal, enter:
+    pip install -e <PATH_TO_THELPER_DIR> --no-deps
+
+----------------------------
+Running a training instance:
+----------------------------
+  You can either run the attached `cli.py` script with the arguments
+  given below, or forward them yourself to the entrypoint function of
+  `thelper.cli.main` --- both will result in the same thing. Examples
+  of JSON configuration files should also be attached. Finally, note
+  that the `-vvv` argument below is only used to force debug-level
+  output at all levels (console/logfiles). For more information on
+  CLI arguments, run `cli.py --help`.
+
+  Starting a new session:
+    cli.py -vvv new <PATH_TO_CONFIG_FILE> <PATH_TO_SESSIONS_ROOT_DIR>
+  Example:
+    cli.py -vvv new ./configs/multi-defect.json ./saved-sessions/
+
+  Resuming an interrupted session:
+    cli.py -vvv resume <PATH_TO_SESSION_DIR>
+  Example:
+    cli.py -vvv resume ./saved-sessions/session1/
+
+  Evaluate a checkpoint on the test set:
+    cli.py -vvv resume <PATH_TO_CHECKPOINT> --eval-only
+  Example:
+    cli.py -vvv resume ./saved-sessions/session1/checkpoints/ckpt.best.pth --eval-only
