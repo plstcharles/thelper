@@ -372,7 +372,7 @@ class Trainer:
             filename_best = os.path.join(self.checkpoint_dir, "ckpt.best.pth")
             self.logger.info("loading best model & initializing final test run")
             ckptdata = torch.load(filename_best, map_location="cpu")
-            if self.config != ckptdata["config"]["model"]:  # todo: dig into members and check only critical ones
+            if self.config != ckptdata["config"]:  # todo: dig into members and check only critical ones
                 raise AssertionError("could not load compatible best checkpoint to run test eval")
             self.model.load_state_dict(ckptdata["state_dict"])
             best_epoch = ckptdata["epoch"]
