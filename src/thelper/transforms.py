@@ -241,7 +241,7 @@ class ImageTransformWrapper(object):
 
     def __repr__(self):
         """Create a print-friendly representation of inner augmentation stages."""
-        return "ImageTransformWrapper: [prob=%f => %s]" % (self.probability, str(self.operation))
+        return "ImageTransformWrapper: [prob=%f: [%s]]" % (self.probability, str(self.operation))
 
 
 class Compose(torchvision.transforms.Compose):
@@ -265,6 +265,9 @@ class Compose(torchvision.transforms.Compose):
             sample = t.invert(sample)
         return sample
 
+    def __repr__(self):
+        """Provides print-friendly output for class attributes."""
+        return "Compose: [\n" + ",\n".join([str(t) for t in self.transforms]) + "]"
 
 class ToNumpy(object):
     """Converts and returns an image in numpy format from a torch.Tensor or PIL.Image format.
