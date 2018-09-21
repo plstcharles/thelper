@@ -1,0 +1,7 @@
+bumpversion
+matplotlib
+torch
+tensorflow
+# numpy version requirement set by tensorflow
+numpy<=1.14.5
+scipy
