@@ -41,8 +41,8 @@ all: help
 
 .PHONY: help
 help:
-	@echo "bump             bump version"
-	@echo "bump-dry         bump version (dry-run)"
+	@echo "bump             bump version using version specified as user input"
+	@echo "bump-dry         bump version using version specified as user input (dry-run)"
 	@echo "clean            remove all build, test, coverage and Python artifacts"
 	@echo "clean-build      remove build artifacts"
 	@echo "clean-env        remove package environment"
@@ -61,13 +61,13 @@ help:
 
 .PHONY: bump
 bump: conda_env
-	$(shell bash -c 'read -p "Version: " ver; echo $$ver')
-	@-bash -c "source $(ANACONDA_HOME)/bin/activate $(CONDA_ENV); $(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg --verbose $$VERSION;
+	$(shell bash -c 'read -p "Version: " ver; echo $$ver'); \
+	source $(ANACONDA_HOME)/bin/activate $(CONDA_ENV); $(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg --verbose --new-version $$VERSION;
 
 .PHONY: bump-dry
 bump-dry: conda_env
-	$(shell bash -c 'read -p "Version: " ver; echo $$ver')
-	@-bash -c "source $(ANACONDA_HOME)/bin/activate $(CONDA_ENV); $(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg --verbose --dry-run $$VERSION;"
+	$(shell bash -c 'read -p "Version: " ver; echo $$ver'); \
+	source $(ANACONDA_HOME)/bin/activate $(CONDA_ENV); $(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg --verbose --dry-run --new-version $$VERSION;"
 
 .PHONY: clean
 clean: clean-build clean-pyc clean-test
