@@ -119,10 +119,10 @@ coverage:
 .PHONY: docs
 docs: install-docs
 	echo $(CUR_DIR)
-	sphinx-apidoc -o $(CUR_DIR)/docs/ $(CUR_DIR)/src
+	$(CUR_DIR)/docs/sphinx "apidoc" -o $(CUR_DIR)/docs/source $(CUR_DIR)/src
 	$(MAKE) -C $(CUR_DIR)/docs clean
 	$(MAKE) -C $(CUR_DIR)/docs html
-	$(BROWSER) $(CUR_DIR)/docs/_build/html/index.html
+	$(BROWSER) $(CUR_DIR)/docs/build/html/index.html
 
 .PHONY: install-docs
 install-docs: clean conda_env
