@@ -43,6 +43,7 @@ all: help
 help:
 	@echo "bump             bump version using version specified as user input"
 	@echo "bump-dry         bump version using version specified as user input (dry-run)"
+	@echo "bump-tag         bump version using version specified as user input, tags it and commits the change in git"
 	@echo "clean            remove all build, test, coverage and Python artifacts"
 	@echo "clean-build      remove build artifacts"
 	@echo "clean-env        remove package environment"
@@ -61,13 +62,24 @@ help:
 
 .PHONY: bump
 bump: conda_env
-	$(shell bash -c 'read -p "Version: " ver; echo $$ver'); \
-	source $(ANACONDA_HOME)/bin/activate $(CONDA_ENV); $(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg --verbose --new-version $$VERSION;
+	$(shell bash -c 'read -p "Version: " VERSION_PART; \
+	source $(ANACONDA_HOME)/bin/activate $(CONDA_ENV); \
+	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg \
+	    --verbose --allow-dirty --no-tag --new-version $$VERSION_PART patch;')
 
 .PHONY: bump-dry
 bump-dry: conda_env
-	$(shell bash -c 'read -p "Version: " ver; echo $$ver'); \
-	source $(ANACONDA_HOME)/bin/activate $(CONDA_ENV); $(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg --verbose --dry-run --new-version $$VERSION;"
+	$(shell bash -c 'read -p "Version: " VERSION_PART; \
+	source $(ANACONDA_HOME)/bin/activate $(CONDA_ENV); \
+	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg \
+	    --verbose --allow-dirty --dry-run --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;')
+
+.PHONY: bump-tag
+bump-tag: conda_env
+	$(shell bash -c 'read -p "Version: " VERSION_PART; \
+	source $(ANACONDA_HOME)/bin/activate $(CONDA_ENV); \
+	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg \
+	    --verbose --allow-dirty --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;')
 
 .PHONY: clean
 clean: clean-build clean-pyc clean-test
@@ -119,7 +131,9 @@ coverage:
 .PHONY: docs
 docs: install-docs
 	echo $(CUR_DIR)
+	# generate module docs from code
 	$(CUR_DIR)/docs/sphinx "apidoc" -o $(CUR_DIR)/docs/source $(CUR_DIR)/src
+	# generate documentation from generated code docs and other metadata
 	$(MAKE) -C $(CUR_DIR)/docs clean
 	$(MAKE) -C $(CUR_DIR)/docs html
 	$(BROWSER) $(CUR_DIR)/docs/build/html/index.html

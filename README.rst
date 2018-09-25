@@ -22,17 +22,13 @@ Overview
 
 .. |commits-since| image:: https://img.shields.io/github/commits-since/plstcharles/thelper/latest.svg
     :alt: Commits since latest release
-    :target: https://github.com/plstcharles/thelper/compare/v0.0.0...master
+    :target: https://github.com/plstcharles/thelper/compare/v0.0.1...master
 
 .. not ready for live version (WiP)
 
    .. |docs| image:: https://readthedocs.org/projects/thelper/badge/?style=flat
        :target: https://readthedocs.org/projects/thelper
        :alt: Documentation Status
-
-   .. |requires| image:: https://requires.io/github/plstcharles/thelper/requirements.svg?branch=master
-       :alt: Requirements Status
-       :target: https://requires.io/github/plstcharles/thelper/requirements/?branch=master
 
    .. |version| image:: https://img.shields.io/pypi/v/thelper.svg
        :alt: PyPI Package latest release
@@ -58,38 +54,38 @@ This library provides training help & tools for PyTorch-based machine learning p
 
    Installation
    ============
-   
+
    ::
-   
+
        pip install thelper
-   
+
    Documentation
    =============
-   
+
    https://thelper.readthedocs.io/
-   
+
    Development
    ===========
-   
+
    To run the all tests run::
-   
+
        tox
-   
+
    Note, to combine the coverage data from all the tox environments run:
-   
+
    .. list-table::
        :widths: 10 90
        :stub-columns: 1
-   
+
        - - Windows
          - ::
-   
+
                set PYTEST_ADDOPTS=--cov-append
                tox
-   
+
        - - Other
          - ::
-   
+
                PYTEST_ADDOPTS=--cov-append tox
 
 =====
