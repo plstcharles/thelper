@@ -510,16 +510,19 @@ class ROCCurve(Metric):
     def eval(self):
         # if we did not specify a target operating point in terms of true/false positive rate, return AUC
         if self.target_tpr is None and self.target_fpr is None:
-            return self.auc(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv)
+            return "AUC = %.5f" % self.auc(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv)
         # otherwise, find the opposite rate at the requested target operating point
-        _fpr, _tpr, _ = self.curve(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv, _drop_intermediate=False)
-        for fpr, tpr in zip(_fpr, _tpr):
+        _fpr, _tpr, _thrs = self.curve(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv, _drop_intermediate=False)
+        for fpr, tpr, thrs in zip(_fpr, _tpr, _thrs):
             if self.target_tpr is not None and tpr >= self.target_tpr:
-                return fpr
+                return "for target tpr = %.5f, fpr = %.5f at threshold = %f" % (self.target_tpr, fpr, thrs)
             elif self.target_fpr is not None and fpr >= self.target_fpr:
-                return tpr
+                return "for target fpr = %.5f, tpr = %.5f at threshold = %f" % (self.target_fpr, tpr, thrs)
         # if we did not find a proper rate match above, return worse possible value
-        return 1.0 if self.target_tpr is not None else 0.0
+        if self.target_tpr is not None:
+            return "for target tpr = %.5f, fpr = 1.0 at threshold = min" % self.target_tpr
+        elif self.target_fpr is not None:
+            return "for target fpr = %.5f, tpr = 0.0 at threshold = max" % self.target_fpr
 
     def get_tbx_image(self):
         fpr, tpr, t = self.curve(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv)
