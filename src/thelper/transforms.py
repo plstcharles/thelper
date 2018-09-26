@@ -1,7 +1,12 @@
 """Transformations module.
 
 This module contains image transformation classes and wrappers for
-data augmentation and normalization.
+preprocessing, data augmentation, and normalization.
+
+All transforms should aim to be compatible with both numpy arrays and
+pytorch tensors. All important parameters for an operation should also be
+exposed in the operation's '__repr__' function so that external parsers
+can discover exactly how to reproduce their behavior.
 """
 import logging
 import random
@@ -163,6 +168,8 @@ class ImageTransformWrapper(object):
     Can be used to wrap the operations in thelper.transforms or in torchvision.transforms that
     only accept images as their input. Will optionally force-convert the images to PIL format.
 
+    Can also be used to transform a list of images uniformly based on a shared dice roll.
+
     WARNING: STOCHASTIC TRANSFORMS (e.g. torchvision.transforms.RandomCrop) WILL TREAT EACH
     IMAGE IN A LIST DIFFERENTLY. If the same operations are to be applied to all images, you
     should consider using a series non-stochastic operations wrapped inside an instance of
@@ -268,6 +275,7 @@ class Compose(torchvision.transforms.Compose):
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
         return "Compose: [\n" + ",\n".join([str(t) for t in self.transforms]) + "]"
+
 
 class ToNumpy(object):
     """Converts and returns an image in numpy format from a torch.Tensor or PIL.Image format.
