@@ -194,21 +194,24 @@ def query_yes_no(question, default=None):
         True for 'yes', or False for 'no' (or their respective variations).
     """
     valid = {"yes": True, "ye": True, "y": True, "no": False, "n": False}
-    if default is None:
-        prompt = " [y/n] "
-    elif default == "yes":
+    if ((isinstance(default, bool) and default) or
+        (isinstance(default, str) and default.lower() in ["yes", "ye", "y"])):
         prompt = " [Y/n] "
-    elif default == "no":
+    elif ((isinstance(default, bool) and not default) or
+          (isinstance(default, str) and default.lower() in ["no", "n"])):
         prompt = " [y/N] "
     else:
-        raise AssertionError("invalid default answer: '%s'" % default)
+        prompt = " [y/n] "
     sys.stdout.flush()
     sys.stderr.flush()
     while True:
         sys.stdout.write(question + prompt)
         choice = input().lower()
         if default is not None and choice == "":
-            return valid[default]
+            if isinstance(default, str):
+                return valid[default]
+            else:
+                return default
         elif choice in valid:
             return valid[choice]
         else:
