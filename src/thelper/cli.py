@@ -7,10 +7,7 @@ import json
 import glob
 import logging
 import os
-
 import torch
-import numpy as np
-import matplotlib.pyplot as plt
 
 import thelper
 
@@ -22,6 +19,8 @@ def create_session(config, data_root, save_dir):
     if "name" not in config or not config["name"]:
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
+    if "cudnn_benchmark" in config and thelper.utils.str2bool(config["cudnn_benchmark"]):
+        torch.backends.cudnn.benchmark = True
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
     logger.info("Creating new training session '%s'..." % session_name)
     task, train_loader, valid_loader, test_loader = thelper.data.load(config, data_root, save_dir)
@@ -76,6 +75,8 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False):
     if "name" not in config or not config["name"]:
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
+    if "cudnn_benchmark" in config and thelper.utils.str2bool(config["cudnn_benchmark"]):
+        torch.backends.cudnn.benchmark = True
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config, resume=True)
     logger.info("loading training session '%s' objects..." % session_name)
     task, train_loader, valid_loader, test_loader = thelper.data.load(config, data_root, save_dir)
