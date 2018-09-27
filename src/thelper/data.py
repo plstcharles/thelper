@@ -160,7 +160,7 @@ class DataConfig(object):
             self.test_seed = config[key]
         elif self.shuffle:
             self.test_seed = np.random.randint(2**16)
-            logger.info("setting test seed to %d" % self.test_seed)
+            logger.info("setting test split seed to %d" % self.test_seed)
         if "valid_seed" in config or "valid_split_seed" in config:
             key = "valid_seed" if "valid_seed" in config else "valid_split_seed"
             if not isinstance(config[key], (int, str)):
@@ -168,13 +168,16 @@ class DataConfig(object):
             self.valid_seed = config[key]
         elif self.shuffle:
             self.valid_seed = np.random.randint(2**16)
-            logger.info("setting valid seed to %d" % self.valid_seed)
+            logger.info("setting valid split seed to %d" % self.valid_seed)
         if "torch_seed" in config:
             if not isinstance(config["torch_seed"], int):
                 raise AssertionError("unexpected value type for field 'torch_seed'")
             self.torch_seed = config["torch_seed"]
-            torch.manual_seed(self.torch_seed)
-            torch.cuda.manual_seed(self.torch_seed)
+        else:
+            self.torch_seed = np.random.randint(2**16)
+            logger.info("setting torch seed to %d" % self.torch_seed)
+        torch.manual_seed(self.torch_seed)
+        torch.cuda.manual_seed_all(self.torch_seed)
         self.workers = config["workers"] if "workers" in config and config["workers"] >= 0 else 1
         self.pin_memory = thelper.utils.str2bool(config["pin_memory"]) if "pin_memory" in config else False
         self.drop_last = thelper.utils.str2bool(config["drop_last"]) if "drop_last" in config else False

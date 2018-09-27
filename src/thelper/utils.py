@@ -35,31 +35,33 @@ class Struct(object):
         return self.__class__.__name__ + ": " + str(self.__dict__)
 
 
-def test_cuda_device(nb_devices):
+def get_available_cuda_devices(attempts_per_device=5):
     """
-    Workaround for runtime gpu identification for cluster ops.
+    Tests all visible cuda devices and returns a list of available ones.
 
     Returns:
-        The id (integer) of an available cuda device.
+        List of available cuda device IDs (integers). An empty list means no
+        cuda device is available, and the app should fallback to cpu.
     """
-
-    def try_device(_device_id):
-        try:
-            torch.cuda.set_device(_device_id)
-            _ = torch.cuda.FloatTensor(1)
-            logger.info("Device '%d' is available" % _device_id)
-            return True
-        except Exception:
-            logger.info("Device '%d' is NOT available" % _device_id)
-            return False
-
-    device_id = 0
-    while device_id < nb_devices:
-        if try_device(device_id):
-            torch.cuda.empty_cache()
-            return device_id
-    logger.error("No cuda device available!")
-    return -1
+    if not torch.cuda.is_available() or torch.cuda.device_count() == 0:
+        return []
+    devices_available = [False] * torch.cuda.device_count()
+    attempt_broadcast = False
+    for attempt in range(attempts_per_device):
+        for device_id in range(torch.cuda.device_count()):
+            if not devices_available[device_id]:
+                if not attempt_broadcast:
+                    logger.debug("testing availability of cuda device #%d (%s)" % (
+                        device_id, torch.cuda.get_device_name(device_id)
+                    ))
+                try:
+                    torch.cuda.set_device(device_id)
+                    test_tensor = torch.cuda.FloatTensor(1)
+                    devices_available[device_id] = True
+                except Exception:
+                    pass
+        attempt_broadcast = True
+    return [device_id for device_id, available in enumerate(devices_available) if available]
 
 
 def import_class(fullname):

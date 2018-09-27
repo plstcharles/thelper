@@ -110,7 +110,6 @@ def main(args=None):
     cl_new_session_ap = subparsers.add_parser("cl_new", help="creates a new session from a config file for the cluster")
     cl_new_session_ap.add_argument("cfg_path", type=str, help="path to the training configuration file")
     cl_new_session_ap.add_argument("save_dir", type=str, help="path to the root directory where checkpoints should be saved")
-    cl_new_session_ap.add_argument("-n", "--nb-devices", default=2, type=int, help="number of devices to test for availability on cluster")
     resume_session_ap = subparsers.add_parser("resume", help="resume a session from a checkpoint file")
     resume_session_ap.add_argument("ckpt_path", type=str, help="path to the checkpoint (or save directory) to resume training from")
     resume_session_ap.add_argument("-s", "--save-dir", default=None, type=str, help="path to the root directory where checkpoints should be saved")
@@ -150,20 +149,15 @@ def main(args=None):
         thelper.logger.debug("checking dataset root '%s'..." % args.data_root)
         if not os.path.exists(args.data_root) or not os.path.isdir(args.data_root):
             raise AssertionError("invalid data root folder at '%s'; please specify a valid path via --data-root=PATH")
-    if args.mode == "new":
+    if args.mode == "new" or args.mode == "cl_new":
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
         config = json.load(open(args.cfg_path))
-        return create_session(config, args.data_root, args.save_dir)
-    elif args.mode == "cl_new":
-        thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
-        config = json.load(open(args.cfg_path))
-        nb_devices = args.nb_devices
-        device_id = thelper.utils.test_cuda_device(nb_devices)
-        if device_id < 0 or device_id >= nb_devices:
-            raise AssertionError("no cuda device available")
-        config["trainer"]["trainer"]["train_device"] = "cuda:%i" % device_id
-        config["trainer"]["trainer"]["valid_device"] = "cuda:%i" % device_id
-        config["trainer"]["trainer"]["test_device"] = "cuda:%i" % device_id
+        if args.mode == "cl_new":
+            trainer_config = config["trainer"] if "trainer" in config else None
+            if trainer_config is not None:
+                if "train_device" in trainer_config or "valid_device" in trainer_config or \
+                    "test_device" in trainer_config or "device" in trainer_config:
+                    raise AssertionError("cannot specify device in config for cluster sessions, it is determined at runtime")
         return create_session(config, args.data_root, args.save_dir)
     elif args.mode == "resume":
         if os.path.isdir(args.ckpt_path):

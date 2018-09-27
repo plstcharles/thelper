@@ -85,56 +85,7 @@ class Trainer:
         self.optimizer = None
         self.scheduler = None
         self.config = config
-        self.default_dev = "cpu"
-        if torch.cuda.is_available():
-            self.default_dev = "cuda:0"
-        devices = [None] * 3
-        for idx, field in enumerate(["train_device", "valid_device", "test_device"]):
-            device_str = str(trainer_config[field]) if field in trainer_config and trainer_config[field] else self.default_dev
-            if not torch.cuda.is_available() and "cuda" in device_str:
-                raise AssertionError("cuda not available (according to pytorch), cannot use in '%s' field" % field)
-            curr_devices = device_str.split(",")
-            cuda_device_idxs = []
-            for dev_idx, device in enumerate(curr_devices):
-                if "cuda" not in device and "cpu" not in device:
-                    raise AssertionError("unknown device type '%s' for field '%s'" % (device, field))
-                elif device == "cpu":
-                    if len(curr_devices) > 1:
-                        raise AssertionError("cannot combine cpu with other devices in field '%s'" % field)
-                    else:
-                        devices[idx] = "cpu"
-                        break
-                elif device == "cuda":
-                    if len(curr_devices) > 1:
-                        raise AssertionError("must specify device index (e.g. 'cuda:0') if combining devices in '%s'" % field)
-                    else:
-                        devices[idx] = self.default_dev
-                        break
-                elif "cuda:" not in device:
-                    raise AssertionError("expecting cuda device format to be 'cuda:X' (where X is device index)")
-                cuda_dev_count = torch.cuda.device_count()
-                cuda_dev_str = device.rsplit(":", 1)[-1]
-                if cuda_dev_str == "all":
-                    if len(curr_devices) > 1:
-                        raise AssertionError("use of 'cuda:all' must not be combined with other devices")
-                    if cuda_dev_count == 1:
-                        devices[idx] = self.default_dev
-                        break
-                    else:
-                        devices[idx] = []  # will be interpreted as 'use all cuda devices' later
-                        break
-                else:
-                    cuda_dev_idx = int(device.rsplit(":", 1)[-1])
-                    if cuda_dev_idx >= cuda_dev_count:
-                        raise AssertionError("cuda device '%s' out of range (detected device count = %d)" % (device, cuda_dev_count))
-                    if len(curr_devices) == 1:
-                        devices[idx] = device
-                        break
-                    else:
-                        cuda_device_idxs.append(cuda_dev_idx)
-            if devices[idx] is None:
-                devices[idx] = cuda_device_idxs
-        self.train_dev, self.valid_dev, self.test_dev = tuple(devices)
+        self.devices = self._load_devices(trainer_config)
         if "loss" not in trainer_config or not trainer_config["loss"]:
             raise AssertionError("trainer config missing 'loss' field")
         self.loss = self._load_loss(trainer_config["loss"], next((loader for loader in loaders if loader is not None)).dataset)
@@ -187,7 +138,9 @@ class Trainer:
     def _upload_model(self, model, dev):
         if isinstance(dev, list):
             if len(dev) == 0:
-                return torch.nn.DataParallel(model).cuda()
+                return model.cpu()
+            elif len(dev) == 1:
+                return model.cuda(dev[0])
             else:
                 return torch.nn.DataParallel(model, device_ids=dev).cuda(dev[0])
         else:
@@ -196,7 +149,7 @@ class Trainer:
     def _upload_tensor(self, tensor, dev):
         if isinstance(dev, list):
             if len(dev) == 0:
-                return tensor.cuda()
+                return tensor.cpu()
             else:
                 return tensor.cuda(dev[0])
         else:
@@ -244,7 +197,7 @@ class Trainer:
                     avg_weight = sum(class_weights.values()) / len(class_weights)
                     class_weights = {label: weight / avg_weight for label, weight in class_weights.items()}
                 if weight_param_pass_tensor:
-                    params[weight_param_name] = self._upload_tensor(torch.FloatTensor(list(class_weights.values())), dev=self.train_dev)
+                    params[weight_param_name] = self._upload_tensor(torch.FloatTensor(list(class_weights.values())), dev=self.devices)
                 else:
                     params[weight_param_name] = class_weights
         loss = loss_type(**params)
@@ -293,22 +246,68 @@ class Trainer:
             scheduler = scheduler_type(optimizer, **scheduler_params)
         return optimizer, scheduler
 
+    @staticmethod
+    def _load_devices(config):
+        available_cuda_devices = thelper.utils.get_available_cuda_devices()
+        devices, devices_str = None, None
+        if "device" in config:
+            devices_str = config["device"]
+        elif "train_device" in config:
+            devices_str = config["train_device"]
+        if devices_str is not None:
+            if isinstance(devices_str, str):
+                if not devices_str:
+                    raise AssertionError("cannot specify empty device name, remove field instead for default assignment")
+                devices_str = devices_str.split(",")
+            elif isinstance(devices_str, list):
+                if not devices_str:
+                    raise AssertionError("cannot specify empty device list, remove field instead for default assignment")
+                if not all([isinstance(dev_str, str) for dev_str in devices_str]):
+                    raise AssertionError("unexpected type in device list, should be string")
+            for dev_idx, dev_str in enumerate(devices_str):
+                if "cuda" not in dev_str and dev_str != "cpu":
+                    raise AssertionError("unknown device type '%s' (expecting 'cpu' or 'cuda:X')" % dev_str)
+                elif dev_str == "cpu":
+                    if len(devices_str) > 1:
+                        raise AssertionError("cannot combine cpu with other devices")
+                    return []
+                elif dev_str == "cuda" or dev_str == "cuda:all":
+                    if len(devices_str) > 1:
+                        raise AssertionError("must specify device index (e.g. 'cuda:0') if combining devices")
+                    if not available_cuda_devices:
+                        raise AssertionError("could not find any available cuda devices")
+                    return available_cuda_devices
+                elif "cuda:" not in dev_str:
+                    raise AssertionError("expecting cuda device format to be 'cuda:X' (where X is device index)")
+                cuda_dev_idx = int(dev_str.rsplit(":", 1)[-1])
+                if cuda_dev_idx not in available_cuda_devices:
+                    raise AssertionError("cuda device '%s' out of range (detected devices = %s)" % (dev_str, str(available_cuda_devices)))
+                if devices is None:
+                    devices = [cuda_dev_idx]
+                else:
+                    devices.append(cuda_dev_idx)
+            return devices
+        else:
+            return available_cuda_devices
+
     def train(self):
         if not self.train_loader:
             raise AssertionError("missing training data, invalid loader!")
-        model = self._upload_model(self.model, self.train_dev)
-        self.optimizer, self.scheduler = self._load_optimization(model, self.optimization_config)
+        self.logger.debug("uploading model to '%s'..." % str(self.devices))
+        self.model = self._upload_model(self.model, self.devices)
+        self.logger.debug("loading optimizer...")
+        self.optimizer, self.scheduler = self._load_optimization(self.model, self.optimization_config)
         if self.optimizer_state is not None:
             self.optimizer.load_state_dict(self.optimizer_state)
         start_epoch = self.current_epoch + 1
         train_writer, valid_writer, test_writer = None, None, None
         for epoch in range(start_epoch, self.epochs + 1):
-            self.logger.debug("launching training epoch %d for '%s' (dev=%s)" % (epoch, self.name, str(self.train_dev)))
+            self.logger.debug("launching training epoch %d for '%s' (dev=%s)" % (epoch, self.name, str(self.devices)))
             if self.scheduler:
                 self.scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
                 self.current_lr = self.scheduler.get_lr()[0]  # for debug/display purposes only
                 self.logger.info("learning rate at %.8f" % self.current_lr)
-            model.train()
+            self.model.train()
             if self.use_tbx and not train_writer:
                 train_writer = tensorboardX.SummaryWriter(log_dir=self.train_writer_path, comment=self.name)
                 setattr(train_writer, "path", self.train_writer_path)  # for external usage, if needed
@@ -318,23 +317,21 @@ class Trainer:
                     metric.set_max_accum(len(self.train_loader))  # used to make scalar metric evals smoother between epochs
                 if metric.needs_reset():
                     metric.reset()  # if a metric needs to be reset between two epochs, do it here
-            loss, self.current_iter = self._train_epoch(model, epoch, self.current_iter, self.train_dev, self.optimizer,
+            loss, self.current_iter = self._train_epoch(self.model, epoch, self.current_iter, self.devices, self.optimizer,
                                                         self.train_loader, self.train_metrics, train_writer)
             self._write_epoch_metrics(epoch, self.train_metrics, train_writer)
             train_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.train_metrics.items()}
             result = {"train/loss": loss, "train/metrics": train_metric_vals}
             monitor_type_key = "train/metrics"  # if we cannot run validation, will monitor progression on training metrics
             if self.valid_loader:
-                model.eval()
-                # here, we reuse the model on the train device, as switching may slow everything down hard
-                # todo: run eval in parallel (i.e. at the same time as training?)
+                self.model.eval()
                 if self.use_tbx and not valid_writer:
                     valid_writer = tensorboardX.SummaryWriter(log_dir=self.valid_writer_path, comment=self.name)
                     setattr(valid_writer, "path", self.valid_writer_path)  # for external usage, if needed
                     setattr(valid_writer, "prefix", "valid")  # to prefix data added to tbx logs (if needed)
                 for metric in self.valid_metrics.values():
                     metric.reset()  # force reset here, we always evaluate from a clean state
-                self._eval_epoch(model, epoch, self.current_iter, self.valid_dev,
+                self._eval_epoch(self.model, epoch, self.current_iter, self.devices,
                                  self.valid_loader, self.valid_metrics, valid_writer)
                 self._write_epoch_metrics(epoch, self.valid_metrics, valid_writer)
                 valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()}
@@ -376,15 +373,15 @@ class Trainer:
             self.model.load_state_dict(ckptdata["state_dict"])
             best_epoch = ckptdata["epoch"]
             best_iter = ckptdata["iter"] if "iter" in ckptdata else None
-            model = self._upload_model(self.model, self.test_dev)
-            model.eval()
+            self.model = self._upload_model(self.model, self.devices)
+            self.model.eval()
             if self.use_tbx and not test_writer:
                 test_writer = tensorboardX.SummaryWriter(log_dir=self.test_writer_path, comment=self.name)
                 setattr(test_writer, "path", self.test_writer_path)  # for external usage, if needed
                 setattr(test_writer, "prefix", "test")  # to prefix data added to tbx logs (if needed)
             for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
-            self._eval_epoch(model, best_epoch, best_iter, self.test_dev,
+            self._eval_epoch(self.model, best_epoch, best_iter, self.devices,
                              self.test_loader, self.test_metrics, test_writer)
             self._write_epoch_metrics(best_epoch, self.test_metrics, test_writer)
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
@@ -400,32 +397,31 @@ class Trainer:
     def eval(self):
         if not self.valid_loader and not self.test_loader:
             raise AssertionError("missing validation/test data, invalid loaders!")
+        self.logger.debug("uploading model to '%s'..." % str(self.devices))
+        self.model = self._upload_model(self.model, self.devices)
+        self.model.eval()
         result = {}
         valid_writer, test_writer = None, None
         if self.test_loader:
-            model = self._upload_model(self.model, self.test_dev)
-            model.eval()
             if self.use_tbx and not test_writer:
                 test_writer = tensorboardX.SummaryWriter(log_dir=self.test_writer_path, comment=self.name)
                 setattr(test_writer, "path", self.test_writer_path)  # for external usage, if needed
                 setattr(test_writer, "prefix", "test")  # to prefix data added to tbx logs (if needed)
             for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
-            self._eval_epoch(model, self.current_epoch, self.current_iter, self.test_dev,
+            self._eval_epoch(self.model, self.current_epoch, self.current_iter, self.devices,
                              self.test_loader, self.test_metrics, test_writer)
             self._write_epoch_metrics(self.current_epoch, self.test_metrics, test_writer)
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
             result = {**result, **test_metric_vals}
         elif self.valid_loader:
-            model = self._upload_model(self.model, self.valid_dev)
-            model.eval()
             if self.use_tbx and not valid_writer:
                 valid_writer = tensorboardX.SummaryWriter(log_dir=self.valid_writer_path, comment=self.name)
                 setattr(valid_writer, "path", self.valid_writer_path)  # for external usage, if needed
                 setattr(valid_writer, "prefix", "valid")  # to prefix data added to tbx logs (if needed)
             for metric in self.valid_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
-            self._eval_epoch(model, self.current_epoch, self.current_iter, self.valid_dev,
+            self._eval_epoch(self.model, self.current_epoch, self.current_iter, self.devices,
                              self.valid_loader, self.valid_metrics, valid_writer)
             self._write_epoch_metrics(self.current_epoch, self.valid_metrics, valid_writer)
             valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()}
