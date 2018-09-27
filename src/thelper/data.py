@@ -2,6 +2,7 @@ import logging
 import copy
 import os
 import time
+import random
 import platform
 import json
 from abc import ABC, abstractmethod
@@ -151,14 +152,29 @@ class DataConfig(object):
         if self.shuffle:
             logger.debug("dataset samples will be shuffled according to predefined seeds")
             np.random.seed()
-        self.test_seed = config["test_seed"] if "test_seed" in config and isinstance(config["test_seed"], (int, str)) else None
-        self.valid_seed = config["valid_seed"] if "valid_seed" in config and isinstance(config["valid_seed"], (int, str)) else None
-        if self.shuffle and self.test_seed is None:
+        self.valid_seed, self.test_seed, self.torch_seed = None, None, None
+        if "test_seed" in config or "test_split_seed" in config:
+            key = "test_seed" if "test_seed" in config else "test_split_seed"
+            if not isinstance(config[key], (int, str)):
+                raise AssertionError("unexpected value type for field '%s'" % key)
+            self.test_seed = config[key]
+        elif self.shuffle:
             self.test_seed = np.random.randint(2**16)
             logger.info("setting test seed to %d" % self.test_seed)
-        if self.shuffle and self.valid_seed is None:
+        if "valid_seed" in config or "valid_split_seed" in config:
+            key = "valid_seed" if "valid_seed" in config else "valid_split_seed"
+            if not isinstance(config[key], (int, str)):
+                raise AssertionError("unexpected value type for field '%s'" % key)
+            self.valid_seed = config[key]
+        elif self.shuffle:
             self.valid_seed = np.random.randint(2**16)
             logger.info("setting valid seed to %d" % self.valid_seed)
+        if "torch_seed" in config:
+            if not isinstance(config["torch_seed"], int):
+                raise AssertionError("unexpected value type for field 'torch_seed'")
+            self.torch_seed = config["torch_seed"]
+            torch.manual_seed(self.torch_seed)
+            torch.cuda.manual_seed(self.torch_seed)
         self.workers = config["workers"] if "workers" in config and config["workers"] >= 0 else 1
         self.pin_memory = thelper.utils.str2bool(config["pin_memory"]) if "pin_memory" in config else False
         self.drop_last = thelper.utils.str2bool(config["drop_last"]) if "drop_last" in config else False
@@ -255,6 +271,7 @@ class DataConfig(object):
                     trainvalid_idxs = indices[name][offsets[name]:]
                     np.random.shuffle(trainvalid_idxs)
                     indices[name][offsets[name]:] = trainvalid_idxs
+                np.random.seed()  # back to truly random state for future use
         return train_idxs, valid_idxs, test_idxs
 
     def get_split(self, datasets, task):
