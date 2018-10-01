@@ -174,15 +174,17 @@ def main(args=None):
             for ckpt_path in ckpt_paths:
                 # note: the 2nd field in the name should be the epoch index, or 'best' if final checkpoint
                 tag = os.path.basename(ckpt_path).split(".")[1]
-                if tag == "best" and args.eval_only:  # if eval-only, always pick the best checkpoint
+                if tag == "best" and (args.eval_only or latest_checkpoint_epoch == 0):
+                    # if eval-only, always pick the best checkpoint; otherwise, only pick if nothing else exists
                     args.ckpt_path = ckpt_path
-                    break
+                    if args.eval_only:
+                        break
                 elif tag != "best" and int(tag) > latest_checkpoint_epoch:  # otherwise, pick latest
                     # note: if several sessions are merged, this will pick the latest checkpoint of the first...
                     args.ckpt_path = ckpt_path
                     latest_checkpoint_epoch = int(tag)
         if not os.path.isfile(args.ckpt_path):
-            raise AssertionError("invalid checkpoint at '%s'" % args.ckpt_path)
+            raise AssertionError("could not find valid checkpoint at '%s'" % args.ckpt_path)
         thelper.logger.debug("parsing checkpoint at '%s'" % args.ckpt_path)
         ckptdata = torch.load(args.ckpt_path, map_location=args.map_location)
         override_config = None
