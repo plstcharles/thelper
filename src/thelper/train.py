@@ -294,9 +294,9 @@ class Trainer:
         if not self.train_loader:
             raise AssertionError("missing training data, invalid loader!")
         self.logger.debug("uploading model to '%s'..." % str(self.devices))
-        self.model = self._upload_model(self.model, self.devices)
+        model = self._upload_model(self.model, self.devices)
         self.logger.debug("loading optimizer...")
-        self.optimizer, self.scheduler = self._load_optimization(self.model, self.optimization_config)
+        self.optimizer, self.scheduler = self._load_optimization(model, self.optimization_config)
         if self.optimizer_state is not None:
             self.optimizer.load_state_dict(self.optimizer_state)
         start_epoch = self.current_epoch + 1
@@ -307,7 +307,7 @@ class Trainer:
                 self.scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
                 self.current_lr = self.scheduler.get_lr()[0]  # for debug/display purposes only
                 self.logger.info("learning rate at %.8f" % self.current_lr)
-            self.model.train()
+            model.train()
             if self.use_tbx and not train_writer:
                 train_writer = tensorboardX.SummaryWriter(log_dir=self.train_writer_path, comment=self.name)
                 setattr(train_writer, "path", self.train_writer_path)  # for external usage, if needed
@@ -317,21 +317,21 @@ class Trainer:
                     metric.set_max_accum(len(self.train_loader))  # used to make scalar metric evals smoother between epochs
                 if metric.needs_reset():
                     metric.reset()  # if a metric needs to be reset between two epochs, do it here
-            loss, self.current_iter = self._train_epoch(self.model, epoch, self.current_iter, self.devices, self.optimizer,
+            loss, self.current_iter = self._train_epoch(model, epoch, self.current_iter, self.devices, self.optimizer,
                                                         self.train_loader, self.train_metrics, train_writer)
             self._write_epoch_metrics(epoch, self.train_metrics, train_writer)
             train_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.train_metrics.items()}
             result = {"train/loss": loss, "train/metrics": train_metric_vals}
             monitor_type_key = "train/metrics"  # if we cannot run validation, will monitor progression on training metrics
             if self.valid_loader:
-                self.model.eval()
+                model.eval()
                 if self.use_tbx and not valid_writer:
                     valid_writer = tensorboardX.SummaryWriter(log_dir=self.valid_writer_path, comment=self.name)
                     setattr(valid_writer, "path", self.valid_writer_path)  # for external usage, if needed
                     setattr(valid_writer, "prefix", "valid")  # to prefix data added to tbx logs (if needed)
                 for metric in self.valid_metrics.values():
                     metric.reset()  # force reset here, we always evaluate from a clean state
-                self._eval_epoch(self.model, epoch, self.current_iter, self.devices,
+                self._eval_epoch(model, epoch, self.current_iter, self.devices,
                                  self.valid_loader, self.valid_metrics, valid_writer)
                 self._write_epoch_metrics(epoch, self.valid_metrics, valid_writer)
                 valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()}
@@ -373,15 +373,15 @@ class Trainer:
             self.model.load_state_dict(ckptdata["state_dict"])
             best_epoch = ckptdata["epoch"]
             best_iter = ckptdata["iter"] if "iter" in ckptdata else None
-            self.model = self._upload_model(self.model, self.devices)
-            self.model.eval()
+            model = self._upload_model(self.model, self.devices)
+            model.eval()
             if self.use_tbx and not test_writer:
                 test_writer = tensorboardX.SummaryWriter(log_dir=self.test_writer_path, comment=self.name)
                 setattr(test_writer, "path", self.test_writer_path)  # for external usage, if needed
                 setattr(test_writer, "prefix", "test")  # to prefix data added to tbx logs (if needed)
             for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
-            self._eval_epoch(self.model, best_epoch, best_iter, self.devices,
+            self._eval_epoch(model, best_epoch, best_iter, self.devices,
                              self.test_loader, self.test_metrics, test_writer)
             self._write_epoch_metrics(best_epoch, self.test_metrics, test_writer)
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
@@ -398,8 +398,8 @@ class Trainer:
         if not self.valid_loader and not self.test_loader:
             raise AssertionError("missing validation/test data, invalid loaders!")
         self.logger.debug("uploading model to '%s'..." % str(self.devices))
-        self.model = self._upload_model(self.model, self.devices)
-        self.model.eval()
+        model = self._upload_model(self.model, self.devices)
+        model.eval()
         result = {}
         valid_writer, test_writer = None, None
         if self.test_loader:
@@ -409,7 +409,7 @@ class Trainer:
                 setattr(test_writer, "prefix", "test")  # to prefix data added to tbx logs (if needed)
             for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
-            self._eval_epoch(self.model, self.current_epoch, self.current_iter, self.devices,
+            self._eval_epoch(model, self.current_epoch, self.current_iter, self.devices,
                              self.test_loader, self.test_metrics, test_writer)
             self._write_epoch_metrics(self.current_epoch, self.test_metrics, test_writer)
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
@@ -421,7 +421,7 @@ class Trainer:
                 setattr(valid_writer, "prefix", "valid")  # to prefix data added to tbx logs (if needed)
             for metric in self.valid_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
-            self._eval_epoch(self.model, self.current_epoch, self.current_iter, self.devices,
+            self._eval_epoch(model, self.current_epoch, self.current_iter, self.devices,
                              self.valid_loader, self.valid_metrics, valid_writer)
             self._write_epoch_metrics(self.current_epoch, self.valid_metrics, valid_writer)
             valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()}
