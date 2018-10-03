@@ -1,0 +1,15 @@
+name: thelper
+channels:
+  - pytorch
+dependencies:
+  - pytorch=0.4.0
+  - numpy
+  - tensorflow
+  - cython
+  - matplotlib
+  - opencv
+  - scikit-learn
+  - pip:
+    - augmentor
+    - tensorboardX==1.2
+    - torchvision
