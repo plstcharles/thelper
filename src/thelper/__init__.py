@@ -12,5 +12,5 @@ import thelper.utils
 
 logger = logging.getLogger("thelper")
 
-__version__ = "0.0.0"
+__version__ = "0.0.1"
 __url__ = "https://github.com/plstcharles/thelper"

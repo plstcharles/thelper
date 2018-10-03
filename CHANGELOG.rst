@@ -2,7 +2,7 @@
 Changelog
 =========
 
-0.1.0 (Summer 2018)
+0.0.1 (2018/10/03)
 -------------------
 
-* Initial WiP release.
+* Initial release (work in progress).

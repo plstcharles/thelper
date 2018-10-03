@@ -1,0 +1,15 @@
+torch
+torchvision
+bumpversion
+matplotlib
+cython
+torch
+opencv-python
+# tensorflow required for tensorboard only
+tensorflow
+# numpy version requirement set by tensorflow
+numpy<=1.14.5
+scipy
+scikit-learn
+augmentor
+tensorboardX==1.2

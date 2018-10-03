@@ -2,4 +2,6 @@
 Authors
 =======
 
-* Pierre-Luc St-Charles - pierreluc.stcharles<at>gmail.com
+* Pierre-Luc St-Charles - stcharpl<at>crim.ca
+* Francis Charette Migneault - francis.charette-migneault<at>crim.ca
+* Mario Beaulieu - mario.beaulieu<at>crim.ca

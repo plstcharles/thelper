@@ -1,0 +1,35 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import argparse
+
+import sphinx.cmd.build
+import sphinx.cmd.quickstart
+import sphinx.ext.apidoc
+import sphinx.ext.autosummary.generate
+
+cur_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../src/thelper'))
+sys.path.insert(0, cur_dir)
+
+
+def main(argv=sys.argv):
+    ap = argparse.ArgumentParser(description='thelper sphinx documentation generator')
+    ap.add_argument('mode', type=str, choices=['build', 'quickstart', 'apidoc', 'summary'],
+                    help="prints the version of the library and exits")
+    runner_args = ap.parse_args(args=argv[1:2])
+    sphinx_args = argv[2:]
+    if runner_args.mode == 'build':
+        sys.exit(sphinx.cmd.build.main(sphinx_args))
+    elif runner_args.mode == 'quickstart':
+        sys.exit(sphinx.cmd.quickstart.main(sphinx_args))
+    elif runner_args.mode == 'apidoc':
+        sys.exit(sphinx.ext.apidoc.main(sphinx_args))
+    elif runner_args.mode == 'summary':
+        sys.exit(sphinx.ext.autosummary.generate.main(sphinx_args))
+    else:
+        raise ValueError("unknown sphinx mode `{!r}`".format(runner_args.mode))
+
+
+if __name__ == '__main__':
+    main()

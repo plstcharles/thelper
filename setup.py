@@ -41,7 +41,6 @@ class OptionalBuildExt(build_ext):
 
     Optimizations for this package will not be available!
         """)
-
         print("CAUSE:")
         print("")
         print("    " + repr(e))
@@ -50,7 +49,7 @@ class OptionalBuildExt(build_ext):
 
 setuptools.setup(
     name="thelper",
-    version="0.0.0",
+    version="0.0.1",
     license="Apache Software License 2.0",
     description="Provides training help & tools for PyTorch-based machine learning projects.",
     long_description="%s\n%s" % (
@@ -58,7 +57,7 @@ setuptools.setup(
         re.sub(":[a-z]+:`~?(.*?)`", r"``\1``", read("CHANGELOG.rst"))
     ),
     author="Pierre-Luc St-Charles",
-    author_email="pierreluc.stcharles@gmail.com",
+    author_email="stcharpl@crim.ca",
     url="https://github.com/plstcharles/thelper",
     packages=setuptools.find_packages("src"),
     package_dir={"": "src"},
