@@ -4,6 +4,7 @@
 *.egg-info
 dist
 build
+downloads
 eggs
 .eggs
 parts
@@ -19,7 +20,7 @@ data
 venv*/
 pyvenv*/
 pip-log.txt
-thelper.log
+*.log
 .coverage
 .tox
 .coverage.*
