@@ -6,19 +6,19 @@ and matplotlib/pyplot drawing calls.
 import glob
 import importlib
 import inspect
+import itertools
+import json
 import logging
 import math
-import json
 import os
 import re
 import sys
 import time
-import itertools
 
 import cv2 as cv
-import sklearn.metrics
 import matplotlib.pyplot as plt
 import numpy as np
+import sklearn.metrics
 import torch
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,9 @@ def get_available_cuda_devices(attempts_per_device=5):
                     ))
                 try:
                     torch.cuda.set_device(device_id)
-                    test_tensor = torch.cuda.FloatTensor(1)
+                    test_val = torch.cuda.FloatTensor(1)
+                    if test_val.cpu().item() != 1.0:
+                        raise AssertionError("sometime's really wrong")
                     devices_available[device_id] = True
                 except Exception:
                     pass
@@ -196,11 +198,11 @@ def query_yes_no(question, default=None):
         True for 'yes', or False for 'no' (or their respective variations).
     """
     valid = {"yes": True, "ye": True, "y": True, "no": False, "n": False}
-    if ((isinstance(default, bool) and default) or
-        (isinstance(default, str) and default.lower() in ["yes", "ye", "y"])):
+    if (isinstance(default, bool) and default) or \
+       (isinstance(default, str) and default.lower() in ["yes", "ye", "y"]):
         prompt = " [Y/n] "
-    elif ((isinstance(default, bool) and not default) or
-          (isinstance(default, str) and default.lower() in ["no", "n"])):
+    elif (isinstance(default, bool) and not default) or \
+         (isinstance(default, str) and default.lower() in ["no", "n"]):
         prompt = " [y/N] "
     else:
         prompt = " [y/n] "
@@ -303,7 +305,8 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
             if os.path.exists(config_backup_path):
                 config_backup = json.load(open(config_backup_path, "r"))
                 if config_backup != config:
-                    answer = query_yes_no("Config backup in '%s' differs from config loaded through checkpoint; overwrite?" % config_backup_path)
+                    query_msg = "Config backup in '%s' differs from config loaded through checkpoint; overwrite?" % config_backup_path
+                    answer = query_yes_no(query_msg)
                     if answer:
                         logger.warning("config mismatch with previous run; will overwrite latest backup in save directory")
                     else:
@@ -423,11 +426,11 @@ def draw_sample(sample, pred=None, image_key="image", label_key="label", block=F
         else:
             raise AssertionError("missing classification-related fields in sample dict, and dict is multi-elem")
         key1, key2 = sample.keys()
-        if ((isinstance(sample[key1], torch.Tensor) and sample[key1].dim() > 1) and
-            (isinstance(sample[key2], list) or (isinstance(sample[key2], torch.Tensor) and sample[key2].dim() == 1))):
+        if (isinstance(sample[key1], torch.Tensor) and sample[key1].dim() > 1) and \
+           (isinstance(sample[key2], list) or (isinstance(sample[key2], torch.Tensor) and sample[key2].dim() == 1)):
             image_key, label_key = key1, key2
-        elif ((isinstance(sample[key2], torch.Tensor) and sample[key2].dim() > 1) and
-              (isinstance(sample[key1], list) or (isinstance(sample[key1], torch.Tensor) and sample[key1].dim() == 1))):
+        elif (isinstance(sample[key2], torch.Tensor) and sample[key2].dim() > 1) and \
+             (isinstance(sample[key1], list) or (isinstance(sample[key1], torch.Tensor) and sample[key1].dim() == 1)):
             image_key, label_key = key2, key1
         else:
             raise AssertionError(
@@ -549,12 +552,12 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
     fig = plt.figure(num="confmat", figsize=size_inch, dpi=dpi, facecolor="w", edgecolor="k")
     fig.clf()
     ax = fig.add_subplot(1, 1, 1)
-    im = ax.imshow(confmat, cmap=plt.cm.hot)
+    ax.imshow(confmat, cmap=plt.cm.hot)
     labels = [clipstr(label, 9) for label in class_list]
     tick_marks = np.arange(len(labels))
     ax.set_xlabel("Predicted", fontsize=7)
     ax.set_xticks(tick_marks)
-    c = ax.set_xticklabels(labels, fontsize=4, rotation=-90, ha="center")
+    ax.set_xticklabels(labels, fontsize=4, rotation=-90, ha="center")
     ax.xaxis.set_label_position("bottom")
     ax.xaxis.tick_bottom()
     ax.set_ylabel("Real", fontsize=7)

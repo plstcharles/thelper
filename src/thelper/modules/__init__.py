@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 
 import thelper.modules.utils
 from thelper.modules.utils import Module

@@ -543,7 +543,8 @@ class Affine(object):
         out_size = self.out_size
         if out_size is None:
             out_size = (sample.shape[1], sample.shape[0])
-        return cv.warpAffine(sample, self.transf, dsize=out_size, flags=self.flags, borderMode=self.border_mode, borderValue=self.border_val)
+        return cv.warpAffine(sample, self.transf, dsize=out_size, flags=self.flags,
+                             borderMode=self.border_mode, borderValue=self.border_val)
 
     def invert(self, sample):
         """Inverts the warp transformation, but only is the output image has not been cropped before."""
@@ -554,7 +555,8 @@ class Affine(object):
             out_size = (sample.shape[1], sample.shape[0])
         else:
             raise AssertionError("unknown original image size, cannot invert affine transform")
-        return cv.warpAffine(sample, self.transf, dsize=out_size, flags=self.flags ^ cv.WARP_INVERSE_MAP, borderMode=self.border_mode, borderValue=self.border_val)
+        return cv.warpAffine(sample, self.transf, dsize=out_size, flags=self.flags ^ cv.WARP_INVERSE_MAP,
+                             borderMode=self.border_mode, borderValue=self.border_val)
 
     def __repr__(self):
         """Provides print-friendly output for class attributes."""

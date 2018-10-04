@@ -1,14 +1,13 @@
 import logging
 
-import thelper.cli
-import thelper.data
-import thelper.features
-import thelper.modules
-import thelper.optim
-import thelper.tasks
-import thelper.train
-import thelper.transforms
-import thelper.utils
+import thelper.cli  # noqa: F401
+import thelper.data  # noqa: F401
+import thelper.modules  # noqa: F401
+import thelper.optim  # noqa: F401
+import thelper.tasks  # noqa: F401
+import thelper.train  # noqa: F401
+import thelper.transforms  # noqa: F401
+import thelper.utils  # noqa: F401
 
 logger = logging.getLogger("thelper")
 

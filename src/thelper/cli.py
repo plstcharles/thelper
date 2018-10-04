@@ -3,10 +3,11 @@ Command-line module, for use with __main__ entrypoint or external apps.
 """
 
 import argparse
-import json
 import glob
+import json
 import logging
 import os
+
 import torch
 
 import thelper
@@ -104,20 +105,20 @@ def main(args=None):
     ap.add_argument("-v", "--verbose", action="count", default=3, help="set logging terminal verbosity level (additive)")
     ap.add_argument("-d", "--data-root", default=None, type=str, help="path to the root directory passed to dataset interfaces for parsing")
     subparsers = ap.add_subparsers(title="Operating mode", dest="mode")
-    new_session_ap = subparsers.add_parser("new", help="creates a new session from a config file")
-    new_session_ap.add_argument("cfg_path", type=str, help="path to the training configuration file")
-    new_session_ap.add_argument("save_dir", type=str, help="path to the root directory where checkpoints should be saved")
-    cl_new_session_ap = subparsers.add_parser("cl_new", help="creates a new session from a config file for the cluster")
-    cl_new_session_ap.add_argument("cfg_path", type=str, help="path to the training configuration file")
-    cl_new_session_ap.add_argument("save_dir", type=str, help="path to the root directory where checkpoints should be saved")
-    resume_session_ap = subparsers.add_parser("resume", help="resume a session from a checkpoint file")
-    resume_session_ap.add_argument("ckpt_path", type=str, help="path to the checkpoint (or save directory) to resume training from")
-    resume_session_ap.add_argument("-s", "--save-dir", default=None, type=str, help="path to the root directory where checkpoints should be saved")
-    resume_session_ap.add_argument("-m", "--map-location", default=None, help="map location for loading data (default=None)")
-    resume_session_ap.add_argument("-c", "--override-cfg", default=None, help="override config file path (default=None)")
-    resume_session_ap.add_argument("-e", "--eval-only", default=False, action="store_true", help="only run evaluation pass (valid+test)")
-    viz_session_ap = subparsers.add_parser("viz", help="visualize the loaded data for a training/eval session")
-    viz_session_ap.add_argument("cfg_path", type=str, help="path to the training configuration file (or session save directory)")
+    new_ap = subparsers.add_parser("new", help="creates a new session from a config file")
+    new_ap.add_argument("cfg_path", type=str, help="path to the training configuration file")
+    new_ap.add_argument("save_dir", type=str, help="path to the root directory where checkpoints should be saved")
+    cl_new_ap = subparsers.add_parser("cl_new", help="creates a new session from a config file for the cluster")
+    cl_new_ap.add_argument("cfg_path", type=str, help="path to the training configuration file")
+    cl_new_ap.add_argument("save_dir", type=str, help="path to the root directory where checkpoints should be saved")
+    resume_ap = subparsers.add_parser("resume", help="resume a session from a checkpoint file")
+    resume_ap.add_argument("ckpt_path", type=str, help="path to the checkpoint (or save directory) to resume training from")
+    resume_ap.add_argument("-s", "--save-dir", default=None, type=str, help="path to the root directory where checkpoints should be saved")
+    resume_ap.add_argument("-m", "--map-location", default=None, help="map location for loading data (default=None)")
+    resume_ap.add_argument("-c", "--override-cfg", default=None, help="override config file path (default=None)")
+    resume_ap.add_argument("-e", "--eval-only", default=False, action="store_true", help="only run evaluation pass (valid+test)")
+    viz_ap = subparsers.add_parser("viz", help="visualize the loaded data for a training/eval session")
+    viz_ap.add_argument("cfg_path", type=str, help="path to the training configuration file (or session save directory)")
     args = ap.parse_args(args=args)
     if args.verbose > 2:
         log_level = logging.NOTSET
@@ -155,8 +156,8 @@ def main(args=None):
         if args.mode == "cl_new":
             trainer_config = config["trainer"] if "trainer" in config else None
             if trainer_config is not None:
-                if "train_device" in trainer_config or "valid_device" in trainer_config or \
-                    "test_device" in trainer_config or "device" in trainer_config:
+                if ("train_device" in trainer_config or "valid_device" in trainer_config or
+                        "test_device" in trainer_config or "device" in trainer_config):
                     raise AssertionError("cannot specify device in config for cluster sessions, it is determined at runtime")
         return create_session(config, args.data_root, args.save_dir)
     elif args.mode == "resume":

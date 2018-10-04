@@ -1,6 +1,5 @@
 torch
 torchvision
-bumpversion
 matplotlib
 cython
 torch

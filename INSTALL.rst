@@ -31,7 +31,7 @@ Other systems
 -------------
 
 If you cannot use the Makefile, you will have to install the dependencies yourself. These dependencies are listed in
-the requirements file `here <requirements.txt>`_, and can be installed using the conda environment configuration
+the `requirements file <requirements.txt>`_, and can be installed using the conda environment configuration
 file provided `here <conda-env.yml>`_. For the latter case, call the following from your terminal::
 
   $ conda env create --file <THELPER_ROOT>/conda-env.yml -n thelper

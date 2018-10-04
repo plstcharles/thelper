@@ -12,9 +12,17 @@ include .editorconfig
 include AUTHORS.rst
 include CHANGELOG.rst
 include CONTRIBUTING.rst
-include LICENSE
+include INSTALL.rst
 include README.rst
 
-include tox.ini .travis.yml appveyor.yml
+include LICENSE
+include Makefile
+include requirements.txt
+include thelper_usage.txt
+
+include tox.ini
+include conda-env.yml
+include .travis.yml
+include appveyor.yml
 
 global-exclude *.py[cod] __pycache__ *.so *.dylib

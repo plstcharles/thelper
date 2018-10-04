@@ -60,6 +60,7 @@ help:
 bump: conda-env
 	$(shell bash -c 'read -p "Version: " VERSION_PART; \
 	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
+	test -f $(CONDA_ENV_PATH)/bin/bumpversion || pip install bumpversion; \
 	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg \
 		--verbose --allow-dirty --no-tag --new-version $$VERSION_PART patch;')
 
@@ -67,6 +68,7 @@ bump: conda-env
 bump-dry: conda-env
 	$(shell bash -c 'read -p "Version: " VERSION_PART; \
 	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
+	test -f $(CONDA_ENV_PATH)/bin/bumpversion || pip install bumpversion; \
 	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg \
 		--verbose --allow-dirty --dry-run --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;')
 
@@ -74,6 +76,7 @@ bump-dry: conda-env
 bump-tag: conda-env
 	$(shell bash -c 'read -p "Version: " VERSION_PART; \
 	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
+	test -f $(CONDA_ENV_PATH)/bin/bumpversion || pip install bumpversion; \
 	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg \
 		--verbose --allow-dirty --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;')
 
@@ -106,10 +109,10 @@ clean-test:
 	@rm -fr $(CUR_DIR)/coverage/
 
 .PHONY: lint
-lint:
-	@-bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
-	           test -f $(CONDA_ENV_PATH)/bin/flake8 || pip install flake8; \
-	           flake8 src tests"
+lint: conda-env
+	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
+		test -f $(CONDA_ENV_PATH)/bin/flake8 || pip install flake8; \
+		flake8 src tests"
 
 .PHONY: test
 test:
@@ -117,7 +120,9 @@ test:
 
 .PHONY: test-all
 test-all:
-	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); tox"
+	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
+		test -f $(CONDA_ENV_PATH)/bin/tox || pip install tox; \
+		tox"
 
 .PHONY: coverage
 coverage:
@@ -136,7 +141,7 @@ docs: install-docs
 
 .PHONY: install-docs
 install-docs: conda-env
-	@-bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); pip install -r $(CUR_DIR)/docs/src/requirements.txt"
+	@-bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); pip install -r $(CUR_DIR)/docs/requirements.txt"
 
 .PHONY: install
 install: conda-env

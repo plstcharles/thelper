@@ -1,11 +1,11 @@
-import logging
 import copy
-import os
-import time
-import random
-import platform
 import json
-from abc import ABC, abstractmethod
+import logging
+import os
+import platform
+import time
+from abc import ABC
+from abc import abstractmethod
 from collections import Counter
 
 import numpy as np
@@ -15,10 +15,10 @@ import torch
 import torch.utils.data
 import torch.utils.data.sampler
 
-import thelper.utils
-import thelper.tasks
 import thelper.samplers
+import thelper.tasks
 import thelper.transforms
+import thelper.utils
 
 logger = logging.getLogger(__name__)
 
@@ -192,11 +192,14 @@ class DataConfig(object):
                 self.sampler_type = thelper.utils.import_class(sampler_config["type"])
                 self.sampler_params = thelper.utils.keyvals2dict(sampler_config["params"]) if "params" in sampler_config else None
                 logger.debug("will use global sampler with type '%s' and config : %s" % (str(self.sampler_type), str(self.sampler_params)))
-                self.sampler_pass_labels = thelper.utils.str2bool(sampler_config["pass_labels"]) if "pass_labels" in sampler_config else False
-                apply_train = thelper.utils.str2bool(sampler_config["apply_train"]) if "apply_train" in sampler_config else True
-                apply_valid = thelper.utils.str2bool(sampler_config["apply_valid"]) if "apply_valid" in sampler_config else False
-                apply_test = thelper.utils.str2bool(sampler_config["apply_test"]) if "apply_test" in sampler_config else False
-                self.sampler_apply = [apply_train, apply_valid, apply_test]
+                self.sampler_pass_labels = False
+                if "pass_labels" in sampler_config:
+                    self.sampler_pass_labels = thelper.utils.str2bool(sampler_config["pass_labels"])
+                self.sampler_apply = [
+                    thelper.utils.str2bool(sampler_config["apply_train"]) if "apply_train" in sampler_config else True,
+                    thelper.utils.str2bool(sampler_config["apply_valid"]) if "apply_valid" in sampler_config else False,
+                    thelper.utils.str2bool(sampler_config["apply_test"]) if "apply_test" in sampler_config else False,
+                ]
                 logger.debug("global sampler will be applied to loaders: %s" % str(self.sampler_apply))
         self.train_augments = None
         self.train_augments_append = False
@@ -285,12 +288,12 @@ class DataConfig(object):
             # note: with current impl, all classes will be shuffle the same way... (shouldnt matter, right?)
             global_class_names = task.get_class_names()
             logger.info("will split evenly over %d classes..." % len(global_class_names))
-            dataset_class_sample_maps = {dataset_name: task.get_class_sample_map(dataset.samples) for dataset_name, dataset in datasets.items()}
+            sample_maps = {dataset_name: task.get_class_sample_map(dataset.samples) for dataset_name, dataset in datasets.items()}
             train_idxs, valid_idxs, test_idxs = {}, {}, {}
             for class_name in global_class_names:
                 curr_class_samples, curr_class_size = {}, {}
                 for dataset_name, dataset in datasets.items():
-                    class_samples = dataset_class_sample_maps[dataset_name][class_name] if class_name in dataset_class_sample_maps[dataset_name] else []
+                    class_samples = sample_maps[dataset_name][class_name] if class_name in sample_maps[dataset_name] else []
                     samples_pairs = list(zip(class_samples, [class_name] * len(class_samples)))
                     curr_class_samples[dataset_name] = samples_pairs
                     curr_class_size[dataset_name] = len(curr_class_samples[dataset_name])
@@ -316,7 +319,8 @@ class DataConfig(object):
             dataset_indices = {}
             for dataset_name in datasets:
                 # note: all indices paired with 'None' below as class is ignored; used for compatibility with code above
-                dataset_indices[dataset_name] = list(zip(list(range(dataset_sizes[dataset_name])), [None] * len(dataset_sizes[dataset_name])))
+                dataset_indices[dataset_name] = list(
+                    zip(list(range(dataset_sizes[dataset_name])), [None] * len(dataset_sizes[dataset_name])))
             train_idxs, valid_idxs, test_idxs = self._get_raw_split(dataset_indices)
         return train_idxs, valid_idxs, test_idxs
 

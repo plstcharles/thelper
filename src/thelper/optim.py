@@ -1,13 +1,14 @@
-import logging
-import copy
 import bisect
+import copy
+import logging
+from abc import ABC
+from abc import abstractmethod
 from collections import deque
-from abc import ABC, abstractmethod
 
+import sklearn.metrics
 import torch
 import torch.nn
 import torch.nn.functional
-import sklearn.metrics
 
 import thelper.utils
 

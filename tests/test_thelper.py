@@ -1,10 +1,5 @@
-from thelper import longest
-from thelper.cli import main
+import thelper.cli
 
 
-def test_main():
-    main(["--version"])
-
-
-def test_longest():
-    assert longest([b'a', b'bc', b'abc']) == b'abc'
+def test_main_version():
+    thelper.cli.main(["--version"])

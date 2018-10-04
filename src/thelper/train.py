@@ -1,16 +1,14 @@
-import json
 import logging
 import os
-import time
 import platform
-from copy import deepcopy
+import time
 from abc import abstractmethod
+from copy import deepcopy
 
+import cv2 as cv
+import tensorboardX
 import torch
 import torch.optim
-
-import tensorboardX
-import cv2 as cv
 
 import thelper.utils
 
@@ -174,8 +172,8 @@ class Trainer:
                 weight_distribution = "uniform"
                 if "weight_distribution" in config:
                     weight_distribution = config["weight_distribution"]
-                    if not isinstance(weight_distribution, str) or (
-                        weight_distribution != "uniform" and "root" not in weight_distribution):
+                    if not isinstance(weight_distribution, str) or \
+                       (weight_distribution != "uniform" and "root" not in weight_distribution):
                         raise AssertionError("unexpected weight distribution strategy")
                 weight_max = float("inf")
                 if "weight_max" in config:
@@ -188,8 +186,8 @@ class Trainer:
                 class_weights = None
                 pow = 1
                 if "root" in weight_distribution:
-                    pow = 1.0 / int(weight_distribution.split("root", 1)[
-                                        1])  # will be the inverse power to use for rooting weights
+                    # will be the inverse power to use for rooting weights
+                    pow = 1.0 / int(weight_distribution.split("root", 1)[1])
                 class_weights = {label: (size / tot_samples) ** pow for label, size in class_sizes.items()}
                 class_weights = {label: max(class_weights.values()) / max(weight, 1e-6) for label, weight in class_weights.items()}
                 class_weights = {label: min(weight, weight_max) for label, weight in class_weights.items()}
@@ -344,8 +342,8 @@ class Trainer:
                     if self.monitor not in value:
                         raise AssertionError("not monitoring required variable '%s' in metrics" % self.monitor)
                     monitor_val = value[self.monitor]
-                    if ((self.monitor_goal == thelper.optim.Metric.minimize and monitor_val < self.monitor_best) or
-                        (self.monitor_goal == thelper.optim.Metric.maximize and monitor_val > self.monitor_best)):
+                    if (self.monitor_goal == thelper.optim.Metric.minimize and monitor_val < self.monitor_best) or \
+                       (self.monitor_goal == thelper.optim.Metric.maximize and monitor_val > self.monitor_best):
                         self.monitor_best = monitor_val
                         new_best = True
                 if not isinstance(value, dict):

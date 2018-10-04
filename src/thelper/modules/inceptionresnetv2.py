@@ -1,4 +1,5 @@
-# InceptionResNetv2 derived from https://github.com/Cadene/pretrained-models.pytorch/blob/master/pretrainedmodels/models/inceptionresnetv2.py
+# InceptionResNetv2 derived from:
+# https://github.com/Cadene/pretrained-models.pytorch/blob/master/pretrainedmodels/models/inceptionresnetv2.py
 import torch
 import torch.nn
 

@@ -153,7 +153,8 @@ class ResNet(thelper.modules.Module):
         self.inplanes = 64
         self.coordconv = coordconv
         self.radius_channel = radius_channel
-        self.conv1 = self._make_conv2d(in_channels=input_channels, out_channels=self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+        self.conv1 = self._make_conv2d(in_channels=input_channels, out_channels=self.inplanes,
+                                       kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = torch.nn.BatchNorm2d(self.inplanes)
         self.relu = torch.nn.ReLU(inplace=True)
         self.maxpool = torch.nn.MaxPool2d(kernel_size=3, stride=2, padding=1)

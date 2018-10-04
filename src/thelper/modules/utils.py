@@ -1,14 +1,15 @@
 import logging
-from abc import ABC, abstractmethod
+from abc import ABC
+from abc import abstractmethod
 
 import numpy as np
 import torch
 import torch.nn
 
 import thelper
-import thelper.utils
-import thelper.tasks
 import thelper.modules
+import thelper.tasks
+import thelper.utils
 
 logger = logging.getLogger(__name__)
 

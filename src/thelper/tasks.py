@@ -8,10 +8,11 @@ models instantiated by this framework are attached to a task.
 For now, only 'classification' (i.e. generic image recognition) is implemented. New tasks
 such as object detection and image segmentation will later be added here.
 """
-import logging
 import json
+import logging
 import os
-from abc import ABC, abstractmethod
+from abc import ABC
+from abc import abstractmethod
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,7 @@ class Classification(Task):
                 raise AssertionError("could not find label key match in sample dict")
             if isinstance(class_name, str):
                 if class_name not in self.class_names:
-                    raise AssertionError("label '%s' not found in class names provided earlier" % label)
+                    raise AssertionError("label '%s' not found in class names provided earlier" % class_name)
             else:
                 raise AssertionError("unexpected sample label type (need string!)")
             sample_idxs[class_name].append(sample_idx)
