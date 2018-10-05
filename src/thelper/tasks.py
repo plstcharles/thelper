@@ -29,7 +29,7 @@ class Task(ABC):
 
     @abstractmethod
     def get_input_key(self):
-        """Returns the key used to fetch input data tensors from loaded samples.
+        """Returns the key used to fetch input data tensors from a sample dictionary.
 
         The key can be of any type, as long as it can be used to index a dictionary. Print-
         friendly types (e.g. string) are recommended for debugging.
@@ -38,7 +38,7 @@ class Task(ABC):
 
     @abstractmethod
     def get_gt_key(self):
-        """Returns the key used to fetch groundtruth data tensors from loaded samples.
+        """Returns the key used to fetch groundtruth data tensors from a sample dictionary.
 
         The key can be of any type, as long as it can be used to index a dictionary. Print-
         friendly types (e.g. string) are recommended for debugging.
@@ -83,14 +83,27 @@ class Task(ABC):
 class Classification(Task):
     """Classification interface for input-to-label translation.
 
-    This specialization requests that for a given input, the model should provide prediction
-    scores for each predefined label (or class). The label names are not used by the model,
-    but the number of labels will affect the complexity of its final layer. The names are used
+    This specialization requests that the model provides prediction scores for each predefined
+    label (or class) given an input tensor. The label names are not directly used by the model,
+    but the number of labels may affect the complexity of its final layer. The names are used
     here to help categorize samples, and to assure that two tasks are only identical when
-    their label counts and ordering match, which helps during sanity-checks.
+    their label counts and ordering match. This helps complete sanity checks.
+
+    Attributes:
+        class_names: list of class (or label) names to predict, where each name is a string.
+        input_key: the key used to fetch input tensors from a sample dictionary.
+        label_key: the key used to fetch class (label) names from a sample dictionary.
+        meta_keys: the list of extra keys provided by the data parser inside each sample.
     """
 
     def __init__(self, class_names, input_key, label_key, meta_keys=None):
+        """Receives and stores the class (or label) names to predict, the input tensor key, the
+        groundtruth class (label) key, and the extra (meta) keys produced by the dataset(s).
+
+        The class names can be provided as a list of strings, or as a path to a json file that
+        contains such a list. The list must contain at least two items. All other arguments are
+        used as-is to index dictionaries, and must therefore be key-compatible types.
+        """
         self.class_names = class_names
         if isinstance(class_names, str) and os.path.exists(class_names):
             with open(class_names, "r") as fd:
@@ -99,6 +112,8 @@ class Classification(Task):
             raise AssertionError("expected class names to be provided as a list")
         if len(self.class_names) < 1:
             raise AssertionError("should have at least one class!")
+        if len(self.class_names) != len(set(self.class_names)):
+            raise AssertionError("list should not contain duplicates")
         self.input_key = input_key
         self.label_key = label_key
         self.meta_keys = []
@@ -108,25 +123,60 @@ class Classification(Task):
             self.meta_keys = meta_keys
 
     def get_input_key(self):
+        """Returns the key used to fetch input data tensors from a sample dictionary.
+
+        The returned key is the one originally passed in the constructor, typically provided
+        by the dataset parsing interface that will be filling the sample dictionaries.
+        """
         return self.input_key
 
     def get_gt_key(self):
+        """Returns the key used to fetch label indices from a sample dictionary.
+
+        The returned key is the one originally passed in the constructor, typically provided
+        by the dataset parsing interface that will be filling the sample dictionaries.
+        """
         return self.label_key
 
     def get_meta_keys(self):
+        """Returns a list of keys used to carry metadata and auxiliary info in samples.
+
+        The returned keys are the ones originally passed in the constructor, typically provided
+        by the dataset parsing interface that will be filling the sample dictionaries. The list
+        can be empty, meaning that no extra data will be available in the loaded samples.
+        """
         return self.meta_keys
 
+    def get_class_names(self):
+        """Returns the list of class names to be predicted by the model."""
+        return self.class_names
+
     def get_nb_classes(self):
+        """Returns the number of classes (or labels) to be predicted by the model."""
         return len(self.class_names)
 
     def get_class_idxs_map(self):
+        """Returns the class-label-to-index map used for encoding class labels as integers."""
         return {class_name: idx for idx, class_name in enumerate(self.class_names)}
 
     def get_class_sizes(self, samples):
+        """Given a list of samples, returns a map of sample counts for each class label."""
         class_idxs = self.get_class_sample_map(samples)
         return {class_name: len(class_idxs[class_name]) for class_name in class_idxs}
 
     def get_class_sample_map(self, samples):
+        """Splits a list of samples based on their labels into a map of sample lists.
+
+        This function is useful if we need to split a dataset based on its label categories in
+        order to sort it, augment it, or rebalance it. The samples do not need to be fully loaded
+        for this to work, as only their label (gt) value will be queried.
+
+        Args:
+            samples: a list of samples to split, where each sample is a dictionary.
+
+        Returns:
+            A dictionary that maps each class label to its corresponding list of samples.
+        """
         if samples is None or not samples:
             raise AssertionError("provided invalid sample list")
         elif not isinstance(samples, list) or not isinstance(samples[0], dict):
@@ -149,10 +199,11 @@ class Classification(Task):
             sample_idxs[class_name].append(sample_idx)
         return sample_idxs
 
-    def get_class_names(self):
-        return self.class_names
-
     def __eq__(self, other):
+        """Checks whether two tasks are compatible or not.
+
+        In this case, an extra check regarding class names is added when all other fields match.
+        """
         if isinstance(other, self.__class__):
             return (self.get_input_key() == other.get_input_key() and
                     self.get_gt_key() == other.get_gt_key() and
@@ -161,6 +212,7 @@ class Classification(Task):
         return False
 
     def __repr__(self):
+        """Creates a print-friendly representation of a classification task."""
         return self.__class__.__name__ + ": " + str({
             "input": self.get_input_key(),
             "gt": self.get_gt_key(),
