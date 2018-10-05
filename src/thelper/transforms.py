@@ -31,24 +31,24 @@ def load_transforms(stages):
     is important, as some transformations might not be compatible if taken out of order. The entries must
     each be dictionaries that define an operation, its parameters, and some meta-parameters (detailed below).
 
-    The 'operation' field of each stage will be used to dynamically import a specific type of operation to
-    apply. The 'parameters' field of each stage will then be used to pass parameters to the constructor of
-    this operation. If an operation is identified as 'Augmentor.Pipeline', it will be specially handled as
-    an Augmentor pipeline, and its parameters will be parsed further (a dictionary is expected). Three
-    fields are required in this dictionary: 'input_tensor' (bool) which specifies whether the previous stage
-    provides a torch.Tensor to the augmentor pipeline; 'output_tensor' (bool) which specifies whether the
-    output of the augmentor pipeline should be converted into a torch.Tensor; and 'operations' (dict) which
-    specifies the Augmentor pipeline operation names and parameters (as a dictionary).
+    The ``operation`` field of each stage will be used to dynamically import a specific type of operation to
+    apply. The ``parameters`` field of each stage will then be used to pass parameters to the constructor of
+    this operation. If an operation is identified as ``"Augmentor.Pipeline"``, it will be specially handled
+    as an Augmentor pipeline, and its parameters will be parsed further (a dictionary is expected). Three
+    fields are required in this dictionary: ``input_tensor`` (bool) which specifies whether the previous stage
+    provides a ``torch.Tensor`` to the augmentor pipeline; ``output_tensor`` (bool) which specifies whether the
+    output of the augmentor pipeline should be converted into a ``torch.Tensor``; and ``operations`` (dict)
+    which specifies the Augmentor pipeline operation names and parameters (as a dictionary).
 
-    Finally, if a stage possesses the 'append' key, its value should be a bool, and it will be used to
+    Finally, if a stage possesses the ``append`` key, its value should be a bool, and it will be used to
     specify whether the whole pipeline should be appended or prepended to other transformations. If no
-    'append' key is provided, the pipeline will be returned with `append_ops=True` by default.
+    ``append`` key is provided, the pipeline will be returned with `append_ops=True` by default.
 
     Args:
         stages: a list defining a series of transformations to apply as a single pipeline.
 
     Returns:
-        A tuple that consists of a pipeline compatible with the torchvision.transforms interfaces, and
+        A tuple that consists of a pipeline compatible with the ``torchvision.transforms`` interfaces, and
         a bool specifying whether this pipeline should be appended or prefixed to other transforms.
     """
     if not isinstance(stages, list):
@@ -106,12 +106,14 @@ def load_transforms(stages):
 class AugmentorWrapper(object):
     """Augmentor pipeline wrapper that allows pickling and multithreading.
 
-    See https://github.com/mdbloice/Augmentor for more information. This wrapper
-    was last updated to work with version 0.2.2 --- more recent versions introduced
-    yet unfixed (as of 2018/08) issues on some platforms.
+    See https://github.com/mdbloice/Augmentor for more information. This wrapper was last updated to work
+    with version 0.2.2 --- more recent versions introduced yet unfixed (as of 2018/08) issues on some platforms.
 
-    All original transforms are supported here. This wrapper also fixes the list
-    output bug for single-image samples when using operations individually.
+    All original transforms are supported here. This wrapper also fixes the list output bug for single-image
+    samples when using operations individually.
+
+    .. seealso::
+        :func:`thelper.transforms.load_transforms`
 
     Attributes:
         pipeline: the augmentor pipeline instance to apply to images.
@@ -120,7 +122,7 @@ class AugmentorWrapper(object):
     def __init__(self, pipeline):
         """Receives and stores an augmentor pipeline for later use.
 
-        The pipeline itself is instantiated in `thelper.transforms.load_transforms(...)`.
+        The pipeline itself is instantiated in :func:`thelper.transforms.load_transforms`.
         """
         self.pipeline = pipeline
 
@@ -165,16 +167,17 @@ class AugmentorWrapper(object):
 class ImageTransformWrapper(object):
     """Image tranform wrapper that allows operations on lists.
 
-    Can be used to wrap the operations in thelper.transforms or in torchvision.transforms that
-    only accept images as their input. Will optionally force-convert the images to PIL format.
+    Can be used to wrap the operations in ``thelper.transforms`` or in ``torchvision.transforms``
+    that only accept images as their input. Will optionally force-convert the images to PIL format.
 
     Can also be used to transform a list of images uniformly based on a shared dice roll.
 
-    WARNING: STOCHASTIC TRANSFORMS (e.g. torchvision.transforms.RandomCrop) WILL TREAT EACH
-    IMAGE IN A LIST DIFFERENTLY. If the same operations are to be applied to all images, you
-    should consider using a series non-stochastic operations wrapped inside an instance of
-    torchvision.transforms.RandomApply, or simply provide the probability of applying the
-    transforms to this wrapper's constructor.
+    .. warning::
+        Stochastic transforms (e.g. ``torchvision.transforms.RandomCrop``) will treat each image in
+        a list differently. If the same operations are to be applied to all images, you should
+        consider using a series non-stochastic operations wrapped inside an instance of
+        ``torchvision.transforms.RandomApply``, or simply provide the probability of applying the
+        transforms to this wrapper's constructor.
 
     Attributes:
         operation: the wrapped operation (callable object or class name string to import).
@@ -254,7 +257,7 @@ class ImageTransformWrapper(object):
 class Compose(torchvision.transforms.Compose):
     """Composes several transforms together (with support for invert ops).
 
-    This interface is fully compatible with torchvision.transforms.Compose.
+    This interface is fully compatible with ``torchvision.transforms.Compose``.
     """
 
     def __init__(self, transforms):
@@ -278,7 +281,7 @@ class Compose(torchvision.transforms.Compose):
 
 
 class ToNumpy(object):
-    """Converts and returns an image in numpy format from a torch.Tensor or PIL.Image format.
+    """Converts and returns an image in numpy format from a ``torch.Tensor`` or ``PIL.Image`` format.
 
     This operation is deterministic. The returns image will always be encoded as HxWxC, where
     if the input has three channels, the ordering might be optionally changed.
@@ -322,13 +325,13 @@ class CenterCrop(object):
     """Returns a center crop from a given image via OpenCV and numpy.
 
     This operation is deterministic. The code relies on OpenCV, meaning the border arguments
-    must be compatible with cv2.copyMakeBorder.
+    must be compatible with ``cv2.copyMakeBorder``.
 
     Attributes:
         size: the size of the target crop (tuple of width, height).
         relative: specifies whether the target crop size is relative to the image size or not.
-        bordertype: argument forwarded to cv2.copyMakeBorder.
-        borderval: argument forwarded to cv2.copyMakeBorder.
+        bordertype: argument forwarded to ``cv2.copyMakeBorder``.
+        borderval: argument forwarded to ``cv2.copyMakeBorder``.
     """
 
     def __init__(self, size, bordertype=cv.BORDER_CONSTANT, borderval=0):
@@ -340,9 +343,9 @@ class CenterCrop(object):
                 assumed to be relative, and will be determined dynamically for each sample. If a
                 tuple is used, it is assumed to be (width, height).
             bordertype: border copy type to use when the image is too small for the required crop size.
-                See cv2.copyMakeBorder for more information.
+                See ``cv2.copyMakeBorder`` for more information.
             borderval: border value to use when the image is too small for the required crop size. See
-                cv2.copyMakeBorder for more information.
+                ``cv2.copyMakeBorder`` for more information.
         """
         if isinstance(size, (tuple, list)):
             if len(size) != 2:
@@ -393,25 +396,25 @@ class Resize(object):
     """Resizes a given image using OpenCV and numpy.
 
     This operation is deterministic. The code relies on OpenCV, meaning the interpolation arguments
-    must be compatible with cv2.resize.
+    must be compatible with ``cv2.resize``.
 
     Attributes:
-        interp: interpolation type to use (forwarded to cv2.resize)
+        interp: interpolation type to use (forwarded to ``cv2.resize``)
         buffer: specifies whether a destination buffer should be used to avoid allocations
         dsize: target image size (tuple of width, height).
-        dst: buffer used to avoid reallocations if self.buffer == True
-        fx: argument forwarded to cv2.resize.
-        fy: argument forwarded to cv2.resize.
+        dst: buffer used to avoid reallocations if ``self.buffer == True``
+        fx: argument forwarded to ``cv2.resize``.
+        fy: argument forwarded to ``cv2.resize``.
     """
 
     def __init__(self, dsize, fx=0, fy=0, interp=cv.INTER_LINEAR, buffer=False):
         """Validates and initializes resize parameters.
 
         Args:
-            dsize: size of the target image, forwarded to cv2.resize.
-            fx: x-scaling factor, forwarded to cv2.resize.
-            fy: y-scaling factor, forwarded to cv2.resize.
-            interp: resize interpolation type, forwarded to cv2.resize.
+            dsize: size of the target image, forwarded to ``cv2.resize``.
+            fx: x-scaling factor, forwarded to ``cv2.resize``.
+            fy: y-scaling factor, forwarded to ``cv2.resize``.
+            interp: resize interpolation type, forwarded to ``cv2.resize``.
             buffer: specifies whether a destination buffer should be used to avoid allocations
         """
         self.interp = thelper.utils.import_class(interp) if isinstance(interp, str) else interp
@@ -477,25 +480,25 @@ class Affine(object):
     """Warps a given image using an affine matrix via OpenCV and numpy.
 
     This operation is deterministic. The code relies on OpenCV, meaning the border arguments
-    must be compatible with cv2.warpAffine.
+    must be compatible with ``cv2.warpAffine``.
 
     Attributes:
-        transf: the 2x3 transformation matrix passed to cv2.warpAffine.
+        transf: the 2x3 transformation matrix passed to ``cv2.warpAffine``.
         out_size: target image size (tuple of width, height). If None, same as original.
-        flags: extra warp flags forwarded to cv2.warpAffine.
-        border_mode: border extrapolation mode forwarded to cv2.warpAffine.
-        border_val: border constant extrapolation value forwarded to cv2.warpAffine.
+        flags: extra warp flags forwarded to ``cv2.warpAffine``.
+        border_mode: border extrapolation mode forwarded to ``cv2.warpAffine``.
+        border_val: border constant extrapolation value forwarded to ``cv2.warpAffine``.
     """
 
     def __init__(self, transf, out_size=None, flags=None, border_mode=None, border_val=None):
         """Validates and initializes affine warp parameters.
 
         Args:
-            transf: the 2x3 transformation matrix passed to cv2.warpAffine.
+            transf: the 2x3 transformation matrix passed to ``cv2.warpAffine``.
             out_size: target image size (tuple of width, height). If None, same as original.
-            flags: extra warp flags forwarded to cv2.warpAffine.
-            border_mode: border extrapolation mode forwarded to cv2.warpAffine.
-            border_val: border constant extrapolation value forwarded to cv2.warpAffine.
+            flags: extra warp flags forwarded to ``cv2.warpAffine``.
+            border_mode: border extrapolation mode forwarded to ``cv2.warpAffine``.
+            border_val: border constant extrapolation value forwarded to ``cv2.warpAffine``.
         """
         if isinstance(transf, np.ndarray):
             if transf.size != 6:
@@ -568,15 +571,15 @@ class RandomShift(object):
 
     This operation is stochastic, and thus cannot be inverted. Each time the operation is called,
     a random check will determine whether a transformation is applied or not. The code relies on
-    OpenCV, meaning the border arguments must be compatible with cv2.warpAffine.
+    OpenCV, meaning the border arguments must be compatible with ``cv2.warpAffine``.
 
     Attributes:
         min: the minimum pixel shift that can be applied stochastically.
         max: the maximum pixel shift that can be applied stochastically.
         probability: the probability that the transformation will be applied when called.
-        flags: extra warp flags forwarded to cv2.warpAffine.
-        border_mode: border extrapolation mode forwarded to cv2.warpAffine.
-        border_val: border constant extrapolation value forwarded to cv2.warpAffine.
+        flags: extra warp flags forwarded to ``cv2.warpAffine``.
+        border_mode: border extrapolation mode forwarded to ``cv2.warpAffine``.
+        border_val: border constant extrapolation value forwarded to ``cv2.warpAffine``.
     """
 
     def __init__(self, min, max, probability=1.0, flags=None, border_mode=None, border_val=None):
@@ -586,9 +589,9 @@ class RandomShift(object):
             min: the minimum pixel shift that can be applied stochastically.
             max: the maximum pixel shift that can be applied stochastically.
             probability: the probability that the transformation will be applied when called.
-            flags: extra warp flags forwarded to cv2.warpAffine.
-            border_mode: border extrapolation mode forwarded to cv2.warpAffine.
-            border_val: border constant extrapolation value forwarded to cv2.warpAffine.
+            flags: extra warp flags forwarded to ``cv2.warpAffine``.
+            border_mode: border extrapolation mode forwarded to ``cv2.warpAffine``.
+            border_val: border constant extrapolation value forwarded to ``cv2.warpAffine``.
         """
         if isinstance(min, tuple) and isinstance(max, tuple):
             if len(min) != len(max) or len(min) != 2:
@@ -654,15 +657,15 @@ class Transpose(object):
     This operation is deterministic.
 
     Attributes:
-        axes: the axes on which to apply the transpose; forwarded to numpy.transpose(...).
-        axes_inv: used to invert the tranpose; also forwarded to numpy.transpose(...).
+        axes: the axes on which to apply the transpose; forwarded to ``numpy.transpose``.
+        axes_inv: used to invert the tranpose; also forwarded to ``numpy.transpose``.
     """
 
     def __init__(self, axes):
         """Validates and initializes tranpose parameters.
 
         Args:
-            axes: the axes on which to apply the transpose; forwarded to numpy.transpose(...).
+            axes: the axes on which to apply the transpose; forwarded to ``numpy.transpose``.
         """
         axes = np.asarray(axes)
         if axes.ndim > 1:
@@ -704,7 +707,7 @@ class Transpose(object):
 class NormalizeZeroMeanUnitVar(object):
     """Normalizes a given image using a set of mean and standard deviation parameters.
 
-    The samples will be transformed such that `s = (s - mean) / std`.
+    The samples will be transformed such that ``s = (s - mean) / std``.
 
     This can be used for whitening; see https://en.wikipedia.org/wiki/Whitening_transformation
     for more information. Note that this operation is also not restricted to images.
@@ -741,7 +744,7 @@ class NormalizeZeroMeanUnitVar(object):
             will be converted to a numpy array first.
 
         Returns:
-            The warped sample, in a numpy array of type 'self.out_type'.
+            The warped sample, in a numpy array of type ``self.out_type``.
         """
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
@@ -761,7 +764,7 @@ class NormalizeZeroMeanUnitVar(object):
 class NormalizeMinMax(object):
     """Normalizes a given image using a set of minimum and maximum values.
 
-    The samples will be transformed such that `s = (s - min) / (max - min)`.
+    The samples will be transformed such that ``s = (s - min) / (max - min)``.
 
     Note that this operation is also not restricted to images.
 
@@ -802,7 +805,7 @@ class NormalizeMinMax(object):
             will be converted to a numpy array first.
 
         Returns:
-            The warped sample, in a numpy array of type 'self.out_type'.
+            The warped sample, in a numpy array of type ``self.out_type``.
         """
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)

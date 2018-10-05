@@ -137,8 +137,8 @@ def get_caller_name(skip=2):
 def str2bool(s):
     """Converts a string to a boolean.
 
-    If the lower case version of the provided string matches any of 'true',
-    '1', or 'yes', then the function returns True.
+    If the lower case version of the provided string matches any of 'true', '1', or
+    'yes', then the function returns ``True``.
     """
     if isinstance(s, bool):
         return s
@@ -191,11 +191,11 @@ def query_yes_no(question, default=None):
 
     Args:
         question: the string that is presented to the user.
-        default: the presumed answer if the user just hits `<Enter>`. It
-            must be 'yes', 'no', or `None` (meaning an answer is required).
+        default: the presumed answer if the user just hits ``<Enter>``. It must be 'yes',
+        'no', or `None` (meaning an answer is required).
 
     Returns:
-        True for 'yes', or False for 'no' (or their respective variations).
+        ``True`` for 'yes', or ``False`` for 'no' (or their respective variations).
     """
     valid = {"yes": True, "ye": True, "y": True, "no": False, "n": False}
     if (isinstance(default, bool) and default) or \
@@ -228,8 +228,8 @@ def query_string(question, choices=None, default=None, allow_empty=False):
     Args:
         question: the string that is presented to the user.
         choices: a list of predefined choices that the user can pick from. If
-            None, then whatever the user types will be accepted.
-        default: the presumed answer if the user just hits `<Enter>`. If None,
+            ``None``, then whatever the user types will be accepted.
+        default: the presumed answer if the user just hits ``<Enter>``. If ``None``,
             then an answer is required to continue.
         allow_empty: defines whether an empty answer should be accepted.
 
@@ -262,9 +262,9 @@ def query_string(question, choices=None, default=None, allow_empty=False):
 def get_save_dir(out_root, dir_name, config=None, resume=False):
     """Returns a directory path in which the app can save its data.
 
-    If a folder with name `dir_name` already exists in the directory `out_root`, then the user will be
-    asked to pick a new name. If the user refuses, `sys.exit(1)` is called. If config is not None, it will
-    be saved to the output directory as a json file. Finally, a 'logs' directory will also be created in
+    If a folder with name ``dir_name`` already exists in the directory ``out_root``, then the user will be
+    asked to pick a new name. If the user refuses, ``sys.exit(1)`` is called. If config is not None, it will
+    be saved to the output directory as a json file. Finally, a ``logs`` directory will also be created in
     the output directory for writing logger files.
 
     Args:
@@ -327,9 +327,9 @@ def safe_crop(image, tl, br, bordertype=cv.BORDER_CONSTANT, borderval=0):
         tl: a tuple or list specifying the (x,y) coordinates of the top-left crop corner.
         br: a tuple or list specifying the (x,y) coordinates of the bottom-right crop corner.
         bordertype: border copy type to use when the image is too small for the required crop size.
-            See cv2.copyMakeBorder for more information.
+            See ``cv2.copyMakeBorder`` for more information.
         borderval: border value to use when the image is too small for the required crop size. See
-            cv2.copyMakeBorder for more information.
+            ``cv2.copyMakeBorder`` for more information.
 
     Returns:
         The cropped image.

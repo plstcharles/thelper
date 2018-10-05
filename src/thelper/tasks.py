@@ -68,7 +68,7 @@ class Task(ABC):
         return False
 
     def __ne__(self, other):
-        """Checks whether two tasks are compatible or not. See __eq__ for more info."""
+        """Checks whether two tasks are compatible or not. See ``__eq__`` for more info."""
         return not (self == other)
 
     def __repr__(self):

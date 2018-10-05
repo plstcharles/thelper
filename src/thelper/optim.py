@@ -1,3 +1,15 @@
+"""Optimization/metrics module.
+
+This module contains metrics implementations used to monitor training sessions and evaluate models,
+and optimization methods used to control the learning behavior of these models.
+
+The metrics classes should all inherit from ``thelper.optim.Metric`` for them to be dynamically
+instantiated by the framework from a configuration file and evaluated automatically inside a training
+session.
+
+Note: this module will likely be split in the future into 'metrics' and 'optim' modules.
+"""
+
 import bisect
 import copy
 import logging
@@ -16,86 +28,203 @@ logger = logging.getLogger(__name__)
 
 
 class CustomStepLR(torch.optim.lr_scheduler._LRScheduler):
-    """Sets the learning rate of each parameter group using a dictionary of preset scaling
-    factors for epoch-based milestones. When last_epoch=-1, sets initial lr as lr.
+    """Sets the learning rate of each parameter group using a dictionary of preset scaling factors
+    for epoch-based milestones.
 
-    Args:
-        optimizer (Optimizer): Wrapped optimizer.
-        milestones (dict): Epoch indices tied to scaling factors. Keys must be increasing.
-        last_epoch (int): The index of last epoch. Default: -1.
+    This class can be useful for tuning the learning rate scheduling behavior of a training session
+    beyond what is already possible using PyTorch's existing LR scheduler classes.
 
-    Example:
-        >>> # Assuming the optimizer uses lr = 0.05, we apply a warm startup...
-        >>> # lr = 0.00625   if epoch < 2        (warm startup, 1/8)
-        >>> # lr = 0.0125    if 2 <= epoch < 3   (warm startup, 1/4)
-        >>> # lr = 0.025     if 3 <= epoch < 4   (warm startup, 1/2)
-        >>> # lr = 0.05      if 4 <= epoch < 30  (back to default)
-        >>> # lr = 0.005     if 30 <= epoch < 80 (scale, 1/10 past 30)
-        >>> # lr = 0.0005    if epoch >= 80      (scale, 1/100 past 80)
-        >>> scheduler = CustomStepLR(optimizer, milestone_map={
-        >>>   1: 1/8, 2: 1/4, 3: 1/2, 4: 1, 30: 0.1, 80: 0.01
-        >>> })
-        >>> for epoch in range(100):
-        >>>     scheduler.step(epoch)
-        >>>     train(...)
-        >>>     validate(...)
+    Example::
+
+        # Assuming the optimizer uses lr = 0.05, we hard-code a slow startup...
+        # lr = 0.00625   if epoch < 2        (1/8 scale before epoch 2)
+        # lr = 0.0125    if 2 <= epoch < 3   (1/4 scale before epoch 3)
+        # lr = 0.025     if 3 <= epoch < 4   (1/2 scale before epoch 4)
+        # lr = 0.05      if 4 <= epoch < 30  (default scale between epoch 4 and 30)
+        # lr = 0.005     if 30 <= epoch < 80 (1/10 scale past epoch 30)
+        # lr = 0.0005    if epoch >= 80      (1/100 scale past epoch 80)
+        scheduler = CustomStepLR(optimizer, milestone_map={
+            1: 1/8,
+            2: 1/4,
+            3: 1/2,
+            4: 1,
+            30: 0.1,
+            80: 0.01
+        })
+        for epoch in range(100):
+            scheduler.step(epoch)
+            train(...)
+            validate(...)
+
+    Attributes:
+        stages: list of epochs where a new scaling factor is to be applied.
+        scales: list of scaling factors to apply at each stage.
+        milestones: original milestones map provided in the constructor.
     """
 
     def __init__(self, optimizer, milestones, last_epoch=-1):
-        if not isinstance(milestones, dict) or not milestones:
-            raise AssertionError("milestones should be provided as a (non-empty) dictionary")
-        if isinstance(list(milestones.keys())[0], str):  # fixup for json-based config loaders
-            self.stages = [int(key) for key in milestones.keys()]
-        elif isinstance(list(milestones.keys())[0], int):
-            self.stages = list(milestones.keys())
-        else:
-            raise AssertionError("milestone stages should be epoch indices (integers)")
-        if self.stages != sorted(self.stages):
-            raise AssertionError("milestone stages should be increasing integers")
-        if not isinstance(list(milestones.values())[0], (float, int)):
-            raise AssertionError("milestone scaling factors should be int/float")
+        """Receives the optimizer, milestone scaling factor, and initialization state.
+
+        If the milestones do not include the first epoch, then its scaling factor is set to 1. When
+        last_epoch is -1, the training is assumed to start from scratch.
+
+        Args:
+            optimizer: Wrapped optimizer (PyTorch-compatible object).
+            milestones: Map of epoch indices tied to scaling factors. Keys must be increasing.
+            last_epoch: The index of last epoch. Default: -1.
+        """
+        if not isinstance(milestones, dict):
+            raise AssertionError("milestones should be provided as a dictionary")
+        self.stages = []
+        if len(milestones) > 0:
+            if isinstance(list(milestones.keys())[0], str):  # fixup for json-based config loaders
+                self.stages = [int(key) for key in milestones.keys()]
+            elif isinstance(list(milestones.keys())[0], int):
+                self.stages = list(milestones.keys())
+            else:
+                raise AssertionError("milestone stages should be epoch indices (integers)")
+            if self.stages != sorted(self.stages):
+                raise AssertionError("milestone stages should be increasing integers")
+            if not isinstance(list(milestones.values())[0], (float, int)):
+                raise AssertionError("milestone scaling factors should be int/float")
         self.scales = [float(scale) for scale in milestones.values()]
+        if 1 not in self.stages:
+            self.stages.insert(0, int(1))
+            self.scales.insert(0, float(1))
         self.milestones = milestones
         super().__init__(optimizer, last_epoch)
 
     def get_lr(self):
-        stage = bisect.bisect_right(self.stages, self.last_epoch)
+        """Returns the learning rate to use given the current epoch and scaling factors."""
+        stage = min(bisect.bisect_right(self.stages, self.last_epoch), len(self.stages) - 1)
         return [base_lr * self.scales[stage] for base_lr in self.base_lrs]
 
 
 class Metric(ABC):
-    # 'goal' values for optimization (minimum/maximum)
+    """Abstract metric interface.
+
+    This interface defines basic functions required so that :class:`thelper.train.Trainer` can figure
+    out how to instantiate, update, reset, and optimize a given metric while training a model.
+
+    Not all metrics are required to be 'optimizable'; in other words, they do not always need to
+    return a scalar value and define a goal. For example, a class can derive from this interface
+    and simply accumulate predictions to produce a ROC graph. In such cases, the class would simply
+    need to override the ``goal`` method to return ``None``. Then, the trainer would still update
+    the object periodically with predictions, but it will not try to monitor the output of its
+    ``eval`` function.
+    """
+
     minimize = float("-inf")
+    """Possible return value of the ``goal`` function for scalar metrics."""
+
     maximize = float("inf")
+    """Possible return value of the ``goal`` function for scalar metrics."""
 
     @abstractmethod
     def accumulate(self, pred, gt, meta=None):
+        """Receives the latest prediction and groundtruth tensors from the training session.
+
+        The data given here is used to update the internal state of the metric. For example, a
+        classification accuracy metric would accumulate the correct number of predictions in
+        comparison to groundtruth labels. The meta values are also provided in case the metric
+        can use one of them to produce a better output.
+
+        Args:
+            pred: model prediction tensor forwarded by the trainer.
+            gt: groundtruth tensor forwarded by the trainer.
+            meta: metadata tensors forwarded by the trainer.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def eval(self):
+        """Returns the metric's evaluation result.
+
+        This can be a scalar, a string, or any other type of object. If it is a scalar, the
+        metric should also define a goal (minimize, maximize) so that the trainer can monitor
+        whether the metric is improving over time. If it is a string, it will be printed in the
+        console at the end of every epoch. Otherwise, it is simply logged and eventually returned
+        at the end of the training session.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def reset(self):
+        """Toggles a reset of the metric's internal state.
+
+        Some metrics might rely on an internal state to smooth out their evaluation results using
+        e.g. a moving average, or to keep track of the progression through a dataset. A reset can
+        thus be necessary when the dataset changes (e.g. at the end of an epoch). This function is
+        called automatically by the trainer in such cases."""
         raise NotImplementedError
 
     def needs_reset(self):
-        return True  # override and return false if reset not needed between epochs
+        """Returns whether the metric needs to be reset between every training epoch or not.
+
+        For example, a metric that computes the prediction accuracy over an entire dataset might
+        need to be reset every epoch (it would thus return ``True``). However, if it is implemented
+        with a moving average and used to monitor prediction accuracy at each iteration, then
+        resetting it every epoch might cause spikes in the results. In this case, returning ``False``
+        would be best.
+
+        Note that even if a metric always returns ``False`` here, it might still be reset by the
+        trainer if the dataset is switched (e.g. while phasing from training to validation, or to
+        testing).
+        """
+        return True
 
     @abstractmethod
     def goal(self):
-        # should return 'minimize' or 'maximize' if scalar, and None otherwise
+        """Returns the scalar optimization goal of the metric, if available.
+
+        The returned goal can be the ``minimize`` or ``maximize`` members of ``thelper.optim.Metric``
+        if the class's evaluation returns a scalar value, and ``None`` otherwise. The trainer will
+        check this value to see if monitoring the metric's evaluation result progression is possible.
+        """
         raise NotImplementedError
 
     def is_scalar(self):
+        """Returns whether the metric evaluates to a scalar based on its goal."""
         curr_goal = self.goal()
         return curr_goal == Metric.minimize or curr_goal == Metric.maximize
 
 
 class CategoryAccuracy(Metric):
+    r"""Classification accuracy metric interface.
+
+    This is a scalar metric used to monitor the multi-label prediction accuracy of a model. By default,
+    it works in ``top-k`` mode, meaning that the evaluation result is given by:
+
+    .. math::
+      \text{accuracy} = \frac{\text{nb. correct predictions}}{\text{nb. total predictions}} \cdot 100
+
+    When :math:`k>1`, a 'correct' prediction is obtained if any of the model's top :math:`k` predictions
+    (i.e. the :math:`k` predictions with the highest score) match the groundtruth label. Otherwise, if
+    :math:`k=1`, then only the top prediction is compared to the groundtruth label.
+
+    This metric's goal is to maximize its value :math:`\in [0,100]` (a percentage is returned).
+
+    Attributes:
+        top_k: number of top predictions to consider when matching with the groundtruth (default=1).
+        max_accum: if using a moving average, this is the window size to use (default=None).
+        correct: total number of correct predictions stored using a queue for window-based averaging.
+        total: total number of predictions stored using a queue for window-based averaging.
+        warned_eval_bad: toggles whether the division-by-zero warning has been flagged or not.
+    """
 
     def __init__(self, top_k=1, max_accum=None):
+        """Receives the number of predictions to consider for matches (top-k) and the moving average
+        window size (max_accum).
+
+        Note that by default, even if max_accum is not provided here, it can still be set by the
+        trainer at runtime through the :func:`thelper.optim.CategoryAccuracy.set_max_accum` function.
+        This is fairly useful as the total size of the training dataset is unlikely to be known when
+        metrics are instantiated.
+        """
+        if not isinstance(top_k, int) or top_k <= 0:
+            raise AssertionError("invalid top-k value")
+        if max_accum is not None and (not isinstance(max_accum, int) or max_accum <= 0):
+            raise AssertionError("invalid max accumulation value for moving average")
         self.top_k = top_k
         self.max_accum = max_accum
         self.correct = deque()
@@ -103,6 +232,17 @@ class CategoryAccuracy(Metric):
         self.warned_eval_bad = False
 
     def accumulate(self, pred, gt, meta=None):
+        """Receives the latest class prediction and groundtruth labels from the training session.
+
+        The inputs are expected to still be in ``torch.Tensor`` format, but must be located on the
+        CPU. This function computes and accumulate the number of correct and total predictions in
+        the queues, popping them if the maximum window length is reached.
+
+        Args:
+            pred: model class predictions forwarded by the trainer.
+            gt: groundtruth labels forwarded by the trainer.
+            meta: metadata forwarded by the trainer (unused).
+        """
         top_k = pred.topk(self.top_k, 1)[1]
         true_k = gt.view(len(gt), 1).expand_as(top_k)
         self.correct.append(top_k.eq(true_k).float().sum().item())
@@ -112,6 +252,10 @@ class CategoryAccuracy(Metric):
             self.total.popleft()
 
     def eval(self):
+        """Returns the current accuracy (in percentage) based on the accumulated prediction counts.
+
+        Will issue a warning if no predictions have been accumulated yet.
+        """
         if len(self.total) == 0 or sum(self.total) == 0:
             if not self.warned_eval_bad:
                 self.warned_eval_bad = True
@@ -120,28 +264,74 @@ class CategoryAccuracy(Metric):
         return (float(sum(self.correct)) / float(sum(self.total))) * 100
 
     def reset(self):
+        """Toggles a reset of the metric's internal state, emptying prediction count queues."""
         self.correct = deque()
         self.total = deque()
 
     def needs_reset(self):
+        """If the metric is currently operating in moving average mode, then it does not need to
+        be reset (returns ``False``); else returns ``True``."""
         return self.max_accum is None
 
     def set_max_accum(self, max_accum):
+        """Sets the moving average window size.
+
+        This is fairly useful as the total size of the training dataset is unlikely to be known when
+        metrics are instantiated. The current implementation of :class:`thelper.train.Trainer` will look
+        for this member function and automatically call it with the dataset size when it is available.
+        """
         self.max_accum = max_accum
 
     def goal(self):
+        """Returns the scalar optimization goal of this metric (maximization)."""
         return Metric.maximize
 
 
 class BinaryAccuracy(Metric):
+    r"""Binary classification accuracy metric interface.
+
+    This is a scalar metric used to monitor the binary prediction accuracy of a model. The evaluation
+    result is given by:
+
+    .. math::
+      \text{accuracy} = \frac{\text{TN} + \text{TP}}{\text{TN} + \text{TP} + \text{FN} + \text{FP}} \cdot 100,
+
+    where TN = True Negative, TP = True Positive, FN = False Negative, and FP = False Positive.
+
+    This metric's goal is to maximize its value :math:`\in [0,100]` (a percentage is returned).
+
+    Attributes:
+        max_accum: if using a moving average, this is the window size to use (default=None).
+        correct: total number of correct predictions stored using a queue for window-based averaging.
+        total: total number of predictions stored using a queue for window-based averaging.
+        warned_eval_bad: toggles whether the division-by-zero warning has been flagged or not.
+    """
 
     def __init__(self, max_accum=None):
+        """Receives the moving average window size (max_accum).
+
+        Note that by default, even if max_accum is not provided here, it can still be set by the
+        trainer at runtime through the :func:`thelper.optim.BinaryAccuracy.set_max_accum` function.
+        This is fairly useful as the total size of the training dataset is unlikely to be known when
+        metrics are instantiated.
+        """
         self.max_accum = max_accum
         self.correct = deque()
         self.total = deque()
         self.warned_eval_bad = False
 
     def accumulate(self, pred, gt, meta=None):
+        """Receives the latest class prediction and groundtruth labels from the training session.
+
+        The inputs are expected to still be in ``torch.Tensor`` format, but must be located on the
+        CPU. This function computes and accumulate the number of correct and total predictions in
+        the queues, popping them if the maximum window length is reached.
+
+        Args:
+            pred: model class predictions forwarded by the trainer.
+            gt: groundtruth labels forwarded by the trainer.
+            meta: metadata forwarded by the trainer (unused).
+        """
         pred = pred.topk(1, 1)[1].view(len(gt))
         if pred.size() != gt.size():
             raise AssertionError("pred and gt should have similar size")
@@ -152,6 +342,10 @@ class BinaryAccuracy(Metric):
             self.total.popleft()
 
     def eval(self):
+        """Returns the current accuracy (in percentage) based on the accumulated prediction counts.
+
+        Will issue a warning if no predictions have been accumulated yet.
+        """
         if len(self.total) == 0 or sum(self.total) == 0:
             if not self.warned_eval_bad:
                 self.warned_eval_bad = True
@@ -160,28 +354,133 @@ class BinaryAccuracy(Metric):
         return (float(sum(self.correct)) / float(sum(self.total))) * 100
 
     def reset(self):
+        """Toggles a reset of the metric's internal state, emptying prediction count queues."""
         self.correct = deque()
         self.total = deque()
 
     def needs_reset(self):
+        """If the metric is currently operating in moving average mode, then it does not need to
+        be reset (returns ``False``); else returns ``True``."""
         return self.max_accum is None
 
     def set_max_accum(self, max_accum):
+        """Sets the moving average window size.
+
+        This is fairly useful as the total size of the training dataset is unlikely to be known when
+        metrics are instantiated. The current implementation of :class:`thelper.train.Trainer` will look
+        for this member function and automatically call it with the dataset size when it is available.
+        """
         self.max_accum = max_accum
 
     def goal(self):
+        """Returns the scalar optimization goal of this metric (maximization)."""
         return Metric.maximize
 
 
 class ExternalMetric(Metric):
+    r"""External metric wrapping interface.
+
+    This interface is used to wrap external metrics and use them in the training framework. The metrics
+    of ``sklearn.metrics`` are good candidates that have been used extensively with this interface in
+    the past, but those of other libraries might also be compatible.
+
+    Along with the name of the class to import and its constructor's parameters, the user must provide
+    a handling mode that specifies how prediction and groundtruth data should be handled in this wrapper.
+    Also, extra arguments such as target label names, goal information, and window sizes can be provided
+    for specific use cases related to the selected handling mode.
+
+    For now, two metric handling modes (both related to classification) are supported:
+
+      * ``classif_best``: the wrapper will accumulate the predicted and groundtruth classification
+        labels forwarded by the trainer and provide them to the external metric for evaluation. If
+        a target label name is specified, then only classifications related to that label will be
+        accumulated. This is the handling mode required for count-based classification metrics such
+        as accuracy, F-Measure, precision, recall, etc.
+
+      * ``classif_score``: the wrapper will accumulate the prediction score of the targeted label
+        along with a boolean that indicates whether this label was the groundtruth label or not. This
+        is the handling mode required for score-based classification metrics such as when computing
+        the area under the ROC curve (AUC).
+
+    Usage examples inside a session configuration file::
+
+        # lists all metrics to instantiate as a dictionary
+        "metrics": {
+            # this is the name of the first example metric; it is used for lookup/printing only
+            "f1_score_reject": {
+                # this type is used to instantiate the wrapper
+                "type": "thelper.optim.ExternalMetric",
+                # these parameters are passed to the wrapper's constructor
+                "params": [
+                    # the external class to import
+                    {"name": "metric_name", "value": "sklearn.metrics.f1_score"},
+                    # the parameters passed to the external class's constructor
+                    {"name": "metric_params", "value": []},
+                    # the wrapper metric handling mode
+                    {"name": "metric_type", "value": "classif_best"},
+                    # the target class name (note: dataset-specific)
+                    {"name": "target_name", "value": "reject"},
+                    # the goal type of the external metric
+                    {"name": "goal", "value": "max"}
+                ]
+            },
+            # this is the name of the second example metric; it is used for lookup/printing only
+            "roc_auc_accept": {
+                # this type is used to instantiate the wrapper
+                "type": "thelper.optim.ExternalMetric",
+                # these parameters are passed to the wrapper's constructor
+                "params": [
+                    # the external class to import
+                    {"name": "metric_name", "value": "sklearn.metrics.roc_auc_score"},
+                    # the parameters passed to the external class's constructor
+                    {"name": "metric_params", "value": []},
+                    # the wrapper metric handling mode
+                    {"name": "metric_type", "value": "classif_score"},
+                    # the target class name (note: dataset-specific)
+                    {"name": "target_name", "value": "accept"},
+                    # the goal type of the external metric
+                    {"name": "goal", "value": "max"}
+                ]
+            },
+        }
+
+    Attributes:
+        metric_goal: goal of the external metric, used for monitoring. Can be ``min``, ``max``, or ``None``.
+        metric_type: handling mode of the external metric. Can only be one of the predetermined values.
+        metric: type of the external metric that will be instantiated when ``eval`` is called.
+        metric_params: dictionary of parameters passed to the external metric on instantiation.
+        target_name: name of the targeted label. Used only in handling modes related to classification.
+        target_idx: index of the targeted label. Used only in handling modes related to classification.
+        class_names: holds the list of class label names provided by the dataset parser. If it is not
+            provided when the constructor is called, it will be set by the trainer at runtime.
+        force_softmax: specifies whether a softmax operation should be applied to the prediction scores
+            obtained from the trainer. Only used with the "classif_score" handling mode.
+        max_accum: if using a moving average, this is the window size to use (default=None).
+        pred: queue used to store predictions-related values for window-based averaging.
+        gt: queue used to store groundtruth-related values for window-based averaging.
+    """
 
     def __init__(self, metric_name, metric_params, metric_type, target_name=None,
                  goal=None, class_names=None, max_accum=None, force_softmax=True):
-        if not isinstance(metric_type, str) or (
-                metric_type != "classif_top1" and
-                metric_type != "classif_scores" and
-                metric_type != "regression"):
+        """Receives all necessary arguments for wrapper initialization and external metric instantiation.
+
+        See :class:`thelper.optim.ExternalMetric` for information on arguments.
+        """
+        if not isinstance(metric_name, str):
+            raise AssertionError("metric_name must be fully qualifiied class name to import")
+        if metric_params is not None and not isinstance(metric_params, (list, dict)):
+            raise AssertionError("metric_params must be either dict or list of name-value pairs")
+        supported_handling_types = [
+            "classif_top1", "classif_best",  # the former is for backwards-compat with the latter
+            "classif_scores", "classif_score",  # the former is for backwards-compat with the latter
+            "regression",  # missing impl, work in progress
+        ]
+        if not isinstance(metric_type, str) or metric_type not in supported_handling_types:
             raise AssertionError("unknown metric type '%s'" % str(metric_type))
+        if metric_type == "classif_top1":
+            metric_type = "classif_best"  # they are identical, just overwrite for backwards compat
+        if metric_type == "classif_scores":
+            metric_type = "classif_score"  # they are identical, just overwrite for backwards compat
         self.metric_goal = None
         if goal is not None:
             if isinstance(goal, str) and "max" in goal.lower():
@@ -192,10 +491,12 @@ class ExternalMetric(Metric):
                 raise AssertionError("unexpected goal type for '%s'" % str(metric_name))
         self.metric_type = metric_type
         self.metric = thelper.utils.import_class(metric_name)
-        if metric_params:
-            self.metric_params = thelper.utils.keyvals2dict(metric_params["params"])
-        else:
-            self.metric_params = {}
+        self.metric_params = {}
+        if metric_params is not None:
+            if isinstance(metric_params, dict):
+                self.metric_params = metric_params
+            elif isinstance(metric_params, list):
+                self.metric_params = thelper.utils.keyvals2dict(metric_params)
         if "classif" in metric_type:
             self.target_name = target_name
             self.target_idx = None
@@ -210,6 +511,16 @@ class ExternalMetric(Metric):
         self.gt = deque()
 
     def set_class_names(self, class_names):
+        """Sets the class label names that must be predicted by the model.
+
+        This is only useful in metric handling modes related to classification. The goal of having
+        class names here is to translate a target class label (provided in the constructor) into a
+        target class index. This is required as predictions are not mapped to their original names
+        (in string format) before being forwarded to this object by the trainer.
+
+        The current implementation of :class:`thelper.train.Trainer` will automatically call this
+        function at runtime if it is available, and provide the dataset's classes as a list of strings.
+        """
         if "classif" in self.metric_type:
             if not isinstance(class_names, list):
                 raise AssertionError("expected list for class names")
@@ -224,6 +535,15 @@ class ExternalMetric(Metric):
             raise AssertionError("unexpected class list with metric type other than classif")
 
     def accumulate(self, pred, gt, meta=None):
+        """Receives the latest prediction and groundtruth tensors from the training session.
+
+        The handling of the data received here will depend on the current handling mode.
+
+        Args:
+            pred: model prediction tensor forwarded by the trainer.
+            gt: groundtruth tensor forwarded by the trainer.
+            meta: metadata tensors forwarded by the trainer.
+        """
         if "classif" in self.metric_type:
             if self.target_name is not None and self.target_idx is None:
                 raise AssertionError("could not map target name '%s' to target idx, missing class list" % self.target_name)
@@ -260,6 +580,7 @@ class ExternalMetric(Metric):
             self.pred.popleft()
 
     def eval(self):
+        """Returns the external metric's evaluation result."""
         if "classif" in self.metric_type:
             y_gt = [gt for gts in self.gt for gt in gts]
             y_pred = [pred for preds in self.pred for pred in preds]
@@ -270,16 +591,26 @@ class ExternalMetric(Metric):
             raise NotImplementedError
 
     def reset(self):
+        """Toggles a reset of the metric's internal state, emptying pred/gt queues."""
         self.gt = deque()
         self.pred = deque()
 
     def needs_reset(self):
+        """If the metric is currently operating in moving average mode, then it does not need to
+        be reset (returns ``False``); else returns ``True``."""
         return self.max_accum is None
 
     def set_max_accum(self, max_accum):
+        """Sets the moving average window size.
+
+        This is fairly useful as the total size of the training dataset is unlikely to be known when
+        metrics are instantiated. The current implementation of :class:`thelper.train.Trainer` will look
+        for this member function and automatically call it with the dataset size when it is available.
+        """
         self.max_accum = max_accum
 
     def goal(self):
+        """Returns the scalar optimization goal of this metric (user-defined)."""
         return self.metric_goal
 
 
@@ -557,8 +888,8 @@ class ROCCurve(Metric):
             gt_label_idx = self.true[sample_idx].item()
             scores = self.score[sample_idx, :].tolist()
             gt_label_score = scores[gt_label_idx]
-            if ((self.target_inv and gt_label_idx != self.target_idx and (1 - gt_label_score) <= threshold) or
-                    (not self.target_inv and gt_label_idx == self.target_idx and gt_label_score <= threshold)):
+            if (self.target_inv and gt_label_idx != self.target_idx and (1 - gt_label_score) <= threshold) or \
+               (not self.target_inv and gt_label_idx == self.target_idx and gt_label_score <= threshold):
                 pred_label_score = max(scores)
                 pred_label_idx = scores.index(pred_label_score)
                 res += "{},{},{},{:2.4f},{},{},{:2.4f}".format(

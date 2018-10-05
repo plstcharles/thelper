@@ -49,3 +49,11 @@ html_short_title = "%s-%s" % (project, version)
 napoleon_use_ivar = True
 napoleon_use_rtype = False
 napoleon_use_param = False
+
+def skip(app, what, name, obj, skip, options):
+    if name == "__init__" or name == "__call__":
+        return False
+    return skip
+
+def setup(app):
+    app.connect("autodoc-skip-member", skip)
