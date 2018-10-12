@@ -56,7 +56,7 @@ def get_available_cuda_devices(attempts_per_device=5):
                     ))
                 try:
                     torch.cuda.set_device(device_id)
-                    test_val = torch.cuda.FloatTensor(1)
+                    test_val = torch.cuda.FloatTensor([1])
                     if test_val.cpu().item() != 1.0:
                         raise AssertionError("sometime's really wrong")
                     devices_available[device_id] = True
