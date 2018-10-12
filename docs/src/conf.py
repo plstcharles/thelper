@@ -51,7 +51,7 @@ napoleon_use_rtype = False
 napoleon_use_param = False
 
 def skip(app, what, name, obj, skip, options):
-    if name == "__init__" or name == "__call__":
+    if name == "__init__" or name == "__call__" or name == "__getitem__":
         return False
     return skip
 
