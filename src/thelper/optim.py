@@ -503,7 +503,7 @@ class ExternalMetric(Metric):
             self.class_names = None
             if class_names is not None:
                 self.set_class_names(class_names)
-            if metric_type == "classif_scores":
+            if metric_type == "classif_score":
                 self.force_softmax = force_softmax  # only useful in this case
         # elif "regression" in metric_type: missing impl for custom handling
         self.max_accum = max_accum
@@ -550,13 +550,13 @@ class ExternalMetric(Metric):
             elif self.target_idx is not None:
                 pred_label = pred.topk(1, 1)[1].view(len(gt))
                 y_true, y_pred = [], []
-                if self.metric_type == "classif_top1":
+                if self.metric_type == "classif_best":
                     must_keep = [y_pred == self.target_idx or y_true == self.target_idx for y_pred, y_true in zip(pred_label, gt)]
                     for idx in range(len(must_keep)):
                         if must_keep[idx]:
                             y_true.append(gt[idx].item() == self.target_idx)
                             y_pred.append(pred_label[idx].item() == self.target_idx)
-                else:  # self.metric_type == "classif_scores"
+                else:  # self.metric_type == "classif_score"
                     if self.force_softmax:
                         with torch.no_grad():
                             pred = torch.nn.functional.softmax(pred, dim=1)
@@ -566,10 +566,10 @@ class ExternalMetric(Metric):
                 self.gt.append(y_true)
                 self.pred.append(y_pred)
             else:
-                if self.metric_type == "classif_top1":
+                if self.metric_type == "classif_best":
                     self.gt.append([gt[idx].item() for idx in range(len(pred.numel()))])
                     self.pred.append([pred[idx].item() for idx in range(len(pred.numel()))])
-                else:  # self.metric_type == "classif_scores"
+                else:  # self.metric_type == "classif_score"
                     raise AssertionError("score-based classification analyses (e.g. roc auc) must specify target label")
         elif self.metric_type == "regression":
             raise NotImplementedError
