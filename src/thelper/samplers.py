@@ -56,6 +56,28 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
     this interface every time the ``__iter__`` function is called, meaning two consecutive lists
     might not contain the exact same indices.
 
+    Example configuration file::
+
+        # ...
+        # the sampler is defined inside the 'data_config' field
+        "data_config": {
+            # ...
+            # this field is completely optional, and can be omitted entirely
+            "sampler": {
+                # the type of the sampler we want to instantiate
+                "type": "thelper.samplers.WeightedSubsetRandomSampler",
+                # the parameters passed to the sampler's constructor
+                "params": [
+                    {"name": "stype", "value": "root3"},
+                    {"name": "scale", "value": 1.2}
+                ],
+                # specifies whether the sampler should receive class labels
+                "pass_labels": true
+            },
+            # ...
+        },
+        # ...
+
     Attributes:
         nb_samples: total number of samples to rebalance (i.e. scaled size of original dataset)
         label_groups: map that splits all samples indices into groups based on labels
@@ -65,6 +87,9 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
         weights: original class weights used in the ``random`` strategy
         label_weights: readjusted class weights used in the ``uniform`` and ``root`` strategies
         label_counts: number of samples in each class for the ``uniform`` and ``root`` strategies
+
+    .. seealso::
+        :func:`thelper.data.load`
     """
 
     def __init__(self, indices, labels, stype="uniform", scale=1.0):

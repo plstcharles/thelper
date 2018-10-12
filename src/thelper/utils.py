@@ -192,7 +192,7 @@ def query_yes_no(question, default=None):
     Args:
         question: the string that is presented to the user.
         default: the presumed answer if the user just hits ``<Enter>``. It must be 'yes',
-        'no', or `None` (meaning an answer is required).
+            'no', or ``None`` (meaning an answer is required).
 
     Returns:
         ``True`` for 'yes', or ``False`` for 'no' (or their respective variations).
@@ -271,7 +271,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
         out_root: path to the directory root where the save directory should be created.
         dir_name: name of the save directory to create. If it already exists, a new one will be requested.
         config: dictionary of app configuration parameters. Used to overwrite i/o queries, and will be
-            written to the save directory in json format to test writing. Default is `None`.
+            written to the save directory in json format to test writing. Default is ``None``.
         resume: specifies whether this session is new, or resumed from an older one (in the latter
             case, overwriting is allowed, and the user will never have to choose a new folder)
 

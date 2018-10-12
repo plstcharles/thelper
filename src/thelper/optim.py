@@ -3,11 +3,12 @@
 This module contains metrics implementations used to monitor training sessions and evaluate models,
 and optimization methods used to control the learning behavior of these models.
 
-The metrics classes should all inherit from ``thelper.optim.Metric`` for them to be dynamically
+The metric classes should all inherit from ``thelper.optim.Metric`` to allow them to be dynamically
 instantiated by the framework from a configuration file and evaluated automatically inside a training
-session.
+session. For more information on this, refer to :class:`thelper.train.Trainer`.
 
-Note: this module will likely be split in the future into 'metrics' and 'optim' modules.
+Todo:
+    * split module into 'metrics' and 'optim' submodules.
 """
 
 import bisect
@@ -34,7 +35,7 @@ class CustomStepLR(torch.optim.lr_scheduler._LRScheduler):
     This class can be useful for tuning the learning rate scheduling behavior of a training session
     beyond what is already possible using PyTorch's existing LR scheduler classes.
 
-    Example::
+    Usage example in Python::
 
         # Assuming the optimizer uses lr = 0.05, we hard-code a slow startup...
         # lr = 0.00625   if epoch < 2        (1/8 scale before epoch 2)
@@ -56,10 +57,42 @@ class CustomStepLR(torch.optim.lr_scheduler._LRScheduler):
             train(...)
             validate(...)
 
+    Usage example inside a session configuration file::
+
+        # ...
+        # lists the model optimization parameters for the training session
+        "optimization": {
+            # lists the optimizer arguments (type, parameters, LR, ...)
+            "optimizer": {
+                # ...
+            },
+            # lists the scheduler arguments (field can be omitted if no scheduler is needed)
+            "scheduler": {
+                # the type used to instantiate the scheduler
+                "type": "thelper.optim.CustomStepLR",
+                # the parameters passed to the scheduler's constructor
+                "params": [
+                    # by default, the optimizer is passed automatically;
+                    # we only need to specify the extra parameters here
+                    {"name": "milestones", "value": {
+                        "1": 1,  # after epoch 1, scale the LR by 1
+                        "10": 0.1, # after epoch 10, scale the LR by 0.1
+                        "20": 0.01,  # ... and so on
+                        "30": 0.001,
+                        "40": 0.0001
+                    }}
+                ]
+            }
+        },
+        # ...
+
     Attributes:
         stages: list of epochs where a new scaling factor is to be applied.
         scales: list of scaling factors to apply at each stage.
         milestones: original milestones map provided in the constructor.
+
+    .. seealso::
+        :class:`thelper.train.Trainer`
     """
 
     def __init__(self, optimizer, milestones, last_epoch=-1):
@@ -204,6 +237,26 @@ class CategoryAccuracy(Metric):
 
     This metric's goal is to maximize its value :math:`\in [0,100]` (a percentage is returned).
 
+    Usage example inside a session configuration file::
+
+        # ...
+        # lists all metrics to instantiate as a dictionary
+        "metrics": {
+            # ...
+            # this is the name of the example metric; it is used for lookup/printing only
+            "top_5_accuracy": {
+                # this type is used to instantiate the accuracy metric
+                "type": "thelper.optim.CategoryAccuracy",
+                # these parameters are passed to the wrapper's constructor
+                "params": [
+                    # the top prediction count to check for a match with the groundtruth
+                    {"name": "top_k", "value": 5}
+                ]
+            },
+            # ...
+        }
+        # ...
+
     Attributes:
         top_k: number of top predictions to consider when matching with the groundtruth (default=1).
         max_accum: if using a moving average, this is the window size to use (default=None).
@@ -299,6 +352,23 @@ class BinaryAccuracy(Metric):
     where TN = True Negative, TP = True Positive, FN = False Negative, and FP = False Positive.
 
     This metric's goal is to maximize its value :math:`\in [0,100]` (a percentage is returned).
+
+    Usage example inside a session configuration file::
+
+        # ...
+        # lists all metrics to instantiate as a dictionary
+        "metrics": {
+            # ...
+            # this is the name of the example metric; it is used for lookup/printing only
+            "accuracy": {
+                # this type is used to instantiate the accuracy metric
+                "type": "thelper.optim.BinaryAccuracy",
+                # there are no useful parameters to give to the constructor
+                "params": []
+            },
+            # ...
+        }
+        # ...
 
     Attributes:
         max_accum: if using a moving average, this is the window size to use (default=None).
@@ -404,8 +474,10 @@ class ExternalMetric(Metric):
 
     Usage examples inside a session configuration file::
 
+        # ...
         # lists all metrics to instantiate as a dictionary
         "metrics": {
+            # ...
             # this is the name of the first example metric; it is used for lookup/printing only
             "f1_score_reject": {
                 # this type is used to instantiate the wrapper
@@ -442,7 +514,9 @@ class ExternalMetric(Metric):
                     {"name": "goal", "value": "max"}
                 ]
             },
+            # ...
         }
+        # ...
 
     Attributes:
         metric_goal: goal of the external metric, used for monitoring. Can be ``min``, ``max``, or ``None``.
@@ -615,8 +689,47 @@ class ExternalMetric(Metric):
 
 
 class ClassifReport(Metric):
+    """Classification report interface.
+
+    This class provides a simple interface to ``sklearn.metrics.classification_report`` so that all
+    count-based metrics can be reported at once under a string-based representation. Note that since
+    the evaluation result is a string, this metric cannot be used to directly monitor training
+    progression, and thus returns ``None`` in :func:`thelper.optim.ClassifReport.goal`.
+
+    Usage example inside a session configuration file::
+
+        # ...
+        # lists all metrics to instantiate as a dictionary
+        "metrics": {
+            # ...
+            # this is the name of the example metric; it is used for lookup/printing only
+            "classifreport": {
+                # this type is used to instantiate the classification report metric
+                "type": "thelper.optim.ClassifReport",
+                # we do not need to provide any parameters to the constructor, defaults are fine
+                "params": []
+            },
+            # ...
+        }
+        # ...
+
+    Attributes:
+        report: report generator function, called at evaluation time to generate the output string.
+        class_names: holds the list of class label names provided by the dataset parser. If it is not
+            provided when the constructor is called, it will be set by the trainer at runtime.
+        pred: queue used to store the top-1 (best) predicted class indices at each iteration.
+        gt: queue used to store the groundtruth class indices at each iteration.
+    """
 
     def __init__(self, class_names=None, sample_weight=None, digits=4):
+        """Receives the optional class names and arguments passed to the report generator function.
+
+        Args:
+            class_names: holds the list of class label names provided by the dataset parser. If it is not
+                provided when the constructor is called, it will be set by the trainer at runtime.
+            sample_weight: sample weights, forwarded to ``sklearn.metrics.classification_report``.
+            digits: metrics output digit count, forwarded to ``sklearn.metrics.classification_report``.
+        """
 
         def gen_report(y_true, y_pred, _class_names):
             if not _class_names:
@@ -639,6 +752,11 @@ class ClassifReport(Metric):
         self.gt = None
 
     def set_class_names(self, class_names):
+        """Sets the class label names that must be predicted by the model.
+
+        The current implementation of :class:`thelper.train.Trainer` will automatically call this
+        function at runtime if it is available, and provide the dataset's classes as a list of strings.
+        """
         if class_names and not isinstance(class_names, list):
             raise AssertionError("expected class names to be list")
         if len(class_names) < 2:
@@ -646,6 +764,13 @@ class ClassifReport(Metric):
         self.class_names = class_names
 
     def accumulate(self, pred, gt, meta=None):
+        """Receives the latest class prediction and groundtruth labels from the training session.
+
+        Args:
+            pred: model class predictions forwarded by the trainer (in ``torch.Tensor`` format).
+            gt: groundtruth labels forwarded by the trainer (in ``torch.Tensor`` format).
+            meta: metadata forwarded by the trainer (unused).
+        """
         if self.pred is None:
             self.pred = pred.topk(1, 1)[1].view(len(gt))
             self.gt = gt.view(len(gt)).clone()
@@ -654,19 +779,62 @@ class ClassifReport(Metric):
             self.gt = torch.cat((self.gt, gt.view(len(gt))), 0)
 
     def eval(self):
+        """Returns the classification report as a multi-line print-friendly string."""
         return self.report(self.gt.numpy(), self.pred.numpy(), self.class_names)
 
     def reset(self):
+        """Toggles a reset of the metric's internal state, emptying queues."""
         self.pred = None
         self.gt = None
 
     def goal(self):
-        return None  # means this class should not be used for monitoring
+        """Returns ``None``, as this class should not be used to directly monitor the training progress."""
+        return None
 
 
 class ConfusionMatrix(Metric):
+    """Confusion matrix report interface.
+
+    This class provides a simple interface to ``sklearn.metrics.confusion_matrix`` so that a full
+    confusion matrix can be easily reported under a string-based representation. Note that since
+    the evaluation result is a string, this metric cannot be used to directly monitor training
+    progression, and thus returns ``None`` in :func:`thelper.optim.ConfusionMatrix.goal`.
+
+    It also offers a tensorboardX-compatible output image that can be saved locally or posted to
+    tensorboard for browser-based visualization.
+
+    Usage example inside a session configuration file::
+
+        # ...
+        # lists all metrics to instantiate as a dictionary
+        "metrics": {
+            # ...
+            # this is the name of the example metric; it is used for lookup/printing only
+            "confmat": {
+                # this type is used to instantiate the confusion matrix report metric
+                "type": "thelper.optim.ConfusionMatrix",
+                # we do not need to provide any parameters to the constructor, defaults are fine
+                "params": []
+            },
+            # ...
+        }
+        # ...
+
+    Attributes:
+        matrix: report generator function, called at evaluation time to generate the output string.
+        class_names: holds the list of class label names provided by the dataset parser. If it is not
+            provided when the constructor is called, it will be set by the trainer at runtime.
+        pred: queue used to store the top-1 (best) predicted class indices at each iteration.
+        gt: queue used to store the groundtruth class indices at each iteration.
+    """
 
     def __init__(self, class_names=None):
+        """Receives the optional class label names used to decorate the output string.
+
+        Args:
+            class_names: holds the list of class label names provided by the dataset parser. If it is not
+                provided when the constructor is called, it will be set by the trainer at runtime.
+        """
 
         def gen_matrix(y_true, y_pred, _class_names):
             if not _class_names:
@@ -685,6 +853,11 @@ class ConfusionMatrix(Metric):
         self.gt = None
 
     def set_class_names(self, class_names):
+        """Sets the class label names that must be predicted by the model.
+
+        The current implementation of :class:`thelper.train.Trainer` will automatically call this
+        function at runtime if it is available, and provide the dataset's classes as a list of strings.
+        """
         if not isinstance(class_names, list):
             raise AssertionError("expected class names to be list")
         if len(class_names) < 2:
@@ -693,6 +866,13 @@ class ConfusionMatrix(Metric):
         self.class_names.append("<unset>")
 
     def accumulate(self, pred, gt, meta=None):
+        """Receives the latest class prediction and groundtruth labels from the training session.
+
+        Args:
+            pred: model class predictions forwarded by the trainer (in ``torch.Tensor`` format).
+            gt: groundtruth labels forwarded by the trainer (in ``torch.Tensor`` format).
+            meta: metadata forwarded by the trainer (unused).
+        """
         if self.pred is None:
             self.pred = pred.topk(1, 1)[1].view(len(gt))
             self.gt = gt.view(len(gt)).clone()
@@ -701,6 +881,7 @@ class ConfusionMatrix(Metric):
             self.gt = torch.cat((self.gt, gt.view(len(gt))), 0)
 
     def eval(self):
+        """Returns the confusion matrix as a multi-line print-friendly string."""
         confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_names)
         if self.class_names:
             return "\n" + thelper.utils.stringify_confmat(confmat, self.class_names)
@@ -708,6 +889,7 @@ class ConfusionMatrix(Metric):
             return "\n" + str(confmat)
 
     def get_tbx_image(self):
+        """Returns the confusion matrix as a numpy-compatible RGBA image drawn by pyplot."""
         confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_names)
         if self.class_names:
             fig = thelper.utils.draw_confmat(confmat, self.class_names)
@@ -717,17 +899,98 @@ class ConfusionMatrix(Metric):
             raise NotImplementedError
 
     def reset(self):
+        """Toggles a reset of the metric's internal state, emptying queues."""
         self.pred = None
         self.gt = None
 
     def goal(self):
-        return None  # means this class should not be used for monitoring
+        """Returns ``None``, as this class should not be used to directly monitor the training progress."""
+        return None
 
 
 class ROCCurve(Metric):
+    r"""Receiver operating characteristic curve computation interface.
+
+    This class provides an interface to ``sklearn.metrics.roc_curve`` and ``sklearn.metrics.roc_auc_score``
+    that can produce various types of ROC-related information including the area under the curve (AUC), the
+    false positive and negative rates for various operating points, the ROC curve itself as an image (also
+    compatible with tensorboardX), and CSV files containing the metadata of badly predicted samples.
+
+    By default, evaluating this metric returns a print-friendly string containing the AUC score. If a target
+    operating point is set, it will instead return the false positive/negative prediction rate of the model
+    at that point (also as a print-friendly string). Since this evaluation result is not a scalar, this metric
+    cannot be directly used to monitor the progression of a model during a training session, and thus returns
+    ``None`` in :func:`thelper.optim.ROCCurve.goal`.
+
+    Usage examples inside a session configuration file::
+
+        # ...
+        # lists all metrics to instantiate as a dictionary
+        "metrics": {
+            # ...
+            # this is the name of the first example; it will output the AUC of the "reject" class
+            "roc_reject_auc": {
+                # this type is used to instantiate the ROC metric
+                "type": "thelper.optim.ROCCurve",
+                # these parameters are passed to the constructor
+                "params": [
+                    # the name of the class to evaluate
+                    {"name": "target_name", "value": "reject"}
+                ]
+            },
+            # this is the name of the second example; it will output the FPR at TPR=0.99
+            "roc_reject_0.99tpr": {
+                # this type is used to instantiate the ROC metric
+                "type": "thelper.optim.ROCCurve",
+                # these parameters are passed to the constructor
+                "params": [
+                    # the name of the class to evaluate
+                    {"name": "target_name", "value": "reject"},
+                    # the target true positive rate (TPR) operating point
+                    {"name": "target_tpr", "value": 0.99}
+                ]
+            },
+            # ...
+        }
+        # ...
+
+    Attributes:
+        target_inv: used to target all classes except the named one(s); experimental!
+        target_name: name of targeted class to generate the roc curve/auc information for.
+        target_tpr: target operating point in terms of true positive rate (provided in constructor).
+        target_fpr: target operating point in terms of false positive rate (provided in constructor).
+        target_idx: index of the targeted class, mapped from target_name using the class_names list.
+        class_names: holds the list of class label names provided by the dataset parser. If it is not
+            provided when the constructor is called, it will be set by the trainer at runtime.
+        force_softmax: specifies whether a softmax operation should be applied to the prediction scores
+            obtained from the trainer.
+        log_params: dictionary of extra parameters used to control the logging of bad predictions.
+        log_fpr_threshold: used to deduce the fpr operating threshold to use for logging bad predictions.
+        log_tpr_threshold: used to deduce the tpr operating threshold to use for logging bad predictions.
+        log_meta_keys: list of metadata fields to copy in the log for each bad prediction.
+        curve: roc curve generator function, called at evaluation time to generate the output string.
+        auc: auc score generator function, called at evaluation time to generate the output string.
+        score: queue used to store prediction score values for window-based averaging.
+        true: queue used to store groundtruth label values for window-based averaging.
+        meta: dictionary of metadata queues used for logging.
+    """
 
     def __init__(self, target_name, target_tpr=None, target_fpr=None, class_names=None,
                  force_softmax=True, log_params=None, sample_weight=None, drop_intermediate=True):
+        """Receives the target class/operating point info, log parameters, and roc computation arguments.
+
+        Args:
+            target_name: name of targeted class to generate the roc curve/auc information for.
+            target_tpr: target operating point in terms of true positive rate (provided in constructor).
+            target_fpr: target operating point in terms of false positive rate (provided in constructor).
+            class_names: holds the list of class label names provided by the dataset parser. If it is not
+                provided when the constructor is called, it will be set by the trainer at runtime.
+            force_softmax: specifies whether a softmax operation should be applied to the prediction scores
+                obtained from the trainer.
+            log_params: dictionary of extra parameters used to control the logging of bad predictions.
+            sample_weight: passed to ``sklearn.metrics.roc_curve`` and ``sklearn.metrics.roc_auc_score``.
+            drop_intermediate: passed to ``sklearn.metrics.roc_curve``.
+        """
         if target_name is None:
             raise AssertionError("must provide a target (class) name for ROC metric")
         self.target_inv = False
@@ -785,7 +1048,7 @@ class ROCCurve(Metric):
             for sample_idx, label_idx in enumerate(y_true):
                 _y_true.append(label_idx != _target_idx if _target_inv else label_idx == _target_idx)
                 _y_score.append(1 - y_score[sample_idx, _target_idx] if _target_inv else y_score[sample_idx, _target_idx])
-            res = sklearn.metrics.roc_curve(_y_true, _y_score, sample_weight=sample_weight, drop_intermediate=drop_intermediate)
+            res = sklearn.metrics.roc_curve(_y_true, _y_score, sample_weight=_sample_weight, drop_intermediate=_drop_intermediate)
             return res
 
         def gen_auc(y_true, y_score, _target_idx, _target_inv, _sample_weight=sample_weight):
@@ -795,7 +1058,7 @@ class ROCCurve(Metric):
             for sample_idx, label_idx in enumerate(y_true):
                 _y_true.append(label_idx != _target_idx if _target_inv else label_idx == _target_idx)
                 _y_score.append(1 - y_score[sample_idx, _target_idx] if _target_inv else y_score[sample_idx, _target_idx])
-            res = sklearn.metrics.roc_auc_score(_y_true, _y_score, sample_weight=sample_weight)
+            res = sklearn.metrics.roc_auc_score(_y_true, _y_score, sample_weight=_sample_weight)
             return res
 
         self.curve = gen_curve
@@ -805,6 +1068,13 @@ class ROCCurve(Metric):
         self.meta = None  # needed if outputting tbx txt
 
     def set_class_names(self, class_names):
+        """Sets the class label names that must be predicted by the model.
+
+        This allows the target class name to be mapped to a target class index.
+
+        The current implementation of :class:`thelper.train.Trainer` will automatically call this
+        function at runtime if it is available, and provide the dataset's classes as a list of strings.
+        """
         if not isinstance(class_names, list):
             raise AssertionError("expected list for class names")
         if len(class_names) < 2:
@@ -815,6 +1085,13 @@ class ROCCurve(Metric):
         self.class_names = class_names
 
     def accumulate(self, pred, gt, meta=None):
+        """Receives the latest prediction scores and groundtruth label indices from the trainer.
+
+        Args:
+            pred: class prediction scores forwarded by the trainer.
+            gt: groundtruth label indices forwarded by the trainer.
+            meta: metadata tensors forwarded by the trainer (used for logging, if activated).
+        """
         if self.force_softmax:
             with torch.no_grad():
                 pred = torch.nn.functional.softmax(pred, dim=1)
@@ -840,6 +1117,12 @@ class ROCCurve(Metric):
                         raise AssertionError("missing impl for meta concat w/ type '%s'" % str(type(_meta[key])))
 
     def eval(self):
+        """Returns a print-friendly string containing the evaluation result (AUC/TPR/FPR).
+
+        If no target operating point is set, the returned string contains the AUC for the target class. If a
+        target TPR is set, the returned string contains the FPR for that operating point. If a target FPR is set,
+        the returned string contains the TPR for that operating point.
+        """
         # if we did not specify a target operating point in terms of true/false positive rate, return AUC
         if self.target_tpr is None and self.target_fpr is None:
             return "AUC = %.5f" % self.auc(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv)
@@ -857,12 +1140,17 @@ class ROCCurve(Metric):
             return "for target fpr = %.5f, tpr = 0.0 at threshold = max" % self.target_fpr
 
     def get_tbx_image(self):
+        """Returns the ROC curve as a numpy-compatible RGBA image drawn by pyplot."""
         fpr, tpr, t = self.curve(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv)
         fig = thelper.utils.draw_roc_curve(fpr, tpr)
         array = thelper.utils.fig2array(fig)
         return array
 
     def get_tbx_text(self):
+        """Returns the logged metadata of badly predicted samples if logging is activated, and ``None`` otherwise.
+
+        The returned object is a print-friendly string that can be consumed directly by tensorboardX.
+        """
         if self.log_params is None:
             return None  # do not generate log text unless requested
         if self.meta is None or not self.meta:
@@ -911,9 +1199,11 @@ class ROCCurve(Metric):
         return res
 
     def reset(self):
+        """Toggles a reset of the metric's internal state, emptying queues."""
         self.score = None
         self.true = None
         self.meta = None
 
     def goal(self):
-        return None  # means this class should not be used for monitoring
+        """Returns ``None``, as this class should not be used to directly monitor the training progress."""
+        return None

@@ -1,3 +1,10 @@
+"""Data parsing/handling/splitting module.
+
+This module contains classes and functions whose role is to fetch the data required to train, validate,
+and test a model. The :func:`thelper.data.load` function contained herein is responsible for preparing
+the data loaders and the task interface for a training session based on a provided configuration.
+"""
+
 import copy
 import json
 import logging
@@ -24,14 +31,99 @@ logger = logging.getLogger(__name__)
 
 
 def load(config, data_root, save_dir=None):
+    """Prepares the task interface and the data loaders based on a provided data configuration.
+
+    This function will parse a configuration dictionary and extract all the information required to
+    instantiate the requested dataset parsers. Then, combining the task metadata of all these parsers,
+    it will evenly split the available samples into three sets (training, validation, test) to be handled
+    by different data loaders. These will finally be returned along with the task interface.
+
+    The configuration dictionary is expected to contain two fields: ``data_config``, which includes
+    information about the dataset split, shuffling seeds, and batch size; and ``datasets``, which lists
+    the dataset parser interfaces to instantiate as well as their parameters. The former is parsed by
+    the :class:`thelper.data.DataConfig` class, and the latter via :func:`thelper.data.load_datasets`.
+
+    Example configuration file::
+
+        # ...
+        "data_config": {
+            "batch_size": 128,  # batch size to use in data loaders
+            "shuffle": true,  # specifies that the data should be shuffled
+            "workers": 4,  # number of threads to pre-fetch data batches with
+            "sampler": {  # we can use a data sampler to rebalance classes (optional)
+                # see e.g. 'thelper.samplers.WeightedSubsetRandomSampler'
+                # ...
+            },
+            "train_augments": [ # training data augmentation operations
+                # see 'thelper.transforms.load_transforms'
+                # ...
+            ],
+            "base_transforms": [ # global sample transformation operations
+                # see 'thelper.transforms.load_transforms'
+                # ...
+            ],
+            # finally, we define a 80%-10%-10% split for our data
+            # (we could instead use one dataset for training and one for testing)
+            "train_split": {
+                "dataset_A": 0.8
+                "dataset_B": 0.8
+            },
+            "valid_split": {
+                "dataset_A": 0.1
+                "dataset_B": 0.1
+            },
+            "test_split": {
+                "dataset_A": 0.1
+                "dataset_B": 0.1
+            }
+            # (note that the dataset names above are defined in the field below)
+        },
+        "datasets": {
+            "dataset_A": {
+                # type of dataset interface to instantiate
+                # (note: must be derived from 'thelper.data.Dataset')
+                "type": "...",
+                "params": [
+                    # ...
+                ]
+            },
+            "dataset_B": {
+                # type of dataset interface to instantiate
+                # (note: must be derived from 'thelper.data.Dataset')
+                "type": "...",
+                "params": [
+                    # ...
+                ]
+            },
+            # ...
+        },
+        # ...
+
+    Args:
+        config: a dictionary that provides all required data configuration and dataset parameters; these
+            are detailed in :class:`thelper.data.DataConfig` and :func:`thelper.data.load_datasets`.
+        data_root: the path to the dataset root directory that will be passed to the dataset interfaces
+            for them to figure out where the training/validation/testing data is located. This path may
+            be unused if the dataset interfaces already know where to look via config parameters.
+        save_dir: the path to the root directory where the session directory should be saved. Note that
+            this is not the path to the session directory itself, but its parent, which may also contain
+            other session directories.
+
+    .. seealso::
+        :class:`thelper.data.DataConfig`
+        :func:`thelper.data.load_datasets`
+        :func:`thelper.transforms.load_transforms`
+        :class:`thelper.samplers.WeightedSubsetRandomSampler`
+    """
     logstamp = str(platform.node()) + "-" + time.strftime("%Y%m%d-%H%M%S")
+    session_name = config["name"] if "name" in config else "session"
     if save_dir is not None:
         data_logger_path = os.path.join(save_dir, "logs", "data.log")
         data_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         data_logger_fh = logging.FileHandler(data_logger_path)
         data_logger_fh.setFormatter(data_logger_format)
         logger.addHandler(data_logger_fh)
-        logger.info("created data log for session '%s'" % config["name"])
+        logger.info("created data log for session '%s'" % session_name)
         config_backup_path = os.path.join(save_dir, "logs", "config." + logstamp + ".json")
         json.dump(config, open(config_backup_path, "w"), indent=4, sort_keys=False)
     logger.debug("loading data usage config")
@@ -54,13 +146,13 @@ def load(config, data_root, save_dir=None):
     logger.info("task info: %s" % str(task))
     if save_dir is not None:
         with open(os.path.join(save_dir, "logs", "task.log"), "a+") as fd:
-            fd.write("session: %s-%s\n" % (config["name"], logstamp))
+            fd.write("session: %s-%s\n" % (session_name, logstamp))
             fd.write(str(task) + "\n")
     for dataset_name, dataset in datasets.items():
         logger.info("dataset '%s' info: %s" % (dataset_name, str(dataset)))
         if save_dir is not None:
             with open(os.path.join(save_dir, "logs", dataset_name + ".log"), "a+") as fd:
-                fd.write("session: %s-%s\n" % (config["name"], logstamp))
+                fd.write("session: %s-%s\n" % (session_name, logstamp))
                 fd.write(str(dataset) + "\n")
                 if hasattr(dataset, "samples") and isinstance(dataset.samples, list):
                     for idx, sample in enumerate(dataset.samples):
@@ -69,7 +161,7 @@ def load(config, data_root, save_dir=None):
     train_idxs, valid_idxs, test_idxs = data_config.get_split(datasets, task)
     if save_dir is not None:
         with open(os.path.join(save_dir, "logs", "split.log"), "a+") as fd:
-            fd.write("session: %s-%s\n" % (config["name"], logstamp))
+            fd.write("session: %s-%s\n" % (session_name, logstamp))
             fd.write("train:\n" + str(train_idxs) + "\n")
             fd.write("valid:\n" + str(valid_idxs) + "\n")
             fd.write("test:\n" + str(test_idxs) + "\n")
@@ -77,7 +169,31 @@ def load(config, data_root, save_dir=None):
     return task, train_loader, valid_loader, test_loader
 
 
-def load_datasets(config, root, base_transforms=None):
+def load_datasets(config, data_root, base_transforms=None):
+    """Instantiates dataset parsers based on a provided dictionary.
+
+    This function will instantiate dataset parsers as defined in a name-type-param dictionary. If multiple
+    datasets are instantiated, this function will also verify their task compatibility and return the combined
+    output task (if necessary). The dataset interfaces themselves should be derived from
+    :class:`thelper.data.Dataset`, or be compatible with :class:`thelper.data.ExternalDataset`.
+
+    The keys in ``config`` are treated as unique dataset names and are used for lookups (e.g. for splitting
+    in :class:`thelper.data.DataConfig`). The value associated to each key (or dataset name) should be a
+    type-params dictionary as shown in the example of :func:`thelper.data.load`.
+
+    Args:
+        config: a dictionary that provides unique dataset names and parameters needed for instantiation.
+        data_root: the path to the dataset root directory that will be passed to the dataset interfaces
+            for them to figure out where the training/validation/testing data is located. This path may
+            be unused if the dataset interfaces already know where to look via config parameters.
+        base_transforms: the transform operation that should be applied to all loaded samples, and that
+            will be provided to the constructor of all instantiated dataset parsers.
+
+    .. seealso::
+        :func:`thelper.data.load`
+        :class:`thelper.data.Dataset`
+        :class:`thelper.data.ExternalDataset`
+    """
     datasets = {}
     tasks = []
     global_class_names = None  # if remains none, task is not classif-related
@@ -97,7 +213,7 @@ def load_datasets(config, root, base_transforms=None):
             transforms = base_transforms
         if issubclass(dataset_type, Dataset):
             # assume that the dataset is derived from thelper.data.Dataset (it is fully sampling-ready)
-            dataset = dataset_type(name=dataset_name, root=root, config=params, transforms=transforms)
+            dataset = dataset_type(name=dataset_name, root=data_root, config=params, transforms=transforms)
             if "task" in dataset_config:
                 logger.warning("'task' field detected in dataset config; will be ignored, since interface should itself define it")
         else:
@@ -114,7 +230,7 @@ def load_datasets(config, root, base_transforms=None):
             task = task_type(**task_params)
             if not issubclass(task_type, thelper.tasks.Task):
                 raise AssertionError("the task type for dataset '%s' must be derived from 'thelper.tasks.Task'" % dataset_name)
-            dataset = ExternalDataset(dataset_name, root, dataset_type, task, config=params, transforms=transforms)
+            dataset = ExternalDataset(dataset_name, data_root, dataset_type, task, config=params, transforms=transforms)
         task = dataset.get_task()
         if len(tasks) > 0 and task != tasks[0]:
             raise AssertionError("not all datasets have similar task, or sample input/gt keys differ")
@@ -139,8 +255,55 @@ def load_datasets(config, root, base_transforms=None):
 
 
 class DataConfig(object):
+    """Data configuration helper class used for preparing and splitting datasets.
+
+    This class is responsible for parsing the parameters contained in the 'data_config' field of a
+    configuration dictionary, instantiating the data loaders, and shuffling/splitting the samples.
+    An example configuration is presented in :func:`thelper.data.load`.
+
+    The parameters it currently looks for in the configuration dictionary are the following:
+
+    - ``batch_size`` (mandatory): specifies the (mini)batch size to use in data loaders. Note that
+        the framework does not currently test the validity of the provided value, so if you get an
+        'out of memory' error at runtime, try reducing it.
+    - ``shuffle`` (optional, default=True): specifies whether the data loaders should shuffle
+        their samples or not.
+    - ``test_seed`` (optional): specifies the RNG seed to use when splitting test data. If no seed
+        is specified, the RNG will be initialized with a device-specific or time-related seed.
+    - ``valid_seed`` (optional): specifies the RNG seed to use when splitting validation data. If no
+        seed is specified, the RNG will be initialized with a device-specific or time-related seed.
+    - ``torch_seed`` (optional): specifies the RNG seed to use for torch-related stochastic operations
+        (e.g. for data augmentation). If no seed is specified, the RNG will be initialized with a
+        device-specific or time-related seed.
+    - ``workers`` (optional, default=1): specifies the number of threads to use to preload batches in
+        parallel; can be 0 (loading will be on main thread), or an integer >= 1.
+    - ``pin_memory`` (optional, default=False): specifies whether the data loaders will copy tensors
+        into CUDA-pinned memory before returning them.
+    - ``drop_last`` (optional, default=False): specifies whether to drop the last incomplete batch
+        or not if the dataset size is not a multiple of the batch size.
+    - ``sampler`` (optional): specifies a type of sampler and its constructor parameters to be used
+        in the data loaders. This can be used for example to help rebalance a dataset based on its
+        class distribution. See :class:`thelper.samplers.WeightedSubsetRandomSampler` for more info.
+    - ``train_augments`` (optional): provides a list of transformation operations used to augment the
+        training samples of a dataset. See :func:`thelper.transforms.load_transforms` for more info.
+    - ``base_transforms`` (optional): provides a list of transformation operations to apply to all
+        loaded samples. This list will be passed to the constructor of all instantiated dataset parsers.
+        See :func:`thelper.transforms.load_transforms` for more info.
+    - ``train_split`` (optional): provides the proportion of samples of each dataset to hand off to the
+        training data loader. These proportions are given in a dictionary format (``name: ratio``).
+    - ``valid_split`` (optional): provides the proportion of samples of each dataset to hand off to the
+        validation data loader. These proportions are given in a dictionary format (``name: ratio``).
+    - ``test_split`` (optional): provides the proportion of samples of each dataset to hand off to the
+        test data loader. These proportions are given in a dictionary format (``name: ratio``).
+
+    .. seealso::
+        :func:`thelper.data.load`
+        :func:`thelper.transforms.load_transforms`
+        :class:`thelper.samplers.WeightedSubsetRandomSampler`
+    """
 
     def __init__(self, config):
+        """Receives and parses the data configuration dictionary."""
         logger.debug("loading data config")
         if not isinstance(config, dict):
             raise AssertionError("input config should be dict")
@@ -148,7 +311,7 @@ class DataConfig(object):
             raise AssertionError("data config missing 'batch_size' field")
         self.batch_size = config["batch_size"]
         logger.debug("loaders will use batch size = %d" % self.batch_size)
-        self.shuffle = thelper.utils.str2bool(config["shuffle"]) if "shuffle" in config else False
+        self.shuffle = thelper.utils.str2bool(config["shuffle"]) if "shuffle" in config else True
         if self.shuffle:
             logger.debug("dataset samples will be shuffled according to predefined seeds")
             np.random.seed()
@@ -159,7 +322,7 @@ class DataConfig(object):
                 raise AssertionError("unexpected value type for field '%s'" % key)
             self.test_seed = config[key]
         elif self.shuffle:
-            self.test_seed = np.random.randint(2**16)
+            self.test_seed = np.random.randint(2 ** 16)
             logger.info("setting test split seed to %d" % self.test_seed)
         if "valid_seed" in config or "valid_split_seed" in config:
             key = "valid_seed" if "valid_seed" in config else "valid_split_seed"
@@ -167,14 +330,14 @@ class DataConfig(object):
                 raise AssertionError("unexpected value type for field '%s'" % key)
             self.valid_seed = config[key]
         elif self.shuffle:
-            self.valid_seed = np.random.randint(2**16)
+            self.valid_seed = np.random.randint(2 ** 16)
             logger.info("setting valid split seed to %d" % self.valid_seed)
         if "torch_seed" in config:
             if not isinstance(config["torch_seed"], int):
                 raise AssertionError("unexpected value type for field 'torch_seed'")
             self.torch_seed = config["torch_seed"]
         else:
-            self.torch_seed = np.random.randint(2**16)
+            self.torch_seed = np.random.randint(2 ** 16)
             logger.info("setting torch seed to %d" % self.torch_seed)
         torch.manual_seed(self.torch_seed)
         torch.cuda.manual_seed_all(self.torch_seed)
@@ -281,6 +444,20 @@ class DataConfig(object):
         return train_idxs, valid_idxs, test_idxs
 
     def get_split(self, datasets, task):
+        """Returns the train/valid/test sample indices split for a given dataset (name-parser) map.
+
+        Note that the returned indices are unique, possibly shuffle, and never duplicated between sets.
+        If the samples have a class attribute (i.e. the task is related to classification), the split
+        will respect the initial distribution and apply the ratios within the classes themselves.
+
+        Args:
+            datasets: the map of datasets to split, where each has a name (key) and a parser (value).
+            task: a task object that should be compatible with all provided datasets.
+
+        Returns:
+            A three-element tuple containing the maps of the training, validation, and test sets
+            respectively. These maps associate dataset names to a list of sample indices.
+        """
         dataset_sizes = {dataset_name: len(dataset) for dataset_name, dataset in datasets.items()}
         global_size = sum(len(dataset) for dataset in datasets.values())
         logger.info("splitting datasets with parsed sizes = %s" % str(dataset_sizes))
@@ -325,6 +502,22 @@ class DataConfig(object):
         return train_idxs, valid_idxs, test_idxs
 
     def get_loaders(self, datasets, train_idxs, valid_idxs, test_idxs):
+        """Returns the data loaders for the train/valid/test sets based on a prior split.
+
+        This function essentially takes the dataset parser interfaces and indices maps, and instantiates
+        data loaders that are ready to produce samples for training or evaluation. Note that the dataset
+        parsers will be deep-copied in each data loader, meaning that they should ideally not contain a
+        persistent loading state or a large buffer.
+
+        Args:
+            datasets: the map of dataset parsers, where each has a name (key) and a parser (value).
+            train_idxs: training data samples indices map.
+            valid_idxs: validation data samples indices map.
+            test_idxs: test data samples indices map.
+
+        Returns:
+            A three-element tuple containing the training, validation, and test data loaders, respectively.
+        """
         loaders = []
         for loader_idx, idxs_map in enumerate([train_idxs, valid_idxs, test_idxs]):
             loader_sample_idx_offset = 0
@@ -381,12 +574,69 @@ class DataConfig(object):
         return train_loader, valid_loader, test_loader
 
     def get_base_transforms(self):
+        """Returns the (global) sample transformation operations parsed in the data configuration."""
         return self.base_transforms
 
 
 class Dataset(torch.utils.data.Dataset, ABC):
+    """Abstract dataset interface that holds a task and a list of sample dictionaries.
+
+    This interface helps fix a failure of PyTorch's dataset interface (``torch.utils.data.Dataset``):
+    the lack of identity associated with the components of a sample. In short, a data sample loaded by a
+    dataset typically contains the input data that should be forwarded to a model and the expected
+    prediction of the model (i.e. the 'groundtruth') that will be used to compute the loss. These two
+    elements are typically loaded and paired in a tuple that can then be provided to the data loader for
+    batching. Problems however arise when the model has multiple inputs or outputs, when the sample needs
+    to carry supplemental metadata to simplify debugging, or when transformation operations need to be
+    applied only to specific elements of the sample. Here, we fix this issue by specifying that all
+    samples are provided to data loaders as dictionaries. The keys of these dictionaries explicitly
+    define which value(s) to forward to the model, which value(s) to use for prediction evaluation,
+    and which value(s) is(are) only used for debugging. The keys are defined through the task object
+    that is generated by the dataset (see :class:`thelper.tasks.Task` for more information).
+
+    To properly use this interface, a derived class must thus implement :func:`thelper.data.Dataset.__getitem__`,
+    :func:`thelper.data.Dataset.get_task`, and store its samples as dictionaries in ``self.samples``.
+
+    Attributes:
+        name: printable and key-compatible name of the dataset currently being instantiated.
+        root: the path to the root directory that is used to figure out where the data is located.
+            This path may be unused if the 'config' argument already includes the necessary info.
+        config: dictionary of extra parameters that are required by the dataset interface.
+        transforms: function or object that should be applied to all loaded samples in order to
+            return the data in the requested transformed/augmented state.
+        bypass_deepcopy: specifies whether this dataset interface can avoid the (possibly costly)
+            deep copy inside :func:`thelper.data.DataConfig.get_loaders`, and instead only use
+            a shallow copy. This is false by default, as if the dataset parser contains an
+            internal state or a buffer, it would cause problems in multi-threaded data loaders.
+        samples: list of dictionaries containing the data that is ready to be forwarded to the
+            data loader. Note that relatively costly operations (such as reading images from a disk
+            or transforming them) should be delayed until the :func:`thelper.data.Dataset.__getitem__`
+            function is called, as they will most likely then be accomplished in a separate thread.
+
+    .. seealso::
+        :class:`thelper.data.ExternalDataset`
+    """
 
     def __init__(self, name, root, config=None, transforms=None, bypass_deepcopy=False):
+        """Dataset parser constructor.
+
+        In order for derived datasets to be instantiated automatically be the framework from a
+        configuration file, the signature of their constructors should match the one shown here.
+        This means all required extra parameters must be passed in the 'config' argument, which is
+        a dictionary.
+
+        Args:
+            name: printable and key-compatible name of the dataset currently being instantiated.
+            root: the path to the root directory that is used to figure out where the data is located.
+                This path may be unused if the 'config' argument already includes the necessary info.
+            config: dictionary of extra parameters that are required by the dataset interface.
+            transforms: function or object that should be applied to all loaded samples in order to
+                return the data in the requested transformed/augmented state.
+            bypass_deepcopy: specifies whether this dataset interface can avoid the (possibly costly)
+                deep copy inside :func:`thelper.data.DataConfig.get_loaders`, and instead only use
+                a shallow copy. This is false by default, as if the dataset parser contains an
+                internal state or a buffer, it would cause problems in multi-threaded data loaders.
+        """
         super().__init__()
         if not name:
             raise AssertionError("dataset name must not be empty (lookup might fail)")
@@ -398,50 +648,131 @@ class Dataset(torch.utils.data.Dataset, ABC):
         self.samples = None  # must be filled by the derived class as a list of dictionaries
 
     def _get_derived_name(self):
+        """Returns a pretty-print version of the derived class's name."""
         dname = str(self.__class__.__qualname__)
         if self.name:
             dname += "." + self.name
         return dname
 
     def __len__(self):
+        """Returns the total number of samples available from this dataset interface."""
         return len(self.samples)
 
     def __iter__(self):
+        """Returns an iterator over the dataset's samples."""
         for idx in range(len(self.samples)):
             yield self[idx]
 
     @abstractmethod
     def __getitem__(self, idx):
-        # note: returned samples should be dictionaries (keys are used in config file to setup model i/o during training)
+        """Returns the data sample (a dictionary) for a specific (0-based) index."""
         raise NotImplementedError
 
     @abstractmethod
     def get_task(self):
-        # the task is up to the derived class to specify (but it must be derived from the thelper.tasks.Task)
+        """Returns the dataset task object that provides the input/output keys for sample dictionaries."""
         raise NotImplementedError
 
     def __repr__(self):
+        """Returns a print-friendly representation of this dataset."""
         return self._get_derived_name() + " : size=%s, transforms=%s" % (str(len(self)), str(self.transforms))
 
 
 class ClassificationDataset(Dataset):
+    """Classification dataset specialization interface.
 
-    def __init__(self, name, root, class_names, input_key, label_key, meta_keys=None, config=None, transforms=None, bypass_deepcopy=False):
+    This specialization receives some extra parameters in its constructor and automatically defines
+    the dataset task (sample classification) based on those. The derived class must still implement
+    :func:`thelper.data.ClassificationDataset.__getitem__`, and it must still store its samples as
+    dictionaries in ``self.samples``.
+
+    Attributes:
+        task: classification task object containing the key information passed in the constructor.
+
+    .. seealso::
+        :class:`thelper.data.Dataset`
+    """
+
+    def __init__(self, name, root, class_names, input_key, label_key, meta_keys=None, config=None,
+                 transforms=None, bypass_deepcopy=False):
+        """Classification dataset parser constructor.
+
+        In order for derived datasets to be instantiated automatically be the framework from a
+        configuration file, the signature of their constructors should match the one shown here.
+        This means all required extra parameters must be passed in the 'config' argument, which is
+        a dictionary.
+
+        Args:
+            name: printable and key-compatible name of the dataset currently being instantiated.
+            root: the path to the root directory that is used to figure out where the data is located.
+                This path may be unused if the 'config' argument already includes the necessary info.
+            class_names: list of all class names (or labels) that will be associated with the samples.
+            input_key: key used to index the input data in the loaded samples.
+            label_key: key used to index the label (or class name) in the loaded samples.
+            meta_keys: list of extra keys that will be available in the loaded samples.
+            config: dictionary of extra parameters that are required by the dataset interface.
+            transforms: function or object that should be applied to all loaded samples in order to
+                return the data in the requested transformed/augmented state.
+            bypass_deepcopy: specifies whether this dataset interface can avoid the (possibly costly)
+                deep copy inside :func:`thelper.data.DataConfig.get_loaders`, and instead only use
+                a shallow copy. This is false by default, as if the dataset parser contains an
+                internal state or a buffer, it would cause problems in multi-threaded data loaders.
+        """
         super().__init__(name, root, config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
         self.task = thelper.tasks.Classification(class_names, input_key, label_key, meta_keys=meta_keys)
 
     @abstractmethod
     def __getitem__(self, idx):
-        # note: returned samples should be dictionaries (keys are used in config file to setup model i/o during training)
+        """Returns the data sample (a dictionary) for a specific (0-based) index."""
         raise NotImplementedError
 
     def get_task(self):
+        """Returns the classification task object that provides the input/output keys for sample dictionaries."""
         return self.task
 
 
 class ExternalDataset(Dataset):
+    """External dataset interface.
+
+    This interface allows external classes to be instantiated automatically in the framework through
+    a configuration file, as long as they themselves provide implementations for  ``__getitem__`` and
+    ``__len__``. This includes all derived classes of ``torch.utils.data.Dataset`` such as
+    ``torchvision.datasets.ImageFolder``, and the specialized versions such as ``torchvision.datasets.CIFAR10``.
+
+    Note that for this interface to be compatible with our runtime instantiation rules, the constructor
+    needs to receive a fully constructed task object. This object is currently constructed in
+    :func:`thelper.data.load_datasets` based on extra parameters; see the code there for more information.
+
+    Attributes:
+        dataset_type: type of the external dataset object to instantiate
+        task: task object containing the key information passed in the external configuration.
+        samples: instantiation of the dataset object itself, faking the presence of a list of samples
+        warned_partial_transform: specifies whether the user was warned about partially applying
+            transforms to samples without knowing which component is being modified.
+        warned_dictionary: specifies whether the user was warned about missing keys in the output
+            samples dictionaries.
+
+    .. seealso::
+        :class:`thelper.data.Dataset`
+    """
 
     def __init__(self, name, root, dataset_type, task, config=None, transforms=None, bypass_deepcopy=False):
+        """External dataset parser constructor.
+
+        Args:
+            name: printable and key-compatible name of the dataset currently being instantiated.
+            root: the path to the root directory that is used to figure out where the data is located.
+                This path may be unused if the 'config' argument already includes the necessary info.
+            dataset_type: fully qualified name of the dataset object to instantiate
+            task: fully constructed task object providing key information for sample loading.
+            config: dictionary of extra parameters that are required by the dataset interface.
+            transforms: function or object that should be applied to all loaded samples in order to
+                return the data in the requested transformed/augmented state.
+            bypass_deepcopy: specifies whether this dataset interface can avoid the (possibly costly)
+                deep copy inside :func:`thelper.data.DataConfig.get_loaders`, and instead only use
+                a shallow copy. This is false by default, as if the dataset parser contains an
+                internal state or a buffer, it would cause problems in multi-threaded data loaders.
+        """
         super().__init__(name, root, config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
         logger.info("instantiating external dataset '%s'..." % name)
         if not dataset_type or not hasattr(dataset_type, "__getitem__") or not hasattr(dataset_type, "__len__"):
@@ -450,18 +781,19 @@ class ExternalDataset(Dataset):
             raise AssertionError("task type must be derived from 'thelper.tasks.Task' class")
         self.dataset_type = dataset_type
         self.task = task
-        self.key_in, self.key_gt = None, None
         self.samples = dataset_type(**config)
         self.warned_partial_transform = False
         self.warned_dictionary = False
 
     def _get_derived_name(self):
-        dname = thelper.utils.get_caller_name(0).rsplit(".", 1)[0]
+        """Returns a pretty-print version of the external class's name."""
+        dname = str(self.dataset_type)
         if self.name:
             dname += "." + self.name
         return dname
 
     def __getitem__(self, idx):
+        """Returns the data sample (a dictionary) for a specific (0-based) index."""
         sample = self.samples[idx]
         if sample is None:
             # since might have provided an invalid sample count before, it's dangerous to skip empty samples here
@@ -502,4 +834,5 @@ class ExternalDataset(Dataset):
         return out_sample
 
     def get_task(self):
+        """Returns the task object that provides the input/output keys for sample dictionaries."""
         return self.task

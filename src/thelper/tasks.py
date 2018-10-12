@@ -94,6 +94,9 @@ class Classification(Task):
         input_key: the key used to fetch input tensors from a sample dictionary.
         label_key: the key used to fetch class (label) names from a sample dictionary.
         meta_keys: the list of extra keys provided by the data parser inside each sample.
+
+    .. seealso::
+        :class:`thelper.train.ImageClassifTrainer`
     """
 
     def __init__(self, class_names, input_key, label_key, meta_keys=None):

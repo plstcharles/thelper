@@ -4,9 +4,14 @@ This module contains image transformation classes and wrappers for
 preprocessing, data augmentation, and normalization.
 
 All transforms should aim to be compatible with both numpy arrays and
-pytorch tensors. All important parameters for an operation should also be
-exposed in the operation's '__repr__' function so that external parsers
-can discover exactly how to reproduce their behavior.
+PyTorch tensors. By default, images are processed using ``__call__``,
+meaning that for a given transformation ``t``, we apply it via::
+
+    image_transformed = t(image)
+
+All important parameters for an operation should also be passed in the
+constructor and exposed in the operation's ``__repr__`` function so that
+external parsers can discover exactly how to reproduce their behavior.
 """
 import logging
 import random
@@ -44,12 +49,60 @@ def load_transforms(stages):
     specify whether the whole pipeline should be appended or prepended to other transformations. If no
     ``append`` key is provided, the pipeline will be returned with `append_ops=True` by default.
 
+    Usage examples inside a session configuration file::
+
+        # ...
+        # the 'data_config' field can contain several transformation pipelines
+        # (see 'thelper.data.load' for more information on these pipelines)
+        "data_config": {
+            # ...
+            # the 'train_augments' operations are applied to training samples only
+            "train_augments": [
+                {
+                    # here, we use a single stage, which is actually an augmentor sub-pipeline
+                    "operation": "Augmentor.Pipeline",
+                    "parameters": {
+                        # we assume input images are still provided in numpy/PIL format
+                        "input_tensor": false,
+                        # we also produce output images in numpy/PIL format
+                        "output_tensor": false,
+                        "operations": {
+                            # the augmentor pipeline defines two operations: rotations and flips
+                            "rotate_random_90": {"probability": 0.75},
+                            "flip_random": {"probability": 0.75}
+                        }
+                    },
+                    # make sure that the augmentations are applied before the transforms below
+                    "append": false
+                }
+            ],
+            # the 'base_transforms' operations are applied to all loaded samples
+            "base_transforms": [
+                {
+                    "operation": "...",
+                    "parameters": {
+                        ...
+                    }
+                },
+                {
+                    "operation": "...",
+                    "parameters": {
+                        ...
+                    }
+                }
+            ],
+        # ...
+
     Args:
         stages: a list defining a series of transformations to apply as a single pipeline.
 
     Returns:
         A tuple that consists of a pipeline compatible with the ``torchvision.transforms`` interfaces, and
         a bool specifying whether this pipeline should be appended or prefixed to other transforms.
+
+    .. seealso::
+        :class:`thelper.transforms.AugmentorWrapper`
+        :func:`thelper.data.load`
     """
     if not isinstance(stages, list):
         raise AssertionError("expected stages to be provided as a list")
@@ -112,11 +165,11 @@ class AugmentorWrapper(object):
     All original transforms are supported here. This wrapper also fixes the list output bug for single-image
     samples when using operations individually.
 
-    .. seealso::
-        :func:`thelper.transforms.load_transforms`
-
     Attributes:
         pipeline: the augmentor pipeline instance to apply to images.
+
+    .. seealso::
+        :func:`thelper.transforms.load_transforms`
     """
 
     def __init__(self, pipeline):
