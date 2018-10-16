@@ -16,6 +16,40 @@ import torch.utils.data.sampler
 logger = logging.getLogger(__name__)
 
 
+def get_class_weights(label_map, stype, invmax, maxw=float('inf'), minw=0.0, norm=True):
+    """Returns a map of adjusted class weights based on a given rebalancing strategy.
+
+    Args:
+        label_map: map of index lists tied to class labels.
+        stype: weighting strategy ('uniform', `linear`, or 'rootX'); see :class:`thelper.samplers.WeightedSubsetRandomSampler`.
+        invmax: specifies whether to max-invert the weight vector (thus creating cost factors) or not (default=True).
+        maxw: maximum allowed weight value (applied after invmax, if required).
+        minw: minimum allowed weight value (applied after invmax, if required).
+        norm: specifies whether the returned weights should be normalized (default=True, i.e. normalized).
+
+    Returns:
+        Map of adjusted weights tied to class labels.
+    """
+    if stype == "uniform":
+        label_weights = {label: 1.0 / len(label_map) for label in label_map}
+    elif stype == "linear" or "root" in stype:
+        if stype == "root" or stype == "linear":
+            rpow = 1.0
+        else:
+            rpow = 1.0 / float(stype.split("root", 1)[1])
+        tot_count = sum([len(idxs) for idxs in label_map.values()])
+        label_weights = {label: (len(idxs) / tot_count) ** rpow for label, idxs in label_map.items()}
+    else:
+        raise AssertionError("unknown label weighting strategy")
+    if invmax:
+        label_weights = {label: max(label_weights.values()) / max(weight, 1e-6) for label, weight in label_weights.items()}
+    label_weights = {label: min(max(weight, minw), maxw) for label, weight in label_weights.items()}
+    if norm:
+        tot_weight = sum([w for w in label_weights.values()])
+        label_weights = {label: weight / tot_weight for label, weight in label_weights.items()}
+    return label_weights
+
+
 class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
     r"""Provides a rebalanced list of sample indices to use in a data loader.
 
@@ -81,11 +115,9 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
     Attributes:
         nb_samples: total number of samples to rebalance (i.e. scaled size of original dataset)
         label_groups: map that splits all samples indices into groups based on labels
-        pow: exponential power used to scale class weights in ``root`` strategy
         stype: name of the rebalancing strategy to use
         indices: copy of the original list of sample indices provided in the constructor
-        weights: original class weights used in the ``random`` strategy
-        label_weights: readjusted class weights used in the ``uniform`` and ``root`` strategies
+        sample_weights: list of weights used for random sampling.
         label_counts: number of samples in each class for the ``uniform`` and ``root`` strategies
 
     .. seealso::
@@ -117,33 +149,24 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
             raise AssertionError("invalid scale parameter; should be greater than zero")
         self.nb_samples = int(round(len(indices) * scale))
         if self.nb_samples > 0:
-            self.label_groups = {}
-            if not isinstance(stype, str) or (stype not in ["uniform", "random"] and "root" not in stype):
-                raise AssertionError("unexpected sampling type")
-            if "root" in stype:
-                self.pow = 1.0 / float(stype.split("root", 1)[1])  # will be the inverse power to use for rooting weights
-                self.stype = "root"
-            else:
-                self.stype = stype
+            self.stype = stype
             self.indices = copy.deepcopy(indices)
+            self.label_groups = {}
             for idx, label in enumerate(labels):
                 if label in self.label_groups:
                     self.label_groups[label].append(indices[idx])
                 else:
                     self.label_groups[label] = [indices[idx]]
-            if self.stype == "random":
-                self.weights = [1.0 / len(self.label_groups[label]) for label in labels]
+            if not isinstance(stype, str) or (stype not in ["uniform", "random"] and "root" not in stype):
+                raise AssertionError("unexpected sampling type")
+            if stype == "random":
+                self.sample_weights = [1.0 / len(self.label_groups[label]) for label in labels]
             else:
-                if self.stype == "uniform":
-                    self.label_weights = {label: 1.0 / len(self.label_groups) for label in self.label_groups}
-                else:  # self.stype == "root"
-                    self.label_weights = {label: (len(idxs) / len(labels)) ** self.pow for label, idxs in self.label_groups.items()}
-                    tot_weight = sum([w for w in self.label_weights.values()])
-                    self.label_weights = {label: weight / tot_weight for label, weight in self.label_weights.items()}
+                weights = get_class_weights(self.label_groups, stype, invmax=False)
                 self.label_counts = {}
                 curr_nb_samples, max_sample_label = 0, None
                 for label_idx, (label, indices) in enumerate(self.label_groups.items()):
-                    self.label_counts[label] = int(self.nb_samples * self.label_weights[label])
+                    self.label_counts[label] = int(self.nb_samples * weights[label])
                     curr_nb_samples += self.label_counts[label]
                     if max_sample_label is None or len(self.label_groups[label]) > len(self.label_groups[max_sample_label]):
                         max_sample_label = label
@@ -160,8 +183,8 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
         if self.nb_samples == 0:
             return iter([])
         if self.stype == "random":
-            return (self.indices[idx] for idx in torch.multinomial(self.weights, self.nb_samples, replacement=True))
-        elif self.stype == "uniform" or self.stype == "root":
+            return (self.indices[idx] for idx in torch.multinomial(self.sample_weights, self.nb_samples, replacement=True))
+        elif self.stype == "uniform" or "root" in self.stype:
             indices = []
             for label, count in self.label_counts.items():
                 max_samples = len(self.label_groups[label])
