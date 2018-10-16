@@ -1,3 +1,8 @@
+"""Model training/evaluation module.
+
+This module contains the classes required to train and/or evaluate a model based on different tasks. These are
+instantiated in launched sessions based on configuration dictionaries, like many other classes of the framework.
+"""
 import logging
 import os
 import platform
@@ -10,12 +15,35 @@ import tensorboardX
 import torch
 import torch.optim
 
+import thelper.samplers
 import thelper.utils
 
 logger = logging.getLogger(__name__)
 
 
 def load_trainer(session_name, save_dir, config, model, loaders, ckptdata=None):
+    """Instantiates the trainer object based on the type contained in the config dictionary.
+
+    The trainer type is expected to be in the configuration dictionary's `trainer` field, under the `type` key. For more
+    information on the configuration, refer to :class:`thelper.train.Trainer`. The instantiated type must be compatible
+    with the constructor signature of :class:`thelper.train.Trainer`. The object's constructor will be given the full
+    config dictionary and the checkpoint data for resuming the session (if available).
+
+    Args:
+        session_name: name of the training session used for printing and to create internal tensorboardX directories.
+        save_dir: path to the session directory where logs and checkpoints will be saved.
+        config: full configuration dictionary that will be parsed for trainer parameters and saved in checkpoints.
+        model: model to train/evaluate; should be compatible with :class:`thelper.modules.Module` and expose a task.
+        loaders: a tuple containing the training/validation/test data loaders (a loader can be ``None`` if empty).
+        ckptdata: raw checkpoint to parse data from when resuming a session (if ``None``, will start from scratch).
+
+    Returns:
+        The fully-constructed trainer object, ready to begin model training/evaluation.
+
+    .. seealso::
+        :class:`thelper.train.Trainer`
+
+    """
     if "trainer" not in config or not config["trainer"]:
         raise AssertionError("config missing 'trainer' field")
     trainer_config = config["trainer"]
@@ -26,8 +54,104 @@ def load_trainer(session_name, save_dir, config, model, loaders, ckptdata=None):
 
 
 class Trainer:
+    """Abstract trainer interface that defines basic session i/o and setup operations.
+
+    This interface defines the general behavior of a training session which includes configuration parsing, tensorboard
+    setup, metrics and goal setup, and loss/optimizer setup. It also provides utilities for uploading models and tensors
+    on specific devices, and for saving the state of a session. This interface should be specialized for every task by
+    implementing the ``_train_epoch`` and ``_train_epoch`` functions in a derived class. See
+    :class:`thelper.train.ImageClassifTrainer` for an example.
+
+    The parameters that will be parsed by this interface from a configuration dictionary are the following:
+
+    - ``epochs`` (mandatory if training): number of epochs to train for; one epoch is one iteration over all samples.
+    - ``optimization`` (mandatory if training): subdictionary containing types and extra parameters required for
+      instantiating the loss, optimizer, and scheduler objects. See the code of each related loading function for more
+      information on special parameters.
+    - ``save_freq`` (optional, default=1): checkpoint save frequency (will save every epoch multiple of given number).
+    - ``use_tbx`` (optional, default=False): defines whether to use tensorboardX writers for logging or not.
+    - ``device`` (optional): specifies which device to train/evaluate the model on (default=all available).
+    - ``metrics``: list of metrics to instantiate and update during training/evaluation; see related loading function for
+      more information.
+    - ``monitor``: specifies the name of the metric that should be monitored on the validation set for model improvement.
+
+    Example configuration file::
+
+        # ...
+        "trainer": {
+            # type of trainer to instantiate (linked to task type)
+            "type": "thelper.train.ImageClassifTrainer",
+            # train for 40 epochs
+            "epochs": 40,
+            # save every 5 epochs
+            "save_freq": 5,
+            # monitor validation accuracy and save best model based on that
+            "monitor": "accuracy",
+            # turn on tensorboardX logging for real-time monitoring
+            "use_tbx": true,
+            # optimization parameters block
+            "optimization": {
+                # all types & params below provided by PyTorch
+                "loss": {
+                    "type": "torch.nn.CrossEntropyLoss"
+                },
+                "optimizer": {
+                    "type": "torch.optim.SGD",
+                    "params": [
+                        {"name": "lr", "value": 0.1},
+                        {"name": "momentum", "value": 0.9},
+                        {"name": "weight_decay", "value": 1e-06},
+                        {"name": "nesterov", "value": true}
+                    ]
+                },
+                "scheduler": {
+                    "type": "torch.optim.lr_scheduler.StepLR",
+                    "params": [
+                        {"name": "step_size", "value": 10},
+                        {"name": "step_size", "value": 0.1}
+                    ]
+                }
+            },
+            # in this example, we use two metrics in total
+            # (one for monitoring, and one for logging only)
+            "metrics": {
+                "accuracy": {
+                    "type": "thelper.optim.CategoryAccuracy"
+                },
+                "fullreport": {
+                    "type": "thelper.optim.ClassifReport"
+                }
+            }
+        }
+        # ...
+
+    Attributes:
+        logger: used to output debug/warning/error messages to session log.
+        name: name of the session, used for printing and creating log folders.
+        epochs: number of epochs to train the model for.
+        optimization_config: dictionary of optim-related parameters, parsed at training time.
+        save_freq: frequency of checkpoint saves while training (i.e. save every X epochs).
+        save_dir: top-level session save directory.
+        checkpoint_dir: session checkpoint output directory (located within 'save_dir').
+        use_tbx: defines whether to use tensorboardX writers for logging or not.
+        tbx_root_dir: top-level tensorboard log/event output directory (located within 'save_dir').
+        model: model to train; will be uploaded to target device(s) at runtime.
+        loss: model loss function; will be instantiated with the correct parameters at runtime.
+        optimizer: model optimizer; will be instantiated with the correct model location at runtime.
+        scheduler: learning rate scheduler; will be instantiated with the optimizer at runtime.
+        config: full configuration dictionary of the session; will be incorporated into all saved checkpoints.
+        devices: list of (cuda) device IDs to upload the model/tensors to; can be empty if only the CPU is available.
+        monitor: specifies the name of the metric that should be monitored on the validation set for model improvement.
+
+    TODO: move static utils to their related modules; no need for monitor if evaluating only;
+
+    .. seealso::
+        :class:`thelper.train.ImageClassifTrainer`
+        :func:`thelper.train.load_trainer`
+    """
 
     def __init__(self, session_name, save_dir, model, loaders, config, ckptdata=None):
+        """Receives the trainer configuration dictionary, parses it, and sets up the session."""
         if not model or not loaders or not config:
             raise AssertionError("missing input args")
         train_loader, valid_loader, test_loader = loaders
@@ -41,9 +165,9 @@ class Trainer:
         self.train_loader = train_loader
         self.valid_loader = valid_loader
         self.test_loader = test_loader
-        if "epochs" not in trainer_config or not trainer_config["epochs"] or int(trainer_config["epochs"]) <= 0:
-            raise AssertionError("bad trainer config epoch count")
         if train_loader:
+            if "epochs" not in trainer_config or not trainer_config["epochs"] or int(trainer_config["epochs"]) <= 0:
+                raise AssertionError("bad trainer config epoch count")
             self.epochs = int(trainer_config["epochs"])
             # no need to load optimization stuff if not training (i.e. no train_loader)
             # loading optimization stuff later since model needs to be on correct device
@@ -54,6 +178,8 @@ class Trainer:
             self.epochs = 1
             self.logger.info("no training data provided, will run a single epoch on valid/test data")
         self.save_freq = int(trainer_config["save_freq"]) if "save_freq" in trainer_config else 1
+        if self.save_freq < 1:
+            raise AssertionError("checkpoint save frequency should be integer great or equal to 1")
         self.save_dir = save_dir
         self.checkpoint_dir = os.path.join(self.save_dir, "checkpoints")
         if not os.path.exists(self.checkpoint_dir):
@@ -80,15 +206,18 @@ class Trainer:
             self.logger.debug("tensorboard init : tensorboard --logdir %s --port <your_port>" % self.tbx_root_dir)
         self.train_writer_path, self.valid_writer_path, self.test_writer_path = writer_paths
         self.model = model
+        self.loss = None
         self.optimizer = None
         self.scheduler = None
         self.config = config
-        self.devices = self._load_devices(trainer_config)
-        if "loss" not in trainer_config or not trainer_config["loss"]:
-            raise AssertionError("trainer config missing 'loss' field")
-        self.loss = self._load_loss(trainer_config["loss"], next((loader for loader in loaders if loader is not None)).dataset)
-        if hasattr(self.loss, "summary"):
-            self.loss.summary()
+        devices_str = None
+        if "device" in trainer_config:
+            devices_str = trainer_config["device"]
+        elif "train_device" in trainer_config:  # for backw compat only
+            devices_str = trainer_config["train_device"]
+        self.devices = self._load_devices(devices_str)
+        if "loss" in trainer_config:  # warning for older configs only
+            self.logger.warning("trainer config has 'loss' field, but it should now be moved inside the 'optimization' field")
         if "metrics" not in trainer_config or not trainer_config["metrics"]:
             raise AssertionError("trainer config missing 'metrics' field")
         metrics = self._load_metrics(trainer_config["metrics"])
@@ -118,7 +247,7 @@ class Trainer:
         train_logger_fh = logging.FileHandler(train_logger_path)
         train_logger_fh.setFormatter(train_logger_format)
         self.logger.addHandler(train_logger_fh)
-        self.logger.info("created training log for session '%s'" % session_name)
+        self.logger.info("created training log for session '%s'" % self.name)
         self.current_lr = self._get_lr()  # for debug/display purposes only
         if ckptdata is not None:
             self.monitor_best = ckptdata["monitor_best"]
@@ -133,7 +262,9 @@ class Trainer:
             self.current_epoch = 0
             self.outputs = {}
 
-    def _upload_model(self, model, dev):
+    @staticmethod
+    def _upload_model(model, dev):
+        """Uploads a model to a specific device, wrapping it in ``torch.nn.DataParallel`` if needed."""
         if isinstance(dev, list):
             if len(dev) == 0:
                 return model.cpu()
@@ -144,7 +275,9 @@ class Trainer:
         else:
             return model.to(dev)
 
-    def _upload_tensor(self, tensor, dev):
+    @staticmethod
+    def _upload_tensor(tensor, dev):
+        """Uploads a tensor to a specific device."""
         if isinstance(dev, list):
             if len(dev) == 0:
                 return tensor.cpu()
@@ -153,115 +286,173 @@ class Trainer:
         else:
             return tensor.to(dev)
 
-    def _load_loss(self, config, dataset):
+    def _load_optimization(self, model):
+        """Instantiates and returns all optimization objects required for training the model."""
+        config = self.optimization_config  # for abbrev only
+        if not isinstance(config, dict):
+            raise AssertionError("config should be provided as a dictionary")
+        if self.train_loader is None or not self.train_loader:
+            raise AssertionError("optimization only useful if training data is available")
+        if "loss" not in config or not config["loss"]:
+            raise AssertionError("optimization config missing 'loss' field")
+        loss = self._load_loss(config["loss"])
+        if "optimizer" not in config or not config["optimizer"]:
+            raise AssertionError("optimization config missing 'optimizer' field")
+        optimizer = self._load_optimizer(config["optimizer"], model)
+        scheduler = None
+        if "scheduler" in config and config["scheduler"]:
+            scheduler = self._load_scheduler(config["scheduler"], optimizer)
+        return loss, optimizer, scheduler
+
+    def _load_loss(self, config):
+        """Instantiates and returns the loss function to use for training.
+
+        This function supports an extra special parameter if the task is related to classification : ``weight_classes``. If
+        this parameter is found and positive (boolean), then the loss function will apply weights to the computed loss of each
+        class. The strategy used to compute these weights is related to the one in :class:`thelper.samplers.WeightedSubsetRandomSampler`.
+        The exact parameters that are expected for class reweighting are the following:
+
+        - ``weight_param_name`` (optional, default="weight"): name of the loss constructor parameter that expects the weight list.
+        - ``weight_param_pass_tensor`` (optional, default=True): specifies whether the weights should be passed as a tensor or list.
+        - ``weight_distribution`` (mandatory): the dictionary of weights assigned to each class, or the rebalancing strategy to use.
+        - ``weight_max`` (optional, default=inf): the maximum weight that can be assigned to a class.
+        - ``weight_min`` (optional, default=0): the minimum weight that can be assigned to a class.
+        - ``weight_norm`` (optional, default=True): specifies whether the weights should be normalized or not.
+
+        """
+        self.logger.debug("loading loss")
+        if not isinstance(config, dict):
+            raise AssertionError("config should be provided as a dictionary")
         if "type" not in config or not config["type"]:
             raise AssertionError("loss config missing 'type' field")
         loss_type = thelper.utils.import_class(config["type"])
-        if "params" not in config:
-            raise AssertionError("loss config missing 'params' field")
-        params = thelper.utils.keyvals2dict(config["params"])
+        loss_params = {}
+        if "params" in config:
+            loss_params = thelper.utils.keyvals2dict(config["params"])
         if isinstance(self.model.task, thelper.tasks.Classification) and "weight_classes" in config:
             weight_classes = thelper.utils.str2bool(config["weight_classes"])
             if weight_classes:
+                if self.train_loader is None or not self.train_loader:
+                    raise AssertionError("cannot get class sizes, no training data available")
+                samples_map = self.model.task.get_class_sample_map(self.train_loader.dataset.samples)
                 weight_param_name = "weight"
                 if "weight_param_name" in config:
                     weight_param_name = config["weight_param_name"]
                 weight_param_pass_tensor = True
                 if "weight_param_pass_tensor" in config:
                     weight_param_pass_tensor = thelper.utils.str2bool(config["weight_param_pass_tensor"])
-                weight_distribution = "uniform"
-                if "weight_distribution" in config:
-                    weight_distribution = config["weight_distribution"]
-                    if not isinstance(weight_distribution, str) or \
-                       (weight_distribution != "uniform" and "root" not in weight_distribution):
-                        raise AssertionError("unexpected weight distribution strategy")
-                weight_max = float("inf")
-                if "weight_max" in config:
-                    weight_max = float(config["weight_max"])
-                weight_norm = True
-                if "weight_norm" in config:
-                    weight_norm = thelper.utils.str2bool(config["weight_norm"])
-                class_sizes = self.model.task.get_class_sizes(dataset.samples)
-                tot_samples = sum(class_sizes.values())
-                class_weights = None
-                pow = 1
-                if "root" in weight_distribution:
-                    # will be the inverse power to use for rooting weights
-                    pow = 1.0 / int(weight_distribution.split("root", 1)[1])
-                class_weights = {label: (size / tot_samples) ** pow for label, size in class_sizes.items()}
-                class_weights = {label: max(class_weights.values()) / max(weight, 1e-6) for label, weight in class_weights.items()}
-                class_weights = {label: min(weight, weight_max) for label, weight in class_weights.items()}
-                if weight_norm:
-                    avg_weight = sum(class_weights.values()) / len(class_weights)
-                    class_weights = {label: weight / avg_weight for label, weight in class_weights.items()}
-                if weight_param_pass_tensor:
-                    params[weight_param_name] = self._upload_tensor(torch.FloatTensor(list(class_weights.values())), dev=self.devices)
+                if "weight_distribution" not in config:
+                    raise AssertionError("missing 'weight_distribution' field in loss config")
+                weight_distrib = config["weight_distribution"]
+                if isinstance(weight_distrib, dict):
+                    for label, weight in weight_distrib.items():
+                        if label not in samples_map:
+                            raise AssertionError("weight distribution label '%s' not in dataset class list" % label)
+                        if not isinstance(weight, float):
+                            raise AssertionError("expected weight distrib map to provide weights as floats directly")
+                elif isinstance(weight_distrib, str):
+                    weight_max = float("inf")
+                    if "weight_max" in config:
+                        weight_max = float(config["weight_max"])
+                    weight_min = 0
+                    if "weight_min" in config:
+                        weight_min = float(config["weight_min"])
+                    weight_norm = True
+                    if "weight_norm" in config:
+                        weight_norm = thelper.utils.str2bool(config["weight_norm"])
+                    weight_distrib = thelper.samplers.get_class_weights(samples_map, weight_distrib, invmax=True,
+                                                                        maxw=weight_max, minw=weight_min, norm=weight_norm)
                 else:
-                    params[weight_param_name] = class_weights
-        loss = loss_type(**params)
+                    raise AssertionError("unexpected weight distribution strategy (should be map or string)")
+                weight_list = [weight_distrib[label] if label in weight_distrib else 1.0 for label in samples_map]
+                if weight_param_pass_tensor:
+                    loss_params[weight_param_name] = self._upload_tensor(torch.FloatTensor(weight_list), dev=self.devices)
+                else:
+                    loss_params[weight_param_name] = weight_list
+        loss = loss_type(**loss_params)
         return loss
 
-    @staticmethod
-    def _load_metrics(config):
+    def _load_optimizer(self, config, model):
+        """Instantiates and returns the optimizer to use for training.
+
+        By default, the optimizer will be instantiated with the model parameters given as the first argument of its constructor.
+        All supplementary arguments are expected to be handed in through the configuration via key-value pairs (see
+        :func:`thelper.utils.keyvals2dict` for more information).
+        """
+        self.logger.debug("loading optimizer")
         if not isinstance(config, dict):
-            raise AssertionError("metrics config should be provided as dict")
+            raise AssertionError("config should be provided as a dictionary")
+        if "type" not in config or not config["type"]:
+            raise AssertionError("optimizer config missing 'type' field")
+        optimizer_type = thelper.utils.import_class(config["type"])
+        optimizer_params = {}
+        if "params" in config:
+            optimizer_params = thelper.utils.keyvals2dict(config["params"])
+        optimizer = optimizer_type(filter(lambda p: p.requires_grad, model.parameters()), **optimizer_params)
+        return optimizer
+
+    def _load_scheduler(self, config, optimizer):
+        """Instantiates and returns the learning rate scheduler to use for training.
+
+        All arguments are expected to be handed in through the configuration via key-value pairs (see :func:`thelper.utils.keyvals2dict`
+        for more information).
+        """
+        self.logger.debug("loading scheduler")
+        if not isinstance(config, dict):
+            raise AssertionError("config should be provided as a dictionary")
+        scheduler_config = config["scheduler"]
+        if "type" not in scheduler_config or not scheduler_config["type"]:
+            raise AssertionError("scheduler config missing 'type' field")
+        scheduler_type = thelper.utils.import_class(scheduler_config["type"])
+        scheduler_params = {}
+        if "params" in config:
+            scheduler_params = thelper.utils.keyvals2dict(scheduler_config["params"])
+        scheduler = scheduler_type(optimizer, **scheduler_params)
+        return scheduler
+
+    def _load_metrics(self, config):
+        """Instantiates and returns the metrics defined in the configuration dictionary.
+
+        All arguments are expected to be handed in through the configuration via key-value pairs (see :func:`thelper.utils.keyvals2dict`
+        for more information).
+        """
+        self.logger.debug("loading metrics")
+        if not isinstance(config, dict):
+            raise AssertionError("config should be provided as a dictionary")
         metrics = {}
         for name, metric_config in config.items():
+            if not isinstance(metric_config, dict):
+                raise AssertionError("metric config should be provided as a dictionary")
             if "type" not in metric_config or not metric_config["type"]:
                 raise AssertionError("metric config missing 'type' field")
             metric_type = thelper.utils.import_class(metric_config["type"])
-            if "params" not in metric_config:
-                raise AssertionError("metric config missing 'params' field")
-            params = thelper.utils.keyvals2dict(metric_config["params"])
-            metric = metric_type(**params)
+            metric_params = {}
+            if "params" in metric_config:
+                metric_params = thelper.utils.keyvals2dict(metric_config["params"])
+            metric = metric_type(**metric_params)
             goal = getattr(metric, "goal", None)
             if not callable(goal):
                 raise AssertionError("expected metric to define 'goal' based on parent interface")
             metrics[name] = metric
         return metrics
 
-    @staticmethod
-    def _load_optimization(model, config):
-        if not isinstance(config, dict):
-            raise AssertionError("optimization config should be provided as dict")
-        if "optimizer" not in config or not config["optimizer"]:
-            raise AssertionError("optimization config missing 'optimizer' field")
-        optimizer_config = config["optimizer"]
-        if "type" not in optimizer_config or not optimizer_config["type"]:
-            raise AssertionError("optimizer config missing 'type' field")
-        optimizer_type = thelper.utils.import_class(optimizer_config["type"])
-        optimizer_params = thelper.utils.keyvals2dict(
-            optimizer_config["params"]) if "params" in optimizer_config else None
-        optimizer = optimizer_type(filter(lambda p: p.requires_grad, model.parameters()), **optimizer_params)
-        scheduler = None
-        if "scheduler" in config and config["scheduler"]:
-            scheduler_config = config["scheduler"]
-            if "type" not in scheduler_config or not scheduler_config["type"]:
-                raise AssertionError("scheduler config missing 'type' field")
-            scheduler_type = thelper.utils.import_class(scheduler_config["type"])
-            scheduler_params = thelper.utils.keyvals2dict(
-                scheduler_config["params"]) if "params" in scheduler_config else None
-            scheduler = scheduler_type(optimizer, **scheduler_params)
-        return optimizer, scheduler
-
-    @staticmethod
-    def _load_devices(config):
+    def _load_devices(self, devices_str=None):
+        """Validates and returns the list of CUDA devices available on the system."""
+        self.logger.debug("loading available devices")
         available_cuda_devices = thelper.utils.get_available_cuda_devices()
-        devices, devices_str = None, None
-        if "device" in config:
-            devices_str = config["device"]
-        elif "train_device" in config:
-            devices_str = config["train_device"]
+        devices = None
         if devices_str is not None:
             if isinstance(devices_str, str):
                 if not devices_str:
-                    raise AssertionError("cannot specify empty device name, remove field instead for default assignment")
+                    raise AssertionError("cannot specify empty device name, use default to auto-detect")
                 devices_str = devices_str.split(",")
             elif isinstance(devices_str, list):
                 if not devices_str:
-                    raise AssertionError("cannot specify empty device list, remove field instead for default assignment")
+                    raise AssertionError("cannot specify empty device list, use default to auto-detect")
                 if not all([isinstance(dev_str, str) for dev_str in devices_str]):
                     raise AssertionError("unexpected type in device list, should be string")
+            else:
+                raise AssertionError("unexpected device string type")
             for dev_idx, dev_str in enumerate(devices_str):
                 if "cuda" not in dev_str and dev_str != "cpu":
                     raise AssertionError("unknown device type '%s' (expecting 'cpu' or 'cuda:X')" % dev_str)
@@ -289,14 +480,24 @@ class Trainer:
             return available_cuda_devices
 
     def train(self):
+        """Starts the training process.
+
+        This function will train the model until the required number of epochs is reached, and then evaluate it on the test data. The
+        setup of loggers, tensorboard writers is done here, so is model improvement tracking via monitored metrics. However, the code
+        related to loss computation and backpropagation is implemented in a derived class via :func:`thelper.train.Trainer._train_epoch`.
+        """
         if not self.train_loader:
             raise AssertionError("missing training data, invalid loader!")
         self.logger.debug("uploading model to '%s'..." % str(self.devices))
         model = self._upload_model(self.model, self.devices)
         self.logger.debug("loading optimizer...")
-        self.optimizer, self.scheduler = self._load_optimization(model, self.optimization_config)
+        self.loss, self.optimizer, self.scheduler = self._load_optimization(model)
         if self.optimizer_state is not None:
             self.optimizer.load_state_dict(self.optimizer_state)
+        if hasattr(self.loss, "summary") and callable(self.loss.summary):
+            self.loss.summary()
+        if hasattr(self.optimizer, "summary") and callable(self.optimizer.summary):
+            self.optimizer.summary()
         start_epoch = self.current_epoch + 1
         train_writer, valid_writer, test_writer = None, None, None
         for epoch in range(start_epoch, self.epochs + 1):
@@ -391,8 +592,15 @@ class Trainer:
                     for subkey, subvalue in value.items():
                         self.logger.debug(" final result =>  {}:{}: {}".format(str(key), str(subkey), subvalue))
             self.logger.info("evaluation for session '%s' done" % self.name)
+        return self.outputs
 
     def eval(self):
+        """Starts the evaluation process.
+
+        This function will evaluate the model using the test data (or the validation data, if no test data is available), and return the
+        results. Note that the code related to the forwarding of samples inside the model itself is implemented in a derived class via
+        :func:`thelper.train.Trainer._train_epoch`.
+        """
         if not self.valid_loader and not self.test_loader:
             raise AssertionError("missing validation/test data, invalid loaders!")
         self.logger.debug("uploading model to '%s'..." % str(self.devices))
@@ -432,16 +640,41 @@ class Trainer:
                     self.logger.debug(" final result =>  {}:{}: {}".format(str(key), str(subkey), subvalue))
         self.outputs[self.current_epoch] = result
         self.logger.info("evaluation for session '%s' done" % self.name)
+        return result
 
     @abstractmethod
     def _train_epoch(self, model, epoch, iter, dev, optimizer, loader, metrics, writer=None):
+        """Trains the model for a single epoch using the provided objects.
+
+        Args:
+            model: the model to train that is already uploaded to the target device(s).
+            epoch: the index of the epoch we are training for.
+            iter: the index of the iteration at the start of the current epoch.
+            dev: the target device that tensors should be uploaded to.
+            optimizer: the optimizer used for back propagation.
+            loader: the data loader used to get (pre-transformed) training samples.
+            metrics: the list of metrics to evaluate after every iteration.
+            writer: the writer used to store tbx events/messages/metrics.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def _eval_epoch(self, model, epoch, iter, dev, loader, metrics, writer=None):
+        """Evaluates the model using the provided objects.
+
+        Args:
+            model: the model to evaluate that is already uploaded to the target device(s).
+            epoch: the index of the epoch we are evaluating for.
+            iter: the index of the iteration at the start of the current epoch.
+            dev: the target device that tensors should be uploaded to.
+            loader: the data loader used to get (pre-transformed) valid/test samples.
+            metrics: the list of metrics to evaluate after every iteration.
+            writer: the writer used to store tbx events/messages/metrics.
+        """
         raise NotImplementedError
 
     def _get_lr(self):
+        """Returns the optimizer's learning rate, or 0 if not training a model."""
         if self.optimizer:
             for param_group in self.optimizer.param_groups:
                 if "lr" in param_group:
@@ -449,8 +682,10 @@ class Trainer:
         return 0.0
 
     def _write_epoch_metrics(self, epoch, metrics, writer):
+        """Writes the cumulative evaluation result of all metrics using a specific writer."""
         if not self.use_tbx or writer is None:
             return
+        self.logger.debug("writing epoch metrics")
         for metric_name, metric in metrics.items():
             if metric.is_scalar():
                 writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
@@ -473,6 +708,7 @@ class Trainer:
                         fd.write(txt)
 
     def _save(self, epoch, save_best=False):
+        """Saves a session checkpoint containing all the information required to resume training."""
         # logically, this should only be called during training (i.e. with a valid optimizer)
         timestr = time.strftime("%Y%m%d-%H%M%S")
         curr_state = {
@@ -490,15 +726,27 @@ class Trainer:
         }
         filename = "ckpt.%04d.%s.%s.pth" % (epoch, platform.node(), timestr)
         filename = os.path.join(self.checkpoint_dir, filename)
+        self.logger.debug("writing checkpoint to '%s'" % filename)
         torch.save(curr_state, filename)
         if save_best:
             filename_best = os.path.join(self.checkpoint_dir, "ckpt.best.pth")
+            self.logger.debug("writing checkpoint to '%s'" % filename_best)
             torch.save(curr_state, filename_best)
 
 
 class ImageClassifTrainer(Trainer):
+    """Trainer interface specialized for image classification.
+
+    This class implements the abstract functions of :class:`thelper.train.Trainer` required to train/evaluate
+    a model for image classification or recognition. It also provides a utility function for fetching i/o packets
+    (images, class labels) from a sample that transforms them into tensors for forwarding and loss estimation.
+
+    .. seealso::
+        :class:`thelper.train.Trainer`
+    """
 
     def __init__(self, session_name, save_dir, model, loaders, config, ckptdata=None):
+        """Receives session parameters, parses image/label keys from task object, and sets up metrics."""
         super().__init__(session_name, save_dir, model, loaders, config, ckptdata=ckptdata)
         if not isinstance(self.model.task, thelper.tasks.Classification):
             raise AssertionError("expected task to be classification")
@@ -515,6 +763,7 @@ class ImageClassifTrainer(Trainer):
                 metric.set_class_names(self.class_names)
 
     def _to_tensor(self, sample):
+        """Fetches and returns tensors of input images and class labels from a batched sample dictionary."""
         if not isinstance(sample, dict):
             raise AssertionError("trainer expects samples to come in dicts for key-based usage")
         input, label = None, None
@@ -538,6 +787,18 @@ class ImageClassifTrainer(Trainer):
         return torch.FloatTensor(input), torch.LongTensor(label_idx)
 
     def _train_epoch(self, model, epoch, iter, dev, optimizer, loader, metrics, writer=None):
+        """Trains the model for a single epoch using the provided objects.
+
+        Args:
+            model: the model to train that is already uploaded to the target device(s).
+            epoch: the index of the epoch we are training for.
+            iter: the index of the iteration at the start of the current epoch.
+            dev: the target device that tensors should be uploaded to.
+            optimizer: the optimizer used for back propagation.
+            loader: the data loader used to get (pre-transformed) training samples.
+            metrics: the list of metrics to evaluate after every iteration.
+            writer: the writer used to store tbx events/messages/metrics.
+        """
         if not optimizer:
             raise AssertionError("missing optimizer")
         if not loader:
@@ -585,6 +846,17 @@ class ImageClassifTrainer(Trainer):
         return total_loss / epoch_size, iter
 
     def _eval_epoch(self, model, epoch, iter, dev, loader, metrics, writer=None):
+        """Evaluates the model using the provided objects.
+
+        Args:
+            model: the model to evaluate that is already uploaded to the target device(s).
+            epoch: the index of the epoch we are evaluating for.
+            iter: the index of the iteration at the start of the current epoch.
+            dev: the target device that tensors should be uploaded to.
+            loader: the data loader used to get (pre-transformed) valid/test samples.
+            metrics: the list of metrics to evaluate after every iteration.
+            writer: the writer used to store tbx events/messages/metrics.
+        """
         if not loader:
             raise AssertionError("no available data to load")
         with torch.no_grad():

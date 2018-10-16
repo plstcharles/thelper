@@ -36,6 +36,9 @@ def create_session(config, data_root, save_dir):
         save_dir: the path to the root directory where the session directory should be saved. Note that
             this is not the path to the session directory itself, but its parent, which may also contain
             other session directories.
+
+    .. seealso::
+        :class:`thelper.train.Trainer`
     """
     logger = thelper.utils.get_func_logger()
     if "name" not in config or not config["name"]:
@@ -132,6 +135,9 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False):
             :class:`thelper.train.Trainer` and :func:`thelper.data.load` for more information. Here, it
             is only expected to contain a ``name`` field that specifies the name of the session.
         eval_only: specifies whether training should be resumed or the model should only be evaluated.
+
+    .. seealso::
+        :class:`thelper.train.Trainer`
     """
     logger = thelper.utils.get_func_logger()
     if not config:
@@ -171,6 +177,11 @@ def main(args=None):
     This function parses command line arguments and dispatches the execution based on the selected
     operating mode (new session, resume session, or visualize). Run with ``--help`` for information
     on the available arguments.
+
+    .. warning::
+        If you are trying to resume a session that was previously executed using a now unavailable GPU,
+        you will have to force the checkpoint data to be loaded on CPU using ``--map-location=cpu`` (or
+        using ``-m=cpu``).
 
     .. seealso::
         :func:`thelper.cli.create_session`

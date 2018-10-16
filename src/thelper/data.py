@@ -109,6 +109,10 @@ def load(config, data_root, save_dir=None):
             this is not the path to the session directory itself, but its parent, which may also contain
             other session directories.
 
+    Returns:
+        A 4-element tuple that contains the global task object to specialize models with and the training,
+        validation, and test data loaders (respectively).
+
     .. seealso::
         :class:`thelper.data.DataConfig`
         :func:`thelper.data.load_datasets`
@@ -189,6 +193,10 @@ def load_datasets(config, data_root, base_transforms=None):
         base_transforms: the transform operation that should be applied to all loaded samples, and that
             will be provided to the constructor of all instantiated dataset parsers.
 
+    Returns:
+        A 2-element tuple that contains the list of dataset interfaces/parsers and a task object compatible
+        with all of those.
+
     .. seealso::
         :func:`thelper.data.load`
         :class:`thelper.data.Dataset`
@@ -262,39 +270,38 @@ class DataConfig(object):
     An example configuration is presented in :func:`thelper.data.load`.
 
     The parameters it currently looks for in the configuration dictionary are the following:
-
     - ``batch_size`` (mandatory): specifies the (mini)batch size to use in data loaders. Note that
-        the framework does not currently test the validity of the provided value, so if you get an
-        'out of memory' error at runtime, try reducing it.
+      the framework does not currently test the validity of the provided value, so if you get an
+      'out of memory' error at runtime, try reducing it.
     - ``shuffle`` (optional, default=True): specifies whether the data loaders should shuffle
-        their samples or not.
+      their samples or not.
     - ``test_seed`` (optional): specifies the RNG seed to use when splitting test data. If no seed
-        is specified, the RNG will be initialized with a device-specific or time-related seed.
+      is specified, the RNG will be initialized with a device-specific or time-related seed.
     - ``valid_seed`` (optional): specifies the RNG seed to use when splitting validation data. If no
-        seed is specified, the RNG will be initialized with a device-specific or time-related seed.
+      seed is specified, the RNG will be initialized with a device-specific or time-related seed.
     - ``torch_seed`` (optional): specifies the RNG seed to use for torch-related stochastic operations
-        (e.g. for data augmentation). If no seed is specified, the RNG will be initialized with a
-        device-specific or time-related seed.
+      (e.g. for data augmentation). If no seed is specified, the RNG will be initialized with a
+      device-specific or time-related seed.
     - ``workers`` (optional, default=1): specifies the number of threads to use to preload batches in
-        parallel; can be 0 (loading will be on main thread), or an integer >= 1.
+      parallel; can be 0 (loading will be on main thread), or an integer >= 1.
     - ``pin_memory`` (optional, default=False): specifies whether the data loaders will copy tensors
-        into CUDA-pinned memory before returning them.
+      into CUDA-pinned memory before returning them.
     - ``drop_last`` (optional, default=False): specifies whether to drop the last incomplete batch
-        or not if the dataset size is not a multiple of the batch size.
+      or not if the dataset size is not a multiple of the batch size.
     - ``sampler`` (optional): specifies a type of sampler and its constructor parameters to be used
-        in the data loaders. This can be used for example to help rebalance a dataset based on its
-        class distribution. See :class:`thelper.samplers.WeightedSubsetRandomSampler` for more info.
+      in the data loaders. This can be used for example to help rebalance a dataset based on its
+      class distribution. See :class:`thelper.samplers.WeightedSubsetRandomSampler` for more info.
     - ``train_augments`` (optional): provides a list of transformation operations used to augment the
-        training samples of a dataset. See :func:`thelper.transforms.load_transforms` for more info.
+      training samples of a dataset. See :func:`thelper.transforms.load_transforms` for more info.
     - ``base_transforms`` (optional): provides a list of transformation operations to apply to all
-        loaded samples. This list will be passed to the constructor of all instantiated dataset parsers.
-        See :func:`thelper.transforms.load_transforms` for more info.
+      loaded samples. This list will be passed to the constructor of all instantiated dataset parsers.
+      See :func:`thelper.transforms.load_transforms` for more info.
     - ``train_split`` (optional): provides the proportion of samples of each dataset to hand off to the
-        training data loader. These proportions are given in a dictionary format (``name: ratio``).
+      training data loader. These proportions are given in a dictionary format (``name: ratio``).
     - ``valid_split`` (optional): provides the proportion of samples of each dataset to hand off to the
-        validation data loader. These proportions are given in a dictionary format (``name: ratio``).
+      validation data loader. These proportions are given in a dictionary format (``name: ratio``).
     - ``test_split`` (optional): provides the proportion of samples of each dataset to hand off to the
-        test data loader. These proportions are given in a dictionary format (``name: ratio``).
+      test data loader. These proportions are given in a dictionary format (``name: ratio``).
 
     .. seealso::
         :func:`thelper.data.load`

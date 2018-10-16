@@ -167,6 +167,15 @@ def lreplace(string, old_prefix, new_prefix):
 def keyvals2dict(keyvals):
     """Returns a dictionary of key-value parameter pairs.
 
+    In JSON format, the expected input would look like this::
+
+        [
+            {"name": <...>, "value": <...>},
+            {"name": <...>, "value": <...>},
+            {"name": <...>, "value": <...>},
+            <...>
+        ]
+
     Args:
         keyvals: a list of 2-element dictionaries to be parsed.
 
