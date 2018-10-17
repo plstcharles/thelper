@@ -270,6 +270,7 @@ class DataConfig(object):
     An example configuration is presented in :func:`thelper.data.load`.
 
     The parameters it currently looks for in the configuration dictionary are the following:
+
     - ``batch_size`` (mandatory): specifies the (mini)batch size to use in data loaders. Note that
       the framework does not currently test the validity of the provided value, so if you get an
       'out of memory' error at runtime, try reducing it.

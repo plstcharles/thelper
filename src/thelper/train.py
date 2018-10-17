@@ -294,7 +294,8 @@ class Trainer:
         if self.train_loader is None or not self.train_loader:
             raise AssertionError("optimization only useful if training data is available")
         if "loss" not in config or not config["loss"]:
-            raise AssertionError("optimization config missing 'loss' field")
+            raise AssertionError("optimization config missing 'loss' field\n"
+                                 "(is it still located in 'trainer'? just move it to 'optimization'!)")
         loss = self._load_loss(config["loss"])
         if "optimizer" not in config or not config["optimizer"]:
             raise AssertionError("optimization config missing 'optimizer' field")
@@ -400,13 +401,12 @@ class Trainer:
         self.logger.debug("loading scheduler")
         if not isinstance(config, dict):
             raise AssertionError("config should be provided as a dictionary")
-        scheduler_config = config["scheduler"]
-        if "type" not in scheduler_config or not scheduler_config["type"]:
+        if "type" not in config or not config["type"]:
             raise AssertionError("scheduler config missing 'type' field")
-        scheduler_type = thelper.utils.import_class(scheduler_config["type"])
+        scheduler_type = thelper.utils.import_class(config["type"])
         scheduler_params = {}
         if "params" in config:
-            scheduler_params = thelper.utils.keyvals2dict(scheduler_config["params"])
+            scheduler_params = thelper.utils.keyvals2dict(config["params"])
         scheduler = scheduler_type(optimizer, **scheduler_params)
         return scheduler
 
