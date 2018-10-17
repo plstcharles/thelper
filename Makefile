@@ -134,7 +134,6 @@ coverage:
 .PHONY: docs
 docs: install-docs
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
-		$(CUR_DIR)/docs/sphinx "apidoc" -o $(CUR_DIR)/docs/src $(CUR_DIR)/src; \
 		$(MAKE) -C $(CUR_DIR)/docs clean; \
 		$(MAKE) -C $(CUR_DIR)/docs html;"
 	$(BROWSER) $(CUR_DIR)/docs/build/html/index.html

@@ -55,5 +55,18 @@ def skip(app, what, name, obj, skip, options):
         return False
     return skip
 
+def run_apidoc(_):
+    argv = ["-o", "./src/", "../src/"]
+    try:
+        # Sphinx 1.7+
+        from sphinx.ext import apidoc
+        apidoc.main(argv)
+    except ImportError:
+        # Sphinx 1.6 (and earlier)
+        from sphinx import apidoc
+        argv.insert(0, apidoc.__file__)
+        apidoc.main(argv)
+
 def setup(app):
     app.connect("autodoc-skip-member", skip)
+    app.connect("builder-inited", run_apidoc)
