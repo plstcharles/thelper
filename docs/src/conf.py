@@ -50,13 +50,19 @@ napoleon_use_ivar = True
 napoleon_use_rtype = False
 napoleon_use_param = False
 
+import os
+on_rtd = os.environ.get('READTHEDOCS') == 'True'
+
 def skip(app, what, name, obj, skip, options):
     if name == "__init__" or name == "__call__" or name == "__getitem__":
         return False
     return skip
 
 def run_apidoc(_):
-    argv = ["-o", "./src/", "../src/"]
+    if on_rtd:
+        argv = ["-o", ".", "../../src/"]
+    else:
+        argv = ["-o", "./src/", "../src/"]
     try:
         # Sphinx 1.7+
         from sphinx.ext import apidoc
