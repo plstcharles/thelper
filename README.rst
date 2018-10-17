@@ -8,7 +8,7 @@ Overview
     :stub-columns: 1
 
     * - tests
-      - | |travis|
+      - | |travis| |readthedocs|
     * - package
       - | |pyver| |commits-since|
 
@@ -24,11 +24,11 @@ Overview
     :alt: Commits since latest release
     :target: https://github.com/plstcharles/thelper/compare/v0.0.1...master
 
-.. not ready for live version (WiP)
+.. |readthedocs| image:: https://readthedocs.org/projects/thelper/badge/?version=latest
+    :alt: Documentation Build Status
+    :target: https://thelper.readthedocs.io/en/latest/?badge=latest
 
-   .. |docs| image:: https://readthedocs.org/projects/thelper/badge/?style=flat
-       :target: https://readthedocs.org/projects/thelper
-       :alt: Documentation Status
+.. not ready for live version (WiP)
 
    .. |requires| image:: https://requires.io/github/plstcharles/thelper/requirements.svg?branch=master
        :alt: Requirements Status
