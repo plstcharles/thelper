@@ -49,7 +49,7 @@ class OptionalBuildExt(build_ext):
 
 setuptools.setup(
     name="thelper",
-    version="0.0.1",
+    version="0.0.2",
     license="Apache Software License 2.0",
     description="Provides training help & tools for PyTorch-based machine learning projects.",
     long_description="%s\n%s" % (
