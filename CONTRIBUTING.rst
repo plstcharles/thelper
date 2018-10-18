@@ -40,23 +40,23 @@ To set up `thelper` for local development:
    (look for the "Fork" button).
 2. Clone your fork locally::
 
-    git clone git@github.com:your_name_here/thelper.git
+  $ git clone git@github.com:your_name_here/thelper.git
 
 3. Create a branch for local development::
 
-    git checkout -b name-of-your-bugfix-or-feature
+  $ git checkout -b name-of-your-bugfix-or-feature
 
    Now you can make your changes locally.
 
-4. When you're done making changes, run all the checks and doc builder with `tox <https://tox.readthedocs.io/en/latest/install.html>`_ one command::
+4. When you're done making changes, run all the checks and doc builder with `tox <https://tox.readthedocs.io/en/latest/install.html>`_ via::
 
-    tox
+  $ make test-all
 
 5. Commit your changes and push your branch to GitHub::
 
-    git add .
-    git commit -m "Your detailed description of your changes."
-    git push origin name-of-your-bugfix-or-feature
+  $ git add .
+  $ git commit -m "Your detailed description of your changes."
+  $ git push origin name-of-your-bugfix-or-feature
 
 6. Submit a pull request through the GitHub website.
 
@@ -67,7 +67,7 @@ If you need some code review or feedback while you're developing the code just m
 
 For merging, you should:
 
-1. Include passing tests (run ``tox``) [1]_.
+1. Make sure all tests are passing (run ``make test-all``) [1]_.
 2. Update documentation when there's new API, functionality etc.
 3. Add a note to ``CHANGELOG.rst`` about the changes.
 4. Add yourself to ``AUTHORS.rst``.
@@ -76,14 +76,3 @@ For merging, you should:
        `run the tests <https://travis-ci.org/plstcharles/thelper/pull_requests>`_ for each change you add in the pull request.
 
        It will be slower though ...
-
-Tips
-----
-
-To run a subset of tests::
-
-    tox -e envname -- pytest -k test_myfeature
-
-To run all the test environments in *parallel* (you need to ``pip install detox``)::
-
-    detox

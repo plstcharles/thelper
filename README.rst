@@ -56,39 +56,9 @@ This package provides a training framework and CLI for PyTorch-based machine lea
 under the `Apache Software License version 2.0 <https://tldrlegal.com/license/apache-license-2.0-(apache-2.0)>`_ built by researchers
 and developers from the Centre de Recherche Informatique de Montréal / Computer Research Institute of Montreal (CRIM).
 
-For installation and usage instructions, refer to the `installation guide <INSTALL.rst>`_.
-
-
-.. doc/dev instructions below not ready for live version (WiP)
-
-   Documentation
-   =============
-
-   https://thelper.readthedocs.io/
-
-   Development
-   ===========
-
-   To run the all tests run::
-
-       tox
-
-   Note, to combine the coverage data from all the tox environments run:
-
-   .. list-table::
-       :widths: 10 90
-       :stub-columns: 1
-
-       - - Windows
-         - ::
-
-               set PYTEST_ADDOPTS=--cov-append
-               tox
-
-       - - Other
-         - ::
-
-               PYTEST_ADDOPTS=--cov-append tox
+For installation instructions, refer to the `installation guide <https://github.com/plstcharles/thelper/blob/master/INSTALL.rst>`_. For
+usage instructions, refer to the `user guide <https://github.com/plstcharles/thelper/blob/master/thelper_usage.txt>`_. Information about
+the auto-generated documentation is available `here <https://github.com/plstcharles/thelper/blob/master/DOCUMENTATION.rst>`_.
 
 =====
 Notes
