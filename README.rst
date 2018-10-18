@@ -60,9 +60,9 @@ For installation instructions, refer to the `installation guide <https://github.
 usage instructions, refer to the `user guide <https://github.com/plstcharles/thelper/blob/master/thelper_usage.txt>`_. Information about
 the auto-generated documentation is available `here <https://github.com/plstcharles/thelper/blob/master/DOCUMENTATION.rst>`_.
 
-=====
+
 Notes
-=====
+-----
 
 Development is still on-going --- expect the API and the internal classes to change rapidly.
 
