@@ -9,7 +9,6 @@ through a configuration file and used as the input of a data loader.
 import copy
 import logging
 
-import numpy as np
 import torch
 import torch.utils.data.sampler
 
