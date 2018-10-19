@@ -534,7 +534,7 @@ class DataConfig(object):
             loader_datasets = []
             for dataset_name, sample_idxs in idxs_map.items():
                 if datasets[dataset_name].bypass_deepcopy:
-                    dataset = datasets[dataset_name]
+                    dataset = copy.copy(datasets[dataset_name])
                 else:
                     dataset = copy.deepcopy(datasets[dataset_name])
                 if loader_idx == 0 and self.train_augments:
