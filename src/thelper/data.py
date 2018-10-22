@@ -479,12 +479,17 @@ class DataConfig(object):
         for name in self.total_usage:
             if name not in indices:
                 raise AssertionError("dataset '%s' does not exist" % name)
-        indices = {name: copy.deepcopy(indices) for name, indices in indices.items()}
+        _indices, train_idxs, valid_idxs, test_idxs = {}, {}, {}, {}
+        for name, indices in indices.items():
+            _indices[name] = copy.deepcopy(indices)
+            train_idxs[name] = []
+            valid_idxs[name] = []
+            test_idxs[name] = []
+        indices = _indices
         if self.shuffle:
             np.random.seed(self.test_seed)  # test idxs will be picked first, then valid+train
             for idxs in indices.values():
                 np.random.shuffle(idxs)
-        train_idxs, valid_idxs, test_idxs = {}, {}, {}
         offsets = dict.fromkeys(self.total_usage, 0)
         for loader_idx, (idxs_map, ratio_map) in enumerate(zip([test_idxs, valid_idxs, train_idxs],
                                                                [self.test_split, self.valid_split, self.train_split])):
