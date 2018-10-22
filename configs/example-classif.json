@@ -1,0 +1,146 @@
+{
+    "name": "example-classif",
+    "datasets": {
+        "cifar10_train": {
+            "type": "torchvision.datasets.CIFAR10",
+            "params": [
+                {"name": "root", "value": "data/cifar/train"},
+                {"name": "train", "value": true},
+                {"name": "download", "value": true}
+            ],
+            "task": {
+                "type": "thelper.tasks.Classification",
+                "params": [
+                    {"name": "class_names", "value": [
+                        "airplane", "car", "bird", "cat", "deer",
+                        "dog", "frog", "horse", "ship", "truck"
+                    ]},
+                    {"name": "input_key", "value": "0"},
+                    {"name": "label_key", "value": "1"}
+                ]
+            }
+        },
+        "cifar10_test": {
+            "type": "torchvision.datasets.CIFAR10",
+            "params": [
+                {"name": "root", "value": "data/cifar/test"},
+                {"name": "train", "value": false},
+                {"name": "download", "value": true}
+            ],
+            "task": {
+                "type": "thelper.tasks.Classification",
+                "params": [
+                    {"name": "class_names", "value": [
+                        "airplane", "car", "bird", "cat", "deer",
+                        "dog", "frog", "horse", "ship", "truck"
+                    ]},
+                    {"name": "input_key", "value": "0"},
+                    {"name": "label_key", "value": "1"}
+                ]
+            }
+        }
+    },
+    "data_config": {
+        "batch_size": 32,
+        "shuffle": true,
+        "valid_seed": 0,
+        "test_seed": 0,
+        "torch_seed": 0,
+        "workers": 4,
+        "pin_memory": false,
+        "drop_last": false,
+        "train_augments": [
+            {
+                "operation": "Augmentor.Pipeline",
+                "parameters": {
+                    "input_tensor": false,
+                    "output_tensor": false,
+                    "operations": {
+                        "flip_left_right": {"probability": 0.5}
+                    }
+                },
+                "append": false
+            }
+        ],
+        "base_transforms": [
+            {
+                "operation": "thelper.transforms.ImageTransformWrapper",
+                "parameters": {
+                    "operation": "thelper.transforms.NormalizeMinMax",
+                    "parameters": {
+                        "min": [127, 127, 127],
+                        "max": [255, 255, 255]
+                    },
+                    "force_convert": false
+                }
+            },
+            {
+                "operation": "thelper.transforms.ImageTransformWrapper",
+                "parameters": {
+                    "operation": "thelper.transforms.Resize",
+                    "parameters": {
+                        "dsize": [224, 224]
+                    },
+                    "force_convert": false
+                }
+            },
+            {
+                "operation": "thelper.transforms.ImageTransformWrapper",
+                "parameters": {
+                    "operation": "torchvision.transforms.ToTensor",
+                    "force_convert": false
+                }
+            }
+        ],
+        "train_split": {
+            "cifar10_train": 0.8
+        },
+        "valid_split": {
+            "cifar10_train": 0.2
+        },
+        "test_split": {
+            "cifar10_test": 1.0
+        }
+    },
+    "model": {
+        "name": "mobilenetv2test",
+        "type": "thelper.modules.mobilenet.MobileNetV2",
+        "params": []
+    },
+    "trainer": {
+        "type": "thelper.train.ImageClassifTrainer",
+        "device": "cuda:all",
+        "epochs": 40,
+        "save_freq": 5,
+        "monitor": "accuracy",
+        "use_tbx": true,
+        "optimization": {
+            "loss": {
+                "type": "torch.nn.CrossEntropyLoss",
+                "params": []
+            },
+            "optimizer": {
+                "type": "torch.optim.RMSprop",
+                "params": [
+                    {"name": "lr", "value": 0.01},
+                    {"name": "weight_decay", "value": 0.00004}
+                ]
+            },
+            "scheduler": {
+                "type": "torch.optim.lr_scheduler.ExponentialLR",
+                "params": [
+                    {"name": "gamma", "value": 0.98}
+                ],
+                "step": 1
+            }
+        },
+        "metrics": {
+            "accuracy": {
+                "type": "thelper.optim.CategoryAccuracy",
+                "params": [
+                    {"name": "top_k", "value": 1}
+                ]
+            }
+        }
+    }
+}
