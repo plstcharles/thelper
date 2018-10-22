@@ -197,6 +197,11 @@ class Classification(Task):
             if isinstance(class_name, str):
                 if class_name not in self.class_names:
                     raise AssertionError("label '%s' not found in class names provided earlier" % class_name)
+            elif isinstance(class_name, int):
+                # dataset must already be using indices, we will forgive this...
+                if class_name < 0 or class_name >= len(self.class_names):
+                    raise AssertionError("class name given as out-of-range index (%d) for class list" % class_name)
+                class_name = self.class_names[class_name]
             else:
                 raise AssertionError("unexpected sample label type (need string!)")
             sample_idxs[class_name].append(sample_idx)
