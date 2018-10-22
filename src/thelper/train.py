@@ -779,7 +779,16 @@ class ImageClassifTrainer(Trainer):
             raise AssertionError("could not find input or label key in sample dict")
         label_idx = []
         for class_name in label:
-            if not isinstance(class_name, str):
+            if isinstance(class_name, (int, torch.Tensor)):
+                if isinstance(class_name, torch.Tensor):
+                    if torch.numel(class_name) != 1:
+                        raise AssertionError("unexpected label name type, got vector")
+                    class_name = class_name.item()
+                # dataset must already be using indices, we will forgive this...
+                if class_name < 0 or class_name >= len(self.class_names):
+                    raise AssertionError("class name given as out-of-range index (%d) for class list" % class_name)
+                class_name = self.class_names[class_name]
+            elif not isinstance(class_name, str):
                 raise AssertionError("expected label to be in str format (task will convert to proper index)")
             if class_name not in self.class_names:
                 raise AssertionError("got unexpected label '%s' for a sample (unknown class)" % class_name)
