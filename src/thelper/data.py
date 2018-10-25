@@ -664,7 +664,8 @@ class DataConfig(object):
                                                            sampler=sampler,
                                                            num_workers=self.workers,
                                                            pin_memory=self.pin_memory,
-                                                           drop_last=self.drop_last))
+                                                           drop_last=self.drop_last,
+                                                           worker_init_fn=self._worker_init_fn))
             else:
                 loaders.append(None)
         train_loader, valid_loader, test_loader = loaders
@@ -677,6 +678,11 @@ class DataConfig(object):
     def get_base_transforms(self):
         """Returns the (global) sample transformation operations parsed in the data configuration."""
         return self.base_transforms
+
+    def _worker_init_fn(self, worker_id):
+        torch.manual_seed(self.torch_seed + worker_id)
+        torch.cuda.manual_seed_all(self.torch_seed + worker_id)
+        np.random.seed(self.numpy_seed + worker_id)
 
 
 class Dataset(torch.utils.data.Dataset, ABC):
