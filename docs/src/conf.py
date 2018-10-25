@@ -62,7 +62,7 @@ def run_apidoc(_):
     if on_rtd:
         argv = ["-o", ".", "../../src/"]
     else:
-        argv = ["-f', "-o", "./src/", "../src/"]
+        argv = ["-f", "-o", "./src/", "../src/"]
     try:
         # Sphinx 1.7+
         from sphinx.ext import apidoc
