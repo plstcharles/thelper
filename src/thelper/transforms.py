@@ -14,10 +14,10 @@ constructor and exposed in the operation's ``__repr__`` function so that
 external parsers can discover exactly how to reproduce their behavior.
 """
 import logging
-import random
 
 import Augmentor
 import cv2 as cv
+import math
 import numpy as np
 import PIL.Image
 import torch
@@ -202,7 +202,7 @@ class AugmentorWrapper(object):
         elif not isinstance(samples[0], PIL.Image.Image):
             raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
         for operation in self.pipeline.operations:
-            r = round(random.uniform(0, 1), 1)
+            r = round(np.random.uniform(0, 1), 1)
             if r <= operation.probability:
                 samples = operation.perform_operation(samples)
         if cvt_array:
@@ -290,7 +290,7 @@ class ImageTransformWrapper(object):
                 cvt_array = True
         elif not isinstance(samples[0], PIL.Image.Image):
             raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
-        if self.probability >= 1 or round(random.uniform(0, 1), 1) <= self.probability:
+        if self.probability >= 1 or round(np.random.uniform(0, 1), 1) <= self.probability:
             # we either apply the op on all samples, or on none
             for idx in range(len(samples)):
                 if cvt_array:
@@ -687,7 +687,7 @@ class RandomShift(object):
         """
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
-        if np.random.uniform(0, 1) > self.probability:
+        if self.probability < 1 and np.random.uniform(0, 1) > self.probability:
             return sample
         out_size = (sample.shape[1], sample.shape[0])
         x_shift = np.random.uniform(self.min[0], self.max[0])
