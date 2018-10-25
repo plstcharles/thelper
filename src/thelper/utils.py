@@ -217,6 +217,7 @@ def query_yes_no(question, default=None):
         prompt = " [y/n] "
     sys.stdout.flush()
     sys.stderr.flush()
+    time.sleep(0.01)
     while True:
         sys.stdout.write(question + prompt)
         choice = input().lower()
@@ -247,6 +248,7 @@ def query_string(question, choices=None, default=None, allow_empty=False):
     """
     sys.stdout.flush()
     sys.stderr.flush()
+    time.sleep(0.01)
     while True:
         msg = question
         if choices is not None:
