@@ -303,3 +303,7 @@ def main(args=None):
                 raise AssertionError("no config file found at path '%s'" % args.cfg_path)
             config = json.load(open(args.cfg_path))
         return visualize_data(config, args.data_root)
+
+
+if __name__ == "__main__":
+    main()
