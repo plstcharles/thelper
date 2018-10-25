@@ -14,10 +14,10 @@ constructor and exposed in the operation's ``__repr__`` function so that
 external parsers can discover exactly how to reproduce their behavior.
 """
 import logging
+import math
 
 import Augmentor
 import cv2 as cv
-import math
 import numpy as np
 import PIL.Image
 import torch
@@ -526,12 +526,13 @@ class RandomResizedCrop(object):
             else:
                 raise AssertionError("invalid aspect ratio, expected 2-element tuple/list or single float")
             self.input_size = ((min(input_size), min(input_size)), (max(input_size), max(input_size)))
-        elif all([isinstance(s, tuple) and len(s) == 2 for s in input_size]) or all([isinstance(s, list) and len(s) == 2 for s in input_size]):
+        elif all([isinstance(s, tuple) and len(s) == 2 for s in input_size]) or \
+                all([isinstance(s, list) and len(s) == 2 for s in input_size]):
             if ratio is not None and isinstance(ratio, (tuple, list)) and len(ratio) != 0:
                 raise AssertionError("cannot specify input sizes in two-element tuples/lists and also provide aspect ratios")
             for t in input_size:
                 for s in t:
-                    if not isinstance(s, (int, float)) or type(s) != type(input_size[0][0]):
+                    if not isinstance(s, (int, float)) or isinstance(type(s), type(input_size[0][0])):
                         raise AssertionError("input sizes should all be same type, either int or float")
             self.input_size = (min(input_size[0][0], input_size[1][0]), min(input_size[0][1], input_size[1][1]),
                                max(input_size[0][0], input_size[1][0]), max(input_size[0][1], input_size[1][1]))
