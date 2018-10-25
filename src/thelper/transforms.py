@@ -445,6 +445,184 @@ class CenterCrop(object):
         return self.__class__.__name__ + "(size={0}, bordertype={1}, bordervalue={2})".format(self.size, self.bordertype, self.borderval)
 
 
+class RandomResizedCrop(object):
+    """Returns a resized crop of a randomly selected image region.
+
+    This operation is stochastic, and thus cannot be inverted. Each time the operation is called,
+    a random check will determine whether a transformation is applied or not. The code relies on
+    OpenCV, meaning the interpolation arguments must be compatible with ``cv2.resize``.
+
+    Args:
+        output_size: size of the output crop, provided as a single element (``edge_size``) or as a
+            two-element tuple or list (``[width, height]``). If integer values are used, the size is
+            assumed to be absolute. If floating point values are used (i.e. in [0,1]), the output
+            size is assumed to be relative to the original image size, and will be determined at
+            execution time for each sample.
+        input_size: range of the input region sizes, provided as a pair of elements
+            (``[min_edge_size, max_edge_size]``) or as a pair of tuples or lists
+            (``[[min_width, min_height], [max_width, max_height]]``). If the pair-of-pairs format is
+            used, the ``ratio`` argument cannot be used. If integer values are used, the ranges are
+            assumed to be absolute. If floating point values are used (i.e. in [0,1]), the ranges
+            are assumed to be relative to the original image size, and will be determined at
+            execution time for each sample.
+        ratio: range of minimum/maximum input region aspect ratios to use. This argument cannot be
+            used if the pair-of-pairs format is used for the ``input_size`` argument.
+        probability: the probability that the transformation will be applied when called; if not
+            applied, the returned image will be the original.
+        random_attempts: the number of random sampling attempts to try before reverting to center
+            or most-probably-valid crop generation.
+        flags: interpolation flag forwarded to ``cv2.resize``.
+    """
+
+    def __init__(self, output_size, input_size=(0.08, 1.0), ratio=(0.75, 1.33),
+                 probability=1.0, random_attempts=10, flags=cv.INTER_LINEAR):
+        """Validates and initializes center crop parameters.
+
+        Args:
+            output_size: size of the output crop, provided as a single element (``edge_size``) or as a
+                two-element tuple or list (``[width, height]``). If integer values are used, the size is
+                assumed to be absolute. If floating point values are used (i.e. in [0,1]), the output
+                size is assumed to be relative to the original image size, and will be determined at
+                execution time for each sample.
+            input_size: range of the input region sizes, provided as a pair of elements
+                (``[min_edge_size, max_edge_size]``) or as a pair of tuples or lists
+                (``[[min_width, min_height], [max_width, max_height]]``). If the pair-of-pairs format is
+                used, the ``ratio`` argument cannot be used. If integer values are used, the ranges are
+                assumed to be absolute. If floating point values are used (i.e. in [0,1]), the ranges
+                are assumed to be relative to the original image size, and will be determined at
+                execution time for each sample.
+            ratio: range of minimum/maximum input region aspect ratios to use. This argument cannot be
+                used if the pair-of-pairs format is used for the ``input_size`` argument.
+            probability: the probability that the transformation will be applied when called; if not
+                applied, the returned image will be the original.
+            random_attempts: the number of random sampling attempts to try before reverting to center
+                or most-probably-valid crop generation.
+            flags: interpolation flag forwarded to ``cv2.resize``.
+        """
+        if isinstance(output_size, (tuple, list)):
+            if len(output_size) != 2:
+                raise AssertionError("expected output size to be two-element list or tuple, or single scalar")
+            if not all([isinstance(s, int) for s in output_size]) and not all([isinstance(s, float) for s in output_size]):
+                raise AssertionError("expected output size pair elements to be the same type (int or float)")
+            self.output_size = output_size
+        elif isinstance(output_size, (int, float)):
+            self.output_size = (output_size, output_size)
+        else:
+            raise AssertionError("unexpected output size type (need tuple/list/int/float)")
+        for s in self.output_size:
+            if not ((isinstance(s, float) and 0 < s <= 1) or (isinstance(s, int) and s > 0)):
+                raise AssertionError("invalid output size value (%s)" % str(s))
+        if not isinstance(input_size, (tuple, list)) or len(input_size) != 2:
+            raise AssertionError("expected input size to be provided as a pair of elements or a pair of tuples/lists")
+        if all([isinstance(s, int) for s in input_size]) or all([isinstance(s, float) for s in input_size]):
+            if ratio is not None and isinstance(ratio, (tuple, list)):
+                if len(ratio) != 2:
+                    raise AssertionError("invalid ratio tuple/list length (expected two elements)")
+                if not all([isinstance(r, float) for r in ratio]):
+                    raise AssertionError("expected ratio pair elements to be float values")
+                self.ratio = (min(ratio), max(ratio))
+            elif ratio is not None and isinstance(ratio, float):
+                self.ratio = (ratio, ratio)
+            else:
+                raise AssertionError("invalid aspect ratio, expected 2-element tuple/list or single float")
+            self.input_size = ((min(input_size), min(input_size)), (max(input_size), max(input_size)))
+        elif all([isinstance(s, tuple) and len(s) == 2 for s in input_size]) or all([isinstance(s, list) and len(s) == 2 for s in input_size]):
+            if ratio is not None and isinstance(ratio, (tuple, list)) and len(ratio) != 0:
+                raise AssertionError("cannot specify input sizes in two-element tuples/lists and also provide aspect ratios")
+            for t in input_size:
+                for s in t:
+                    if not isinstance(s, (int, float)) or type(s) != type(input_size[0][0]):
+                        raise AssertionError("input sizes should all be same type, either int or float")
+            self.input_size = (min(input_size[0][0], input_size[1][0]), min(input_size[0][1], input_size[1][1]),
+                               max(input_size[0][0], input_size[1][0]), max(input_size[0][1], input_size[1][1]))
+            self.ratio = None  # ignored since input_size contains all necessary info
+        else:
+            raise AssertionError("expected input size to be two-elem list/tuple of int/float or two-element list/tuple of int/float")
+        for t in self.input_size:
+            for s in t:
+                if not ((isinstance(s, float) and 0 < s <= 1) or (isinstance(s, int) and s > 0)):
+                    raise AssertionError("invalid input size value (%s)" % str(s))
+        if probability < 0 or probability > 1:
+            raise AssertionError("invalid probability value (should be in [0,1]")
+        self.probability = probability
+        if random_attempts <= 0:
+            raise AssertionError("invalid random_attempts value (should be > 0)")
+        self.random_attempts = random_attempts
+        self.flags = thelper.utils.import_class(flags) if isinstance(flags, str) else flags
+
+    def __call__(self, sample):
+        """Extracts and returns a random (resized) crop from the provided image.
+
+        Args:
+            sample: the image to generate the crop from; should be a 2d or 3d numpy array.
+
+        Returns:
+            The randomly selected and resized crop.
+        """
+        if isinstance(sample, PIL.Image.Image):
+            sample = np.asarray(sample)
+        if self.probability < 1 and np.random.uniform(0, 1) > self.probability:
+            return sample
+        image_height, image_width = sample.shape[0], sample.shape[1]
+        target_height, target_width = None, None
+        target_row, target_col = None, None
+        for attempt in range(self.random_attempts):
+            if self.ratio is None:
+                target_width = np.random.uniform(self.input_size[0][0], self.input_size[1][0])
+                target_height = np.random.uniform(self.input_size[0][1], self.input_size[1][1])
+                if isinstance(self.input_size[0][0], float):
+                    target_width *= image_width
+                    target_height *= image_height
+                target_width = int(round(target_width))
+                target_height = int(round(target_height))
+            elif isinstance(self.input_size[0][0], (int, float)):
+                if isinstance(self.input_size[0][0], float):
+                    area = image_height * image_width
+                    target_area = np.random.uniform(self.input_size[0][0], self.input_size[1][0]) * area
+                else:
+                    target_area = np.random.uniform(self.input_size[0][0], self.input_size[1][0]) ** 2
+                aspect_ratio = np.random.uniform(*self.ratio)
+                target_width = int(round(math.sqrt(target_area * aspect_ratio)))
+                target_height = int(round(math.sqrt(target_area / aspect_ratio)))
+                if np.random.random() < 0.5:
+                    target_width, target_height = target_height, target_width
+            else:
+                raise AssertionError("unhandled crop strategy")
+            if target_width <= image_width and target_height <= image_height:
+                target_col = np.random.randint(0, image_width - target_width)
+                target_row = np.random.randint(0, image_height - target_height)
+                break
+        if image_height is None or image_width is None:
+            # fallback, use centered crop
+            target_width = target_height = min(sample.shape[0], sample.shape[1])
+            target_col = (sample.shape[1] - target_width) // 2
+            target_row = (sample.shape[0] - target_height) // 2
+        crop = thelper.utils.safe_crop(sample, (target_col, target_row), (target_col + target_width, target_row + target_height))
+        if isinstance(self.output_size[0], float):
+            output_width = int(round(self.output_size[0] * sample.shape[1]))
+            output_height = int(round(self.output_size[1] * sample.shape[0]))
+            return cv.resize(crop, (output_width, output_height), interpolation=self.flags)
+        elif isinstance(self.output_size[0], int):
+            return cv.resize(crop, (self.output_size[0], self.output_size[1]), interpolation=self.flags)
+        else:
+            raise AssertionError("unhandled crop strategy")
+
+    def invert(self, sample):
+        """Specifies that this operation cannot be inverted, as data loss is incurred during image transformation."""
+        raise AssertionError("cannot be inverted")
+
+    def __repr__(self):
+        """Provides print-friendly output for class attributes."""
+        format_str = self.__class__.__name__ + "("
+        format_str += "output_size={}, ".format(self.output_size)
+        format_str += "input_size={}, ".format(self.input_size)
+        format_str += "ratio={}, ".format(self.ratio)
+        format_str += "probability={}, ".format(self.probability)
+        format_str += "random_attempts={}, ".format(self.random_attempts)
+        format_str += "flags={})".format(self.flags)
+        return format_str
+
+
 class Resize(object):
     """Resizes a given image using OpenCV and numpy.
 
