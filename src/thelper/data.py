@@ -334,6 +334,9 @@ class DataConfig(object):
     - ``torch_seed`` (optional): specifies the RNG seed to use for torch-related stochastic operations
       (e.g. for data augmentation). If no seed is specified, the RNG will be initialized with a
       device-specific or time-related seed.
+    - ``numpy_seed`` (optional): specifies the RNG seed to use for numpy-related stochastic operations
+      (e.g. for data augmentation). If no seed is specified, the RNG will be initialized with a
+      device-specific or time-related seed.
     - ``workers`` (optional, default=1): specifies the number of threads to use to preload batches in
       parallel; can be 0 (loading will be on main thread), or an integer >= 1.
     - ``pin_memory`` (optional, default=False): specifies whether the data loaders will copy tensors
@@ -377,8 +380,8 @@ class DataConfig(object):
         self.shuffle = thelper.utils.str2bool(config["shuffle"]) if "shuffle" in config else True
         if self.shuffle:
             logger.debug("dataset samples will be shuffled according to predefined seeds")
-            np.random.seed()
-        self.valid_seed, self.test_seed, self.torch_seed = None, None, None
+            np.random.seed()  # for seed generation below (if needed); will be reseeded afterwards
+        self.valid_seed, self.test_seed, self.torch_seed, self.numpy_seed = None, None, None, None
         if "test_seed" in config or "test_split_seed" in config:
             key = "test_seed" if "test_seed" in config else "test_split_seed"
             if not isinstance(config[key], (int, str)):
@@ -404,6 +407,14 @@ class DataConfig(object):
             logger.info("setting torch seed to %d" % self.torch_seed)
         torch.manual_seed(self.torch_seed)
         torch.cuda.manual_seed_all(self.torch_seed)
+        if "numpy_seed" in config:
+            if not isinstance(config["numpy_seed"], int):
+                raise AssertionError("unexpected value type for field 'numpy_seed'")
+            self.numpy_seed = config["numpy_seed"]
+        else:
+            self.numpy_seed = np.random.randint(2 ** 16)
+            logger.info("setting numpy seed to %d" % self.numpy_seed)
+        np.random.seed(self.numpy_seed)
         self.workers = config["workers"] if "workers" in config and config["workers"] >= 0 else 1
         self.pin_memory = thelper.utils.str2bool(config["pin_memory"]) if "pin_memory" in config else False
         self.drop_last = thelper.utils.str2bool(config["drop_last"]) if "drop_last" in config else False
@@ -510,7 +521,7 @@ class DataConfig(object):
                     trainvalid_idxs = indices[name][offsets[name]:]
                     np.random.shuffle(trainvalid_idxs)
                     indices[name][offsets[name]:] = trainvalid_idxs
-                np.random.seed()  # back to truly random state for future use
+                np.random.seed(self.numpy_seed)  # back to default random state for future use
         return train_idxs, valid_idxs, test_idxs
 
     def get_split(self, datasets, task):
