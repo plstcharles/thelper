@@ -3,6 +3,7 @@
 This module only contains non-ML specific functions, i/o helpers,
 and matplotlib/pyplot drawing calls.
 """
+import copy
 import glob
 import importlib
 import inspect
@@ -619,6 +620,33 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
         ax.text(j, i, str, horizontalalignment="center", fontsize=3, verticalalignment="center", color=color)
     fig.set_tight_layout(True)
     return fig
+
+
+def draw_bboxes(image, rects, labels=None, confidences=None, win_size=None, thickness=1, show=True):
+    """Draws and returns an image with bounding boxes via OpenCV."""
+    if not isinstance(image, np.ndarray):
+        raise AssertionError("expected input image to be numpy array")
+    if not isinstance(rects, list) or not all([isinstance(r, (tuple, list)) and len(r) == 4 for r in rects]):
+        raise AssertionError("expected input rectangles to be list of 4-elem tuples/lists (x,y,w,h)")
+    if labels is not None and (not isinstance(labels, list) or len(labels) != len(rects)):
+        raise AssertionError("bad labels list (check type/length)")
+    if confidences is not None and (not isinstance(confidences, list) or len(confidences) != len(confidences)):
+        raise AssertionError("bad confidences list (check type/length)")
+    display_image = np.copy(image)
+    if labels is None and confidences is None:
+        # draw all bboxes with unique colors (shuffled)
+        rects = copy.deepcopy(rects)
+        np.random.shuffle(rects)
+        for idx, rect in enumerate(rects):
+            cv.rectangle(display_image, (rect[0], rect[1]), (rect[0] + rect[2], rect[1] + rect[3]),
+                         get_bgr_from_hsl(idx / len(rects) * 360, 1.0, 0.5), thickness)
+    else:
+        raise NotImplementedError  # TODO
+    if win_size is not None:
+        display_image = cv.resize(display_image, win_size)
+    if show:
+        cv.imshow("bboxes", display_image)
+    return display_image
 
 
 def stringify_confmat(confmat, class_list, hide_zeroes=False, hide_diagonal=False, hide_threshold=None):
