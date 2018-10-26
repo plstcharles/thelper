@@ -182,7 +182,8 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
         if self.nb_samples == 0:
             return iter([])
         if self.stype == "random":
-            return (self.indices[idx] for idx in torch.multinomial(self.sample_weights, self.nb_samples, replacement=True))
+            return (self.indices[idx] for idx in torch.multinomial(torch.FloatTensor(self.sample_weights),
+                                                                   self.nb_samples, replacement=True))
         elif self.stype == "uniform" or "root" in self.stype:
             indices = []
             for label, count in self.label_counts.items():
