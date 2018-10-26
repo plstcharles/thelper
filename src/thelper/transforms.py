@@ -13,6 +13,7 @@ All important parameters for an operation should also be passed in the
 constructor and exposed in the operation's ``__repr__`` function so that
 external parsers can discover exactly how to reproduce their behavior.
 """
+import itertools
 import logging
 import math
 
@@ -937,6 +938,163 @@ class Transpose(object):
         """Provides print-friendly output for class attributes."""
         return self.__class__.__name__ + "(axes={0})".format(self.axes)
 
+
+class Tile(object):
+    """Returns a list of tiles cut out from a given image.
+
+    This operation can perform tiling given an optional mask with a target intersection over union (IoU) score,
+    and with an optional overlap between tiles. The tiling is deterministic and can thus be inverted, but only
+    if a mask is not used, as some image regions may be lost otherwise.
+
+    If a mask is used, the first tile position is tested exhaustively by iterating over all input coordinates
+    starting from the top-left corner of the image. Otherwise, the first tile position is set as (0,0). Then,
+    all other tiles are found by offsetting frm these coordinates, and testing for IoU with the mask (if needed).
+
+    Attributes:
+        tile_size: size of the output tiles, provided as a single element (``edge_size``) or as a
+            two-element tuple or list (``[width, height]``). If integer values are used, the size is
+            assumed to be absolute. If floating point values are used (i.e. in [0,1]), the output
+            size is assumed to be relative to the original image size, and will be determined at
+            execution time for each image.
+        tile_overlap: overlap allowed between two neighboring tiles; should be a ratio in [0,1].
+        min_mask_iou: minimum mask intersection over union (IoU) required for accepting a tile (in [0,1]).
+        offset_overlap: specifies whether the overlap tiling should be offset outside the image or not.
+        bordertype: border copy type to use when the image is too small for the required crop size.
+            See ``cv2.copyMakeBorder`` for more information.
+        borderval: border value to use when the image is too small for the required crop size. See
+            ``cv2.copyMakeBorder`` for more information.
+    """
+
+    def __init__(self, tile_size, tile_overlap=0.0, min_mask_iou=1.0, offset_overlap=False, bordertype=cv.BORDER_CONSTANT, borderval=0):
+        """Validates and initializes tiling parameters.
+
+        Args:
+            tile_size: size of the output tiles, provided as a single element (``edge_size``) or as a
+                two-element tuple or list (``[width, height]``). If integer values are used, the size is
+                assumed to be absolute. If floating point values are used (i.e. in [0,1]), the output
+                size is assumed to be relative to the original image size, and will be determined at
+                execution time for each image.
+            tile_overlap: overlap ratio between two consecutive (neighboring) tiles; should be in [0,1].
+            min_mask_iou: minimum mask intersection over union (IoU) required for producing a tile.
+            offset_overlap: specifies whether the overlap tiling should be offset outside the image or not.
+            bordertype: border copy type to use when the image is too small for the required crop size.
+                See ``cv2.copyMakeBorder`` for more information.
+            borderval: border value to use when the image is too small for the required crop size. See
+                ``cv2.copyMakeBorder`` for more information.
+        """
+        if isinstance(tile_size, (tuple, list)):
+            if len(tile_size) != 2:
+                raise AssertionError("expected tile size to be two-element list or tuple, or single scalar")
+            if not all([isinstance(s, int) for s in tile_size]) and not all([isinstance(s, float) for s in tile_size]):
+                raise AssertionError("expected tile size pair elements to be the same type (int or float)")
+            self.tile_size = tile_size
+        elif isinstance(tile_size, (int, float)):
+            self.tile_size = (tile_size, tile_size)
+        else:
+            raise AssertionError("unexpected tile size type (need tuple/list/int/float)")
+        if not isinstance(tile_overlap, float) or tile_overlap < 0 or tile_overlap >= 1:
+            raise AssertionError("invalid tile overlap (should be float in [0,1[)")
+        self.tile_overlap = tile_overlap
+        if not isinstance(min_mask_iou, float) or min_mask_iou < 0 or tile_overlap > 1:
+            raise AssertionError("invalid minimum mask IoU score (should be float in [0,1])")
+        self.min_mask_iou = min_mask_iou
+        self.offset_overlap = offset_overlap
+        self.bordertype = thelper.utils.import_class(bordertype) if isinstance(bordertype, str) else bordertype
+        self.borderval = borderval
+
+    def __call__(self, image, mask=None):
+        """Extracts and returns a list of tiles cut out from the given image.
+
+        Args:
+            image: the image to cut into tiles.
+            mask: the mask to check tile intersections with (may be ``None``).
+
+        Returns:
+            A list of tiles (numpy-compatible images).
+        """
+        tile_rects = self._get_tile_rects(image, mask)
+        thelper.utils.draw_bboxes(image, tile_rects)
+        cv.waitKey(0)
+        tile_images = []
+        for rect in tile_rects:
+            tile_images.append(thelper.utils.safe_crop(image, (rect[0], rect[1]),
+                                                       (rect[0]+rect[2], rect[1]+rect[3]),
+                                                       self.bordertype, self.borderval))
+        for idx, img in enumerate(tile_images):
+            cv.imshow("img=%d" % idx, img)
+        cv.waitKey(0)
+        return tile_images
+
+    def count_tiles(self, image, mask=None):
+        """Returns the number of tiles that would be cut out from the given image.
+
+        Args:
+            image: the image to cut into tiles.
+            mask: the mask to check tile intersections with (may be ``None``).
+
+        Returns:
+            The number of tiles that would be cut with :func:`thelper.transforms.Tile.__call__`.
+        """
+        return len(self._get_tile_rects(image, mask))
+
+    def _get_tile_rects(self, image, mask=None):
+        if isinstance(image, PIL.Image.Image):
+            image = np.asarray(image)
+        if mask is not None and isinstance(mask, PIL.Image.Image):
+            mask = np.asarray(mask)
+        tile_rects = []
+        height, width = image.shape[0], image.shape[1]
+        if isinstance(self.tile_size[0], float):
+            tile_size = (int(round(self.tile_size[0] * width)), int(round(self.tile_size[1] * height)))
+        else:
+            tile_size = self.tile_size
+        overlap = (int(round(tile_size[0] * self.tile_overlap)), int(round(tile_size[1] * self.tile_overlap)))
+        overlap_offset = (-overlap[0] // 2, -overlap[1] // 2) if self.offset_overlap else (0, 0)
+        step_size = (max(tile_size[0] - (overlap[0] // 2) * 2, 1), max(tile_size[1] - (overlap[1] // 2) * 2, 1))
+        req_mask_area = tile_size[0] * tile_size[1] * self.min_mask_iou
+        if mask is not None:
+            if height != mask.shape[0] or width != mask.shape[1]:
+                raise AssertionError("image and mask dimensions mismatch")
+            if mask.ndim != 2:
+                raise AssertionError("mask should be 2d binary (uchar) array")
+            offset_coord = None
+            row_range = range(overlap_offset[1], height - overlap_offset[1] - tile_size[1] + 1)
+            col_range = range(overlap_offset[0], width - overlap_offset[0] - tile_size[0] + 1)
+            for row, col in itertools.product(row_range, col_range):
+                crop = thelper.utils.safe_crop(mask, (col, row), (col + tile_size[0], row + tile_size[1]))
+                if np.count_nonzero(crop) >= req_mask_area:
+                    offset_coord = (overlap_offset[0] + ((col - overlap_offset[0]) % step_size[0]),
+                                    overlap_offset[1] + ((row - overlap_offset[1]) % step_size[1]))
+                    break
+            if offset_coord is None:
+                return tile_rects
+        else:
+            offset_coord = overlap_offset
+        row = offset_coord[1]
+        while row + tile_size[1] <= height - overlap_offset[1]:
+            col = offset_coord[0]
+            while col + tile_size[0] <= width - overlap_offset[0]:
+                if mask is not None:
+                    crop = thelper.utils.safe_crop(mask, (col, row), (col + tile_size[0], row + tile_size[1]))
+                    if np.count_nonzero(crop) >= req_mask_area:
+                        tile_rects.append((col, row, tile_size[0], tile_size[1]))  # rect = (x, y, w, h)
+                else:
+                    tile_rects.append((col, row, tile_size[0], tile_size[1]))  # rect = (x, y, w, h)
+                col += step_size[0]
+            row += step_size[1]
+        return tile_rects
+
+    def invert(self, image, mask=None):
+        """Returns the reconstituted image from a list of tiles, or throws if a mask was used."""
+        if mask is not None:
+            raise AssertionError("cannot invert operation, mask might have forced the loss of image content")
+        else:
+            raise NotImplementedError  # TODO
+
+    def __repr__(self):
+        """Provides print-friendly output for class attributes."""
+        return self.__class__.__name__ + \
+            "(tsize={0}, overlap={1}, iou={2})".format(self.tile_size, self.tile_overlap, self.min_mask_iou)
 
 class NormalizeZeroMeanUnitVar(object):
     """Normalizes a given image using a set of mean and standard deviation parameters.
