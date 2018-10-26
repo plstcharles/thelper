@@ -19,6 +19,7 @@ import time
 import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
+import PIL.Image
 import sklearn.metrics
 import torch
 
@@ -624,6 +625,8 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
 
 def draw_bboxes(image, rects, labels=None, confidences=None, win_size=None, thickness=1, show=True):
     """Draws and returns an image with bounding boxes via OpenCV."""
+    if isinstance(image, PIL.Image.Image):
+        image = np.asarray(image)
     if not isinstance(image, np.ndarray):
         raise AssertionError("expected input image to be numpy array")
     if not isinstance(rects, list) or not all([isinstance(r, (tuple, list)) and len(r) == 4 for r in rects]):
