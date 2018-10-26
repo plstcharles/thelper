@@ -452,7 +452,7 @@ class RandomResizedCrop(object):
     a random check will determine whether a transformation is applied or not. The code relies on
     OpenCV, meaning the interpolation arguments must be compatible with ``cv2.resize``.
 
-    Args:
+    Attributes:
         output_size: size of the output crop, provided as a single element (``edge_size``) or as a
             two-element tuple or list (``[width, height]``). If integer values are used, the size is
             assumed to be absolute. If floating point values are used (i.e. in [0,1]), the output
@@ -674,6 +674,8 @@ class Resize(object):
         Returns:
             The resized image. May be allocated on the spot, or be a pointer to a local buffer.
         """
+        if isinstance(sample, PIL.Image.Image):
+            sample = np.asarray(sample)
         if sample.ndim < 2 or sample.ndim > 3:
             raise AssertionError("bad input dimensions; must be 2-d, or 3-d (with channels)")
         if sample.ndim < 3 or sample.shape[2] <= 4:
