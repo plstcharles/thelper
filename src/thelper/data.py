@@ -9,9 +9,7 @@ import copy
 import json
 import logging
 import os
-import platform
 import sys
-import time
 from abc import ABC
 from abc import abstractmethod
 from collections import Counter
@@ -120,7 +118,8 @@ def load(config, data_root, save_dir=None):
         :func:`thelper.transforms.load_transforms`
         :class:`thelper.samplers.WeightedSubsetRandomSampler`
     """
-    logstamp = str(platform.node()) + "-" + time.strftime("%Y%m%d-%H%M%S")
+    logstamp = thelper.utils.get_log_stamp()
+    repover = thelper.utils.get_git_stamp()
     session_name = config["name"] if "name" in config else "session"
     if save_dir is not None:
         data_logger_path = os.path.join(save_dir, "logs", "data.log")
@@ -156,6 +155,7 @@ def load(config, data_root, save_dir=None):
     if save_dir is not None:
         with open(os.path.join(save_dir, "logs", "task.log"), "a+") as fd:
             fd.write("session: %s-%s\n" % (session_name, logstamp))
+            fd.write("version: %s\n" % repover)
             fd.write(str(task) + "\n")
         for dataset_name, dataset in datasets.items():
             dataset_log_file = os.path.join(save_dir, "logs", dataset_name + ".log")
@@ -210,6 +210,7 @@ def load(config, data_root, save_dir=None):
                 "metadata": {
                     "session_name": session_name,
                     "logstamp": logstamp,
+                    "version": repover,
                     "dataset": str(dataset),
                 },
                 "samples": [str(sample) for sample in samples],
@@ -472,7 +473,6 @@ class DataConfig(object):
                 if usage < 0:
                     raise AssertionError("ratio should never be negative...")
                 elif 0 < usage < 1 and not self.skip_split_norm:
-                    time.sleep(0.25)  # to make sure all debug/info prints are done, and we see the question
                     normalize_ratios = thelper.utils.query_yes_no(
                         "Dataset split for '%s' has a ratio sum less than 1; do you want to normalize the split?" % name)
                 if (normalize_ratios or usage > 1) and usage > 0:

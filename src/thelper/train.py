@@ -242,12 +242,14 @@ class Trainer:
             self.monitor_best = thelper.optim.Metric.minimize
         else:
             raise AssertionError("monitored metric does not return proper optimization goal")
-        train_logger_path = os.path.join(self.save_dir, "logs", "train.log")
+        train_logger_path = os.path.join(self.save_dir, "logs", "trainer.log")
         train_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         train_logger_fh = logging.FileHandler(train_logger_path)
         train_logger_fh.setFormatter(train_logger_format)
         self.logger.addHandler(train_logger_fh)
         self.logger.info("created training log for session '%s'" % self.name)
+        self.logger.debug("logstamp = %s" % thelper.utils.get_log_stamp())
+        self.logger.debug("version = %s" % thelper.utils.get_git_stamp())
         self.current_lr = self._get_lr()  # for debug/display purposes only
         if ckptdata is not None:
             self.monitor_best = ckptdata["monitor_best"]
