@@ -149,7 +149,7 @@ def get_git_stamp():
         repo = git.Repo(search_parent_directories=True)
         sha = repo.head.object.hexsha
         return str(sha)
-    except:
+    except:  # noqa: E722
         pass
     return "unknown"
 
