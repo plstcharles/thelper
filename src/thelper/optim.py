@@ -18,6 +18,7 @@ from abc import ABC
 from abc import abstractmethod
 from collections import deque
 
+import numpy as np
 import sklearn.metrics
 import torch
 import torch.nn
@@ -1196,6 +1197,189 @@ class ROCCurve(Metric):
                     else:
                         res += "," + str(val)
                 res += "\n"
+        return res
+
+    def reset(self):
+        """Toggles a reset of the metric's internal state, emptying queues."""
+        self.score = None
+        self.true = None
+        self.meta = None
+
+    def goal(self):
+        """Returns ``None``, as this class should not be used to directly monitor the training progress."""
+        return None
+
+
+class ClassifLogger(Metric):
+    """Classification output logger.
+
+    This class provides a simple logging interface for accumulating and saving the predictions of a classifier.
+    Note that since the evaluation result is always ``None``, this metric cannot be used to directly monitor
+    training progression, and thus also returns ``None`` in :func:`thelper.optim.ClassifLogger.goal`.
+
+    It also optionally offers tensorboardX-compatible output images that can be saved locally or posted to
+    tensorboard for browser-based visualization.
+
+    Usage examples inside a session configuration file::
+
+        # ...
+        # lists all metrics to instantiate as a dictionary
+        "metrics": {
+            # ...
+            # this is the name of the example metric; it is used for lookup/printing only
+            "logger": {
+                # this type is used to instantiate the confusion matrix report metric
+                "type": "thelper.optim.ClassifLogger",
+                "params": [
+                    # log the three 'best' predictions for each sample
+                    {"name": "top_k", "value": 3},
+                    # keep updating a set of 10 samples for visualization via tensorboardX
+                    {"name": "viz_count", "value": 10}
+                ]
+            },
+            # ...
+        }
+        # ...
+
+    Attributes:
+        top_k: number of 'best' predictions to keep for each sample (along with the gt label).
+        class_names: holds the list of class label names provided by the dataset parser. If it is not
+            provided when the constructor is called, it will be set by the trainer at runtime.
+        viz_count: number of tensorboardX images to generate and update at each epoch.
+        meta_keys: list of metadata fields to copy in the log for each prediction.
+        force_softmax: specifies whether a softmax operation should be applied to the prediction scores
+            obtained from the trainer.
+        score: queue used to store prediction score values for logging.
+        true: queue used to store groundtruth label values for logging.
+        meta: dictionary of metadata queues used for logging.
+    """
+
+    def __init__(self, top_k=1, class_names=None, viz_count=0, meta_keys=None, force_softmax=True):
+        """Receives the logging parameters & the optional class label names used to decorate the log.
+
+        Args:
+            top_k: number of 'best' predictions to keep for each sample (along with the gt label).
+            class_names: holds the list of class label names provided by the dataset parser. If it is not
+                provided when the constructor is called, it will be set by the trainer at runtime.
+            viz_count: number of tensorboardX images to generate and update at each epoch.
+            meta_keys: list of metadata fields to copy in the log for each prediction.
+            force_softmax: specifies whether a softmax operation should be applied to the prediction scores
+                obtained from the trainer.
+        """
+        if not isinstance(top_k, int) or top_k <= 0:
+            raise AssertionError("invalid top-k value")
+        self.top_k = top_k
+        self.class_names = None
+        if class_names is not None:
+            self.set_class_names(class_names)
+        if not isinstance(viz_count, int) or top_k < 0:
+            raise AssertionError("invalid viz_count value")
+        self.viz_count = viz_count
+        if meta_keys is not None and not isinstance(self.meta_keys, list):
+            raise AssertionError("unexpected log meta keys params type (expected list)")
+        self.meta_keys = meta_keys
+        self.force_softmax = force_softmax
+        self.score = None
+        self.true = None
+        self.meta = None
+
+    def set_class_names(self, class_names):
+        """Sets the class label names that must be predicted by the model.
+
+        This allows the target class name to be mapped to a target class index.
+
+        The current implementation of :class:`thelper.train.Trainer` will automatically call this
+        function at runtime if it is available, and provide the dataset's classes as a list of strings.
+        """
+        if not isinstance(class_names, list):
+            raise AssertionError("expected list for class names")
+        if len(class_names) < 2:
+            raise AssertionError("not enough classes in provided class list")
+        self.class_names = class_names
+
+    def accumulate(self, pred, gt, meta=None):
+        """Receives the latest prediction scores and groundtruth label indices from the trainer.
+
+        Args:
+            pred: class prediction scores forwarded by the trainer.
+            gt: groundtruth label indices forwarded by the trainer.
+            meta: metadata tensors forwarded by the trainer (used for logging).
+        """
+        if self.force_softmax:
+            with torch.no_grad():
+                pred = torch.nn.functional.softmax(pred, dim=1)
+        if self.score is None:
+            self.score = pred.clone()
+            self.true = gt.clone()
+        else:
+            self.score = torch.cat((self.score, pred), 0)
+            self.true = torch.cat((self.true, gt), 0)
+        if self.meta_keys is not None and self.meta_keys:
+            if meta is None or not meta:
+                raise AssertionError("sample metadata is required, logging is activated")
+            _meta = {key: meta[key] for key in self.meta_keys}
+            if self.meta is None:
+                self.meta = copy.deepcopy(_meta)
+            else:
+                for key in self.meta_keys:
+                    if isinstance(_meta[key], list):
+                        self.meta[key] += _meta[key]
+                    elif isinstance(_meta[key], torch.Tensor):
+                        self.meta[key] = torch.cat((self.meta[key], _meta[key]), 0)
+                    else:
+                        raise AssertionError("missing impl for meta concat w/ type '%s'" % str(type(_meta[key])))
+
+    def eval(self):
+        """Returns ``None``, as this class only produces log files in the session directory."""
+        return None
+
+    def get_tbx_image(self):
+        """Returns an image of predicted outputs as a numpy-compatible RGBA image drawn by pyplot."""
+        if self.viz_count == 0:
+            return None
+        raise NotImplementedError  # TODO @@@
+
+    def get_tbx_text(self):
+        """Returns the logged metadata of predicted samples.
+
+        The returned object is a print-friendly string that can be consumed directly by tensorboardX. Note that
+        this string might be very long if the dataset is large.
+        """
+        if self.class_names is None or not self.class_names:
+            raise AssertionError("missing class list for logging, current impl only supports named outputs")
+        res = "sample_idx,gt_label_idx,gt_label_name,gt_label_score"
+        for k in range(self.top_k):
+            res += ",pred_label_idx_%d,pred_label_name_%d,pred_label_score_%d" % (k, k, k)
+        if self.meta_keys is not None and self.meta_keys:
+            for key in self.meta_keys:
+                res += "," + str(key)
+        res += "\n"
+        for sample_idx in range(self.true.numel()):
+            gt_label_idx = self.true[sample_idx].item()
+            scores = np.asarray(self.score[sample_idx, :].tolist())
+            gt_label_score = scores[gt_label_idx]
+            sorted_score_idxs = np.argsort(scores)[::-1]
+            sorted_scores = scores[sorted_score_idxs]
+            res += "{},{},{},{:2.4f}".format(
+                sample_idx,
+                gt_label_idx,
+                self.class_names[gt_label_idx],
+                gt_label_score
+            )
+            for k in range(self.top_k):
+                res += ",{},{},{:2.4f}".format(
+                    sorted_score_idxs[k],
+                    self.class_names[sorted_score_idxs[k]],
+                    sorted_scores[k]
+                )
+            if self.meta_keys is not None and self.meta_keys:
+                for key in self.meta_keys:
+                    val = self.meta[key][sample_idx]
+                    if isinstance(val, torch.Tensor) and val.numel() == 1:
+                        res += "," + str(val.item())
+                    else:
+                        res += "," + str(val)
+            res += "\n"
         return res
 
     def reset(self):
