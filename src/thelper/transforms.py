@@ -1096,6 +1096,7 @@ class Tile(object):
         return self.__class__.__name__ + \
             "(tsize={0}, overlap={1}, iou={2})".format(self.tile_size, self.tile_overlap, self.min_mask_iou)
 
+
 class NormalizeZeroMeanUnitVar(object):
     """Normalizes a given image using a set of mean and standard deviation parameters.
 
