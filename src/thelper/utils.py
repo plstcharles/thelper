@@ -366,6 +366,43 @@ def safe_crop(image, tl, br, bordertype=cv.BORDER_CONSTANT, borderval=0):
     return image[tl[1]:br[1], tl[0]:br[0], ...]
 
 
+def get_bgr_from_hsl(hue, sat, light):
+    """Converts a single HSL triplet (0-360 hue, 0-1 sat & lightness) into an 8-bit RGB triplet."""
+    # this function is not intended for fast conversions; use OpenCV's cvtColor for large-scale stuff
+    if hue < 0 or hue > 360:
+        raise AssertionError("invalid hue")
+    if sat < 0 or sat > 1:
+        raise AssertionError("invalid saturation")
+    if light < 0 or light > 1:
+        raise AssertionError("invalid lightness")
+    if sat == 0:
+        return (int(np.clip(round(light * 255), 0, 255)),) * 3
+    if light == 0:
+        return 0, 0, 0
+    if light == 1:
+        return 255, 255, 255
+
+    def h2rgb(p, q, t):
+        if t < 0:
+            t += 1
+        if t > 1:
+            t -= 1
+        if t < 1 / 6:
+            return p + (q - p) * 6 * t
+        if t < 1 / 2:
+            return q
+        if t < 2 / 3:
+            return p + (q - p) * (2 / 3 - t) * 6
+        return p
+
+    q = light * (1 + sat) if (light < 0.5) else light + sat - light*sat
+    p = 2 * light - q
+    h = hue / 360
+    return (int(np.clip(round(h2rgb(p, q, h - 1 / 3) * 255), 0, 255)),
+            int(np.clip(round(h2rgb(p, q, h) * 255), 0, 255)),
+            int(np.clip(round(h2rgb(p, q, h + 1 / 3) * 255), 0, 255)))
+
+
 def draw_histogram(data, bins=50, xlabel="", ylabel="Proportion"):
     """Draws and returns a histogram figure using pyplot."""
     fig, ax = plt.subplots()
