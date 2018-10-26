@@ -591,8 +591,8 @@ class RandomResizedCrop(object):
             else:
                 raise AssertionError("unhandled crop strategy")
             if target_width <= image_width and target_height <= image_height:
-                target_col = np.random.randint(0, image_width - target_width)
-                target_row = np.random.randint(0, image_height - target_height)
+                target_col = np.random.randint(min(0, image_width - target_width), max(0, image_width - target_width) + 1)
+                target_row = np.random.randint(min(0, image_height - target_height), max(0, image_height - target_height) + 1)
                 break
         if image_height is None or image_width is None:
             # fallback, use centered crop
