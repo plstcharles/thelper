@@ -1012,17 +1012,11 @@ class Tile(object):
         Returns:
             A list of tiles (numpy-compatible images).
         """
-        tile_rects = self._get_tile_rects(image, mask)
-        thelper.utils.draw_bboxes(image, tile_rects)
-        cv.waitKey(0)
-        tile_images = []
+        tile_rects, tile_images = self._get_tile_rects(image, mask), []
         for rect in tile_rects:
             tile_images.append(thelper.utils.safe_crop(image, (rect[0], rect[1]),
                                                        (rect[0]+rect[2], rect[1]+rect[3]),
                                                        self.bordertype, self.borderval))
-        for idx, img in enumerate(tile_images):
-            cv.imshow("img=%d" % idx, img)
-        cv.waitKey(0)
         return tile_images
 
     def count_tiles(self, image, mask=None):
