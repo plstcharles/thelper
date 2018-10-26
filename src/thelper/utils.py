@@ -294,7 +294,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
     logger = get_func_logger()
     save_dir = out_root
     if not os.path.exists(save_dir):
-        os.mkdir(save_dir)
+        os.makedirs(save_dir)
     save_dir = os.path.join(save_dir, dir_name)
     if not resume:
         overwrite = str2bool(config["overwrite"]) if config is not None and "overwrite" in config else False
