@@ -141,6 +141,14 @@
                     {"name": "top_k", "value": 1}
                 ]
             }
+        },
+        "test_metrics": {
+            "logger": {
+                "type": "thelper.optim.ClassifLogger",
+                "params": [
+                    {"name": "top_k", "value": 3}
+                ]
+            }
         }
     }
 }
