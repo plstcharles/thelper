@@ -9,6 +9,7 @@ dependencies:
   - matplotlib
   - opencv
   - scikit-learn
+  - gitpython
   - pip:
     - augmentor
     - tensorboardX==1.2

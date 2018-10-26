@@ -12,6 +12,7 @@ import json
 import logging
 import math
 import os
+import platform
 import re
 import sys
 import time
@@ -134,6 +135,23 @@ def get_caller_name(skip=2):
         name.append(codename)  # function or a method
     del parentframe
     return ".".join(name)
+
+
+def get_log_stamp():
+    """Returns a print-friendly and filename-friendly identification string containing platform and time."""
+    return str(platform.node()) + "-" + time.strftime("%Y%m%d-%H%M%S")
+
+
+def get_git_stamp():
+    """Returns a print-friendly SHA signature for the framework's underlying git repository (if found)."""
+    try:
+        import git
+        repo = git.Repo(search_parent_directories=True)
+        sha = repo.head.object.hexsha
+        return str(sha)
+    except:
+        pass
+    return "unknown"
 
 
 def str2bool(s):
