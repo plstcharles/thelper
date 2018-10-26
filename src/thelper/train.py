@@ -218,17 +218,35 @@ class Trainer:
         self.devices = self._load_devices(devices_str)
         if "loss" in trainer_config:  # warning for older configs only
             self.logger.warning("trainer config has 'loss' field, but it should now be moved inside the 'optimization' field")
-        if "metrics" not in trainer_config or not trainer_config["metrics"]:
-            raise AssertionError("trainer config missing 'metrics' field")
-        metrics = self._load_metrics(trainer_config["metrics"])
-        for metric_name, metric in metrics.items():
-            if hasattr(metric, "summary"):
-                logger.info("parsed metric category '%s'" % metric_name)
-                metric.summary()
-        # later, we could use different metrics for each usage type
+        if "metrics" in trainer_config and "base_metrics" in trainer_config:
+            raise AssertionError("trainer config should have only one of 'metrics' and 'base_metrics'")
+        if ("metrics" in trainer_config and trainer_config["metrics"]) or \
+           ("base_metrics" in trainer_config and trainer_config["base_metrics"]):
+            self.logger.debug("loading base metrics")
+            metrics = self._load_metrics(trainer_config["metrics"] if "metrics" in trainer_config else trainer_config["base_metrics"])
+        else:
+            metrics = {}
         self.train_metrics = deepcopy(metrics)
+        if "train_metrics" in trainer_config and trainer_config["train_metrics"]:
+            self.train_metrics = {**self.train_metrics, **self._load_metrics(trainer_config["train_metrics"])}
+        for metric_name, metric in self.train_metrics.items():
+            logger.info("parsed train metric '%s'" % metric_name)
+            if hasattr(metric, "summary"):
+                metric.summary()
         self.valid_metrics = deepcopy(metrics)
+        if "valid_metrics" in trainer_config and trainer_config["valid_metrics"]:
+            self.valid_metrics = {**self.valid_metrics, **self._load_metrics(trainer_config["valid_metrics"])}
+        for metric_name, metric in self.valid_metrics.items():
+            logger.info("parsed valid metric '%s'" % metric_name)
+            if hasattr(metric, "summary"):
+                metric.summary()
         self.test_metrics = deepcopy(metrics)
+        if "test_metrics" in trainer_config and trainer_config["test_metrics"]:
+            self.test_metrics = {**self.test_metrics, **self._load_metrics(trainer_config["test_metrics"])}
+        for metric_name, metric in self.test_metrics.items():
+            logger.info("parsed test metric '%s'" % metric_name)
+            if hasattr(metric, "summary"):
+                metric.summary()
         if "monitor" not in trainer_config or not trainer_config["monitor"]:
             raise AssertionError("missing 'monitor' field for trainer config")
         self.monitor = trainer_config["monitor"]
@@ -418,7 +436,6 @@ class Trainer:
         All arguments are expected to be handed in through the configuration via key-value pairs (see :func:`thelper.utils.keyvals2dict`
         for more information).
         """
-        self.logger.debug("loading metrics")
         if not isinstance(config, dict):
             raise AssertionError("config should be provided as a dictionary")
         metrics = {}
