@@ -228,7 +228,7 @@ class AugmentorWrapper(object):
         :func:`thelper.transforms.load_transforms`
     """
 
-    def __init__(self, pipeline, linked_fate):
+    def __init__(self, pipeline, linked_fate=True):
         """Receives and stores an augmentor pipeline for later use.
 
         The pipeline itself is instantiated in :func:`thelper.transforms.load_transforms`.
@@ -327,12 +327,13 @@ class ImageTransformWrapper(object):
     Can be used to wrap the operations in ``thelper.transforms`` or in ``torchvision.transforms``
     that only accept images as their input. Will optionally force-convert the images to PIL format.
 
-    Can also be used to transform a list of images uniformly based on a shared dice roll.
+    Can also be used to transform a list of images uniformly based on a shared dice roll, or ensure
+    that each image is transformed independently.
 
     .. warning::
-        Stochastic transforms (e.g. ``torchvision.transforms.RandomCrop``) will treat each image in
-        a list differently. If the same operations are to be applied to all images, you should
-        consider using a series non-stochastic operations wrapped inside an instance of
+        Stochastic transforms (e.g. ``torchvision.transforms.RandomCrop``) will always treat each
+        image in a list differently. If the same operations are to be applied to all images, you
+        should consider using a series non-stochastic operations wrapped inside an instance of
         ``torchvision.transforms.RandomApply``, or simply provide the probability of applying the
         transforms to this wrapper's constructor.
 
@@ -341,9 +342,10 @@ class ImageTransformWrapper(object):
         parameters: the parameters that are passed to the operation when init'd or called.
         probability: the probability that the wrapped operation will be applied.
         force_convert: specifies whether images should be forced into PIL format or not.
+        linked_fate: specifies whether input list samples should all have the same fate or not.
     """
 
-    def __init__(self, operation, parameters=None, probability=1, force_convert=True):
+    def __init__(self, operation, parameters=None, probability=1, force_convert=True, linked_fate=True):
         """Receives and stores a torchvision transform operation for later use.
 
         If the operation is given as a string, it is assumed to be a class name and it will
@@ -356,6 +358,7 @@ class ImageTransformWrapper(object):
             parameters: the parameters that are passed to the operation when init'd or called.
             probability: the probability that the wrapped operation will be applied.
             force_convert: specifies whether images should be forced into PIL format or not.
+            linked_fate: specifies whether input list samples should all have the same fate or not.
         """
         if parameters is not None and not isinstance(parameters, dict):
             raise AssertionError("expected parameters to be passed in as a dictionary")
@@ -370,6 +373,7 @@ class ImageTransformWrapper(object):
             raise AssertionError("invalid probability value (range is [0,1]")
         self.probability = probability
         self.force_convert = force_convert
+        self.linked_fate = linked_fate
 
     def __call__(self, samples):
         """Transforms a single image (or a list of images) using the torchvision operation.
@@ -386,22 +390,54 @@ class ImageTransformWrapper(object):
             samples = [samples]
         elif not samples:
             return samples
-        cvt_array = False
-        if isinstance(samples[0], np.ndarray):
-            if self.force_convert:
-                # PIL is pretty bad, it can't handle 3-channel float images...
-                # ... but hey, if your op only supports that, have fun!
-                cvt_array = True
-        elif not isinstance(samples[0], PIL.Image.Image):
-            raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
-        if self.probability >= 1 or round(np.random.uniform(0, 1), 1) <= self.probability:
-            # we either apply the op on all samples, or on none
-            for idx in range(len(samples)):
-                if cvt_array:
+        cvt_array = [False] * len(samples)
+        # todo: add support for torch.Tensor i/o here?
+        for idx, sample in enumerate(samples):
+            if isinstance(sample, np.ndarray):
+                if self.force_convert:
+                    # PIL is pretty bad, it can't handle 3-channel float images...
+                    # ... but hey, if your op only supports that, have fun!
                     samples[idx] = PIL.Image.fromarray(samples[idx])
-                samples[idx] = self.operation(samples[idx], **self.parameters)
-                if cvt_array:
-                    samples[idx] = np.asarray(samples[idx])
+                    cvt_array[idx] = True
+            elif isinstance(sample, list):
+                cvt_array[idx] = [False] * len(sample)
+                for idx2, sample2 in enumerate(sample):
+                    if isinstance(sample2, np.ndarray):
+                        if self.force_convert:
+                            samples[idx][idx2] = PIL.Image.fromarray(samples[idx][idx2])
+                            cvt_array[idx][idx2] = True
+                    elif not isinstance(sample2, PIL.Image.Image):
+                        raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
+            elif not isinstance(sample, PIL.Image.Image):
+                raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
+        flat_array = []
+        for sample in samples:
+            if isinstance(sample, list):
+                for s in sample:
+                    flat_array.append(s)
+            else:
+                flat_array.append(sample)
+        if self.linked_fate:  # process all samples/arrays with the same operations below
+            if self.probability >= 1 or round(np.random.uniform(0, 1), 1) <= self.probability:
+                for idx in range(len(flat_array)):
+                    # reseed with const value generated outside loop?
+                    flat_array[idx] = self.operation(flat_array[idx], **self.parameters)
+        else:  # each sample/array must be processed independently below
+            for idx in range(len(flat_array)):
+                if self.probability >= 1 or round(np.random.uniform(0, 1), 1) <= self.probability:
+                    # reseed with const value generated outside loop, but only if processing a list? TODO
+                    flat_array[idx] = self.operation(flat_array[idx], **self.parameters)
+        flat_idx = 0
+        for idx, cvt in enumerate(cvt_array):
+            if not isinstance(cvt, list):
+                samples[idx] = np.asarray(flat_array[flat_idx]) if cvt else flat_array[flat_idx]
+                flat_idx += 1
+            else:
+                for idx2, cvt2 in enumerate(cvt):
+                    samples[idx][idx2] = np.asarray(flat_array[flat_idx]) if cvt2 else flat_array[flat_idx]
+                    flat_idx += 1
+        if flat_idx != len(flat_array):
+            raise AssertionError("messed up logic somewhere")
         if not in_list and len(samples) == 1:
             samples = samples[0]
         return samples
