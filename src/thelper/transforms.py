@@ -13,6 +13,7 @@ All important parameters for an operation should also be passed in the
 constructor and exposed in the operation's ``__repr__`` function so that
 external parsers can discover exactly how to reproduce their behavior.
 """
+import copy
 import itertools
 import logging
 import math
@@ -994,6 +995,60 @@ class Transpose(object):
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
         return self.__class__.__name__ + "(axes={0})".format(self.axes)
+
+
+class Duplicator(object):
+    """Duplicates and returns a list of copies of the input sample.
+
+    This operation is used in data augmentation pipelines that rely on probabilistic or preset transformations.
+    It can produce a fixed number of simple copies or deep copies of the input samples as required.
+
+    Attributes:
+        count: number of copies to generate.
+        deepcopy: specifies whether to deep-copy samples or not.
+    """
+
+    def __init__(self, count, deepcopy=False):
+        """Validates and initializes duplication parameters.
+
+        Args:
+            count: number of copies to generate.
+            deepcopy: specifies whether to deep-copy samples or not.
+        """
+        if count <= 0:
+            raise AssertionError("invalid copy count")
+        self.count = count
+        self.deepcopy = deepcopy
+
+    def __call__(self, sample):
+        """Generates and returns a list of duplicates.
+
+        Args:
+            sample: the sample to duplicate.
+
+        Returns:
+            A list of duplicated samples.
+        """
+        duplicates = []
+        for idx in range(self.count):
+            if self.deepcopy:
+                duplicates.append(copy.deepcopy(sample))
+            else:
+                duplicates.append(copy.copy(sample))
+        return duplicates
+
+    def invert(self, sample):
+        """Returns the first instance of the list of duplicates."""
+        if not isinstance(sample, list):
+            raise AssertionError("invalid sample type (should be list)")
+        if len(sample) != self.count:
+            raise AssertionError("invalid sample list length")
+        return sample[0]
+
+    def __repr__(self):
+        """Provides print-friendly output for class attributes."""
+        return self.__class__.__name__ + \
+            "(count={0}, deepcopy={1})".format(self.count, self.deepcopy)
 
 
 class Tile(object):
