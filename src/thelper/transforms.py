@@ -40,14 +40,16 @@ def load_transforms(stages):
 
     The ``operation`` field of each stage will be used to dynamically import a specific type of operation to
     apply. The ``parameters`` field of each stage will then be used to pass parameters to the constructor of
-    this operation. If an operation is identified as ``"Augmentor.Pipeline"``, it will be specially handled
-    as an Augmentor pipeline, and its parameters will be parsed further (a dictionary is expected). Three
-    fields are required in this dictionary: ``input_tensor`` (bool) which specifies whether the previous stage
-    provides a ``torch.Tensor`` to the augmentor pipeline; ``output_tensor`` (bool) which specifies whether the
-    output of the augmentor pipeline should be converted into a ``torch.Tensor``; and ``operations`` (dict)
-    which specifies the Augmentor pipeline operation names and parameters (as a dictionary).
+    this operation. If an operation is identified as ``"Augmentor.Pipeline"``, it will be specially handled. In
+    this case, a ``operations`` field in its parameters is required, and it must specify the Augmentor pipeline
+    operation names and parameters (as a dictionary). Three additional optional parameter fields can also be set:
+    ``input_tensor`` (bool) which specifies whether the previous stage provides a ``torch.Tensor`` to the
+    augmentor pipeline (default=False); ``output_tensor`` (bool) which specifies whether the output of the
+    augmentor pipeline should be converted into a ``torch.Tensor`` (default=False); and ``linked_fate`` (bool)
+    which specifies whether the samples provided in lists should all have the same fate or not (default=True).
 
     Usage examples inside a session configuration file::
+
         # ...
         # the 'data_config' field can contain several transformation pipelines
         # (see 'thelper.data.load' for more information on these pipelines)
@@ -98,10 +100,6 @@ def load_transforms(stages):
         operation_params = stage["parameters"] if "parameters" in stage else {}
         if operation_name == "Augmentor.Pipeline":
             augp = Augmentor.Pipeline()
-            if "input_tensor" not in operation_params:
-                raise AssertionError("missing mandatory augmentor pipeline config 'input_tensor' field")
-            if "output_tensor" not in operation_params:
-                raise AssertionError("missing mandatory augmentor pipeline config 'output_tensor' field")
             if "operations" not in operation_params:
                 raise AssertionError("missing mandatory augmentor pipeline config 'operations' field")
             augp_operations = operation_params["operations"]
@@ -109,10 +107,11 @@ def load_transforms(stages):
                 raise AssertionError("augmentor pipeline 'operations' field should contain dictionary")
             for augp_op_name, augp_op_params in augp_operations.items():
                 getattr(augp, augp_op_name)(**augp_op_params)
-            if operation_params["input_tensor"]:
+            if "input_tensor" in operation_params and thelper.utils.str2bool(operation_params["input_tensor"]):
                 operations.append(torchvision.transforms.ToPILImage())
-            operations.append(AugmentorWrapper(augp))
-            if operation_params["output_tensor"]:
+            linked_fate = thelper.utils.str2bool(operation_params["linked_fate"]) if "linked_fate" in operation_params else True
+            operations.append(AugmentorWrapper(augp, linked_fate))
+            if "output_tensor" in operation_params and thelper.utils.str2bool(operation_params["output_tensor"]):
                 operations.append(torchvision.transforms.ToTensor())
         else:
             operation_type = thelper.utils.import_class(operation_name)
@@ -134,6 +133,7 @@ def load_augments(config):
     of samples in a dataset based on the duplication/tiling of input samples from the dataset parser.
 
     Usage examples inside a session configuration file::
+
         # ...
         # the 'data_config' field can contain several augmentation pipelines
         # (see 'thelper.data.load' for more information on these pipelines)
@@ -149,10 +149,6 @@ def load_augments(config):
                         # that is purely probabilistic (i.e. it does not increase input sample count)
                         "operation": "Augmentor.Pipeline",
                         "parameters": {
-                            # we assume input images are still provided in numpy/PIL format
-                            "input_tensor": false,
-                            # we also produce output images in numpy/PIL format
-                            "output_tensor": false,
                             "operations": {
                                 # the augmentor pipeline defines two operations: rotations and flips
                                 "rotate_random_90": {"probability": 0.75},
@@ -226,17 +222,19 @@ class AugmentorWrapper(object):
 
     Attributes:
         pipeline: the augmentor pipeline instance to apply to images.
+        linked_fate: specifies whether input list samples should all have the same fate or not.
 
     .. seealso::
         :func:`thelper.transforms.load_transforms`
     """
 
-    def __init__(self, pipeline):
+    def __init__(self, pipeline, linked_fate):
         """Receives and stores an augmentor pipeline for later use.
 
         The pipeline itself is instantiated in :func:`thelper.transforms.load_transforms`.
         """
         self.pipeline = pipeline
+        self.linked_fate = linked_fate
 
     def __call__(self, samples):
         """Transforms a single image (or a list of images) using the augmentor pipeline.
@@ -253,20 +251,67 @@ class AugmentorWrapper(object):
             samples = [samples]
         elif not samples:
             return samples
-        cvt_array = False
-        if isinstance(samples[0], np.ndarray):
-            for idx in range(len(samples)):
+        cvt_array = [False] * len(samples)
+        for idx, sample in enumerate(samples):
+            if isinstance(sample, np.ndarray):
                 samples[idx] = PIL.Image.fromarray(samples[idx])
-            cvt_array = True
-        elif not isinstance(samples[0], PIL.Image.Image):
-            raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
-        for operation in self.pipeline.operations:
-            r = round(np.random.uniform(0, 1), 1)
-            if r <= operation.probability:
-                samples = operation.perform_operation(samples)
-        if cvt_array:
-            for idx in range(len(samples)):
-                samples[idx] = np.asarray(samples[idx])
+                cvt_array[idx] = True
+            elif isinstance(sample, list):
+                cvt_array[idx] = [False] * len(sample)
+                for idx2, sample2 in enumerate(sample):
+                    if isinstance(sample2, np.ndarray):
+                        samples[idx][idx2] = PIL.Image.fromarray(samples[idx][idx2])
+                        cvt_array[idx][idx2] = True
+                    elif not isinstance(sample2, PIL.Image.Image):
+                        raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
+            elif not isinstance(sample, PIL.Image.Image):
+                raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
+        if self.linked_fate:  # process all samples/arrays with the same operations below
+            flat_array = []
+            for sample in samples:
+                if isinstance(sample, list):
+                    for s in sample:
+                        flat_array.append(s)
+                else:
+                    flat_array.append(sample)
+            for operation in self.pipeline.operations:
+                r = round(np.random.uniform(0, 1), 1)
+                if r <= operation.probability:
+                    flat_array = operation.perform_operation(flat_array)
+            flat_idx = 0
+            for idx, cvt in enumerate(cvt_array):
+                if not isinstance(cvt, list):
+                    samples[idx] = np.asarray(flat_array[flat_idx]) if cvt else flat_array[flat_idx]
+                    flat_idx += 1
+                else:
+                    for idx2, cvt2 in enumerate(cvt):
+                        samples[idx][idx2] = np.asarray(flat_array[flat_idx]) if cvt2 else flat_array[flat_idx]
+                        flat_idx += 1
+            if flat_idx != len(flat_array):
+                raise AssertionError("messed up logic somewhere")
+        else:  # each sample/array must be processed independently below
+            indep_arrays = []
+            for sample in samples:
+                if isinstance(sample, list):
+                    for s in sample:
+                        indep_arrays.append(s)
+                else:
+                    indep_arrays.append([sample])
+            for idx, array in enumerate(indep_arrays):
+                for operation in self.pipeline.operations:
+                    r = round(np.random.uniform(0, 1), 1)
+                    if r <= operation.probability:
+                        indep_arrays[idx] = operation.perform_operation(array)
+            for idx, cvt in enumerate(cvt_array):
+                if not isinstance(cvt, list):
+                    if len(indep_arrays[idx]) != 1:
+                        raise AssertionError("messed up logic somewhere")
+                    samples[idx] = np.asarray(indep_arrays[idx][0]) if cvt else indep_arrays[idx][0]
+                else:
+                    if len(samples[idx]) != len(indep_arrays[idx]) or len(samples[idx]) != len(cvt):
+                        raise AssertionError("messed up logic somewhere")
+                    for idx2, cvt2 in enumerate(cvt):
+                        samples[idx][idx2] = np.asarray(indep_arrays[idx][idx2]) if cvt2 else indep_arrays[idx][idx2]
         if not in_list and len(samples) == 1:
             samples = samples[0]
         return samples
