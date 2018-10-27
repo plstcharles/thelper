@@ -437,7 +437,8 @@ class DataConfig(object):
                     raise AssertionError("missing 'type' field for sampler config")
                 self.sampler_type = thelper.utils.import_class(sampler_config["type"])
                 self.sampler_params = thelper.utils.keyvals2dict(sampler_config["params"]) if "params" in sampler_config else None
-                logger.debug("will use global sampler with type '%s' and config : %s" % (str(self.sampler_type), str(self.sampler_params)))
+                logger.debug("will use global sampler with type '%s' and config : %s" % (str(self.sampler_type),
+                                                                                         str(self.sampler_params)))
                 self.sampler_pass_labels = False
                 if "pass_labels" in sampler_config:
                     self.sampler_pass_labels = thelper.utils.str2bool(sampler_config["pass_labels"])
@@ -451,12 +452,14 @@ class DataConfig(object):
         if "train_augments" in config and config["train_augments"]:
             self.train_augments, self.train_augments_append = thelper.transforms.load_augments(config["train_augments"])
             if self.train_augments:
-                logger.debug("will %s train augmentations: %s" % ("append" if self.train_augments_append else "prefix", str(self.train_augments)))
+                logger.debug("will %s train augments: %s" % ("append" if self.train_augments_append else "prefix",
+                                                             str(self.train_augments)))
         self.eval_augments, self.eval_augments_append = None, False
         if "eval_augments" in config and config["eval_augments"]:
             self.eval_augments, self.eval_augments_append = thelper.transforms.load_augments(config["eval_augments"])
             if self.eval_augments:
-                logger.debug("will %s eval augmentations: %s" % ("append" if self.train_augments_append else "prefix", str(self.eval_augments)))
+                logger.debug("will %s eval augments: %s" % ("append" if self.train_augments_append else "prefix",
+                                                            str(self.eval_augments)))
         self.base_transforms = None
         if "base_transforms" in config and config["base_transforms"]:
             self.base_transforms = thelper.transforms.load_transforms(config["base_transforms"])

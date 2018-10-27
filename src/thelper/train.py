@@ -665,7 +665,7 @@ class Trainer:
             iter: the index of the iteration at the start of the current epoch.
             dev: the target device that tensors should be uploaded to.
             optimizer: the optimizer used for back propagation.
-            loader: the data loader used to get (pre-transformed) training samples.
+            loader: the data loader used to get transformed training samples.
             metrics: the list of metrics to evaluate after every iteration.
             writer: the writer used to store tbx events/messages/metrics.
         """
@@ -680,7 +680,7 @@ class Trainer:
             epoch: the index of the epoch we are evaluating for.
             iter: the index of the iteration at the start of the current epoch.
             dev: the target device that tensors should be uploaded to.
-            loader: the data loader used to get (pre-transformed) valid/test samples.
+            loader: the data loader used to get transformed valid/test samples.
             metrics: the list of metrics to evaluate after every iteration.
             writer: the writer used to store tbx events/messages/metrics.
         """
@@ -752,7 +752,7 @@ class ImageClassifTrainer(Trainer):
 
     This class implements the abstract functions of :class:`thelper.train.Trainer` required to train/evaluate
     a model for image classification or recognition. It also provides a utility function for fetching i/o packets
-    (images, class labels) from a sample that transforms them into tensors for forwarding and loss estimation.
+    (images, class labels) from a sample, and that converts those into tensors for forwarding and loss estimation.
 
     .. seealso::
         :class:`thelper.train.Trainer`
@@ -774,6 +774,7 @@ class ImageClassifTrainer(Trainer):
         for metric in metrics:  # check all metrics for classification-specific attributes, and set them
             if hasattr(metric, "set_class_names") and callable(metric.set_class_names):
                 metric.set_class_names(self.class_names)
+        self.warned_no_shuffling_augments = False
 
     def _to_tensor(self, sample):
         """Fetches and returns tensors of input images and class labels from a batched sample dictionary."""
@@ -806,7 +807,13 @@ class ImageClassifTrainer(Trainer):
             if class_name not in self.class_names:
                 raise AssertionError("got unexpected label '%s' for a sample (unknown class)" % class_name)
             label_idx.append(self.class_idxs_map[class_name])
-        return torch.FloatTensor(input), torch.LongTensor(label_idx)
+        label_idx = torch.LongTensor(label_idx)
+        if isinstance(input, list):
+            for idx in range(len(input)):
+                input[idx] = torch.FloatTensor(input[idx])
+        else:
+            input = torch.FloatTensor(input)
+        return input, label_idx
 
     def _train_epoch(self, model, epoch, iter, dev, optimizer, loader, metrics, writer=None):
         """Trains the model for a single epoch using the provided objects.
@@ -817,7 +824,7 @@ class ImageClassifTrainer(Trainer):
             iter: the index of the iteration at the start of the current epoch.
             dev: the target device that tensors should be uploaded to.
             optimizer: the optimizer used for back propagation.
-            loader: the data loader used to get (pre-transformed) training samples.
+            loader: the data loader used to get transformed training samples.
             metrics: the list of metrics to evaluate after every iteration.
             writer: the writer used to store tbx events/messages/metrics.
         """
@@ -829,16 +836,29 @@ class ImageClassifTrainer(Trainer):
             raise AssertionError("expect metrics as dict object")
         total_loss = 0
         epoch_size = len(loader)
-        for idx, sample in enumerate(loader):
+        for sample_idx, sample in enumerate(loader):
             input, label = self._to_tensor(sample)
-            input = self._upload_tensor(input, dev)
-            label = self._upload_tensor(label, dev)
             optimizer.zero_grad()
-            pred = model(input)
-            loss = self.loss(pred, label)
-            loss.backward()
+            label = self._upload_tensor(label, dev)
+            if isinstance(input, list):
+                if not input:
+                    raise AssertionError("cannot train with empty post-augment sample lists")
+                if not self.warned_no_shuffling_augments:
+                    self.logger.warning("using training augmentation without global shuffling, gradient steps might be affected")
+                    self.warned_no_shuffling_augments = True
+                curr_loss = 0
+                for input_idx in range(len(input)):
+                    pred = model(self._upload_tensor(input[input_idx], dev))
+                    loss = self.loss(pred, label)
+                    loss.backward()
+                    curr_loss += loss.item()
+                total_loss += curr_loss / len(input)
+            else:
+                pred = model(self._upload_tensor(input, dev))
+                loss = self.loss(pred, label)
+                loss.backward()
+                total_loss += loss.item()
             optimizer.step()
-            total_loss += loss.item()
             if iter is not None:
                 iter += 1
             if metrics:
@@ -849,9 +869,9 @@ class ImageClassifTrainer(Trainer):
                 "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}: {:.2f}".format(
                     epoch,
                     iter,
-                    idx,
+                    sample_idx,
                     epoch_size,
-                    (idx / epoch_size) * 100.0,
+                    (sample_idx / epoch_size) * 100.0,
                     loss.item(),
                     self.monitor,
                     metrics[self.monitor].eval()
@@ -876,7 +896,7 @@ class ImageClassifTrainer(Trainer):
             epoch: the index of the epoch we are evaluating for.
             iter: the index of the iteration at the start of the current epoch.
             dev: the target device that tensors should be uploaded to.
-            loader: the data loader used to get (pre-transformed) valid/test samples.
+            loader: the data loader used to get transformed valid/test samples.
             metrics: the list of metrics to evaluate after every iteration.
             writer: the writer used to store tbx events/messages/metrics.
         """
