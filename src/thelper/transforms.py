@@ -46,37 +46,12 @@ def load_transforms(stages):
     output of the augmentor pipeline should be converted into a ``torch.Tensor``; and ``operations`` (dict)
     which specifies the Augmentor pipeline operation names and parameters (as a dictionary).
 
-    Finally, if a stage possesses the ``append`` key, its value should be a bool, and it will be used to
-    specify whether the whole pipeline should be appended or prepended to other transformations. If no
-    ``append`` key is provided, the pipeline will be returned with `append_ops=True` by default.
-
     Usage examples inside a session configuration file::
-
         # ...
         # the 'data_config' field can contain several transformation pipelines
         # (see 'thelper.data.load' for more information on these pipelines)
         "data_config": {
             # ...
-            # the 'train_augments' operations are applied to training samples only
-            "train_augments": [
-                {
-                    # here, we use a single stage, which is actually an augmentor sub-pipeline
-                    "operation": "Augmentor.Pipeline",
-                    "parameters": {
-                        # we assume input images are still provided in numpy/PIL format
-                        "input_tensor": false,
-                        # we also produce output images in numpy/PIL format
-                        "output_tensor": false,
-                        "operations": {
-                            # the augmentor pipeline defines two operations: rotations and flips
-                            "rotate_random_90": {"probability": 0.75},
-                            "flip_random": {"probability": 0.75}
-                        }
-                    },
-                    # make sure that the augmentations are applied before the transforms below
-                    "append": false
-                }
-            ],
             # the 'base_transforms' operations are applied to all loaded samples
             "base_transforms": [
                 {
@@ -98,11 +73,11 @@ def load_transforms(stages):
         stages: a list defining a series of transformations to apply as a single pipeline.
 
     Returns:
-        A tuple that consists of a pipeline compatible with the ``torchvision.transforms`` interfaces, and
-        a bool specifying whether this pipeline should be appended or prefixed to other transforms.
+        A transformation pipeline object compatible with the ``torchvision.transforms`` interfaces.
 
     .. seealso::
         :class:`thelper.transforms.AugmentorWrapper`
+        :func:`thelper.transforms.load_augments`
         :func:`thelper.data.load`
     """
     if not isinstance(stages, list):
@@ -113,7 +88,6 @@ def load_transforms(stages):
     if not isinstance(stages[0], dict):
         raise AssertionError("expected each stage to be provided as a dictionary")
     operations = []
-    append_ops = None
     for stage_idx, stage in enumerate(stages):
         if "operation" not in stage or not stage["operation"]:
             raise AssertionError("stage #%d is missing its operation field" % stage_idx)
@@ -143,18 +117,101 @@ def load_transforms(stages):
             operation_type = thelper.utils.import_class(operation_name)
             operation = operation_type(**operation_params)
             operations.append(operation)
-        if "append" in stage:
-            if append_ops is not None:
-                raise AssertionError("found 'append' definitions in multiple stages (one covers all)")
-            append_ops = thelper.utils.str2bool(stage["append"])
-    if append_ops is None:
-        append_ops = True
     if len(operations) > 1:
-        return thelper.transforms.Compose(operations), append_ops
+        return thelper.transforms.Compose(operations)
     elif len(operations) == 1:
-        return operations[0], append_ops
+        return operations[0]
     else:
-        return None, append_ops
+        return None
+
+
+def load_augments(config):
+    """Loads a data augmentation pipeline.
+
+    An augmentation pipeline is essentially a specialized transformation pipeline that can be appended or
+    prefixed to the base transforms defined for all samples. Most importantly, it can increase the number
+    of samples in a dataset based on the duplication/tiling of input samples from the dataset parser.
+
+    Usage examples inside a session configuration file::
+        # ...
+        # the 'data_config' field can contain several augmentation pipelines
+        # (see 'thelper.data.load' for more information on these pipelines)
+        "data_config": {
+            # ...
+            # the 'train_augments' operations are applied to training samples only
+            "train_augments": {
+                # specifies whether to apply the augmentations before or after the base transforms
+                "append": false,
+                "transforms": [
+                    {
+                        # here, we use a single stage, which is actually an augmentor sub-pipeline
+                        # that is purely probabilistic (i.e. it does not increase input sample count)
+                        "operation": "Augmentor.Pipeline",
+                        "parameters": {
+                            # we assume input images are still provided in numpy/PIL format
+                            "input_tensor": false,
+                            # we also produce output images in numpy/PIL format
+                            "output_tensor": false,
+                            "operations": {
+                                # the augmentor pipeline defines two operations: rotations and flips
+                                "rotate_random_90": {"probability": 0.75},
+                                "flip_random": {"probability": 0.75}
+                            }
+                        }
+                    }
+                ]
+            ],
+            # the 'eval_augments' operations are applied to validation/test samples only
+            "eval_augments": {
+                # specifies whether to apply the augmentations before or after the base transforms
+                "append": false,
+                "transforms": [
+                    # here, we use a combination of a sample duplicator and a random cropper; this
+                    # increases the number of samples provided by the dataset parser
+                    {
+                        "operation": "thelper.transforms.Duplicator",
+                        "parameters": {
+                            "count": 10
+                        }
+                    },
+                    {
+                        "operation": "thelper.transforms.ImageTransformWrapper",
+                        "parameters": {
+                            "operation": "thelper.transforms.RandomResizedCrop",
+                            "parameters": {
+                                "output_size": [224, 224],
+                                "input_size": [0.1, 1.0],
+                                "ratio": 1.0
+                            },
+                            "force_convert": false
+                        }
+                    },
+                ]
+            ],
+        # ...
+
+    Args:
+        config: the configuration dictionary defining the meta parameters as well as the list of transformation
+            operations of the augmentation pipeline.
+
+    Returns:
+        A tuple that consists of a pipeline compatible with the ``torchvision.transforms`` interfaces, and
+        a bool specifying whether this pipeline should be appended or prefixed to the base transforms.
+
+    .. seealso::
+        :class:`thelper.transforms.AugmentorWrapper`
+        :func:`thelper.transforms.load_transforms`
+        :func:`thelper.data.load`
+    """
+    if not isinstance(config, dict):
+        raise AssertionError("augmentation config should be provided as dictionary")
+    augments = None
+    augments_append = False
+    if "append" in config:
+        augments_append = thelper.utils.str2bool(config["append"])
+    if "transforms" in config and config["transforms"]:
+        augments = thelper.transforms.load_transforms(config["transforms"])
+    return augments, augments_append
 
 
 class AugmentorWrapper(object):

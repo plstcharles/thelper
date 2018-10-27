@@ -53,14 +53,18 @@ def load(config, data_root, save_dir=None):
                 # see e.g. 'thelper.samplers.WeightedSubsetRandomSampler'
                 # ...
             },
-            "train_augments": [ # training data augmentation operations
+            "train_augments": { # training data augmentation operations
+                # see 'thelper.transforms.load_augments'
+                # ...
+            },
+            "eval_augments": { # evaluation (valid/test) data augmentation operations
+                # see 'thelper.transforms.load_augments'
+                # ...
+            },
+            "base_transforms": { # global sample transformation operations
                 # see 'thelper.transforms.load_transforms'
                 # ...
-            ],
-            "base_transforms": [ # global sample transformation operations
-                # see 'thelper.transforms.load_transforms'
-                # ...
-            ],
+            },
             # finally, we define a 80%-10%-10% split for our data
             # (we could instead use one dataset for training and one for testing)
             "train_split": {
@@ -115,6 +119,7 @@ def load(config, data_root, save_dir=None):
     .. seealso::
         :class:`thelper.data.DataConfig`
         :func:`thelper.data.load_datasets`
+        :func:`thelper.transforms.load_augments`
         :func:`thelper.transforms.load_transforms`
         :class:`thelper.samplers.WeightedSubsetRandomSampler`
     """
@@ -266,9 +271,9 @@ def load_datasets(config, data_root, base_transforms=None):
         params = thelper.utils.keyvals2dict(dataset_config["params"])
         transforms = None
         if "transforms" in dataset_config and dataset_config["transforms"]:
-            transforms, append = thelper.transforms.load_transforms(dataset_config["transforms"])
+            transforms = thelper.transforms.load_transforms(dataset_config["transforms"])
             if base_transforms is not None:
-                transforms = thelper.transforms.Compose([base_transforms, transforms] if append else [transforms, base_transforms])
+                transforms = thelper.transforms.Compose([transforms, base_transforms])
         elif base_transforms is not None:
             transforms = base_transforms
         if issubclass(dataset_type, Dataset):
@@ -348,7 +353,9 @@ class DataConfig(object):
       in the data loaders. This can be used for example to help rebalance a dataset based on its
       class distribution. See :class:`thelper.samplers.WeightedSubsetRandomSampler` for more info.
     - ``train_augments`` (optional): provides a list of transformation operations used to augment the
-      training samples of a dataset. See :func:`thelper.transforms.load_transforms` for more info.
+      training samples of a dataset. See :func:`thelper.transforms.load_augments` for more info.
+    - ``eval_augments`` (optional): provides a list of transformation operations used to augment the
+      validation/test samples of a dataset. See :func:`thelper.transforms.load_augments` for more info.
     - ``base_transforms`` (optional): provides a list of transformation operations to apply to all
       loaded samples. This list will be passed to the constructor of all instantiated dataset parsers.
       See :func:`thelper.transforms.load_transforms` for more info.
@@ -365,6 +372,7 @@ class DataConfig(object):
 
     .. seealso::
         :func:`thelper.data.load`
+        :func:`thelper.transforms.load_augments`
         :func:`thelper.transforms.load_transforms`
         :class:`thelper.samplers.WeightedSubsetRandomSampler`
     """
@@ -439,17 +447,19 @@ class DataConfig(object):
                     thelper.utils.str2bool(sampler_config["apply_test"]) if "apply_test" in sampler_config else False,
                 ]
                 logger.debug("global sampler will be applied to loaders: %s" % str(self.sampler_apply))
-        self.train_augments = None
-        self.train_augments_append = False
+        self.train_augments, self.train_augments_append = None, False
         if "train_augments" in config and config["train_augments"]:
-            self.train_augments, self.train_augments_append = thelper.transforms.load_transforms(config["train_augments"])
-            if self.train_augments_append:
-                logger.debug("will append train augmentations: %s" % str(self.train_augments))
-            else:
-                logger.debug("will prepend train augmentations: %s" % str(self.train_augments))
+            self.train_augments, self.train_augments_append = thelper.transforms.load_augments(config["train_augments"])
+            if self.train_augments:
+                logger.debug("will %s train augmentations: %s" % ("append" if self.train_augments_append else "prefix", str(self.train_augments)))
+        self.eval_augments, self.eval_augments_append = None, False
+        if "eval_augments" in config and config["eval_augments"]:
+            self.eval_augments, self.eval_augments_append = thelper.transforms.load_augments(config["eval_augments"])
+            if self.eval_augments:
+                logger.debug("will %s eval augmentations: %s" % ("append" if self.train_augments_append else "prefix", str(self.eval_augments)))
         self.base_transforms = None
         if "base_transforms" in config and config["base_transforms"]:
-            self.base_transforms, _ = thelper.transforms.load_transforms(config["base_transforms"])
+            self.base_transforms = thelper.transforms.load_transforms(config["base_transforms"])
 
         def get_ratios_split(prefix, config):
             key = prefix + "_split"
@@ -638,6 +648,15 @@ class DataConfig(object):
                             dataset.transforms = thelper.transforms.Compose([train_augs_copy, dataset.transforms])
                     else:
                         dataset.transforms = train_augs_copy
+                elif loader_idx != 0 and self.eval_augments:
+                    eval_augs_copy = copy.deepcopy(self.eval_augments)
+                    if dataset.transforms is not None:
+                        if self.eval_augments_append:
+                            dataset.transforms = thelper.transforms.Compose([dataset.transforms, eval_augs_copy])
+                        else:
+                            dataset.transforms = thelper.transforms.Compose([eval_augs_copy, dataset.transforms])
+                    else:
+                        dataset.transforms = eval_augs_copy
                 for sample_idx_idx in range(len(sample_idxs)):
                     # values were paired in tuples earlier, 0=idx, 1=label
                     loader_sample_idxs.append(sample_idxs[sample_idx_idx][0] + loader_sample_idx_offset)
@@ -686,7 +705,7 @@ class DataConfig(object):
 
 
 class Dataset(torch.utils.data.Dataset, ABC):
-    """Abstract dataset interface that holds a task and a list of sample dictionaries.
+    """Abstract dataset parsing interface that holds a task and a list of sample dictionaries.
 
     This interface helps fix a failure of PyTorch's dataset interface (``torch.utils.data.Dataset``):
     the lack of identity associated with the components of a sample. In short, a data sample loaded by a
