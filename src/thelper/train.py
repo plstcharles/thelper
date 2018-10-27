@@ -840,7 +840,7 @@ class ImageClassifTrainer(Trainer):
             input, label = self._to_tensor(sample)
             optimizer.zero_grad()
             label = self._upload_tensor(label, dev)
-            if isinstance(input, list):
+            if isinstance(input, list):  # training samples got augmented, we need to backprop in multiple steps
                 if not input:
                     raise AssertionError("cannot train with empty post-augment sample lists")
                 if not self.warned_no_shuffling_augments:
@@ -906,9 +906,20 @@ class ImageClassifTrainer(Trainer):
             epoch_size = len(loader)
             for idx, sample in enumerate(loader):
                 input, label = self._to_tensor(sample)
-                input = self._upload_tensor(input, dev)
                 label = self._upload_tensor(label, dev)
-                pred = model(input)
+                if isinstance(input, list):  # evaluation samples got augmented, we need to get the mean prediction
+                    if not input:
+                        raise AssertionError("cannot eval with empty post-augment sample lists")
+                    preds = None
+                    for input_idx in range(len(input)):
+                        pred = model(self._upload_tensor(input[input_idx], dev))
+                        if preds is None:
+                            preds = torch.unsqueeze(pred.clone(), 0)
+                        else:
+                            preds = torch.cat((preds, torch.unsqueeze(pred, 0)), 0)
+                    pred = torch.mean(preds, dim=0)
+                else:
+                    pred = model(self._upload_tensor(input, dev))
                 if metrics:
                     meta = {key: sample[key] for key in self.meta_keys}
                     for metric in metrics.values():
