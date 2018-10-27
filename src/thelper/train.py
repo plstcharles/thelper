@@ -230,23 +230,17 @@ class Trainer:
         if "train_metrics" in trainer_config and trainer_config["train_metrics"]:
             self.train_metrics = {**self.train_metrics, **self._load_metrics(trainer_config["train_metrics"])}
         for metric_name, metric in self.train_metrics.items():
-            logger.info("parsed train metric '%s'" % metric_name)
-            if hasattr(metric, "summary"):
-                metric.summary()
+            logger.info("parsed train metric '%s' : %s" % (metric_name, str(metric)))
         self.valid_metrics = deepcopy(metrics)
         if "valid_metrics" in trainer_config and trainer_config["valid_metrics"]:
             self.valid_metrics = {**self.valid_metrics, **self._load_metrics(trainer_config["valid_metrics"])}
         for metric_name, metric in self.valid_metrics.items():
-            logger.info("parsed valid metric '%s'" % metric_name)
-            if hasattr(metric, "summary"):
-                metric.summary()
+            logger.info("parsed valid metric '%s' : %s" % (metric_name, str(metric)))
         self.test_metrics = deepcopy(metrics)
         if "test_metrics" in trainer_config and trainer_config["test_metrics"]:
             self.test_metrics = {**self.test_metrics, **self._load_metrics(trainer_config["test_metrics"])}
         for metric_name, metric in self.test_metrics.items():
-            logger.info("parsed test metric '%s'" % metric_name)
-            if hasattr(metric, "summary"):
-                metric.summary()
+            logger.info("parsed test metric '%s' : %s" % (metric_name, str(metric)))
         if "monitor" not in trainer_config or not trainer_config["monitor"]:
             raise AssertionError("missing 'monitor' field for trainer config")
         self.monitor = trainer_config["monitor"]
@@ -839,7 +833,6 @@ class ImageClassifTrainer(Trainer):
             input, label = self._to_tensor(sample)
             input = self._upload_tensor(input, dev)
             label = self._upload_tensor(label, dev)
-            meta = {key: sample[key] for key in self.meta_keys}
             optimizer.zero_grad()
             pred = model(input)
             loss = self.loss(pred, label)
@@ -848,8 +841,10 @@ class ImageClassifTrainer(Trainer):
             total_loss += loss.item()
             if iter is not None:
                 iter += 1
-            for metric in metrics.values():
-                metric.accumulate(pred.cpu(), label.cpu(), meta=meta)
+            if metrics:
+                meta = {key: sample[key] for key in self.meta_keys}
+                for metric in metrics.values():
+                    metric.accumulate(pred.cpu(), label.cpu(), meta=meta)
             self.logger.info(
                 "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}: {:.2f}".format(
                     epoch,
@@ -893,10 +888,11 @@ class ImageClassifTrainer(Trainer):
                 input, label = self._to_tensor(sample)
                 input = self._upload_tensor(input, dev)
                 label = self._upload_tensor(label, dev)
-                meta = {key: sample[key] for key in self.meta_keys}
                 pred = model(input)
-                for metric in metrics.values():
-                    metric.accumulate(pred.cpu(), label.cpu(), meta=meta)
+                if metrics:
+                    meta = {key: sample[key] for key in self.meta_keys}
+                    for metric in metrics.values():
+                        metric.accumulate(pred.cpu(), label.cpu(), meta=meta)
                 self.logger.info(
                     "eval epoch: {}   batch: {}/{} ({:.0f}%)   {}: {:.2f}".format(
                         epoch,
