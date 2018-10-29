@@ -49,19 +49,48 @@
         "workers": 4,
         "pin_memory": false,
         "drop_last": false,
-        "train_augments": [
-            {
-                "operation": "Augmentor.Pipeline",
-                "parameters": {
-                    "input_tensor": false,
-                    "output_tensor": false,
-                    "operations": {
-                        "flip_left_right": {"probability": 0.5}
+        "train_augments": {
+            "append": false,
+            "transforms": [
+                {
+                    "operation": "thelper.transforms.Duplicator",
+                    "parameters": {
+                        "count": 4
                     }
                 },
-                "append": false
-            }
-        ],
+                {
+                    "operation": "Augmentor.Pipeline",
+                    "parameters": {
+                        "linked_fate": false,
+                        "operations": {
+                            "rotate": {"probability": 1, "max_left_rotation": 5, "max_right_rotation": 5},
+                            "flip_left_right": {"probability": 0.5},
+                            "zoom_random": {"probability": 0.5, "percentage_area": 0.8}
+                        }
+                    }
+                }
+            ]
+        },
+        "eval_augments": {
+            "append": false,
+            "transforms": [
+                {
+                    "operation": "thelper.transforms.Duplicator",
+                    "parameters": {
+                        "count": 4
+                    }
+                },
+                {
+                    "operation": "Augmentor.Pipeline",
+                    "parameters": {
+                        "linked_fate": false,
+                        "operations": {
+                            "flip_left_right": {"probability": 0.5}
+                        }
+                    }
+                }
+            ]
+        },
         "base_transforms": [
             {
                 "operation": "thelper.transforms.ImageTransformWrapper",
