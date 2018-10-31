@@ -1,0 +1,22 @@
+{
+    "name": "example-segm-annot",
+    "overwrite": true,
+    "datasets": {
+        "bark_raw": {
+            "type": "thelper.data.ImageDataset",
+            "params": [
+                {"name": "root", "value": "PATH_TO_IMAGE_FOLDER_TO_ANNOTATE"}
+            ]
+        }
+    },
+    "annotator": {
+        "type": "thelper.gui.ImageSegmentAnnotator",
+        "params": [
+            {"name": "sample_input_key", "value": "image"},
+            {"name": "labels", "value": [
+                {"id": 255, "name": "foreground", "color": [0, 0, 255]}
+            ]}
+        ]
+
+    }
+}
