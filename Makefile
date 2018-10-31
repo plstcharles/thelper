@@ -83,8 +83,12 @@ bump-tag: conda-env
 .PHONY: clean
 clean: clean-build clean-pyc clean-test
 
+.PHONY: uninstall
+uninstall: clean clean-env
+
 .PHONY: clean-build
 clean-build:
+	@echo "Cleaning up build artefacts..."
 	@rm -fr $(CUR_DIR)/build/
 	@rm -fr $(CUR_DIR)/dist/
 	@rm -fr $(CUR_DIR)/.eggs/
@@ -93,10 +97,12 @@ clean-build:
 
 .PHONY: clean-env
 clean-env:
-	@-test -d $(CONDA_ENV_PATH) && "$(CONDA_HOME)/bin/conda" remove -n $(CONDA_ENV) --yes --all
+	@echo "Cleaning up environment artefacts..."
+	@-test -d $(CONDA_ENV_PATH) && "$(CONDA_HOME)/bin/conda" remove -n $(CONDA_ENV) --yes --all -v
 
 .PHONY: clean-pyc
 clean-pyc:
+	@echo "Cleaning up cache artefacts..."
 	@find . -type f -name '*.pyc' -exec rm -f {} +
 	@find . -type f -name '*.pyo' -exec rm -f {} +
 	@find . -type f -name '*~' -exec rm -f {} +
@@ -104,6 +110,7 @@ clean-pyc:
 
 .PHONY: clean-test
 clean-test:
+	@echo "Cleaning up test artefacts..."
 	@rm -fr $(CUR_DIR)/.tox/
 	@rm -f $(CUR_DIR)/.coverage
 	@rm -fr $(CUR_DIR)/coverage/
