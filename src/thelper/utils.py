@@ -170,6 +170,16 @@ def get_git_stamp():
     return "unknown"
 
 
+def str2size(input_str):
+    """Returns a (WIDTH, HEIGHT) integer size tuple from a string formatted as 'WxH'."""
+    if not isinstance(input_str, str):
+        raise AssertionError("unexpected input type")
+    display_size_str = input_str.split('x')
+    if len(display_size_str) != 2:
+        raise AssertionError("bad size string formatting")
+    return tuple([max(int(substr), 1) for substr in display_size_str])
+
+
 def str2bool(s):
     """Converts a string to a boolean.
 
