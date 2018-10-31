@@ -353,7 +353,8 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
             os.mkdir(save_dir)
         if config is not None:
             config_backup_path = os.path.join(save_dir, "config.latest.json")
-            json.dump(config, open(config_backup_path, "w"), indent=4, sort_keys=False)
+            with open(config_backup_path, "w") as fd:
+                json.dump(config, fd, indent=4, sort_keys=False)
     else:
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
@@ -369,7 +370,8 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
                     else:
                         logger.error("config mismatch with previous run; user aborted")
                         sys.exit(1)
-            json.dump(config, open(config_backup_path, "w"), indent=4, sort_keys=False)
+            with open(config_backup_path, "w") as fd:
+                json.dump(config, fd, indent=4, sort_keys=False)
     logs_dir = os.path.join(save_dir, "logs")
     if not os.path.exists(logs_dir):
         os.mkdir(logs_dir)
