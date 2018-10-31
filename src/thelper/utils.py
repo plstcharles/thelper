@@ -137,6 +137,22 @@ def get_caller_name(skip=2):
     return ".".join(name)
 
 
+def get_key(key, dict):
+    """Returns a value given a dictionary key, throwing if not available."""
+    if key not in dict:
+        raise AssertionError("config dictionary missing '%s' field" % key)
+    else:
+        return dict[key]
+
+
+def get_key_def(key, dict, default=None):
+    """Returns a value given a dictionary key, or the default value if it cannot be found."""
+    if key not in dict:
+        return default
+    else:
+        return dict[key]
+
+
 def get_log_stamp():
     """Returns a print-friendly and filename-friendly identification string containing platform and time."""
     return str(platform.node()) + "-" + time.strftime("%Y%m%d-%H%M%S")
