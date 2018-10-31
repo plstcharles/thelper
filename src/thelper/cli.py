@@ -1,10 +1,9 @@
 """
 Command-line module, for use with a ``__main__`` entrypoint.
 
-This module contains the primary functions used to create or resume a training session. The three
-basic arguments that need to be provided by the user to create a session are the session configuration
-(dict), the dataset root directory (string), and the save root directory (string). See the docstrings
-of :func:`thelper.cli.create_session` and :func:`thelper.cli.resume_session` for more information.
+This module contains the primary functions used to create or resume a training visualization, or
+annotation session. The three basic arguments that need to be provided by the user to create a session
+are its configuration (dict), the dataset root directory (string), and the save root directory (string).
 """
 
 import argparse
@@ -44,7 +43,7 @@ def create_session(config, data_root, save_dir):
     if "name" not in config or not config["name"]:
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
-    logger.info("Creating new training session '%s'..." % session_name)
+    logger.info("creating new training session '%s'..." % session_name)
     if "cudnn_benchmark" in config and thelper.utils.str2bool(config["cudnn_benchmark"]):
         logger.debug("activating benchmark mode for cudnn")
         torch.backends.cudnn.benchmark = True
@@ -57,53 +56,6 @@ def create_session(config, data_root, save_dir):
     logger.debug("starting trainer")
     trainer.train()
     logger.debug("all done")
-    return 0
-
-
-def visualize_data(config, data_root):
-    """Displays the images used in a training session.
-
-    This mode does not generate any output, and is only used to visualize the transformed images used
-    in a training session. This is useful to debug the data augmentation and base transformation pipelines
-    and make sure the modified images are valid. It does not attempt to load a model or instantiate a
-    trainer, meaning the related fields are not required inside ``config``.
-
-    Args:
-        config: a dictionary that provides all required data configuration parameters; see
-            :func:`thelper.data.load` for more information.
-        data_root: the path to the dataset root directory that will be passed to the dataset interfaces
-            for them to figure out where the training/validation/testing data is located. This path may
-            be unused if the dataset interfaces already know where to look via config parameters.
-    """
-    logger = thelper.utils.get_func_logger()
-    logger.info("creating visualization session...")
-    task, train_loader, valid_loader, test_loader = thelper.data.load(config, data_root)
-    if not isinstance(task, thelper.tasks.Classification):
-        raise AssertionError("missing impl, viz mode expects images + labels")
-    loader_map = {
-        "train": train_loader,
-        "valid": valid_loader,
-        "test": test_loader
-    }
-    choice = thelper.utils.query_string("Which loader would you like to visualize?", choices=list(loader_map.keys()), default="train")
-    loader = loader_map[choice]
-    if loader is None:
-        logger.info("loader is empty, all done")
-        return 0
-    image_key = task.get_input_key()
-    label_key = task.get_gt_key()
-    batch_count = len(loader)
-    logger.info("initializing '%s' loader with %d batches..." % (choice, batch_count))
-    for batch_idx, samples in enumerate(loader):
-        logger.debug("at batch = %d / %d" % (batch_idx, batch_count))
-        if "idx" in samples:
-            indices = samples["idx"]
-            if isinstance(indices, torch.Tensor):
-                logger.debug("(indices = %s)" % indices.tolist())
-            else:
-                logger.debug("(indices = %s)" % indices)
-        thelper.utils.draw_sample(samples, image_key=image_key, label_key=label_key, block=True)
-    logger.info("all done")
     return 0
 
 
@@ -171,6 +123,96 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False):
     return 0
 
 
+def visualize_data(config, data_root):
+    """Displays the images used in a training session.
+
+    This mode does not generate any output, and is only used to visualize the transformed images used
+    in a training session. This is useful to debug the data augmentation and base transformation pipelines
+    and make sure the modified images are valid. It does not attempt to load a model or instantiate a
+    trainer, meaning the related fields are not required inside ``config``.
+
+    Args:
+        config: a dictionary that provides all required data configuration parameters; see
+            :func:`thelper.data.load` for more information.
+        data_root: the path to the dataset root directory that will be passed to the dataset interfaces
+            for them to figure out where the training/validation/testing data is located. This path may
+            be unused if the dataset interfaces already know where to look via config parameters.
+    """
+    logger = thelper.utils.get_func_logger()
+    logger.info("creating visualization session...")
+    task, train_loader, valid_loader, test_loader = thelper.data.load(config, data_root)
+    if not isinstance(task, thelper.tasks.Classification):
+        raise AssertionError("missing impl, viz mode expects images + labels")
+    loader_map = {
+        "train": train_loader,
+        "valid": valid_loader,
+        "test": test_loader
+    }
+    choice = thelper.utils.query_string("Which loader would you like to visualize?", choices=list(loader_map.keys()), default="train")
+    loader = loader_map[choice]
+    if loader is None:
+        logger.info("loader is empty, all done")
+        return 0
+    image_key = task.get_input_key()
+    label_key = task.get_gt_key()
+    batch_count = len(loader)
+    logger.info("initializing '%s' loader with %d batches..." % (choice, batch_count))
+    for batch_idx, samples in enumerate(loader):
+        logger.debug("at batch = %d / %d" % (batch_idx, batch_count))
+        if "idx" in samples:
+            indices = samples["idx"]
+            if isinstance(indices, torch.Tensor):
+                logger.debug("(indices = %s)" % indices.tolist())
+            else:
+                logger.debug("(indices = %s)" % indices)
+        thelper.utils.draw_sample(samples, image_key=image_key, label_key=label_key, block=True)
+    logger.info("all done")
+    return 0
+
+
+def annotate_data(config, data_root, save_dir):
+    """Launches an annotation session for a dataset using a specialized GUI tool.
+
+    Note that the annotation type must be supported by the GUI tool. The annotations created by the user
+    during the session will be saved in the session directory.
+
+    Args:
+        config: a dictionary that provides all required dataset and GUI tool configuration parameters; see
+            :func:`thelper.data.load_datasets` and :class:`thelper.gui.XXXX` for more information.
+        data_root: the path to the dataset root directory that will be passed to the dataset interfaces
+            for them to figure out where the data to annotate is located. This path may be unused if the
+            dataset interfaces already know where to look via config parameters.
+        save_dir: the path to the root directory where the session directory should be saved. Note that
+            this is not the path to the session directory itself, but its parent, which may also contain
+            other session directories.
+    """
+    logger = thelper.utils.get_func_logger()
+    if "name" not in config or not config["name"]:
+        raise AssertionError("config missing 'name' field")
+    session_name = config["name"]
+    logger.info("creating annotation session '%s'..." % session_name)
+    save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
+    logger.debug("session will be saved at '%s'" % save_dir)
+    logger.info("parsing datasets configuration")
+    if "datasets" not in config or not config["datasets"]:
+        raise AssertionError("config missing 'datasets' field (can be dict or str)")
+    datasets_config = config["datasets"]
+    if isinstance(datasets_config, str):
+        if os.path.isfile(datasets_config) and os.path.splitext(datasets_config)[1] == ".json":
+            datasets_config = json.load(open(datasets_config))
+        else:
+            raise AssertionError("'datasets' string should point to valid json file")
+    logger.debug("loading datasets templates")
+    if not isinstance(datasets_config, dict):
+        raise AssertionError("invalid datasets config type")
+    datasets, _ = thelper.data.load_datasets(datasets_config, data_root)
+    annotator = thelper.gui.load_annotator(session_name, save_dir, config, datasets)
+    logger.debug("starting annotator")
+    annotator.run()
+    logger.debug("all done")
+    return 0
+
+
 def main(args=None):
     """Main entrypoint to use with console applications.
 
@@ -195,10 +237,10 @@ def main(args=None):
     ap.add_argument("-d", "--data-root", default=None, type=str, help="path to the root directory passed to dataset interfaces for parsing")
     subparsers = ap.add_subparsers(title="Operating mode", dest="mode")
     new_ap = subparsers.add_parser("new", help="creates a new session from a config file")
-    new_ap.add_argument("cfg_path", type=str, help="path to the training configuration file")
+    new_ap.add_argument("cfg_path", type=str, help="path to the session configuration file")
     new_ap.add_argument("save_dir", type=str, help="path to the root directory where checkpoints should be saved")
     cl_new_ap = subparsers.add_parser("cl_new", help="creates a new session from a config file for the cluster")
-    cl_new_ap.add_argument("cfg_path", type=str, help="path to the training configuration file")
+    cl_new_ap.add_argument("cfg_path", type=str, help="path to the session configuration file")
     cl_new_ap.add_argument("save_dir", type=str, help="path to the root directory where checkpoints should be saved")
     resume_ap = subparsers.add_parser("resume", help="resume a session from a checkpoint file")
     resume_ap.add_argument("ckpt_path", type=str, help="path to the checkpoint (or save directory) to resume training from")
@@ -207,7 +249,10 @@ def main(args=None):
     resume_ap.add_argument("-c", "--override-cfg", default=None, help="override config file path (default=None)")
     resume_ap.add_argument("-e", "--eval-only", default=False, action="store_true", help="only run evaluation pass (valid+test)")
     viz_ap = subparsers.add_parser("viz", help="visualize the loaded data for a training/eval session")
-    viz_ap.add_argument("cfg_path", type=str, help="path to the training configuration file (or session save directory)")
+    viz_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session save directory)")
+    annot_ap = subparsers.add_parser("annot", help="launches a dataset annotation session with a GUI tool")
+    annot_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session save directory)")
+    annot_ap.add_argument("save_dir", type=str, help="path to the root directory where annotations should be saved")
     args = ap.parse_args(args=args)
     if args.verbose > 2:
         log_level = logging.NOTSET
@@ -285,7 +330,7 @@ def main(args=None):
         if save_dir is None:
             save_dir = os.path.abspath(os.path.join(os.path.dirname(args.ckpt_path), "../.."))
         return resume_session(ckptdata, args.data_root, save_dir, config=override_config, eval_only=args.eval_only)
-    elif args.mode == "viz":
+    elif args.mode == "viz" or args.mode == "annot":
         if os.path.isdir(args.cfg_path):
             thelper.logger.debug("will search directory '%s' for a config to load..." % args.cfg_path)
             search_cfg_names = ["config.json", "config.latest.json", "test.json"]
@@ -302,7 +347,10 @@ def main(args=None):
             if not os.path.isfile(args.cfg_path):
                 raise AssertionError("no config file found at path '%s'" % args.cfg_path)
             config = json.load(open(args.cfg_path))
-        return visualize_data(config, args.data_root)
+        if args.mode == "viz":
+            return visualize_data(config, args.data_root)
+        elif args.mode == "annot":
+            return annotate_data(config, args.data_root, args.save_dir)
 
 
 if __name__ == "__main__":
