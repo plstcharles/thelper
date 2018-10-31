@@ -186,6 +186,8 @@ def annotate_data(config, data_root, save_dir):
             this is not the path to the session directory itself, but its parent, which may also contain
             other session directories.
     """
+    # import gui here since it imports packages that will cause errors in CLI-only environments
+    import thelper.gui
     logger = thelper.utils.get_func_logger()
     if "name" not in config or not config["name"]:
         raise AssertionError("config missing 'name' field")
