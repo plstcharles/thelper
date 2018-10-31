@@ -54,19 +54,19 @@ class Annotator:
 
     Example configuration file::
 
-    # ...
-    "annotator": {
-        # type of annotator to instantiate
-        "type": "thelper.gui.ImageSegmentAnnotator",
         # ...
-        # provide all extra parameters to the specialized anntator here
-        "params": [
-            {"name": "...", value: ...},
-            {"name": "...", value: ...},
+        "annotator": {
+            # type of annotator to instantiate
+            "type": "thelper.gui.ImageSegmentAnnotator",
             # ...
-        }
-    },
-    # ...
+            # provide all extra parameters to the specialized anntator here
+            "params": [
+                {"name": "...", value: ...},
+                {"name": "...", value: ...},
+                # ...
+            }
+        },
+        # ...
 
     .. seealso::
         :class:`thelper.gui.ImageSegmentAnnotator`
@@ -118,9 +118,32 @@ class Annotator:
 class ImageSegmentAnnotator(Annotator):
     """Annotator interface specialized for image segmentation annotation generation.
 
-    This interface will create a GUI tool with a brush that allows images to be painted over with
-    predetermined class labels. The generated masks will then be saved in the session directory as
-    PNG images.
+    This interface will create a GUI tool with a brush and a zoomed tooltip window that allows images
+    to be painted over with predetermined class labels. The generated masks will then be saved in the
+    session directory as PNG images.
+
+    The configuration is expected to provide values for at least the following parameters:
+
+    - ``sample_input_key``: specifies the key to use when extracting images from loaded samples. This
+      is typically a string defined by the dataset parser.
+    - ``labels``: provides a list of labels that will be available to use in the GUI. These labels are
+      expected to be given as dictionaries that each define an ``id`` (uint8 value used in output masks),
+      a ``name`` (string used for display/lookup purposes), and a color (3-element integer tuple).
+
+    Other parameters can also be provided to alter the GUI's default behavior:
+
+    - ``default_brush_radius``: the size of the brush at startup (default=10).
+    - ``background_id``: the integer id to use for the background label (default=0).
+    - ``window_zoom_crop_size``: the crop size displayed in the zoom tooltip (default=250x250).
+    - ``window_zoom_size``: the size of the zoom tooltip window (default=500x500).
+    - ``zoom_interp_type``: the interpolation type to use when zooming (default=cv2.INTER_NEAREST).
+    - ``start_sample_idx``: the index of the first sample to display (default=0).
+    - ``window_name``: the name of the main display window (default=image-segm-annotator).
+    - ``window_size``: the size of the main display window (default=1000).
+    - ``brush_thickness``: the size of the GUI brush tooltip border display (default=2).
+    - ``gui_bar_size``: the width of the GUI bar displayed on top of the main window (default=50).
+    - ``default_mask_opacity``: the default opacity of the segmentation mask (default=0.3).
+    - ``default_fill_id``: the label id to fill all new masks with (default=0).
 
     .. seealso::
         :class:`thelper.gui.Annotator`
@@ -139,10 +162,12 @@ class ImageSegmentAnnotator(Annotator):
 
     @staticmethod
     def on_press(key):
+        """Callback entrypoint for pynput to register keyboard presses."""
         ImageSegmentAnnotator.CURRENT_KEY = key
 
     @staticmethod
     def on_mouse(event, x, y, flags, param):
+        """Callback entrypoint for opencv to register mouse movement/clicks."""
         cls = ImageSegmentAnnotator
         cls.LATEST_RAW_PT = (x, y)
         cls.LATEST_PT = (x / cls.WINDOW_SIZE[0], (y - cls.GUI_BAR_SIZE) / cls.WINDOW_SIZE[1])
@@ -156,12 +181,16 @@ class ImageSegmentAnnotator(Annotator):
         cls.GUI_DIRTY = True
 
     class Brush:
+        """Brush manager used to refresh/draw mask contents based on mouse input."""
+
         def __init__(self, config):
+            """Parses the input config and extracts brush-related parameters."""
             ImageSegmentAnnotator.BRUSH_SIZE = int(thelper.utils.get_key_def("default_brush_radius", config, 10))
             self.background_id = int(thelper.utils.get_key_def("background_id", config, 0))
             self.last_coords = collections.deque()
 
         def refresh(self, mask, label):
+            """Fetches the latest mouse state and updates the mask if necessary."""
             cls = ImageSegmentAnnotator
             if not cls.GUI_DIRTY:
                 return
@@ -184,6 +213,7 @@ class ImageSegmentAnnotator(Annotator):
 
         @staticmethod
         def draw_stroke(mask, label_id, start, end):
+            """Draws a brush stroke on the mask with a given label id between two points."""
             cls = ImageSegmentAnnotator
             drag_len = cv.norm(start, end)
             brush_step_size = 1  # min(max(BRUSH_SIZE / 4, 1), 5)  # try increasing this if drawing lags
@@ -198,7 +228,10 @@ class ImageSegmentAnnotator(Annotator):
                           label_id, thickness=-1, lineType=-1)
 
     class ZoomTooltip:
+        """Zoom tooltip manager used to visualize image details based on mouse location."""
+
         def __init__(self, config):
+            """Parses the input config and extracts zoom-related parameters."""
             self.window_zoom_crop_size = thelper.utils.str2size(thelper.utils.get_key_def("window_zoom_crop_size", config, "250x250"))
             self.window_zoom_size = thelper.utils.str2size(thelper.utils.get_key_def("window_zoom_size", config, "500x500"))
             self.window_zoom_name = "zoom"
@@ -212,13 +245,17 @@ class ImageSegmentAnnotator(Annotator):
             cv.namedWindow(self.window_zoom_name, cv.WINDOW_AUTOSIZE | cv.WINDOW_GUI_NORMAL)
 
         def refresh(self, image, mask, mask_colormap, mask_opacity, coords):
+            """Fetches the latest mouse position and updates the zoom window tooltip."""
             if coords is not None:
                 if self.window_zoom_crop_size[0] > image.shape[1] or self.window_zoom_crop_size[1] > image.shape[0]:
                     logger.warning("crop size too large for input image, skipping zoom refresh")
                     return
-                tl = (max(coords[0] - self.window_zoom_crop_size[0] // 2, 0), max(coords[1] - self.window_zoom_crop_size[1] // 2, 0))
-                br = (min(tl[0] + self.window_zoom_crop_size[0], image.shape[1]), min(tl[1] + self.window_zoom_crop_size[1], image.shape[0]))
-                tl = (max(br[0] - self.window_zoom_crop_size[0], 0), max(br[1] - self.window_zoom_crop_size[1], 0))
+                tl = (max(coords[0] - self.window_zoom_crop_size[0] // 2, 0),
+                      max(coords[1] - self.window_zoom_crop_size[1] // 2, 0))
+                br = (min(tl[0] + self.window_zoom_crop_size[0], image.shape[1]),
+                      min(tl[1] + self.window_zoom_crop_size[1], image.shape[0]))
+                tl = (max(br[0] - self.window_zoom_crop_size[0], 0),
+                      max(br[1] - self.window_zoom_crop_size[1], 0))
                 if (br[0] - tl[0], br[1] - tl[1]) != self.window_zoom_crop_size:
                     logger.warning("bad zoom crop size, should never happen...?")
                 else:
@@ -231,6 +268,7 @@ class ImageSegmentAnnotator(Annotator):
                     cv.imshow(self.window_zoom_name, self.display_zoom)
 
     def __init__(self, session_name, config, save_dir, datasets):
+        """Parses the input samples and initializes the anntator GUI elements."""
         super().__init__(session_name, config, save_dir, datasets)
         config = self.annotator_config  # cheat for conciseness
         self.sample_input_key = thelper.utils.get_key("sample_input_key", config)
@@ -310,6 +348,7 @@ class ImageSegmentAnnotator(Annotator):
         cv.setMouseCallback(self.window_name, ImageSegmentAnnotator.on_mouse)
 
     def refresh_layers(self):
+        """Updates the image, mask, and tool display layers based on the latest changes."""
         cls = ImageSegmentAnnotator
         if self.image_display_base is None:
             self.image_display_base = cv.resize(self.image, dsize=cls.WINDOW_SIZE)
@@ -325,6 +364,7 @@ class ImageSegmentAnnotator(Annotator):
         return self.image_display, self.image_display_base, self.mask_display
 
     def refresh_gui(self):
+        """Updates and displays the main window based on the latest changes."""
         cls = ImageSegmentAnnotator
         if self.gui_display is None or cls.GUI_DIRTY:
             gui_shape = (self.image_display.shape[0] + cls.GUI_BAR_SIZE, self.image_display.shape[1], self.image_display.shape[2])
@@ -341,14 +381,17 @@ class ImageSegmentAnnotator(Annotator):
             # todo: update to use meta keys?
             if "path" in self.sample and isinstance(self.sample["path"], str):
                 gui_str += "   path: %s" % self.sample["path"].replace('\\', '/')
-            cv.putText(self.gui_display, gui_str, (10, int(cls.GUI_BAR_SIZE * 2 / 5)), cv.FONT_HERSHEY_SIMPLEX, 0.40, (255, 255, 255), 1, cv.LINE_AA)
+            cv.putText(self.gui_display, gui_str, (10, int(cls.GUI_BAR_SIZE * 2 / 5)),
+                       cv.FONT_HERSHEY_SIMPLEX, 0.40, (255, 255, 255), 1, cv.LINE_AA)
             gui_str = "current brush: %s" % curr_label["name"]
-            cv.putText(self.gui_display, gui_str, (10, int(cls.GUI_BAR_SIZE * 3 / 4)), cv.FONT_HERSHEY_SIMPLEX, 0.40, curr_label["color"], 1, cv.LINE_AA)
+            cv.putText(self.gui_display, gui_str, (10, int(cls.GUI_BAR_SIZE * 3 / 4)),
+                       cv.FONT_HERSHEY_SIMPLEX, 0.40, curr_label["color"], 1, cv.LINE_AA)
             cls.GUI_DIRTY = False
         cv.imshow(self.window_name, self.gui_display)
         cv.waitKey(1)
 
     def handle_keys(self):
+        """Fetches the latest keyboard press and updates the annotator state accordingly."""
         cls = ImageSegmentAnnotator
         nb_labels = len(self.labels)
         if cls.CURRENT_KEY != -1:
@@ -402,6 +445,7 @@ class ImageSegmentAnnotator(Annotator):
         return False
 
     def get_mask_path(self, index):
+        """Returns the path where the mask of a specific sample should be located."""
         dataset_name = None
         for name, offset in reversed(list(self.sample_idx_offsets.items())):
             if 0 <= index - offset < len(self.datasets[name]):
@@ -413,6 +457,7 @@ class ImageSegmentAnnotator(Annotator):
         return os.path.join(self.annotations_dir, dataset_name, str(index) + ".png")
 
     def load(self, index):
+        """Loads the image and mask associated to a specific sample."""
         self.image = None
         for name, offset in reversed(list(self.sample_idx_offsets.items())):
             if 0 <= index - offset < len(self.datasets[name]):
@@ -445,6 +490,7 @@ class ImageSegmentAnnotator(Annotator):
         return self.image, self.mask
 
     def run(self):
+        """Displays the main window and other GUI elements in a loop until it is closed by the user."""
         while cv.getWindowProperty(self.window_name, 0) != -1:
             if self.handle_keys():
                 break
