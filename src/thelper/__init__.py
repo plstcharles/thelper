@@ -2,6 +2,7 @@ import logging
 
 import thelper.cli  # noqa: F401
 import thelper.data  # noqa: F401
+import thelper.gui  # noqa: F401
 import thelper.modules  # noqa: F401
 import thelper.optim  # noqa: F401
 import thelper.tasks  # noqa: F401

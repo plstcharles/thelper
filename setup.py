@@ -86,6 +86,7 @@ setuptools.setup(
         "numpy>=1.14.0",
         "opencv-python>=3.3.0",
         "torch>=0.4.0",
+        "pynput>=1.4",
         "scikit-learn>=0.19.1",
         "torchvision>=0.2.1",
         "tensorboardX==1.2.0",  # 1.4.0 causes issues with some image types?

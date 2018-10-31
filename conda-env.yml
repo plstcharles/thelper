@@ -14,3 +14,4 @@ dependencies:
     - augmentor
     - tensorboardX==1.2
     - torchvision
+    - pynput

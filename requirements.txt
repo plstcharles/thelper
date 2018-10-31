@@ -8,6 +8,7 @@ opencv-python
 tensorflow
 # numpy version requirement set by tensorflow
 numpy<=1.14.5
+pynput
 scipy
 scikit-learn
 augmentor
