@@ -817,6 +817,56 @@ class Dataset(torch.utils.data.Dataset, ABC):
         return self._get_derived_name() + " : size=%s, transforms=%s" % (str(len(self)), str(self.transforms))
 
 
+class ImageDataset(Dataset):
+    """Image dataset specialization interface.
+
+    This specialization is used to parse simple image folders, and it does not fulfill the requirements of the
+    task constructor due to the lack of groundtruth data support. Therefore, it returns ``None`` when asked
+    for a task, and it thus cannot be used to directly train a model. It can however be useful when simply
+    visualizing data or when annotating a simple directory structure.
+
+    .. seealso::
+        :class:`thelper.data.Dataset`
+    """
+
+    def __init__(self, name, root, config=None, transforms=None, bypass_deepcopy=False):
+        """Image dataset parser constructor.
+
+        This baseline constructor matches the signature of :class:`thelper.data.Dataset`, and simply
+        forwards its parameters.
+        """
+        super().__init__(name, root, config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
+        if "root" in config and config["root"] and isinstance(config["root"], str):
+            if root is not None:
+                logger.warning("root dir already specified in config; will ignore data root '%s'" % root)
+            root = config["root"]
+        if root is None or not os.path.isdir(root):
+            raise AssertionError("invalid input data root '%s'" % root)
+        self.samples = []
+        for folder, subfolder, files in os.walk(root):
+            for file in files:
+                ext = os.path.splitext(file)[1].lower()
+                if ext in [".jpg", ".jpeg", ".bmp", ".png", ".ppm", ".pgm", ".tif"]:
+                    self.samples.append({"path": os.path.join(folder, file)})
+
+    def __getitem__(self, idx):
+        """Returns the data sample (a dictionary) for a specific (0-based) index."""
+        if idx < 0 or idx >= len(self.samples):
+            raise AssertionError("sample index is out-of-range")
+        image_path = self.samples[idx]["path"]
+        image = cv.imread(image_path)
+        if image is None:
+            raise AssertionError("invalid image at '%s'" % image_path)
+        return {
+            "path": self.samples[idx]["path"],
+            "image": image
+        }
+
+    def get_task(self):
+        """Returns ``None``, as this specialized interface does not provide support to read groundtruth data."""
+        return None
+
+
 class ClassificationDataset(Dataset):
     """Classification dataset specialization interface.
 
