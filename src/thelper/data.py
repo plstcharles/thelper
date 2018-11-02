@@ -576,7 +576,7 @@ class DataConfig(object):
             sample_maps = {}
             for dataset_name, dataset in datasets.items():
                 if isinstance(dataset, thelper.data.ExternalDataset):
-                    if hasattr(dataset.samples, "samples"):
+                    if hasattr(dataset.samples, "samples") and isinstance(dataset.samples.samples, list):
                         sample_maps[dataset_name] = task.get_class_sample_map(dataset.samples.samples)
                     else:
                         logger.warning(("must fully parse the external dataset '%s' for intra-class shuffling;" % dataset_name) +
