@@ -585,15 +585,20 @@ class DataConfig(object):
             respectively. These maps associate dataset names to a list of sample indices.
         """
         dataset_sizes = {}
+        must_split = {}
         global_size = 0
         for dataset_name, dataset in datasets.items():
             if not isinstance(dataset, thelper.data.Dataset) and not isinstance(dataset, thelper.data.ExternalDataset):
                 raise AssertionError("unexpected dataset type for '%s'" % dataset_name)
             dataset_sizes[dataset_name] = len(dataset)
             global_size += dataset_sizes[dataset_name]
+            # if a single dataset is used in more than a single loader, we cannot skip the rebalancing below
+            must_split[dataset_name] = sum([dataset_name in split for split in
+                                            [self.train_split, self.valid_split, self.test_split]]) > 1
         global_size = sum(len(dataset) for dataset in datasets.values())
         logger.info("splitting datasets with parsed sizes = %s" % str(dataset_sizes))
-        if task is not None and isinstance(task, thelper.tasks.Classification) and not self.skip_class_balancing:
+        must_split = any(must_split.values())
+        if task is not None and isinstance(task, thelper.tasks.Classification) and not self.skip_class_balancing and must_split:
             # note: with current impl, all class sets will be shuffled the same way... (shouldnt matter, right?)
             global_class_names = task.get_class_names()
             logger.info("will split evenly over %d classes..." % len(global_class_names))
@@ -636,7 +641,7 @@ class DataConfig(object):
                             idxs_dict_list[dataset_name] += class_idxs_dict_list[dataset_name]
                         else:
                             idxs_dict_list[dataset_name] = class_idxs_dict_list[dataset_name]
-        else:  # task is ``None`` or not classif-related, no balancing to be done
+        else:  # task is ``None`` or not classif-related, or no balancing to be done
             dataset_indices = {}
             for dataset_name in datasets:
                 # note: all indices paired with 'None' below as class is ignored; used for compatibility with code above
