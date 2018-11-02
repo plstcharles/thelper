@@ -281,11 +281,9 @@ class ImageSegmentAnnotator(Annotator):
             if hasattr(dataset, "get_task") and callable(dataset.get_task):
                 task = dataset.get_task()
                 if task is not None and isinstance(task, thelper.tasks.Task):
-                    keys = task.get_input_key()
-                    if not isinstance(keys, list):
-                        keys = [keys]
-                    if self.sample_input_key not in keys:
-                        raise AssertionError("could not find sample input key '%s' in available keys" % self.sample_input_key)
+                    if self.sample_input_key != task.get_input_key():
+                        raise AssertionError("sample input key '%s' mismatch with task input key '%s'" % (self.sample_input_key,
+                                                                                                          task.get_input_key()))
             annot_dir = os.path.join(self.annotations_dir, dataset_name)
             if not os.path.isdir(annot_dir):
                 os.mkdir(annot_dir)

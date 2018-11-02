@@ -763,10 +763,8 @@ class ImageClassifTrainer(Trainer):
         super().__init__(session_name, save_dir, model, loaders, config, ckptdata=ckptdata)
         if not isinstance(self.model.task, thelper.tasks.Classification):
             raise AssertionError("expected task to be classification")
-        input_key = self.model.task.get_input_key()
-        self.input_keys = input_key if isinstance(input_key, list) else [input_key]
-        label_key = self.model.task.get_gt_key()
-        self.label_keys = label_key if isinstance(label_key, list) else [label_key]
+        self.input_key = self.model.task.get_input_key()
+        self.label_key = self.model.task.get_gt_key()
         self.class_names = self.model.task.get_class_names()
         self.meta_keys = self.model.task.get_meta_keys()
         self.class_idxs_map = self.model.task.get_class_idxs_map()
@@ -780,17 +778,12 @@ class ImageClassifTrainer(Trainer):
         """Fetches and returns tensors of input images and class labels from a batched sample dictionary."""
         if not isinstance(sample, dict):
             raise AssertionError("trainer expects samples to come in dicts for key-based usage")
-        input, label = None, None
-        for key in self.input_keys:
-            if key in sample:
-                input = sample[key]
-                break  # by default, stop after finding first key hit
-        for key in self.label_keys:
-            if key in sample:
-                label = sample[key]
-                break  # by default, stop after finding first key hit
-        if input is None or label is None:
-            raise AssertionError("could not find input or label key in sample dict")
+        if self.input_key not in sample:
+            raise AssertionError("could not find input key '%s' in sample dict" % self.input_key)
+        input = sample[self.input_key]
+        if self.label_key not in sample:
+            raise AssertionError("could not find label key '%s' in sample dict" % self.label_key)
+        label = sample[self.label_key]
         label_idx = []
         for class_name in label:
             if isinstance(class_name, (int, torch.Tensor)):

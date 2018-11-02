@@ -185,20 +185,16 @@ class Classification(Task):
         elif not isinstance(samples, list) or not isinstance(samples[0], dict):
             raise AssertionError("dataset samples should be given as list of dictionaries")
         sample_idxs = {class_name: [] for class_name in self.class_names}
-        label_keys = self.label_key if isinstance(self.label_key, list) else [self.label_key]
         for sample_idx, sample in enumerate(samples):
-            class_name = None
-            for key in label_keys:
-                if key in sample:
-                    class_name = sample[key]
-                    break  # by default, stop after finding first match
-            if class_name is None:
-                raise AssertionError("could not find label key match in sample dict")
+            if self.label_key not in sample:
+                raise AssertionError("could not find label key ('%s') in sample dict" % self.label_key)
+            class_name = sample[self.label_key]
             if isinstance(class_name, str):
                 if class_name not in self.class_names:
                     raise AssertionError("label '%s' not found in class names provided earlier" % class_name)
             elif isinstance(class_name, int):
                 # dataset must already be using indices, we will forgive this...
+                # (this is pretty much always the case for torchvision datasets)
                 if class_name < 0 or class_name >= len(self.class_names):
                     raise AssertionError("class name given as out-of-range index (%d) for class list" % class_name)
                 class_name = self.class_names[class_name]

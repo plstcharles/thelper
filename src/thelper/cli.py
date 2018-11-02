@@ -153,8 +153,6 @@ def visualize_data(config, data_root):
     if loader is None:
         logger.info("loader is empty, all done")
         return 0
-    image_key = task.get_input_key()
-    label_key = task.get_gt_key()
     batch_count = len(loader)
     logger.info("initializing '%s' loader with %d batches..." % (choice, batch_count))
     for batch_idx, samples in enumerate(loader):
@@ -165,7 +163,7 @@ def visualize_data(config, data_root):
                 logger.debug("(indices = %s)" % indices.tolist())
             else:
                 logger.debug("(indices = %s)" % indices)
-        thelper.utils.draw_sample(samples, image_key=image_key, label_key=label_key, block=True)
+        thelper.utils.draw_sample(samples, image_key=task.get_input_key(), label_key=task.get_gt_key(), block=True)
     logger.info("all done")
     return 0
 

@@ -581,13 +581,12 @@ class DataConfig(object):
                     else:
                         logger.warning(("must fully parse the external dataset '%s' for intra-class shuffling;" % dataset_name) +
                                        " this might take a while! (consider making a dataset interface that can return labels only)")
-                        label_keys = task.get_gt_key() if isinstance(task.get_gt_key(), list) else [task.get_gt_key()]
+                        label_key = task.get_gt_key()
                         samples = []
                         for sample in dataset:
-                            for key in label_keys:
-                                if key in sample:
-                                    samples.append({key: sample[key]})
-                                    break  # by default, stop after finding first match
+                            if label_key not in sample:
+                                raise AssertionError("could not find label key ('%s') in sample dict" % label_key)
+                            samples.append({label_key: sample[label_key]})
                         sample_maps[dataset_name] = task.get_class_sample_map(samples)
                 elif isinstance(dataset, thelper.data.Dataset):
                     sample_maps[dataset_name] = task.get_class_sample_map(dataset.samples)
@@ -614,13 +613,11 @@ class DataConfig(object):
                         else:
                             idxs_dict_list[dataset_name] = class_idxs_dict_list[dataset_name]
         else:  # task is ``None`` or not classif-related, no balancing to be done
-            if task is not None:
-                logger.warning("unrecognized task type, will not be used for data splitting")
             dataset_indices = {}
             for dataset_name in datasets:
                 # note: all indices paired with 'None' below as class is ignored; used for compatibility with code above
                 dataset_indices[dataset_name] = list(
-                    zip(list(range(dataset_sizes[dataset_name])), [None] * len(dataset_sizes[dataset_name])))
+                    zip(list(range(dataset_sizes[dataset_name])), [None] * dataset_sizes[dataset_name]))
             train_idxs, valid_idxs, test_idxs = self._get_raw_split(dataset_indices)
         return train_idxs, valid_idxs, test_idxs
 
@@ -823,7 +820,7 @@ class ImageDataset(Dataset):
     This specialization is used to parse simple image folders, and it does not fulfill the requirements of the
     task constructor due to the lack of groundtruth data support. Therefore, it returns ``None`` when asked
     for a task, and it thus cannot be used to directly train a model. It can however be useful when simply
-    visualizing data or when annotating a simple directory structure.
+    visualizing, annotating, or evaluating data from a simple directory structure.
 
     .. seealso::
         :class:`thelper.data.Dataset`
@@ -842,24 +839,26 @@ class ImageDataset(Dataset):
             root = config["root"]
         if root is None or not os.path.isdir(root):
             raise AssertionError("invalid input data root '%s'" % root)
+        self.image_key = thelper.utils.get_key_def("image_key", config, "image")
+        self.path_key = thelper.utils.get_key_def("path_key", config, "path")
         self.samples = []
         for folder, subfolder, files in os.walk(root):
             for file in files:
                 ext = os.path.splitext(file)[1].lower()
                 if ext in [".jpg", ".jpeg", ".bmp", ".png", ".ppm", ".pgm", ".tif"]:
-                    self.samples.append({"path": os.path.join(folder, file)})
+                    self.samples.append({self.path_key: os.path.join(folder, file)})
 
     def __getitem__(self, idx):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
         if idx < 0 or idx >= len(self.samples):
             raise AssertionError("sample index is out-of-range")
-        image_path = self.samples[idx]["path"]
+        image_path = self.samples[idx][self.path_key]
         image = cv.imread(image_path)
         if image is None:
             raise AssertionError("invalid image at '%s'" % image_path)
         return {
-            "path": self.samples[idx]["path"],
-            "image": image
+            self.path_key: self.samples[idx][self.path_key],
+            self.image_key: image
         }
 
     def get_task(self):
