@@ -549,11 +549,32 @@ class DataConfig(object):
         return train_idxs, valid_idxs, test_idxs
 
     def get_split(self, datasets, task):
-        """Returns the train/valid/test sample indices split for a given dataset (name-parser) map.
+        r"""Returns the train/valid/test sample indices split for a given dataset (name-parser) map.
 
-        Note that the returned indices are unique, possibly shuffle, and never duplicated between sets.
+        Note that the returned indices are unique, possibly shuffled, and never duplicated between sets.
         If the samples have a class attribute (i.e. the task is related to classification), the split
-        will respect the initial distribution and apply the ratios within the classes themselves.
+        will respect the initial distribution and apply the ratios within the classes themselves. For
+        example, consider a dataset of three classes (:math:`A`, :math:`B`, and :math:`C`) that contains
+        100 samples such as:
+
+        .. math::
+
+            |A| = 50,\;|B| = 30,\;|C| = 20
+
+        If we require a 80%-10%-10% ratio distribution for the training, validation, and test loaders
+        respectively, the resulting split will contain the following sample counts:
+
+        .. math::
+
+                \text{training loader} = {40A + 24B + 16C}
+
+        .. math::
+
+                \text{validation loader} = {5A + 3B + 2C}
+
+        .. math::
+
+                \text{test loader} = {5A + 3B + 2C}
 
         Args:
             datasets: the map of datasets to split, where each has a name (key) and a parser (value).
