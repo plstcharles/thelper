@@ -12,7 +12,6 @@ import os
 
 import cv2 as cv
 import numpy as np
-import pynput.keyboard
 
 import thelper.utils
 
@@ -341,6 +340,7 @@ class ImageSegmentAnnotator(Annotator):
         self.image, self.mask = self.load(self.curr_sample_idx)
         self.image_display, self.image_display_base, self.mask_display = self.refresh_layers()
         self.gui_display = None
+        import pynput.keyboard
         self.listener = pynput.keyboard.Listener(on_press=ImageSegmentAnnotator.on_press)
         self.listener.start()
         cv.setMouseCallback(self.window_name, ImageSegmentAnnotator.on_mouse)
@@ -390,6 +390,7 @@ class ImageSegmentAnnotator(Annotator):
 
     def handle_keys(self):
         """Fetches the latest keyboard press and updates the annotator state accordingly."""
+        import pynput.keyboard
         cls = ImageSegmentAnnotator
         nb_labels = len(self.labels)
         if cls.CURRENT_KEY != -1:
