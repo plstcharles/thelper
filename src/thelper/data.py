@@ -377,6 +377,8 @@ class DataConfig(object):
       if resuming a session by parsing the log files generated earlier.
     - ``skip_split_norm`` (optional, default=False): specifies whether the question about normalizing
       the split ratios should be skipped or not.
+    - ``skip_class_balancing`` (optional, default=False): specifies whether the balancing of class
+      labels should be skipped in case the task is classification-related.
 
     .. seealso::
         :func:`thelper.data.load`
@@ -488,6 +490,7 @@ class DataConfig(object):
             raise AssertionError("data config must define a split for at least one loader type (train/valid/test)")
         self.total_usage = Counter(self.train_split) + Counter(self.valid_split) + Counter(self.test_split)
         self.skip_split_norm = thelper.utils.str2bool(config["skip_split_norm"]) if "skip_split_norm" in config else False
+        self.skip_class_balancing = thelper.utils.str2bool(config["skip_class_balancing"]) if "skip_class_balancing" in config else False
         for name, usage in self.total_usage.items():
             if usage != 1:
                 normalize_ratios = None
@@ -569,7 +572,7 @@ class DataConfig(object):
             global_size += dataset_sizes[dataset_name]
         global_size = sum(len(dataset) for dataset in datasets.values())
         logger.info("splitting datasets with parsed sizes = %s" % str(dataset_sizes))
-        if task is not None and isinstance(task, thelper.tasks.Classification):
+        if task is not None and isinstance(task, thelper.tasks.Classification) and not self.skip_class_balancing:
             # note: with current impl, all class sets will be shuffled the same way... (shouldnt matter, right?)
             global_class_names = task.get_class_names()
             logger.info("will split evenly over %d classes..." % len(global_class_names))
