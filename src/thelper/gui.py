@@ -262,7 +262,7 @@ class ImageSegmentAnnotator(Annotator):
                     np.copyto(self.image_crop, image[tl[1]:br[1], tl[0]:br[0], ...])
                     cv.resize(self.image_crop, dsize=self.window_zoom_size, dst=self.image_zoom, interpolation=self.zoom_interp_type)
                     np.copyto(self.mask_crop, mask[tl[1]:br[1], tl[0]:br[0], ...])
-                    cv.applyColorMap(self.mask_crop, mask_colormap, dst=self.mask_crop_color)
+                    thelper.utils.apply_color_map(self.mask_crop, mask_colormap, dst=self.mask_crop_color)
                     cv.resize(self.mask_crop_color, dsize=self.window_zoom_size, dst=self.mask_zoom, interpolation=self.zoom_interp_type)
                     cv.addWeighted(self.image_zoom, (1 - mask_opacity), self.mask_zoom, mask_opacity, 0.0, dst=self.display_zoom)
                     cv.imshow(self.window_zoom_name, self.display_zoom)
@@ -355,7 +355,7 @@ class ImageSegmentAnnotator(Annotator):
             cls.MASK_DIRTY = True
         if self.mask_display is None or cls.MASK_DIRTY:
             self.mask_display = cv.resize(self.mask, dsize=cls.WINDOW_SIZE, interpolation=cv.INTER_NEAREST)
-            self.mask_display = cv.applyColorMap(self.mask_display, self.label_colormap)
+            self.mask_display = thelper.utils.apply_color_map(self.mask_display, self.label_colormap)
             cls.MASK_DIRTY = True
         if self.image_display is None or cls.MASK_DIRTY:
             self.image_display = cv.addWeighted(self.image_display_base, (1 - self.mask_opacity), self.mask_display, self.mask_opacity, 0.0)
