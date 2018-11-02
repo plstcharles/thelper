@@ -698,6 +698,22 @@ def draw_bboxes(image, rects, labels=None, confidences=None, win_size=None, thic
     return display_image
 
 
+def apply_color_map(image, colormap, dst=None):
+    """Applies a color map to an image of 8-bit color indices; works similarily to cv2.applyColorMap (v3.3.1)."""
+    if image is None or not isinstance(image, np.ndarray) or image.ndim != 2 or image.dtype != np.uint8:
+        raise AssertionError("invalid input image")
+    if colormap is None or not isinstance(colormap, np.ndarray) or colormap.shape != (256, 1, 3) or colormap.dtype != np.uint8:
+        raise AssertionError("invalid color map")
+    out_shape = (image.shape[0], image.shape[1], 3)
+    if dst is None:
+        dst = np.empty(out_shape, dtype=np.uint8)
+    elif not isinstance(dst, np.ndarray) or dst.shape != out_shape or dst.dtype != np.uint8:
+        raise AssertionError("invalid output image")
+    # using np.take might avoid an extra allocation...
+    np.copyto(dst, colormap.squeeze()[image.ravel(), :].reshape(out_shape))
+    return dst
+
+
 def stringify_confmat(confmat, class_list, hide_zeroes=False, hide_diagonal=False, hide_threshold=None):
     """Transforms a confusion matrix array obtained in list or numpy format into a printable string."""
     if not isinstance(confmat, np.ndarray) or not isinstance(class_list, list):
