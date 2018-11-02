@@ -481,7 +481,7 @@ class ImageSegmentAnnotator(Annotator):
         if isinstance(self.window_size, str):
             cls.WINDOW_SIZE = thelper.utils.str2size(self.window_size)
         elif isinstance(self.window_size, int):
-            max_scale_factor = self.window_size / min(self.image.shape[0], self.image.shape[1])
+            max_scale_factor = self.window_size / max(self.image.shape[0], self.image.shape[1])
             cls.WINDOW_SIZE = (int(round(max_scale_factor * self.image.shape[1])), int(round(max_scale_factor * self.image.shape[0])))
         else:
             raise AssertionError("unexpected window size type")
