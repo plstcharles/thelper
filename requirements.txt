@@ -2,7 +2,6 @@ torch
 torchvision
 matplotlib
 cython
-torch
 opencv-python
 # tensorflow required for tensorboard only
 tensorflow
