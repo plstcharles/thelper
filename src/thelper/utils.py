@@ -499,7 +499,10 @@ def draw_classifs(images, labels_gt, labels_pred=None, labels_map=None):
                 ax.imshow(images[ax_idx], interpolation='nearest')
             else:
                 ax.imshow(images[ax_idx, ...], interpolation='nearest')
-            curr_label_gt = labels_map[labels_gt[ax_idx]] if labels_map else labels_gt[ax_idx]
+            if labels_gt is not None:
+                curr_label_gt = labels_map[labels_gt[ax_idx]] if labels_map else labels_gt[ax_idx]
+            else:
+                curr_label_gt = "<unknown>"
             if labels_pred is not None:
                 curr_label_pred = labels_map[labels_pred[ax_idx]] if labels_map else labels_pred[ax_idx]
                 xlabel = "GT={0}\nPred={1}".format(curr_label_gt, curr_label_pred)
@@ -512,15 +515,12 @@ def draw_classifs(images, labels_gt, labels_pred=None, labels_map=None):
     return fig
 
 
-def draw_sample(sample, pred=None, image_key="image", label_key="label", block=False):
+def draw_sample(sample, preds=None, image_key="image", label_key="label", block=False):
     """Draws and returns a figure of image samples using pyplot."""
     if not isinstance(sample, dict):
         raise AssertionError("expected dict-based sample")
-    if image_key not in sample or label_key not in sample:
-        if len(sample) == 2:
-            get_func_logger().warning("bad or missing image/label keys, will try to guess them for visualization")
-        else:
-            raise AssertionError("missing classification-related fields in sample dict, and dict is multi-elem")
+    if image_key not in sample and label_key not in sample and len(sample) == 2:
+        get_func_logger().warning("bad or missing image/label keys, will try to guess them for visualization")
         key1, key2 = sample.keys()
         if (isinstance(sample[key1], torch.Tensor) and sample[key1].dim() > 1) and \
            (isinstance(sample[key2], list) or (isinstance(sample[key2], torch.Tensor) and sample[key2].dim() == 1)):
@@ -529,22 +529,46 @@ def draw_sample(sample, pred=None, image_key="image", label_key="label", block=F
              (isinstance(sample[key1], list) or (isinstance(sample[key1], torch.Tensor) and sample[key1].dim() == 1)):
             image_key, label_key = key2, key1
         else:
-            raise AssertionError(
-                "missing classification-related fields in sample dict, and could not find proper default types")
-    labels = sample[label_key]
-    if not isinstance(labels, list) and not (isinstance(labels, torch.Tensor) and labels.dim() == 1):
-        raise AssertionError("expected classification labels to be in list or 1-d tensor format")
-    if isinstance(labels, torch.Tensor):
-        labels = labels.tolist()
-    # here we assume the sample's data has been tensor'd (so images are 4D, BxCxHxW)
+            raise AssertionError("missing classification-related fields in sample dict, and could not find proper default types")
+    if image_key not in sample:
+        raise AssertionError("images not available in sample via key '%s'" % image_key)
     images = sample[image_key]
+    if label_key not in sample:
+        labels = None
+    else:
+        labels = sample[label_key]
+        if not isinstance(labels, list) and not (isinstance(labels, torch.Tensor) and labels.dim() == 1):
+            raise AssertionError("expected classification labels to be in list or 1-d tensor format")
+        if isinstance(labels, torch.Tensor):
+            labels = labels.tolist()
+        if preds:
+            if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and preds.dim() == 1):
+                raise AssertionError("expected classification predictions to be in list or 1-d tensor format")
+            if isinstance(preds, torch.Tensor):
+                preds = preds.tolist()
+    # here we assume the sample's data has been tensor'd (so images are 4D, BxCxHxW)
+    if isinstance(images, list) and all([isinstance(t, torch.Tensor) for t in images]):
+        # if we have a list, it must be due to a duplicate/augmentation transformation stage
+        if not all([image.shape == images[0].shape for image in images]):
+            raise AssertionError("image shape mismatch throughout list")
+        images = torch.cat(images, 0)
+        if labels:
+            if not all([image.shape[0] == len(labels) for image in images]):
+                raise AssertionError("image count mistmatch with label count")
+            labels = labels * len(images)
+        if preds:
+            if not all([image.shape[0] == len(preds) for image in images]):
+                raise AssertionError("image count mistmatch with pred count")
+            preds = preds * len(images)
     if not isinstance(images, torch.Tensor):
         raise AssertionError("expected classification images to be in 4-d tensor format")
     images = images.numpy().copy()
     if images.ndim != 4:
         raise AssertionError("unexpected dimension count for input images tensor")
-    if images.shape[0] != len(labels):
+    if labels and images.shape[0] != len(labels):
         raise AssertionError("images/labels count mismatch")
+    if preds and images.shape[0] != len(preds):
+        raise AssertionError("images/predictions count mismatch")
     images = np.transpose(images, (0, 2, 3, 1))  # BxCxHxW to BxHxWxC
     masks = sample["mask"].numpy().copy() if "mask" in sample else None
     if masks is not None:
@@ -565,7 +589,7 @@ def draw_sample(sample, pred=None, image_key="image", label_key="label", block=F
         image_normalized = np.empty_like(image, dtype=np.uint8).copy()  # copy needed here due to ocv 3.3 bug
         cv.normalize(image, image_normalized, 0, 255, cv.NORM_MINMAX, dtype=cv.CV_8U)
         image_list.append(image_normalized)
-    fig = draw_classifs(image_list, labels, labels_pred=pred)  # normalize & pass mask to draw func also? todo
+    fig = draw_classifs(image_list, labels, labels_pred=preds)  # normalize & pass mask to draw func also? todo
     if block:
         plt.show(block=block)
     else:
