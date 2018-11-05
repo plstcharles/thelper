@@ -292,16 +292,7 @@ def load_datasets(config, data_root, base_transforms=None):
         else:
             task = None
             if "task" in dataset_config and dataset_config["task"]:
-                task_config = dataset_config["task"]
-                if "type" not in task_config:
-                    raise AssertionError("missing field 'type' in task config for instantiation of dataset '%s'" % dataset_name)
-                task_type = thelper.utils.import_class(task_config["type"])
-                if "params" not in task_config:
-                    raise AssertionError("missing field 'params' in task config for instantiation of dataset '%s'" % dataset_name)
-                task_params = thelper.utils.keyvals2dict(task_config["params"])
-                task = task_type(**task_params)
-                if not issubclass(task_type, thelper.tasks.Task):
-                    raise AssertionError("the task type for dataset '%s' must be derived from 'thelper.tasks.Task'" % dataset_name)
+                task = thelper.tasks.load_task(dataset_config["task"])
             # assume that __getitem__ and __len__ are implemented, but we need to make it sampling-ready
             dataset = ExternalDataset(dataset_name, data_root, dataset_type, task, config=params, transforms=transforms)
         if task is not None:
@@ -848,8 +839,8 @@ class ImageDataset(Dataset):
 
     This specialization is used to parse simple image folders, and it does not fulfill the requirements of the
     task constructor due to the lack of groundtruth data support. Therefore, it returns ``None`` when asked
-    for a task, and it thus cannot be used to directly train a model. It can however be useful when simply
-    visualizing, annotating, or evaluating data from a simple directory structure.
+    for a task, and it cannot be used to directly train a model. It can however be useful when simply visualizing,
+    annotating, or testing raw data from a simple directory structure.
 
     .. seealso::
         :class:`thelper.data.Dataset`

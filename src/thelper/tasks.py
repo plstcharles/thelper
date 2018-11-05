@@ -14,7 +14,26 @@ import os
 from abc import ABC
 from abc import abstractmethod
 
+import thelper.utils
+
 logger = logging.getLogger(__name__)
+
+
+def load_task(config):
+    """Parses a configuration dictionary and returns an instantiated task from it.
+
+    See :class:`thelper.tasks.Task` for more information.
+    """
+    if "type" not in config:
+        raise AssertionError("missing field 'type' in task config")
+    task_type = thelper.utils.import_class(config["type"])
+    if "params" not in config:
+        raise AssertionError("missing field 'params' in task config")
+    task_params = thelper.utils.keyvals2dict(config["params"])
+    task = task_type(**task_params)
+    if not issubclass(task_type, thelper.tasks.Task):
+        raise AssertionError("the task type must be derived from 'thelper.tasks.Task'")
+    return task
 
 
 class Task(ABC):
