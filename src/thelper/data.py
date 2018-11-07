@@ -442,7 +442,7 @@ class DataConfig(object):
                 self.train_sampler = thelper.utils.str2bool(sampler_config["apply_train"]) if "apply_train" in sampler_config else True
                 self.valid_sampler = thelper.utils.str2bool(sampler_config["apply_valid"]) if "apply_valid" in sampler_config else False
                 self.test_sampler = thelper.utils.str2bool(sampler_config["apply_test"]) if "apply_test" in sampler_config else False
-                logger.debug("global sampler will be applied to loaders: %s" % str([self.train_sampler, self.valid_sampler, self.test_sampler]))
+                logger.debug("global sampler will be applied to: %s" % str([self.train_sampler, self.valid_sampler, self.test_sampler]))
         train_augs_targets = ["augments", "trainvalid_augments", "train_augments"]
         valid_augs_targets = ["augments", "trainvalid_augments", "eval_augments", "validtest_augments", "valid_augments"]
         test_augs_targets = ["augments", "eval_augments", "validtest_augments", "test_augments"]
