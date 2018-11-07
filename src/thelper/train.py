@@ -242,19 +242,18 @@ class Trainer:
             self.test_metrics = {**self.test_metrics, **self._load_metrics(trainer_config["test_metrics"])}
         for metric_name, metric in self.test_metrics.items():
             logger.info("parsed test metric '%s' : %s" % (metric_name, str(metric)))
-        if "monitor" not in trainer_config or not trainer_config["monitor"]:
-            raise AssertionError("missing 'monitor' field for trainer config")
-        self.monitor = trainer_config["monitor"]
-        if self.monitor not in self.train_metrics:
-            raise AssertionError("monitored metric with name '%s' should be declared in config 'metrics' field" % self.monitor)
-        self.monitor_goal = self.train_metrics[self.monitor].goal()
-        self.monitor_best = None
-        if self.monitor_goal == thelper.optim.Metric.minimize:
-            self.monitor_best = thelper.optim.Metric.maximize
-        elif self.monitor_goal == thelper.optim.Metric.maximize:
-            self.monitor_best = thelper.optim.Metric.minimize
-        else:
-            raise AssertionError("monitored metric does not return proper optimization goal")
+        self.monitor, self.monitor_best = None, None
+        if "monitor" in trainer_config and trainer_config["monitor"]:
+            self.monitor = trainer_config["monitor"]
+            if self.monitor not in self.train_metrics:
+                raise AssertionError("monitored metric with name '%s' should be declared in config 'metrics' field" % self.monitor)
+            self.monitor_goal = self.train_metrics[self.monitor].goal()
+            if self.monitor_goal == thelper.optim.Metric.minimize:
+                self.monitor_best = thelper.optim.Metric.maximize
+            elif self.monitor_goal == thelper.optim.Metric.maximize:
+                self.monitor_best = thelper.optim.Metric.minimize
+            else:
+                raise AssertionError("monitored metric does not return proper optimization goal")
         train_logger_path = os.path.join(self.save_dir, "logs", "trainer.log")
         train_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         train_logger_fh = logging.FileHandler(train_logger_path)
@@ -553,7 +552,7 @@ class Trainer:
             new_best = False
             monitor_val = None
             for key, value in result.items():
-                if key == monitor_type_key:
+                if key == monitor_type_key and self.monitor is not None:
                     if self.monitor not in value:
                         raise AssertionError("not monitoring required variable '%s' in metrics" % self.monitor)
                     monitor_val = value[self.monitor]
@@ -566,10 +565,11 @@ class Trainer:
                 else:
                     for subkey, subvalue in value.items():
                         self.logger.debug(" epoch {} result =>  {}:{}: {}".format(epoch, str(key), str(subkey), subvalue))
-            if monitor_val is None:
-                raise AssertionError("training/validation did not produce required monitoring variable '%s'" % self.monitor)
+            if self.monitor is not None:
+                if monitor_val is None:
+                    raise AssertionError("training/validation did not produce required monitoring variable '%s'" % self.monitor)
+                self.logger.info("epoch %d, %s = %s  (best = %s)" % (epoch, self.monitor, monitor_val, self.monitor_best))
             self.outputs[epoch] = result
-            self.logger.info("epoch %d, %s = %s  (best = %s)" % (epoch, self.monitor, monitor_val, self.monitor_best))
             if new_best:
                 self.logger.info("(new best checkpoint)")
             if new_best or (epoch % self.save_freq) == 0:
@@ -862,16 +862,19 @@ class ImageClassifTrainer(Trainer):
                 meta = {key: sample[key] for key in self.meta_keys}
                 for metric in metrics.values():
                     metric.accumulate(pred.cpu(), label.cpu(), meta=meta)
+            if self.monitor is not None:
+                monitor_output = "{}: {:.2f}".format(self.monitor, metrics[self.monitor].eval())
+            else:
+                monitor_output = "(not monitoring)"
             self.logger.info(
-                "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}: {:.2f}".format(
+                "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   %s".format(
                     epoch,
                     iter,
                     sample_idx,
                     epoch_size,
                     (sample_idx / epoch_size) * 100.0,
                     loss.item(),
-                    self.monitor,
-                    metrics[self.monitor].eval()
+                    monitor_output
                 )
             )
             if writer and iter is not None:
@@ -926,13 +929,16 @@ class ImageClassifTrainer(Trainer):
                         meta = None
                     for metric in metrics.values():
                         metric.accumulate(pred.cpu(), label.cpu() if label is not None else None, meta=meta)
+                if self.monitor is not None:
+                    monitor_output = "{}: {:.2f}".format(self.monitor, metrics[self.monitor].eval())
+                else:
+                    monitor_output = "(not monitoring)"
                 self.logger.info(
-                    "eval epoch: {}   batch: {}/{} ({:.0f}%)   {}: {:.2f}".format(
+                    "eval epoch: {}   batch: {}/{} ({:.0f}%)   %s".format(
                         epoch,
                         idx,
                         epoch_size,
                         (idx / epoch_size) * 100.0,
-                        self.monitor,
-                        metrics[self.monitor].eval()
+                        monitor_output
                     )
                 )
