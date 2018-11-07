@@ -576,13 +576,16 @@ class DataConfig(object):
         must_split = any(must_split.values())
         if task is not None and isinstance(task, thelper.tasks.Classification) and not self.skip_class_balancing and must_split:
             # note: with current impl, all class sets will be shuffled the same way... (shouldnt matter, right?)
-            global_class_names = task.get_class_names()
-            logger.info("will split evenly over %d classes..." % len(global_class_names))
+            logger.debug("will split evenly over %d classes..." % len(task.get_class_names()))
+            unset_class_key = "<unset>"
+            global_class_names = task.get_class_names() + [unset_class_key]  # extra name added for unlabeled samples (if needed!)
             sample_maps = {}
             for dataset_name, dataset in datasets.items():
+                if not task.check_compat(dataset.get_task()):
+                    raise AssertionError("global task should already have been compatible with all datasets")
                 if isinstance(dataset, thelper.data.ExternalDataset):
                     if hasattr(dataset.samples, "samples") and isinstance(dataset.samples.samples, list):
-                        sample_maps[dataset_name] = task.get_class_sample_map(dataset.samples.samples)
+                        sample_maps[dataset_name] = task.get_class_sample_map(dataset.samples.samples, unset_class_key)
                     else:
                         logger.warning(("must fully parse the external dataset '%s' for intra-class shuffling;" % dataset_name) +
                                        " this might take a while! (consider making a dataset interface that can return labels only)")
@@ -592,9 +595,9 @@ class DataConfig(object):
                             if label_key not in sample:
                                 raise AssertionError("could not find label key ('%s') in sample dict" % label_key)
                             samples.append({label_key: sample[label_key]})
-                        sample_maps[dataset_name] = task.get_class_sample_map(samples)
+                        sample_maps[dataset_name] = task.get_class_sample_map(samples, unset_class_key)
                 elif isinstance(dataset, thelper.data.Dataset):
-                    sample_maps[dataset_name] = task.get_class_sample_map(dataset.samples)
+                    sample_maps[dataset_name] = task.get_class_sample_map(dataset.samples, unset_class_key)
             train_idxs, valid_idxs, test_idxs = {}, {}, {}
             for class_name in global_class_names:
                 curr_class_samples, curr_class_size = {}, {}
