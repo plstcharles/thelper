@@ -733,7 +733,7 @@ class RandomResizedCrop(object):
                 target_col = np.random.randint(min(0, image_width - target_width), max(0, image_width - target_width) + 1)
                 target_row = np.random.randint(min(0, image_height - target_height), max(0, image_height - target_height) + 1)
                 break
-        if image_height is None or image_width is None:
+        if target_row is None or target_col is None:
             # fallback, use centered crop
             target_width = target_height = min(sample.shape[0], sample.shape[1])
             target_col = (sample.shape[1] - target_width) // 2
