@@ -292,10 +292,11 @@ class Classification(Task):
         if isinstance(other, Classification):
             if self.get_input_key() != other.get_input_key():
                 raise AssertionError("input key mismatch, cannot create compatible task")
-            if self.get_gt_key() is not None and other.get_gt_key() is not None and self.get_gt_key() != other.get_input_key():
+            if self.get_gt_key() is not None and other.get_gt_key() is not None and self.get_gt_key() != other.get_gt_key():
                 raise AssertionError("gt key mismatch, cannot create compatible task")
             meta_keys = list(set(self.get_meta_keys() + other.get_meta_keys()))
-            class_names = list(set(self.get_class_names() + other.get_class_names()))
+            # cannot use set for class names, order needs to stay intact!
+            class_names = self.get_class_names() + [name for name in other.get_class_names() if name not in self.get_class_names()]
             return Classification(class_names, self.get_input_key(), self.get_gt_key(), meta_keys)
         elif type(other) == Task:
             if not self.check_compat(other):
