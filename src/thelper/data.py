@@ -2,7 +2,7 @@
 
 This module contains classes and functions whose role is to fetch the data required to train, validate,
 and test a model. The :func:`thelper.data.load` function contained herein is responsible for preparing
-the data loaders and the task interface for a training session based on a provided configuration.
+the task and data loaders for a training session.
 """
 
 import copy
@@ -31,12 +31,12 @@ logger = logging.getLogger(__name__)
 
 
 def load(config, data_root, save_dir=None):
-    """Prepares the task interface and the data loaders based on a provided data configuration.
+    """Prepares the task and data loaders for a model trainer based on a provided data configuration.
 
     This function will parse a configuration dictionary and extract all the information required to
     instantiate the requested dataset parsers. Then, combining the task metadata of all these parsers, it
     will evenly split the available samples into three sets (training, validation, test) to be handled by
-    different data loaders. These will finally be returned along with the task interface (if available).
+    different data loaders. These will finally be returned along with the task object.
 
     The configuration dictionary is expected to contain two fields: ``data_config``, which includes
     information about the dataset split, shuffling seeds, and batch size; and ``datasets``, which lists
@@ -85,7 +85,6 @@ def load(config, data_root, save_dir=None):
         "datasets": {
             "dataset_A": {
                 # type of dataset interface to instantiate
-                # (note: must be derived from 'thelper.data.Dataset')
                 "type": "...",
                 "params": [
                     # ...
@@ -93,11 +92,18 @@ def load(config, data_root, save_dir=None):
             },
             "dataset_B": {
                 # type of dataset interface to instantiate
-                # (note: must be derived from 'thelper.data.Dataset')
                 "type": "...",
                 "params": [
                     # ...
-                ]
+                ],
+                # if it does not derive from 'thelper.data.Dataset', a task is needed:
+                "task": {
+                    # this type must derive from 'thelper.tasks.Task'
+                    "type": "...",
+                    "params": [
+                        # ...
+                    ]
+                }
             },
             # ...
         },
@@ -114,8 +120,8 @@ def load(config, data_root, save_dir=None):
             other session directories.
 
     Returns:
-        A 4-element tuple that contains the global task object to specialize models (can be ``None``),
-        as well as the training, validation, and test data loaders (respectively).
+        A 4-element tuple that contains: 1) the global task object to specialize models and trainers with;
+        2) the training data loader; 3) the validation data loader; and 4) the test data loader.
 
     .. seealso::
         :class:`thelper.data.DataConfig`
@@ -141,7 +147,7 @@ def load(config, data_root, save_dir=None):
     if "data_config" not in config or not config["data_config"]:
         raise AssertionError("config missing 'data_config' field")
     data_config = thelper.data.DataConfig(config["data_config"])
-    logger.info("parsing datasets configuration")
+    logger.debug("parsing datasets configuration")
     if "datasets" not in config or not config["datasets"]:
         raise AssertionError("config missing 'datasets' field (can be dict or str)")
     datasets_config = config["datasets"]
@@ -239,13 +245,15 @@ def load_datasets(config, data_root, base_transforms=None):
     """Instantiates dataset parsers based on a provided dictionary.
 
     This function will instantiate dataset parsers as defined in a name-type-param dictionary. If multiple
-    datasets are instantiated, this function will also verify their task compatibility and return the combined
-    output task (if necessary). The dataset interfaces themselves should be derived from
-    :class:`thelper.data.Dataset`, or be compatible with :class:`thelper.data.ExternalDataset`.
+    datasets are instantiated, this function will also verify their task compatibility and return the global
+    task. The dataset interfaces themselves should be derived from :class:`thelper.data.Dataset`, be
+    compatible with :class:`thelper.data.ExternalDataset`, or should provide a 'task' field specifying all the
+    information related to sample dictionary keys and model i/o. See the example in :func:`thelper.data.load`
+    for more information.
 
     The keys in ``config`` are treated as unique dataset names and are used for lookups (e.g. for splitting
     in :class:`thelper.data.DataConfig`). The value associated to each key (or dataset name) should be a
-    type-params dictionary as shown in the example of :func:`thelper.data.load`.
+    type-params dictionary that can be parsed to instantiate the dataset interface.
 
     Args:
         config: a dictionary that provides unique dataset names and parameters needed for instantiation.
@@ -256,13 +264,14 @@ def load_datasets(config, data_root, base_transforms=None):
             will be provided to the constructor of all instantiated dataset parsers.
 
     Returns:
-        A 2-element tuple that contains the list of dataset interfaces/parsers and a task object compatible
-        with all of those.
+        A 2-element tuple that contains: 1) the list of dataset interfaces/parsers that were instantiated; and
+        2) a task object compatible with all of those (see :class:`thelper.tasks.Task` for more information).
 
     .. seealso::
         :func:`thelper.data.load`
         :class:`thelper.data.Dataset`
         :class:`thelper.data.ExternalDataset`
+        :class:`thelper.tasks.Task`
     """
     datasets = {}
     tasks = []
@@ -332,10 +341,16 @@ class DataConfig(object):
     - ``sampler`` (optional): specifies a type of sampler and its constructor parameters to be used
       in the data loaders. This can be used for example to help rebalance a dataset based on its
       class distribution. See :class:`thelper.samplers.WeightedSubsetRandomSampler` for more info.
+    - ``augments`` (optional): provides a list of transformation operations used to augment all samples
+      of a dataset. See :func:`thelper.transforms.load_augments` for more info.
     - ``train_augments`` (optional): provides a list of transformation operations used to augment the
       training samples of a dataset. See :func:`thelper.transforms.load_augments` for more info.
+    - ``valid_augments`` (optional): provides a list of transformation operations used to augment the
+      validation samples of a dataset. See :func:`thelper.transforms.load_augments` for more info.
+    - ``test_augments`` (optional): provides a list of transformation operations used to augment the
+      test samples of a dataset. See :func:`thelper.transforms.load_augments` for more info.
     - ``eval_augments`` (optional): provides a list of transformation operations used to augment the
-      validation/test samples of a dataset. See :func:`thelper.transforms.load_augments` for more info.
+      validation and test samples of a dataset. See :func:`thelper.transforms.load_augments` for more info.
     - ``base_transforms`` (optional): provides a list of transformation operations to apply to all
       loaded samples. This list will be passed to the constructor of all instantiated dataset parsers.
       See :func:`thelper.transforms.load_transforms` for more info.
@@ -722,7 +737,7 @@ class Dataset(torch.utils.data.Dataset, ABC):
 
     This interface helps fix a failure of PyTorch's dataset interface (``torch.utils.data.Dataset``):
     the lack of identity associated with the components of a sample. In short, a data sample loaded by a
-    dataset typically contains the input data that should be forwarded to a model and the expected
+    dataset typically contains the input data that should be forwarded to a model as well as the expected
     prediction of the model (i.e. the 'groundtruth') that will be used to compute the loss. These two
     elements are typically loaded and paired in a tuple that can then be provided to the data loader for
     batching. Problems however arise when the model has multiple inputs or outputs, when the sample needs
@@ -809,7 +824,7 @@ class Dataset(torch.utils.data.Dataset, ABC):
 
     @abstractmethod
     def get_task(self):
-        """Returns the dataset task object that provides the input/output keys for sample dictionaries."""
+        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
         raise NotImplementedError
 
     def __repr__(self):
@@ -820,10 +835,11 @@ class Dataset(torch.utils.data.Dataset, ABC):
 class ImageDataset(Dataset):
     """Image dataset specialization interface.
 
-    This specialization is used to parse simple image folders, and it does not fulfill the requirements of the
-    task constructor due to the lack of groundtruth data support. Therefore, it returns ``None`` when asked
-    for a task, and it cannot be used to directly train a model. It can however be useful when simply visualizing,
-    annotating, or testing raw data from a simple directory structure.
+    This specialization is used to parse simple image folders, and it does not fulfill the requirements of any
+    specialized task constructors due to the lack of groundtruth data support. Therefore, it returns a basic task
+    object (:class:`thelper.tasks.Task`) with no set value for the groundtruth key, and it cannot be used to
+    directly train a model. It can however be useful when simply visualizing, annotating, or testing raw data
+    from a simple directory structure.
 
     .. seealso::
         :class:`thelper.data.Dataset`
@@ -861,23 +877,26 @@ class ImageDataset(Dataset):
         image = cv.imread(image_path)
         if image is None:
             raise AssertionError("invalid image at '%s'" % image_path)
+        if self.transforms:
+            image = self.transforms(image)
         return {
             self.path_key: self.samples[idx][self.path_key],
-            self.image_key: image
+            self.image_key: image,
+            self.idx_key: idx
         }
 
     def get_task(self):
-        """Returns ``None``, as this specialized interface does not provide support to read groundtruth data."""
-        return None
+        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
+        return self.task
 
 
 class ClassificationDataset(Dataset):
     """Classification dataset specialization interface.
 
     This specialization receives some extra parameters in its constructor and automatically defines
-    the dataset task (sample classification) based on those. The derived class must still implement
-    :func:`thelper.data.ClassificationDataset.__getitem__`, and it must still store its samples as
-    dictionaries in ``self.samples``.
+    its task (:class:`thelper.tasks.Classification`) based on those. The derived class must still
+    implement :func:`thelper.data.ClassificationDataset.__getitem__`, and it must still store its
+    samples as dictionaries in ``self.samples`` to obtain a proper implementation behavior.
 
     Attributes:
         task: classification task object containing the key information passed in the constructor.
@@ -920,7 +939,7 @@ class ClassificationDataset(Dataset):
         raise NotImplementedError
 
     def get_task(self):
-        """Returns the classification task object that provides the input/output keys for sample dictionaries."""
+        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
         return self.task
 
 
@@ -1027,5 +1046,5 @@ class ExternalDataset(Dataset):
         return out_sample
 
     def get_task(self):
-        """Returns the task object that provides the input/output keys for sample dictionaries."""
+        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
         return self.task
