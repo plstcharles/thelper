@@ -40,13 +40,13 @@ For the latter case, call the following from your terminal::
 Then, simply activate your environment and install the thelper package within it::
 
   $ conda activate thelper
-  $ pip install <THELPER_ROOT> --no-deps
+  $ pip install -e <THELPER_ROOT> --no-deps
 
-On the other hand, although it is not recommended since it tends to break PyTorch, you can install the dependencies
+On the other hand, although it is *not* recommended since it tends to break PyTorch, you can install the dependencies
 directly through pip::
 
   $ pip install -r <THELPER_ROOT>/requirements.txt
-  $ pip install <THELPER_ROOT> --no-deps
+  $ pip install -e <THELPER_ROOT> --no-deps
 
 
 Testing the installation

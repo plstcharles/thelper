@@ -119,7 +119,7 @@ clean-test:
 lint: conda-env
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 		test -f $(CONDA_ENV_PATH)/bin/flake8 || pip install flake8; \
-		flake8 src tests"
+		flake8 thelper tests"
 
 .PHONY: test
 test:
@@ -133,7 +133,7 @@ test-all:
 
 .PHONY: coverage
 coverage:
-	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); coverage run --source src/thelper setup.py test"
+	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); coverage run --source thelper setup.py test"
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); coverage report -m"
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); coverage html -d coverage"
 	$(BROWSER) coverage/index.html

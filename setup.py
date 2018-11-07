@@ -59,9 +59,7 @@ setuptools.setup(
     author="Pierre-Luc St-Charles",
     author_email="stcharpl@crim.ca",
     url="https://github.com/plstcharles/thelper",
-    packages=setuptools.find_packages("src"),
-    package_dir={"": "src"},
-    py_modules=[os.path.splitext(os.path.basename(path))[0] for path in glob.glob("src/*.py")],
+    packages=setuptools.find_packages(),
     include_package_data=True,
     zip_safe=False,
     classifiers=[

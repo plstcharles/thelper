@@ -1,5 +1,5 @@
 graft docs
-graft src
+graft thelper
 graft ci
 graft tests
 graft configs
