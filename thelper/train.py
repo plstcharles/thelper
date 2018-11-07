@@ -503,7 +503,6 @@ class Trainer:
             raise AssertionError("missing training data, invalid loader!")
         self.logger.debug("uploading model to '%s'..." % str(self.devices))
         model = self._upload_model(self.model, self.devices)
-        self.logger.debug("loading optimizer...")
         self.loss, self.optimizer, self.scheduler = self._load_optimization(model)
         if self.optimizer_state is not None:
             self.optimizer.load_state_dict(self.optimizer_state)
@@ -514,11 +513,11 @@ class Trainer:
         start_epoch = self.current_epoch + 1
         train_writer, valid_writer, test_writer = None, None, None
         for epoch in range(start_epoch, self.epochs + 1):
-            self.logger.debug("launching training epoch %d for '%s' (dev=%s)" % (epoch, self.name, str(self.devices)))
+            self.logger.info("launching training epoch %d for '%s' (dev=%s)" % (epoch, self.name, str(self.devices)))
             if self.scheduler:
                 self.scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
                 self.current_lr = self.scheduler.get_lr()[0]  # for debug/display purposes only
-                self.logger.info("learning rate at %.8f" % self.current_lr)
+                self.logger.debug("learning rate at %.8f" % self.current_lr)
             model.train()
             if self.use_tbx and not train_writer:
                 train_writer = self.tbx.SummaryWriter(log_dir=self.train_writer_path, comment=self.name)
@@ -867,7 +866,7 @@ class ImageClassifTrainer(Trainer):
             else:
                 monitor_output = "(not monitoring)"
             self.logger.info(
-                "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   %s".format(
+                "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}".format(
                     epoch,
                     iter,
                     sample_idx,
@@ -934,7 +933,7 @@ class ImageClassifTrainer(Trainer):
                 else:
                     monitor_output = "(not monitoring)"
                 self.logger.info(
-                    "eval epoch: {}   batch: {}/{} ({:.0f}%)   %s".format(
+                    "eval epoch: {}   batch: {}/{} ({:.0f}%)   {}".format(
                         epoch,
                         idx,
                         epoch_size,
