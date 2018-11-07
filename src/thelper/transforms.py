@@ -1233,7 +1233,7 @@ class Tile(object):
         if not isinstance(tile_overlap, float) or tile_overlap < 0 or tile_overlap >= 1:
             raise AssertionError("invalid tile overlap (should be float in [0,1[)")
         self.tile_overlap = tile_overlap
-        if not isinstance(min_mask_iou, float) or min_mask_iou < 0 or tile_overlap > 1:
+        if not isinstance(min_mask_iou, float) or min_mask_iou < 0 or min_mask_iou > 1:
             raise AssertionError("invalid minimum mask IoU score (should be float in [0,1])")
         self.min_mask_iou = min_mask_iou
         self.offset_overlap = offset_overlap
