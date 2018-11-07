@@ -618,11 +618,12 @@ class RandomResizedCrop(object):
             applied, the returned image will be the original.
         random_attempts: the number of random sampling attempts to try before reverting to center
             or most-probably-valid crop generation.
+        min_mask_iou: minimum mask intersection over union (IoU) required for accepting a tile (in [0,1]).
         flags: interpolation flag forwarded to ``cv2.resize``.
     """
 
-    def __init__(self, output_size, input_size=(0.08, 1.0), ratio=(0.75, 1.33),
-                 probability=1.0, random_attempts=10, flags=cv.INTER_LINEAR):
+    def __init__(self, output_size, input_size=(0.08, 1.0), ratio=(0.75, 1.33), probability=1.0,
+                 random_attempts=10, min_mask_iou=1.0, flags=cv.INTER_LINEAR):
         """Validates and initializes center crop parameters.
 
         Args:
@@ -644,6 +645,7 @@ class RandomResizedCrop(object):
                 applied, the returned image will be the original.
             random_attempts: the number of random sampling attempts to try before reverting to center
                 or most-probably-valid crop generation.
+            min_mask_iou: minimum mask intersection over union (IoU) required for producing a tile.
             flags: interpolation flag forwarded to ``cv2.resize``.
         """
         if isinstance(output_size, (tuple, list)):
@@ -696,22 +698,35 @@ class RandomResizedCrop(object):
         if random_attempts <= 0:
             raise AssertionError("invalid random_attempts value (should be > 0)")
         self.random_attempts = random_attempts
+        if not isinstance(min_mask_iou, float) or min_mask_iou < 0 or min_mask_iou > 1:
+            raise AssertionError("invalid minimum mask IoU score (should be float in [0,1])")
+        self.min_mask_iou = min_mask_iou
         self.flags = thelper.utils.import_class(flags) if isinstance(flags, str) else flags
+        self.warned_no_crop_found_with_mask = False
 
-    def __call__(self, sample):
+    def __call__(self, image, mask=None):
         """Extracts and returns a random (resized) crop from the provided image.
 
         Args:
-            sample: the image to generate the crop from; should be a 2d or 3d numpy array.
+            image: the image to generate the crop from. If given as a 2-element list, it is assumed to contain
+                both the image and the mask (passed through a composer).
+            mask: the mask to check tile intersections with (may be ``None``).
 
         Returns:
             The randomly selected and resized crop.
         """
-        if isinstance(sample, PIL.Image.Image):
-            sample = np.asarray(sample)
+        if isinstance(image, list) and len(image) == 2:
+            if mask is not None:
+                raise AssertionError("mask provided twice")
+            # we assume that the mask was given as the 2nd element of the list
+            image, mask = image[0], image[1]
+        if isinstance(image, PIL.Image.Image):
+            image = np.asarray(image)
+        elif not isinstance(image, np.ndarray):
+            raise AssertionError("image type should be np.ndarray")
         if self.probability < 1 and np.random.uniform(0, 1) > self.probability:
-            return sample
-        image_height, image_width = sample.shape[0], sample.shape[1]
+            return image
+        image_height, image_width = image.shape[0], image.shape[1]
         target_height, target_width = None, None
         target_row, target_col = None, None
         for attempt in range(self.random_attempts):
@@ -739,23 +754,30 @@ class RandomResizedCrop(object):
             if target_width <= image_width and target_height <= image_height:
                 target_col = np.random.randint(min(0, image_width - target_width), max(0, image_width - target_width) + 1)
                 target_row = np.random.randint(min(0, image_height - target_height), max(0, image_height - target_height) + 1)
-                break
+                if mask is None:
+                    break
+                roi = thelper.utils.safe_crop(mask, (target_col, target_row), (target_col + target_width, target_row + target_height))
+                if np.count_nonzero(roi) >= target_width * target_height * self.min_mask_iou:
+                    break
         if target_row is None or target_col is None:
             # fallback, use centered crop
-            target_width = target_height = min(sample.shape[0], sample.shape[1])
-            target_col = (sample.shape[1] - target_width) // 2
-            target_row = (sample.shape[0] - target_height) // 2
-        crop = thelper.utils.safe_crop(sample, (target_col, target_row), (target_col + target_width, target_row + target_height))
+            target_width = target_height = min(image.shape[0], image.shape[1])
+            target_col = (image.shape[1] - target_width) // 2
+            target_row = (image.shape[0] - target_height) // 2
+            if mask is not None and not self.warned_no_crop_found_with_mask:
+                logger.warning("random resized crop failing to find proper ROI matches after max attempt count")
+                self.warned_no_crop_found_with_mask = True
+        crop = thelper.utils.safe_crop(image, (target_col, target_row), (target_col + target_width, target_row + target_height))
         if isinstance(self.output_size[0], float):
-            output_width = int(round(self.output_size[0] * sample.shape[1]))
-            output_height = int(round(self.output_size[1] * sample.shape[0]))
+            output_width = int(round(self.output_size[0] * image.shape[1]))
+            output_height = int(round(self.output_size[1] * image.shape[0]))
             return cv.resize(crop, (output_width, output_height), interpolation=self.flags)
         elif isinstance(self.output_size[0], int):
             return cv.resize(crop, (self.output_size[0], self.output_size[1]), interpolation=self.flags)
         else:
             raise AssertionError("unhandled crop strategy")
 
-    def invert(self, sample):
+    def invert(self, image):
         """Specifies that this operation cannot be inverted, as data loss is incurred during image transformation."""
         raise AssertionError("cannot be inverted")
 
