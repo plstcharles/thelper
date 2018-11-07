@@ -387,39 +387,12 @@ class DataConfig(object):
         if self.shuffle:
             logger.debug("dataset samples will be shuffled according to predefined seeds")
             np.random.seed()  # for seed generation below (if needed); will be reseeded afterwards
-        self.valid_seed, self.test_seed, self.torch_seed, self.numpy_seed = None, None, None, None
-        if "test_seed" in config or "test_split_seed" in config:
-            key = "test_seed" if "test_seed" in config else "test_split_seed"
-            if not isinstance(config[key], (int, str)):
-                raise AssertionError("unexpected value type for field '%s'" % key)
-            self.test_seed = config[key]
-        elif self.shuffle:
-            self.test_seed = np.random.randint(2 ** 16)
-            logger.info("setting test split seed to %d" % self.test_seed)
-        if "valid_seed" in config or "valid_split_seed" in config:
-            key = "valid_seed" if "valid_seed" in config else "valid_split_seed"
-            if not isinstance(config[key], (int, str)):
-                raise AssertionError("unexpected value type for field '%s'" % key)
-            self.valid_seed = config[key]
-        elif self.shuffle:
-            self.valid_seed = np.random.randint(2 ** 16)
-            logger.info("setting valid split seed to %d" % self.valid_seed)
-        if "torch_seed" in config:
-            if not isinstance(config["torch_seed"], int):
-                raise AssertionError("unexpected value type for field 'torch_seed'")
-            self.torch_seed = config["torch_seed"]
-        else:
-            self.torch_seed = np.random.randint(2 ** 16)
-            logger.info("setting torch seed to %d" % self.torch_seed)
+        self.test_seed = self._get_seed(["test_seed", "test_split_seed"], config, (int, str))
+        self.valid_seed = self._get_seed(["valid_seed", "valid_split_seed"], config, (int, str))
+        self.torch_seed = self._get_seed(["torch_seed"], config, int)
+        self.numpy_seed = self._get_seed(["numpy_seed"], config, int)
         torch.manual_seed(self.torch_seed)
         torch.cuda.manual_seed_all(self.torch_seed)
-        if "numpy_seed" in config:
-            if not isinstance(config["numpy_seed"], int):
-                raise AssertionError("unexpected value type for field 'numpy_seed'")
-            self.numpy_seed = config["numpy_seed"]
-        else:
-            self.numpy_seed = np.random.randint(2 ** 16)
-            logger.info("setting numpy seed to %d" % self.numpy_seed)
         np.random.seed(self.numpy_seed)
         self.workers = config["workers"] if "workers" in config and config["workers"] >= 0 else 1
         self.pin_memory = thelper.utils.str2bool(config["pin_memory"]) if "pin_memory" in config else False
@@ -480,6 +453,21 @@ class DataConfig(object):
                     if name in self.test_split:
                         self.test_split[name] /= usage
         self.skip_verif = thelper.utils.str2bool(config["skip_verif"]) if "skip_verif" in config else True
+
+    @staticmethod
+    def _get_seed(prefixes, config, stype):
+        key = None
+        for prefix in prefixes:
+            if prefix in config:
+                key = prefix
+                break
+        if key is not None:
+            if not isinstance(config[key], stype):
+                raise AssertionError("unexpected value type for field '%s'" % key)
+            return config[key]
+        seed = np.random.randint(2 ** 16)
+        logger.info("setting '%s' to %d" % (key, seed))
+        return seed
 
     @staticmethod
     def _get_ratios_split(prefix, config):
