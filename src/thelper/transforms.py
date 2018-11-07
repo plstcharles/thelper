@@ -1244,12 +1244,18 @@ class Tile(object):
         """Extracts and returns a list of tiles cut out from the given image.
 
         Args:
-            image: the image to cut into tiles.
+            image: the image to cut into tiles. If given as a 2-element list, it is assumed to contain both
+                the image and the mask (passed through a composer).
             mask: the mask to check tile intersections with (may be ``None``).
 
         Returns:
             A list of tiles (numpy-compatible images).
         """
+        if isinstance(image, list) and len(image) == 2:
+            if mask is not None:
+                raise AssertionError("mask provided twice")
+            # we assume that the mask was given as the 2nd element of the list
+            image, mask = image[0], image[1]
         tile_rects, tile_images = self._get_tile_rects(image, mask), []
         for rect in tile_rects:
             tile_images.append(thelper.utils.safe_crop(image, (rect[0], rect[1]),
@@ -1261,19 +1267,30 @@ class Tile(object):
         """Returns the number of tiles that would be cut out from the given image.
 
         Args:
-            image: the image to cut into tiles.
+            image: the image to cut into tiles. If given as a 2-element list, it is assumed to contain both
+                the image and the mask (passed through a composer).
             mask: the mask to check tile intersections with (may be ``None``).
 
         Returns:
             The number of tiles that would be cut with :func:`thelper.transforms.Tile.__call__`.
         """
+        if isinstance(image, list) and len(image) == 2:
+            if mask is not None:
+                raise AssertionError("mask provided twice")
+            # we assume that the mask was given as the 2nd element of the list
+            image, mask = image[0], image[1]
         return len(self._get_tile_rects(image, mask))
 
     def _get_tile_rects(self, image, mask=None):
         if isinstance(image, PIL.Image.Image):
             image = np.asarray(image)
-        if mask is not None and isinstance(mask, PIL.Image.Image):
-            mask = np.asarray(mask)
+        elif not isinstance(image, np.ndarray):
+            raise AssertionError("image type should be np.ndarray")
+        if mask is not None:
+            if isinstance(mask, PIL.Image.Image):
+                mask = np.asarray(mask)
+            elif not isinstance(mask, np.ndarray):
+                raise AssertionError("mask type should be np.ndarray")
         tile_rects = []
         height, width = image.shape[0], image.shape[1]
         if isinstance(self.tile_size[0], float):
