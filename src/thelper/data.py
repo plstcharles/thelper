@@ -154,20 +154,18 @@ def load(config, data_root, save_dir=None):
     if not isinstance(datasets_config, dict):
         raise AssertionError("invalid datasets config type")
     datasets, task = load_datasets(datasets_config, data_root, data_config.get_base_transforms())
+    if not datasets or task is None:
+        raise AssertionError("invalid dataset configuration (got empty list)")
     for dataset_name, dataset in datasets.items():
         logger.info("dataset '%s' info: %s" % (dataset_name, str(dataset)))
-    if task is not None:
-        logger.info("task info: %s" % str(task))
-    else:
-        logger.warning("could not fetch task interface while loading dataset")
+    logger.info("task info: %s" % str(task))
     logger.debug("splitting datasets and creating loaders...")
     train_idxs, valid_idxs, test_idxs = data_config.get_split(datasets, task)
     if save_dir is not None:
-        if task is not None:
-            with open(os.path.join(save_dir, "logs", "task.log"), "a+") as fd:
-                fd.write("session: %s-%s\n" % (session_name, logstamp))
-                fd.write("version: %s\n" % repover)
-                fd.write(str(task) + "\n")
+        with open(os.path.join(save_dir, "logs", "task.log"), "a+") as fd:
+            fd.write("session: %s-%s\n" % (session_name, logstamp))
+            fd.write("version: %s\n" % repover)
+            fd.write(str(task) + "\n")
         for dataset_name, dataset in datasets.items():
             dataset_log_file = os.path.join(save_dir, "logs", dataset_name + ".log")
             if not data_config.skip_verif and os.path.isfile(dataset_log_file):
@@ -268,7 +266,6 @@ def load_datasets(config, data_root, base_transforms=None):
     """
     datasets = {}
     tasks = []
-    global_class_names = None  # if remains none, task is unavailable or not classif-related
     for dataset_name, dataset_config in config.items():
         if "type" not in dataset_config:
             raise AssertionError("missing field 'type' for instantiation of dataset '%s'" % dataset_name)
@@ -287,35 +284,19 @@ def load_datasets(config, data_root, base_transforms=None):
             # assume that the dataset is derived from thelper.data.Dataset (it is fully sampling-ready)
             dataset = dataset_type(name=dataset_name, root=data_root, config=params, transforms=transforms)
             if "task" in dataset_config:
-                logger.warning("'task' field detected in dataset config; will be ignored, since interface should define it itself")
+                logger.warning("'task' field detected in dataset '%s' config; will be ignored (interface should provide it)" % dataset_name)
             task = dataset.get_task()
         else:
-            task = None
-            if "task" in dataset_config and dataset_config["task"]:
-                task = thelper.tasks.load_task(dataset_config["task"])
+            if "task" not in dataset_config or not dataset_config["task"]:
+                raise AssertionError("external dataset '%s' must define task interface in its configuration dict" % dataset_name)
+            task = thelper.tasks.load_task(dataset_config["task"])
             # assume that __getitem__ and __len__ are implemented, but we need to make it sampling-ready
             dataset = ExternalDataset(dataset_name, data_root, dataset_type, task, config=params, transforms=transforms)
-        if task is not None:
-            if len(tasks) > 0 and task != tasks[0]:
-                raise AssertionError("not all datasets have similar task, or sample input/gt keys differ")
-            if isinstance(task, thelper.tasks.Classification):
-                class_names = task.get_class_names()
-                if global_class_names is None:
-                    if len(datasets) > 0:
-                        raise AssertionError("cannot handle mixed classification and non-classification tasks in datasets")
-                    global_class_names = class_names
-                else:
-                    for class_name in class_names:
-                        if class_name not in global_class_names:
-                            global_class_names.append(class_name)
-            elif global_class_names is not None:
-                raise AssertionError("cannot handle mixed classification and non-classification tasks in datasets")
-            tasks.append(task)
+        if task is None:
+            raise AssertionError("parsed task interface should not be None anymore (old code doing something strange?)")
+        tasks.append(task)
         datasets[dataset_name] = dataset
-    if global_class_names is not None:
-        global_task = thelper.tasks.Classification(global_class_names, tasks[0].input_key, tasks[0].label_key, meta_keys=tasks[0].meta_keys)
-        return datasets, global_task
-    return datasets, tasks[0] if tasks else None
+    return datasets, thelper.tasks.get_global_task(tasks)
 
 
 class DataConfig(object):
@@ -632,7 +613,7 @@ class DataConfig(object):
                             idxs_dict_list[dataset_name] += class_idxs_dict_list[dataset_name]
                         else:
                             idxs_dict_list[dataset_name] = class_idxs_dict_list[dataset_name]
-        else:  # task is ``None`` or not classif-related, or no balancing to be done
+        else:  # no balancing to be done
             dataset_indices = {}
             for dataset_name in datasets:
                 # note: all indices paired with 'None' below as class is ignored; used for compatibility with code above
@@ -856,17 +837,19 @@ class ImageDataset(Dataset):
         if "root" in config and config["root"] and isinstance(config["root"], str):
             if root is not None:
                 logger.warning("root dir already specified in config; will ignore data root '%s'" % root)
-            root = config["root"]
-        if root is None or not os.path.isdir(root):
-            raise AssertionError("invalid input data root '%s'" % root)
+            self.root = config["root"]
+        if self.root is None or not os.path.isdir(self.root):
+            raise AssertionError("invalid input data root '%s'" % self.root)
         self.image_key = thelper.utils.get_key_def("image_key", config, "image")
         self.path_key = thelper.utils.get_key_def("path_key", config, "path")
+        self.idx_key = thelper.utils.get_key_def("idx_key", config, "idx")
         self.samples = []
-        for folder, subfolder, files in os.walk(root):
+        for folder, subfolder, files in os.walk(self.root):
             for file in files:
                 ext = os.path.splitext(file)[1].lower()
                 if ext in [".jpg", ".jpeg", ".bmp", ".png", ".ppm", ".pgm", ".tif"]:
                     self.samples.append({self.path_key: os.path.join(folder, file)})
+        self.task = thelper.tasks.Task(self.image_key, None, [self.path_key, self.idx_key])
 
     def __getitem__(self, idx):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
@@ -985,8 +968,8 @@ class ExternalDataset(Dataset):
         logger.info("instantiating external dataset '%s'..." % name)
         if not dataset_type or not hasattr(dataset_type, "__getitem__") or not hasattr(dataset_type, "__len__"):
             raise AssertionError("external dataset type must implement '__getitem__' and '__len__' methods")
-        if task is not None and not issubclass(type(task), thelper.tasks.Task):
-            raise AssertionError("task type must be derived from 'thelper.tasks.Task' class")
+        if task is None or not isinstance(task, thelper.tasks.Task):
+            raise AssertionError("task type must derive from thelper.tasks.Task")
         self.dataset_type = dataset_type
         self.task = task
         self.samples = dataset_type(**config)
