@@ -138,14 +138,14 @@ class Metric(ABC):
     """Abstract metric interface.
 
     This interface defines basic functions required so that :class:`thelper.train.Trainer` can figure
-    out how to instantiate, update, reset, and optimize a given metric while training a model.
+    out how to instantiate, update, reset, and optimize a given metric while training/evaluating a model.
 
     Not all metrics are required to be 'optimizable'; in other words, they do not always need to
     return a scalar value and define a goal. For example, a class can derive from this interface
-    and simply accumulate predictions to produce a ROC graph. In such cases, the class would simply
-    need to override the ``goal`` method to return ``None``. Then, the trainer would still update
-    the object periodically with predictions, but it will not try to monitor the output of its
-    ``eval`` function.
+    and simply accumulate predictions to log them or to produce a graph. In such cases, the class
+    would simply need to override the ``goal`` method to return ``None``. Then, the trainer would
+    still update the object periodically with predictions, but it will not try to monitor the output
+    of its ``eval`` function.
     """
 
     minimize = float("-inf")
@@ -165,7 +165,7 @@ class Metric(ABC):
 
         Args:
             pred: model prediction tensor forwarded by the trainer.
-            gt: groundtruth tensor forwarded by the trainer.
+            gt: groundtruth tensor forwarded by the trainer (can be ``None`` if unavailable).
             meta: metadata tensors forwarded by the trainer.
         """
         raise NotImplementedError
@@ -294,9 +294,11 @@ class CategoryAccuracy(Metric):
 
         Args:
             pred: model class predictions forwarded by the trainer.
-            gt: groundtruth labels forwarded by the trainer.
+            gt: groundtruth labels forwarded by the trainer (can be ``None`` if unavailable).
             meta: metadata forwarded by the trainer (unused).
         """
+        if gt is None:
+            return  # only accumulating results when groundtruth available
         top_k = pred.topk(self.top_k, 1)[1]
         true_k = gt.view(len(gt), 1).expand_as(top_k)
         self.correct.append(top_k.eq(true_k).float().sum().item())
@@ -400,9 +402,11 @@ class BinaryAccuracy(Metric):
 
         Args:
             pred: model class predictions forwarded by the trainer.
-            gt: groundtruth labels forwarded by the trainer.
+            gt: groundtruth labels forwarded by the trainer (can be ``None`` if unavailable).
             meta: metadata forwarded by the trainer (unused).
         """
+        if gt is None:
+            return  # only accumulating results when groundtruth available
         pred = pred.topk(1, 1)[1].view(len(gt))
         if pred.size() != gt.size():
             raise AssertionError("pred and gt should have similar size")
@@ -616,10 +620,12 @@ class ExternalMetric(Metric):
 
         Args:
             pred: model prediction tensor forwarded by the trainer.
-            gt: groundtruth tensor forwarded by the trainer.
+            gt: groundtruth tensor forwarded by the trainer (can be ``None`` if unavailable).
             meta: metadata tensors forwarded by the trainer.
         """
         if "classif" in self.metric_type:
+            if gt is None:
+                return  # only accumulating results when groundtruth available
             if self.target_name is not None and self.target_idx is None:
                 raise AssertionError("could not map target name '%s' to target idx, missing class list" % self.target_name)
             elif self.target_idx is not None:
@@ -769,9 +775,11 @@ class ClassifReport(Metric):
 
         Args:
             pred: model class predictions forwarded by the trainer (in ``torch.Tensor`` format).
-            gt: groundtruth labels forwarded by the trainer (in ``torch.Tensor`` format).
+            gt: groundtruth labels forwarded by the trainer (can be ``None`` if unavailable).
             meta: metadata forwarded by the trainer (unused).
         """
+        if gt is None:
+            return  # only accumulating results when groundtruth available
         if self.pred is None:
             self.pred = pred.topk(1, 1)[1].view(len(gt))
             self.gt = gt.view(len(gt)).clone()
@@ -781,6 +789,8 @@ class ClassifReport(Metric):
 
     def eval(self):
         """Returns the classification report as a multi-line print-friendly string."""
+        if self.pred is None:
+            return "<UNAVAILABLE>"
         return self.report(self.gt.numpy(), self.pred.numpy(), self.class_names)
 
     def reset(self):
@@ -871,9 +881,11 @@ class ConfusionMatrix(Metric):
 
         Args:
             pred: model class predictions forwarded by the trainer (in ``torch.Tensor`` format).
-            gt: groundtruth labels forwarded by the trainer (in ``torch.Tensor`` format).
+            gt: groundtruth labels forwarded by the trainer (can be ``None`` if unavailable).
             meta: metadata forwarded by the trainer (unused).
         """
+        if gt is None:
+            return  # only accumulating results when groundtruth available
         if self.pred is None:
             self.pred = pred.topk(1, 1)[1].view(len(gt))
             self.gt = gt.view(len(gt)).clone()
@@ -883,6 +895,8 @@ class ConfusionMatrix(Metric):
 
     def eval(self):
         """Returns the confusion matrix as a multi-line print-friendly string."""
+        if self.pred is None:
+            return "<UNAVAILABLE>"
         confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_names)
         if self.class_names:
             return "\n" + thelper.utils.stringify_confmat(confmat, self.class_names)
@@ -891,6 +905,8 @@ class ConfusionMatrix(Metric):
 
     def get_tbx_image(self):
         """Returns the confusion matrix as a numpy-compatible RGBA image drawn by pyplot."""
+        if self.pred is None:
+            return None
         confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_names)
         if self.class_names:
             fig = thelper.utils.draw_confmat(confmat, self.class_names)
@@ -1090,9 +1106,11 @@ class ROCCurve(Metric):
 
         Args:
             pred: class prediction scores forwarded by the trainer.
-            gt: groundtruth label indices forwarded by the trainer.
+            gt: groundtruth labels forwarded by the trainer (can be ``None`` if unavailable).
             meta: metadata tensors forwarded by the trainer (used for logging, if activated).
         """
+        if gt is None:
+            return  # only accumulating results when groundtruth available
         if self.force_softmax:
             with torch.no_grad():
                 pred = torch.nn.functional.softmax(pred, dim=1)
@@ -1103,9 +1121,9 @@ class ROCCurve(Metric):
             self.score = torch.cat((self.score, pred), 0)
             self.true = torch.cat((self.true, gt), 0)
         if self.log_params:  # do not log meta parameters unless requested
-            if meta is None or not meta:
+            if meta is None:
                 raise AssertionError("sample metadata is required, logging is activated")
-            _meta = {key: meta[key] for key in self.log_meta_keys}
+            _meta = {key: meta[key] if key in meta else None for key in self.log_meta_keys}
             if self.meta is None:
                 self.meta = copy.deepcopy(_meta)
             else:
@@ -1124,6 +1142,8 @@ class ROCCurve(Metric):
         target TPR is set, the returned string contains the FPR for that operating point. If a target FPR is set,
         the returned string contains the TPR for that operating point.
         """
+        if self.score is None:
+            return "<UNAVAILABLE>"
         # if we did not specify a target operating point in terms of true/false positive rate, return AUC
         if self.target_tpr is None and self.target_fpr is None:
             return "AUC = %.5f" % self.auc(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv)
@@ -1142,6 +1162,8 @@ class ROCCurve(Metric):
 
     def get_tbx_image(self):
         """Returns the ROC curve as a numpy-compatible RGBA image drawn by pyplot."""
+        if self.score is None:
+            return None
         fpr, tpr, t = self.curve(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv)
         fig = thelper.utils.draw_roc_curve(fpr, tpr)
         array = thelper.utils.fig2array(fig)
@@ -1154,7 +1176,7 @@ class ROCCurve(Metric):
         """
         if self.log_params is None:
             return None  # do not generate log text unless requested
-        if self.meta is None or not self.meta:
+        if self.meta is None or not self.meta or self.score is None:
             return None
         if self.class_names is None or not self.class_names:
             raise AssertionError("missing class list for logging, current impl only supports named outputs")
@@ -1275,7 +1297,7 @@ class ClassifLogger(Metric):
         if not isinstance(viz_count, int) or top_k < 0:
             raise AssertionError("invalid viz_count value")
         self.viz_count = viz_count
-        if meta_keys is not None and not isinstance(self.meta_keys, list):
+        if meta_keys is not None and not isinstance(meta_keys, list):
             raise AssertionError("unexpected log meta keys params type (expected list)")
         self.meta_keys = meta_keys
         self.force_softmax = force_softmax
@@ -1302,12 +1324,15 @@ class ClassifLogger(Metric):
 
         Args:
             pred: class prediction scores forwarded by the trainer.
-            gt: groundtruth label indices forwarded by the trainer.
+            gt: groundtruth labels forwarded by the trainer (can be ``None`` if unavailable).
             meta: metadata tensors forwarded by the trainer (used for logging).
         """
         if self.force_softmax:
             with torch.no_grad():
                 pred = torch.nn.functional.softmax(pred, dim=1)
+        if gt is None:
+            # if gt is missing, set labels as -1; will be reinterpreted when creating log
+            gt = torch.from_numpy(np.full((pred.shape[0], 1), -1, dtype=np.int64))
         if self.score is None:
             self.score = pred.clone()
             self.true = gt.clone()
@@ -1315,9 +1340,9 @@ class ClassifLogger(Metric):
             self.score = torch.cat((self.score, pred), 0)
             self.true = torch.cat((self.true, gt), 0)
         if self.meta_keys is not None and self.meta_keys:
-            if meta is None or not meta:
+            if meta is None:
                 raise AssertionError("sample metadata is required, logging is activated")
-            _meta = {key: meta[key] for key in self.meta_keys}
+            _meta = {key: meta[key] if key in meta else None for key in self.meta_keys}
             if self.meta is None:
                 self.meta = copy.deepcopy(_meta)
             else:
@@ -1337,7 +1362,7 @@ class ClassifLogger(Metric):
         """Returns an image of predicted outputs as a numpy-compatible RGBA image drawn by pyplot."""
         if self.viz_count == 0:
             return None
-        raise NotImplementedError  # TODO @@@
+        raise NotImplementedError  # TODO
 
     def get_tbx_text(self):
         """Returns the logged metadata of predicted samples.
@@ -1345,6 +1370,8 @@ class ClassifLogger(Metric):
         The returned object is a print-friendly string that can be consumed directly by tensorboardX. Note that
         this string might be very long if the dataset is large.
         """
+        if self.score is None:
+            return None
         if self.class_names is None or not self.class_names:
             raise AssertionError("missing class list for logging, current impl only supports named outputs")
         res = "sample_idx,gt_label_idx,gt_label_name,gt_label_score"
@@ -1357,14 +1384,13 @@ class ClassifLogger(Metric):
         for sample_idx in range(self.true.numel()):
             gt_label_idx = self.true[sample_idx].item()
             scores = np.asarray(self.score[sample_idx, :].tolist())
-            gt_label_score = scores[gt_label_idx]
             sorted_score_idxs = np.argsort(scores)[::-1]
             sorted_scores = scores[sorted_score_idxs]
             res += "{},{},{},{:2.4f}".format(
                 sample_idx,
                 gt_label_idx,
-                self.class_names[gt_label_idx],
-                gt_label_score
+                self.class_names[gt_label_idx] if gt_label_idx >= 0 else "n/a",
+                scores[gt_label_idx] if gt_label_idx >= 0 else 0
             )
             for k in range(self.top_k):
                 res += ",{},{},{:2.4f}".format(
