@@ -424,40 +424,24 @@ class DataConfig(object):
                 self.sampler_pass_labels = False
                 if "pass_labels" in sampler_config:
                     self.sampler_pass_labels = thelper.utils.str2bool(sampler_config["pass_labels"])
-                self.sampler_apply = [
-                    thelper.utils.str2bool(sampler_config["apply_train"]) if "apply_train" in sampler_config else True,
-                    thelper.utils.str2bool(sampler_config["apply_valid"]) if "apply_valid" in sampler_config else False,
-                    thelper.utils.str2bool(sampler_config["apply_test"]) if "apply_test" in sampler_config else False,
-                ]
-                logger.debug("global sampler will be applied to loaders: %s" % str(self.sampler_apply))
-        self.train_augments, self.train_augments_append = None, False
-        if "train_augments" in config and config["train_augments"]:
-            self.train_augments, self.train_augments_append = thelper.transforms.load_augments(config["train_augments"])
-            if self.train_augments:
-                logger.debug("will %s train augments: %s" % ("append" if self.train_augments_append else "prefix",
-                                                             str(self.train_augments)))
-        self.eval_augments, self.eval_augments_append = None, False
-        if "eval_augments" in config and config["eval_augments"]:
-            self.eval_augments, self.eval_augments_append = thelper.transforms.load_augments(config["eval_augments"])
-            if self.eval_augments:
-                logger.debug("will %s eval augments: %s" % ("append" if self.train_augments_append else "prefix",
-                                                            str(self.eval_augments)))
+                self.train_sampler = thelper.utils.str2bool(sampler_config["apply_train"]) if "apply_train" in sampler_config else True
+                self.valid_sampler = thelper.utils.str2bool(sampler_config["apply_valid"]) if "apply_valid" in sampler_config else False
+                self.test_sampler = thelper.utils.str2bool(sampler_config["apply_test"]) if "apply_test" in sampler_config else False
+                logger.debug("global sampler will be applied to loaders: %s" % str([self.train_sampler, self.valid_sampler, self.test_sampler]))
+        train_augs_targets = ["augments", "trainvalid_augments", "train_augments"]
+        valid_augs_targets = ["augments", "trainvalid_augments", "eval_augments", "validtest_augments", "valid_augments"]
+        test_augs_targets = ["augments", "eval_augments", "validtest_augments", "test_augments"]
+        self.train_augments, self.train_augments_append = self._get_augments(train_augs_targets, "train", config)
+        self.valid_augments, self.valid_augments_append = self._get_augments(valid_augs_targets, "valid", config)
+        self.test_augments, self.test_augments_append = self._get_augments(test_augs_targets, "test", config)
         self.base_transforms = None
         if "base_transforms" in config and config["base_transforms"]:
             self.base_transforms = thelper.transforms.load_transforms(config["base_transforms"])
-
-        def get_ratios_split(prefix, config):
-            key = prefix + "_split"
-            if key not in config or not config[key]:
-                return {}
-            split = config[key]
-            if any(ratio < 0 or ratio > 1 for ratio in split.values()):
-                raise AssertionError("split ratios in '%s' must be in [0,1]" % key)
-            return split
-
-        self.train_split = get_ratios_split("train", config)
-        self.valid_split = get_ratios_split("valid", config)
-        self.test_split = get_ratios_split("test", config)
+            if self.base_transforms:
+                logger.debug("base transforms: %s" % str(self.base_transforms))
+        self.train_split = self._get_ratios_split("train", config)
+        self.valid_split = self._get_ratios_split("valid", config)
+        self.test_split = self._get_ratios_split("test", config)
         if not self.train_split and not self.valid_split and not self.test_split:
             raise AssertionError("data config must define a split for at least one loader type (train/valid/test)")
         self.total_usage = Counter(self.train_split) + Counter(self.valid_split) + Counter(self.test_split)
@@ -482,6 +466,26 @@ class DataConfig(object):
                         self.test_split[name] /= usage
         self.skip_verif = thelper.utils.str2bool(config["skip_verif"]) if "skip_verif" in config else True
 
+    @staticmethod
+    def _get_ratios_split(prefix, config):
+        key = prefix + "_split"
+        if key not in config or not config[key]:
+            return {}
+        split = config[key]
+        if any(ratio < 0 or ratio > 1 for ratio in split.values()):
+            raise AssertionError("split ratios in '%s' must be in [0,1]" % key)
+        return split
+
+    @staticmethod
+    def _get_augments(targets, name, config):
+        for target in targets:
+            if target in config and config[target]:
+                augments, augments_append = thelper.transforms.load_augments(config[target])
+                if augments:
+                    logger.debug("will %s %s augments: %s" % ("append" if augments_append else "prefix", name, str(augments)))
+                return augments, augments_append
+        return None, False
+
     def _get_raw_split(self, indices):
         for name in self.total_usage:
             if name not in indices:
@@ -505,7 +509,7 @@ class DataConfig(object):
                     count = int(round(ratio_map[name] * len(indices[name])))
                     if count < 0:
                         raise AssertionError("ratios should be non-negative values!")
-                    elif count < 1:
+                    elif count < 1 and len(indices[name]) > 0:
                         logger.warning("split ratio for '%s' too small, sample set will be empty" % name)
                     begidx = offsets[name]
                     endidx = min(begidx + count, len(indices[name]))
@@ -640,7 +644,11 @@ class DataConfig(object):
             A three-element tuple containing the training, validation, and test data loaders, respectively.
         """
         loaders = []
-        for loader_idx, idxs_map in enumerate([train_idxs, valid_idxs, test_idxs]):
+        for idxs_map, (augs, augs_append), sampler_apply in zip([train_idxs, valid_idxs, test_idxs],
+                                                                [(self.train_augments, self.train_augments_append),
+                                                                 (self.valid_augments, self.valid_augments_append),
+                                                                 (self.test_augments, self.test_augments_append)],
+                                                                [self.train_sampler, self.valid_sampler, self.test_sampler]):
             loader_sample_idx_offset = 0
             loader_sample_classes = []
             loader_sample_idxs = []
@@ -650,24 +658,15 @@ class DataConfig(object):
                     dataset = copy.copy(datasets[dataset_name])
                 else:
                     dataset = copy.deepcopy(datasets[dataset_name])
-                if loader_idx == 0 and self.train_augments:
-                    train_augs_copy = copy.deepcopy(self.train_augments)
+                if augs:
+                    augs_copy = copy.deepcopy(augs)
                     if dataset.transforms is not None:
-                        if self.train_augments_append:
-                            dataset.transforms = thelper.transforms.Compose([dataset.transforms, train_augs_copy])
+                        if augs_append:
+                            dataset.transforms = thelper.transforms.Compose([dataset.transforms, augs_copy])
                         else:
-                            dataset.transforms = thelper.transforms.Compose([train_augs_copy, dataset.transforms])
+                            dataset.transforms = thelper.transforms.Compose([augs_copy, dataset.transforms])
                     else:
-                        dataset.transforms = train_augs_copy
-                elif loader_idx != 0 and self.eval_augments:
-                    eval_augs_copy = copy.deepcopy(self.eval_augments)
-                    if dataset.transforms is not None:
-                        if self.eval_augments_append:
-                            dataset.transforms = thelper.transforms.Compose([dataset.transforms, eval_augs_copy])
-                        else:
-                            dataset.transforms = thelper.transforms.Compose([eval_augs_copy, dataset.transforms])
-                    else:
-                        dataset.transforms = eval_augs_copy
+                        dataset.transforms = augs_copy
                 for sample_idx_idx in range(len(sample_idxs)):
                     # values were paired in tuples earlier, 0=idx, 1=label
                     loader_sample_idxs.append(sample_idxs[sample_idx_idx][0] + loader_sample_idx_offset)
@@ -676,7 +675,7 @@ class DataConfig(object):
                 loader_datasets.append(dataset)
             if len(loader_datasets) > 0:
                 dataset = torch.utils.data.ConcatDataset(loader_datasets) if len(loader_datasets) > 1 else loader_datasets[0]
-                if self.sampler_type is not None and self.sampler_apply[loader_idx]:
+                if self.sampler_type is not None and sampler_apply:
                     if self.sampler_pass_labels:
                         if self.sampler_params is not None:
                             sampler = self.sampler_type(loader_sample_idxs, loader_sample_classes, **self.sampler_params)
