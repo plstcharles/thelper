@@ -453,7 +453,7 @@ class ImageSegmentAnnotator(Annotator):
                 break
         if dataset_name is None:
             raise AssertionError("bad logic somewhere")
-        return os.path.join(self.annotations_dir, dataset_name, str(index) + ".png")
+        return os.path.join(self.annotations_dir, dataset_name, "%06d.png" % index)
 
     def load(self, index):
         """Loads the image and mask associated to a specific sample."""
