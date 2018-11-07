@@ -85,7 +85,6 @@ def load_transforms(stages):
     """
     if not isinstance(stages, list):
         raise AssertionError("expected stages to be provided as a list")
-    logger.debug("loading transforms stages...")
     if not stages:
         return None, True  # no-op transform, and dont-care append
     if not isinstance(stages[0], dict):
@@ -320,15 +319,19 @@ class AugmentorWrapper(object):
         """Create a print-friendly representation of inner augmentation stages."""
         return "AugmentorWrapper: " + str([str(op) for op in self.pipeline.operations])
 
+    def set_seed(self, seed):
+        """Sets the internal seed to use for stochastic ops."""
+        np.random.seed(seed)
+
 
 class ImageTransformWrapper(object):
-    """Image tranform wrapper that allows operations on lists.
+    """Image tranform wrapper that allows operations on lists/tuples.
 
     Can be used to wrap the operations in ``thelper.transforms`` or in ``torchvision.transforms``
-    that only accept images as their input. Will optionally force-convert the images to PIL format.
+    that only accept images as their input. Will optionally force-convert the samples to PIL images.
 
-    Can also be used to transform a list of images uniformly based on a shared dice roll, or ensure
-    that each image is transformed independently.
+    Can also be used to transform a list/tuple of images uniformly based on a shared dice roll, or
+    to ensure that each image is transformed independently.
 
     .. warning::
         Stochastic transforms (e.g. ``torchvision.transforms.RandomCrop``) will always treat each
@@ -342,10 +345,11 @@ class ImageTransformWrapper(object):
         parameters: the parameters that are passed to the operation when init'd or called.
         probability: the probability that the wrapped operation will be applied.
         force_convert: specifies whether images should be forced into PIL format or not.
-        linked_fate: specifies whether input list samples should all have the same fate or not.
+        linked_fate: specifies whether images given in a list/tuple should have the same fate or not.
+        flatten: specifies whether embedded lists/tuples should be flattened or not.
     """
 
-    def __init__(self, operation, parameters=None, probability=1, force_convert=True, linked_fate=True):
+    def __init__(self, operation, parameters=None, probability=1, force_convert=False, linked_fate=True, flatten=False):
         """Receives and stores a torchvision transform operation for later use.
 
         If the operation is given as a string, it is assumed to be a class name and it will
@@ -358,7 +362,8 @@ class ImageTransformWrapper(object):
             parameters: the parameters that are passed to the operation when init'd or called.
             probability: the probability that the wrapped operation will be applied.
             force_convert: specifies whether images should be forced into PIL format or not.
-            linked_fate: specifies whether input list samples should all have the same fate or not.
+            linked_fate: specifies whether images given in a list/tuple should have the same fate or not.
+            flatten: specifies whether embedded lists/tuples should be flattened or not.
         """
         if parameters is not None and not isinstance(parameters, dict):
             raise AssertionError("expected parameters to be passed in as a dictionary")
@@ -374,69 +379,65 @@ class ImageTransformWrapper(object):
         self.probability = probability
         self.force_convert = force_convert
         self.linked_fate = linked_fate
+        self.flatten = flatten
 
     def __call__(self, samples):
-        """Transforms a single image (or a list of images) using the torchvision operation.
+        """Transforms a single image (or embedded lists/tuples of images) using a wrapped operation.
 
         Args:
-            samples: the image(s) to transform. Should be a numpy array or a PIL image (or a list of).
+            samples: the image(s) to transform (can also contain embedded lists/tuples of images).
 
         Returns:
-            The transformed image(s), with the same type as the input.
+            The transformed image(s), with the same list/tuple formatting as the input (if any).
         """
         in_list = True
-        if samples is not None and not isinstance(samples, list):
+        if samples is not None and not isinstance(samples, (list, tuple)):
             in_list = False
             samples = [samples]
         elif not samples:
             return samples
-        cvt_array = [False] * len(samples)
-        # todo: add support for torch.Tensor i/o here?
+        array, cvt_array = [], []
         for idx, sample in enumerate(samples):
-            if isinstance(sample, np.ndarray):
-                if self.force_convert:
-                    # PIL is pretty bad, it can't handle 3-channel float images...
-                    # ... but hey, if your op only supports that, have fun!
-                    samples[idx] = PIL.Image.fromarray(samples[idx])
-                    cvt_array[idx] = True
-            elif isinstance(sample, list):
-                cvt_array[idx] = [False] * len(sample)
-                for idx2, sample2 in enumerate(sample):
-                    if isinstance(sample2, np.ndarray):
-                        if self.force_convert:
-                            samples[idx][idx2] = PIL.Image.fromarray(samples[idx][idx2])
-                            cvt_array[idx][idx2] = True
-                    elif not isinstance(sample2, PIL.Image.Image):
-                        raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
-            elif not isinstance(sample, PIL.Image.Image):
-                raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
-        flat_array = []
-        for sample in samples:
-            if isinstance(sample, list):
+            if isinstance(sample, (list, tuple)) and self.flatten:
+                array += []
+                cvt_array += []
                 for s in sample:
-                    flat_array.append(s)
+                    if self.force_convert and not isinstance(s, (list, tuple)):
+                        array[idx].append(PIL.Image.fromarray(s))
+                        cvt_array[idx].append(True)
+                    else:
+                        array[idx].append(s)
+                        cvt_array[idx].append(False)
             else:
-                flat_array.append(sample)
+                if self.force_convert and not isinstance(sample, (list, tuple)):
+                    array.append(PIL.Image.fromarray(sample))
+                    cvt_array.append(True)
+                else:
+                    array.append(sample)
+                    cvt_array.append(False)
         if self.linked_fate:  # process all samples/arrays with the same operations below
             if self.probability >= 1 or round(np.random.uniform(0, 1), 1) <= self.probability:
-                for idx in range(len(flat_array)):
-                    # reseed with const value generated outside loop?
-                    flat_array[idx] = self.operation(flat_array[idx], **self.parameters)
-        else:  # each sample/array must be processed independently below
-            for idx in range(len(flat_array)):
+                op_seed = np.random.randint(2 ** 16)
+                for idx in range(len(array)):
+                    if hasattr(self.operation, "set_seed") and callable(self.operation.set_seed):
+                        self.operation.set_seed(op_seed)
+                    # watch out: if operation is stochastic and we cannot seed above, then there is no
+                    # guarantee that the samples will truly have a 'linked fate' (this might cause issues!)
+                    array[idx] = self.operation(array[idx], **self.parameters)
+        else:  # each sample/array will be processed independently below (current seeds are kept)
+            for idx in range(len(array)):
                 if self.probability >= 1 or round(np.random.uniform(0, 1), 1) <= self.probability:
-                    # reseed with const value generated outside loop, but only if processing a list? TODO
-                    flat_array[idx] = self.operation(flat_array[idx], **self.parameters)
+                    array[idx] = self.operation(array[idx], **self.parameters)
         flat_idx = 0
         for idx, cvt in enumerate(cvt_array):
             if not isinstance(cvt, list):
-                samples[idx] = np.asarray(flat_array[flat_idx]) if cvt else flat_array[flat_idx]
+                samples[idx] = np.asarray(array[flat_idx]) if cvt else array[flat_idx]
                 flat_idx += 1
             else:
                 for idx2, cvt2 in enumerate(cvt):
-                    samples[idx][idx2] = np.asarray(flat_array[flat_idx]) if cvt2 else flat_array[flat_idx]
+                    samples[idx][idx2] = np.asarray(array[flat_idx]) if cvt2 else array[flat_idx]
                     flat_idx += 1
-        if flat_idx != len(flat_array):
+        if flat_idx != len(array):
             raise AssertionError("messed up logic somewhere")
         if not in_list and len(samples) == 1:
             samples = samples[0]
@@ -445,6 +446,10 @@ class ImageTransformWrapper(object):
     def __repr__(self):
         """Create a print-friendly representation of inner augmentation stages."""
         return "ImageTransformWrapper: [prob=%f: [%s]]" % (self.probability, str(self.operation))
+
+    def set_seed(self, seed):
+        """Sets the internal seed to use for stochastic ops."""
+        np.random.seed(seed)
 
 
 class Compose(torchvision.transforms.Compose):
@@ -763,6 +768,10 @@ class RandomResizedCrop(object):
         format_str += "flags={})".format(self.flags)
         return format_str
 
+    def set_seed(self, seed):
+        """Sets the internal seed to use for stochastic ops."""
+        np.random.seed(seed)
+
 
 class Resize(object):
     """Resizes a given image using OpenCV and numpy.
@@ -1023,6 +1032,10 @@ class RandomShift(object):
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
         return self.__class__.__name__ + "(min={0}, max={1}, prob={2})".format(self.min, self.max, self.probability)
+
+    def set_seed(self, seed):
+        """Sets the internal seed to use for stochastic ops."""
+        np.random.seed(seed)
 
 
 class Transpose(object):
