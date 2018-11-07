@@ -141,8 +141,8 @@ coverage:
 .PHONY: docs
 docs: install-docs
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
-		$(MAKE) -C $(CUR_DIR)/docs clean; \
-		$(MAKE) -C $(CUR_DIR)/docs html;"
+		test -f $(CONDA_ENV_PATH)/bin/tox || pip install tox; \
+		tox -e docs"
 	$(BROWSER) $(CUR_DIR)/docs/build/html/index.html
 
 .PHONY: install-docs

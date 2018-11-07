@@ -60,9 +60,9 @@ def skip(app, what, name, obj, skip, options):
 
 def run_apidoc(_):
     if on_rtd:
-        argv = ["-o", ".", "../../src/"]
+        argv = ["-o", ".", "../thelper/"]
     else:
-        argv = ["-f", "-o", "./src/", "../src/"]
+        argv = ["-f", "-o", "./src/", "../thelper"]
     try:
         # Sphinx 1.7+
         from sphinx.ext import apidoc

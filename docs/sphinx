@@ -9,7 +9,7 @@ import sphinx.cmd.quickstart
 import sphinx.ext.apidoc
 import sphinx.ext.autosummary.generate
 
-cur_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../src/thelper'))
+cur_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../thelper'))
 sys.path.insert(0, cur_dir)
 
 
