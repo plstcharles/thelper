@@ -142,7 +142,7 @@ class Trainer:
         devices: list of (cuda) device IDs to upload the model/tensors to; can be empty if only the CPU is available.
         monitor: specifies the name of the metric that should be monitored on the validation set for model improvement.
 
-    TODO: move static utils to their related modules; no need for monitor if evaluating only;
+    TODO: move static utils to their related modules
 
     .. seealso::
         :class:`thelper.train.ImageClassifTrainer`
@@ -782,31 +782,31 @@ class ImageClassifTrainer(Trainer):
         if self.input_key not in sample:
             raise AssertionError("could not find input key '%s' in sample dict" % self.input_key)
         input = sample[self.input_key]
-        if self.label_key not in sample:
-            raise AssertionError("could not find label key '%s' in sample dict" % self.label_key)
-        label = sample[self.label_key]
-        label_idx = []
-        for class_name in label:
-            if isinstance(class_name, (int, torch.Tensor)):
-                if isinstance(class_name, torch.Tensor):
-                    if torch.numel(class_name) != 1:
-                        raise AssertionError("unexpected label name type, got vector")
-                    class_name = class_name.item()
-                # dataset must already be using indices, we will forgive this...
-                if class_name < 0 or class_name >= len(self.class_names):
-                    raise AssertionError("class name given as out-of-range index (%d) for class list" % class_name)
-                class_name = self.class_names[class_name]
-            elif not isinstance(class_name, str):
-                raise AssertionError("expected label to be in str format (task will convert to proper index)")
-            if class_name not in self.class_names:
-                raise AssertionError("got unexpected label '%s' for a sample (unknown class)" % class_name)
-            label_idx.append(self.class_idxs_map[class_name])
-        label_idx = torch.LongTensor(label_idx)
         if isinstance(input, list):
             for idx in range(len(input)):
                 input[idx] = torch.FloatTensor(input[idx])
         else:
             input = torch.FloatTensor(input)
+        label_idx = None
+        if self.label_key in sample:
+            label = sample[self.label_key]
+            label_idx = []
+            for class_name in label:
+                if isinstance(class_name, (int, torch.Tensor)):
+                    if isinstance(class_name, torch.Tensor):
+                        if torch.numel(class_name) != 1:
+                            raise AssertionError("unexpected label name type, got vector")
+                        class_name = class_name.item()
+                    # dataset must already be using indices, we will forgive this...
+                    if class_name < 0 or class_name >= len(self.class_names):
+                        raise AssertionError("class name given as out-of-range index (%d) for class list" % class_name)
+                    class_name = self.class_names[class_name]
+                elif not isinstance(class_name, str):
+                    raise AssertionError("expected label to be in str format (task will convert to proper index)")
+                if class_name not in self.class_names:
+                    raise AssertionError("got unexpected label '%s' for a sample (unknown class)" % class_name)
+                label_idx.append(self.class_idxs_map[class_name])
+            label_idx = torch.LongTensor(label_idx)
         return input, label_idx
 
     def _train_epoch(self, model, epoch, iter, dev, optimizer, loader, metrics, writer=None):
@@ -830,9 +830,12 @@ class ImageClassifTrainer(Trainer):
             raise AssertionError("expect metrics as dict object")
         total_loss = 0
         epoch_size = len(loader)
+        self.logger.debug("fetching data loader samples...")
         for sample_idx, sample in enumerate(loader):
             input, label = self._to_tensor(sample)
             optimizer.zero_grad()
+            if label is None:
+                raise AssertionError("groundtruth required when training a model")
             label = self._upload_tensor(label, dev)
             if isinstance(input, list):  # training samples got augmented, we need to backprop in multiple steps
                 if not input:
@@ -898,9 +901,11 @@ class ImageClassifTrainer(Trainer):
             raise AssertionError("no available data to load")
         with torch.no_grad():
             epoch_size = len(loader)
+            self.logger.debug("fetching data loader samples...")
             for idx, sample in enumerate(loader):
                 input, label = self._to_tensor(sample)
-                label = self._upload_tensor(label, dev)
+                if label is not None:
+                    label = self._upload_tensor(label, dev)
                 if isinstance(input, list):  # evaluation samples got augmented, we need to get the mean prediction
                     if not input:
                         raise AssertionError("cannot eval with empty post-augment sample lists")
@@ -915,9 +920,12 @@ class ImageClassifTrainer(Trainer):
                 else:
                     pred = model(self._upload_tensor(input, dev))
                 if metrics:
-                    meta = {key: sample[key] for key in self.meta_keys}
+                    if self.meta_keys:
+                        meta = {key: sample[key] if key in sample else None for key in self.meta_keys}
+                    else:
+                        meta = None
                     for metric in metrics.values():
-                        metric.accumulate(pred.cpu(), label.cpu(), meta=meta)
+                        metric.accumulate(pred.cpu(), label.cpu() if label is not None else None, meta=meta)
                 self.logger.info(
                     "eval epoch: {}   batch: {}/{} ({:.0f}%)   {}: {:.2f}".format(
                         epoch,
