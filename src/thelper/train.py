@@ -11,7 +11,6 @@ from abc import abstractmethod
 from copy import deepcopy
 
 import cv2 as cv
-import tensorboardX
 import torch
 import torch.optim
 
@@ -203,6 +202,8 @@ class Trainer:
                     if os.path.exists(tbx_dir):
                         raise AssertionError("tbx session paths should be unique")
                     writer_paths[idx] = tbx_dir
+            import tensorboardX
+            self.tbx = tensorboardX
             self.logger.debug("tensorboard init : tensorboard --logdir %s --port <your_port>" % self.tbx_root_dir)
         self.train_writer_path, self.valid_writer_path, self.test_writer_path = writer_paths
         self.model = model
@@ -521,7 +522,7 @@ class Trainer:
                 self.logger.info("learning rate at %.8f" % self.current_lr)
             model.train()
             if self.use_tbx and not train_writer:
-                train_writer = tensorboardX.SummaryWriter(log_dir=self.train_writer_path, comment=self.name)
+                train_writer = self.tbx.SummaryWriter(log_dir=self.train_writer_path, comment=self.name)
                 setattr(train_writer, "path", self.train_writer_path)  # for external usage, if needed
                 setattr(train_writer, "prefix", "train")  # to prefix data added to tbx logs (if needed)
             for metric in self.train_metrics.values():
@@ -538,7 +539,7 @@ class Trainer:
             if self.valid_loader:
                 model.eval()
                 if self.use_tbx and not valid_writer:
-                    valid_writer = tensorboardX.SummaryWriter(log_dir=self.valid_writer_path, comment=self.name)
+                    valid_writer = self.tbx.SummaryWriter(log_dir=self.valid_writer_path, comment=self.name)
                     setattr(valid_writer, "path", self.valid_writer_path)  # for external usage, if needed
                     setattr(valid_writer, "prefix", "valid")  # to prefix data added to tbx logs (if needed)
                 for metric in self.valid_metrics.values():
@@ -588,7 +589,7 @@ class Trainer:
             model = self._upload_model(self.model, self.devices)
             model.eval()
             if self.use_tbx and not test_writer:
-                test_writer = tensorboardX.SummaryWriter(log_dir=self.test_writer_path, comment=self.name)
+                test_writer = self.tbx.SummaryWriter(log_dir=self.test_writer_path, comment=self.name)
                 setattr(test_writer, "path", self.test_writer_path)  # for external usage, if needed
                 setattr(test_writer, "prefix", "test")  # to prefix data added to tbx logs (if needed)
             for metric in self.test_metrics.values():
@@ -623,7 +624,7 @@ class Trainer:
         valid_writer, test_writer = None, None
         if self.test_loader:
             if self.use_tbx and not test_writer:
-                test_writer = tensorboardX.SummaryWriter(log_dir=self.test_writer_path, comment=self.name)
+                test_writer = self.tbx.SummaryWriter(log_dir=self.test_writer_path, comment=self.name)
                 setattr(test_writer, "path", self.test_writer_path)  # for external usage, if needed
                 setattr(test_writer, "prefix", "test")  # to prefix data added to tbx logs (if needed)
             for metric in self.test_metrics.values():
@@ -635,7 +636,7 @@ class Trainer:
             result = {**result, **test_metric_vals}
         elif self.valid_loader:
             if self.use_tbx and not valid_writer:
-                valid_writer = tensorboardX.SummaryWriter(log_dir=self.valid_writer_path, comment=self.name)
+                valid_writer = self.tbx.SummaryWriter(log_dir=self.valid_writer_path, comment=self.name)
                 setattr(valid_writer, "path", self.valid_writer_path)  # for external usage, if needed
                 setattr(valid_writer, "prefix", "valid")  # to prefix data added to tbx logs (if needed)
             for metric in self.valid_metrics.values():
