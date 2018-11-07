@@ -573,6 +573,8 @@ class CenterCrop(object):
         Returns:
             The center crop.
         """
+        if not isinstance(sample, np.ndarray):
+            raise AssertionError("sample type should be np.ndarray")
         if sample.ndim < 2 or sample.ndim > 3:
             raise AssertionError("bad input dimensions; must be 2-d, or 3-d (with channels)")
         crop_height = int(round(self.size[1] * sample.shape[0])) if self.relative else self.size[1]
@@ -825,6 +827,8 @@ class Resize(object):
         """
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
+        elif not isinstance(sample, np.ndarray):
+            raise AssertionError("sample type should be np.ndarray")
         if sample.ndim < 2 or sample.ndim > 3:
             raise AssertionError("bad input dimensions; must be 2-d, or 3-d (with channels)")
         if sample.ndim < 3 or sample.shape[2] <= 4:
@@ -926,6 +930,8 @@ class Affine(object):
         """
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
+        elif not isinstance(sample, np.ndarray):
+            raise AssertionError("sample type should be np.ndarray")
         out_size = self.out_size
         if out_size is None:
             out_size = (sample.shape[1], sample.shape[0])
@@ -1017,6 +1023,8 @@ class RandomShift(object):
         """
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
+        elif not isinstance(sample, np.ndarray):
+            raise AssertionError("sample type should be np.ndarray")
         if self.probability < 1 and np.random.uniform(0, 1) > self.probability:
             return sample
         out_size = (sample.shape[1], sample.shape[0])
@@ -1073,6 +1081,8 @@ class Transpose(object):
         Returns:
             The transposed image.
         """
+        if not isinstance(sample, np.ndarray):
+            raise AssertionError("sample type should be np.ndarray")
         return np.transpose(sample, self.axes)
 
     def invert(self, sample):
@@ -1341,6 +1351,8 @@ class NormalizeZeroMeanUnitVar(object):
         """
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
+        elif not isinstance(sample, np.ndarray):
+            raise AssertionError("sample type should be np.ndarray")
         return ((sample - self.mean) / self.std).astype(self.out_type)
 
     def invert(self, sample):
@@ -1402,6 +1414,8 @@ class NormalizeMinMax(object):
         """
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
+        elif not isinstance(sample, np.ndarray):
+            raise AssertionError("sample type should be np.ndarray")
         return ((sample - self.min) / self.diff).astype(self.out_type)
 
     def invert(self, sample):
