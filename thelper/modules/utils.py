@@ -1,7 +1,7 @@
 import logging
+import os
 from abc import ABC
 from abc import abstractmethod
-import os
 
 import numpy as np
 import torch
@@ -125,7 +125,7 @@ class ExternalModule(Module):
     This interface is built on top of ``torch.nn.Module`` and should remain fully compatible with it. It is
     automatically used when instantiating a model via :func:`thelper.modules.load_model` that is not derived
     from :class:`thelper.modules.Module`. Its only purpose is to hold the task object, and redirect
-    :func:`thelper.modules.Module.forward: to the actual model's transformation function. It can also be
+    :func:`thelper.modules.Module.forward` to the actual model's transformation function. It can also be
     specialized to automatically adapt some external models after their construction using the knowledge
     contained in the task object.
 
