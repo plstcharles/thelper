@@ -59,7 +59,7 @@ setuptools.setup(
     author="Pierre-Luc St-Charles",
     author_email="stcharpl@crim.ca",
     url="https://github.com/plstcharles/thelper",
-    packages=setuptools.find_packages(),
+    packages=setuptools.find_packages(exclude=("test",)),
     include_package_data=True,
     zip_safe=False,
     classifiers=[
