@@ -149,6 +149,14 @@ class ExternalModule(Module):
     def _get_derived_name(self):
         return thelper.utils.get_caller_name(0).rsplit(".", 1)[0]
 
+    def load_state_dict(self, state_dict, strict=True):
+        """Loads the state dict of an external model."""
+        self.model.load_state_dict(state_dict=state_dict, strict=strict)
+
+    def state_dict(self, destination=None, prefix='', keep_vars=False):
+        """Returns the state dict of the external model."""
+        return self.model.state_dict(destination=destination, prefix=prefix, keep_vars=keep_vars)
+
     def forward(self, *input):
         """Transforms an input tensor in order to generate a prediction."""
         return self.model(*input)
@@ -174,9 +182,9 @@ class ExternalClassifModule(ExternalModule):
         :class:`thelper.tasks.Task`
     """
 
-    def __init__(self, model_type, task, module_config=None):
+    def __init__(self, model_type, task, config=None):
         """Receives a task object to hold internally for model specialization, and tries to rewire the last 'fc' layer."""
-        super().__init__(model_type, task, config=module_config)
+        super().__init__(model_type, task, config=config)
         if type(task) != thelper.tasks.Classification:
             raise AssertionError("task passed to ExternalClassifModule should be 'thelper.tasks.Classification'")
         self.nb_classes = self.task.get_nb_classes()
