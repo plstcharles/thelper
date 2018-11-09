@@ -68,6 +68,7 @@ class Trainer:
       instantiating the loss, optimizer, and scheduler objects. See the code of each related loading function for more
       information on special parameters.
     - ``save_freq`` (optional, default=1): checkpoint save frequency (will save every epoch multiple of given number).
+    - ``save_raw`` (optional, default=True): specifies whether to save raw types or thelper objects in checkpoints.
     - ``use_tbx`` (optional, default=False): defines whether to use tensorboardX writers for logging or not.
     - ``device`` (optional): specifies which device to train/evaluate the model on (default=all available).
     - ``metrics``: list of metrics to instantiate and update during training/evaluation; see related loading function for
@@ -130,6 +131,7 @@ class Trainer:
         epochs: number of epochs to train the model for.
         optimization_config: dictionary of optim-related parameters, parsed at training time.
         save_freq: frequency of checkpoint saves while training (i.e. save every X epochs).
+        save_raw: specifies whether to save raw types or thelper objects in checkpoints.
         save_dir: top-level session save directory.
         checkpoint_dir: session checkpoint output directory (located within 'save_dir').
         use_tbx: defines whether to use tensorboardX writers for logging or not.
@@ -179,6 +181,7 @@ class Trainer:
         self.save_freq = int(trainer_config["save_freq"]) if "save_freq" in trainer_config else 1
         if self.save_freq < 1:
             raise AssertionError("checkpoint save frequency should be integer great or equal to 1")
+        self.save_raw = thelper.utils.str2bool(thelper.utils.get_key_def("save_raw", trainer_config, True))
         self.save_dir = save_dir
         self.checkpoint_dir = os.path.join(self.save_dir, "checkpoints")
         if not os.path.exists(self.checkpoint_dir):
@@ -723,21 +726,22 @@ class Trainer:
     def _save(self, epoch, save_best=False):
         """Saves a session checkpoint containing all the information required to resume training."""
         # logically, this should only be called during training (i.e. with a valid optimizer)
-        timestr = time.strftime("%Y%m%d-%H%M%S")
+        log_stamp = thelper.utils.get_log_stamp()
         curr_state = {
             "name": self.name,
             "epoch": epoch,
             "iter": self.current_iter,
-            "time": timestr,
-            "host": platform.node(),
-            "task": self.model.task,
+            "source": log_stamp,
+            "sha1": thelper.utils.get_git_stamp(),
+            "version": thelper.__version__,
+            "task": str(self.model.task) if self.save_raw else self.model.task,
             "outputs": self.outputs[epoch],
-            "state_dict": self.model.state_dict(),
+            "model": self.model.state_dict() if self.save_raw else self.model,
             "optimizer": self.optimizer.state_dict(),
             "monitor_best": self.monitor_best,
             "config": self.config  # note: this is the global app config
         }
-        filename = "ckpt.%04d.%s.%s.pth" % (epoch, platform.node(), timestr)
+        filename = "ckpt.%04d.%s.pth" % (epoch, log_stamp)
         filename = os.path.join(self.checkpoint_dir, filename)
         self.logger.debug("writing checkpoint to '%s'" % filename)
         torch.save(curr_state, filename)

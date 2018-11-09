@@ -50,7 +50,7 @@ def create_session(config, data_root, save_dir):
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
     logger.debug("session will be saved at '%s'" % save_dir)
     task, train_loader, valid_loader, test_loader = thelper.data.load(config, data_root, save_dir)
-    model = thelper.modules.load_model(config, task, save_dir)
+    model = thelper.modules.load_model(config, task, save_dir=save_dir)
     loaders = (train_loader, valid_loader, test_loader)
     trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loaders)
     logger.debug("starting trainer")
@@ -106,11 +106,7 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False):
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config, resume=True)
     logger.debug("session will be saved at '%s'" % save_dir)
     task, train_loader, valid_loader, test_loader = thelper.data.load(config, data_root, save_dir)
-    if "task" not in ckptdata:
-        logger.warning("cannot verify that checkpoint task is same as current task, might cause key or class mapping issues")
-    elif not ckptdata["task"].check_compat(task):
-        raise AssertionError("checkpoint task mismatch with current task")
-    model = thelper.modules.load_model(config, task, save_dir)
+    model = thelper.modules.load_model(config, task, save_dir=save_dir, ckptdata=ckptdata)
     loaders = (None if eval_only else train_loader, valid_loader, test_loader)
     trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loaders, ckptdata=ckptdata)
     if eval_only:

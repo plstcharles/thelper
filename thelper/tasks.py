@@ -15,20 +15,40 @@ logger = logging.getLogger(__name__)
 
 
 def load_task(config):
-    """Parses a configuration dictionary and returns an instantiated task from it.
+    """Parses a configuration dictionary or repr string and returns an instantiated task from it.
 
-    See :class:`thelper.tasks.Task` for more information.
+    If a string is provided, it will first be parsed to get the class, and then the object will be
+    instantiated by forwarding the parameters contained in the string to the constructor of that
+    class. Note that it is important for this function to work that the constructor argument names
+    match the names of parameters printed in the task's ``__repr__`` function.
+
+    If a dict is provided, it should contain a 'type' and a 'params' field with the values required
+    for direct instantiation.
+
+    .. seealso::
+        :class:`thelper.tasks.Task`
+        :func:`thelper.tasks.Task.__repr__`
     """
-    if "type" not in config:
-        raise AssertionError("missing field 'type' in task config")
-    task_type = thelper.utils.import_class(config["type"])
-    if "params" not in config:
-        raise AssertionError("missing field 'params' in task config")
-    task_params = thelper.utils.keyvals2dict(config["params"])
-    task = task_type(**task_params)
-    if not issubclass(task_type, thelper.tasks.Task):
-        raise AssertionError("the task type must be derived from 'thelper.tasks.Task'")
-    return task
+    if config is None or not isinstance(config, (str, dict)):
+        raise AssertionError("unexpected config type (should be str or dict)")
+    if isinstance(config, dict):
+        if "type" not in config:
+            raise AssertionError("missing field 'type' in task config")
+        task_type = thelper.utils.import_class(config["type"])
+        if "params" not in config:
+            raise AssertionError("missing field 'params' in task config")
+        task_params = thelper.utils.keyvals2dict(config["params"])
+        task = task_type(**task_params)
+        if not isinstance(task, thelper.tasks.Task):
+            raise AssertionError("the task must be derived from 'thelper.tasks.Task'")
+        return task
+    elif isinstance(config, str):
+        task_type = thelper.utils.import_class(repr.split(": ")[0])
+        task_params = eval(": ".join(repr.split(": ")[1:]))
+        task = task_type(**task_params)
+        if not isinstance(task, thelper.tasks.Task):
+            raise AssertionError("the task must be derived from 'thelper.tasks.Task'")
+        return task
 
 
 def get_global_task(tasks):
@@ -136,13 +156,6 @@ class Task(object):
         are compatible. It should ideally be overridden in derived classes to specialize
         the compatibility verification.
         """
-        if isinstance(other, str):
-            # assume it is a saved task repr string
-            task_type = other.split(": ")[0]
-            if task_type != "thelper.tasks.Task":
-                return False
-            params = eval(": ".join(other.split(": ")[1:]))
-            other = Task(params["input"], params["gt"], params["meta"])
         if type(other) == Task:
             return (self.get_input_key() == other.get_input_key() and
                     self.get_gt_key() == other.get_gt_key())
@@ -164,12 +177,14 @@ class Task(object):
 
         Note that this representation might also be used to check the compatibility of tasks
         without importing the whole framework. Therefore, it should contain all the necessary
-        information about the task.
+        information about the task. The name of the parameters herein should also match the
+        argument names given to the constructor in case we need to recreate a task object from
+        this string.
         """
         return self.__class__.__qualname__ + ": " + str({
-            "input": self.get_input_key(),
-            "gt": self.get_gt_key(),
-            "meta": self.get_meta_keys()
+            "input_key": self.get_input_key(),
+            "gt_key": self.get_gt_key(),
+            "meta_keys": self.get_meta_keys()
         })
 
 
@@ -284,16 +299,6 @@ class Classification(Task):
 
         In this case, an extra check regarding class names is added when all other fields match.
         """
-        if isinstance(other, str):
-            # assume it is a saved task repr string
-            task_type = other.split(": ")[0]
-            params = eval(": ".join(other.split(": ")[1:]))
-            if task_type == "thelper.tasks.Classification":
-                other = Classification(params["classes"], params["input"], params["gt"], params["meta"])
-            elif task_type == "thelper.tasks.Task":
-                other = Task(params["input"], params["gt"], params["meta"])
-            else:
-                return False
         if isinstance(other, Classification):
             # if both tasks are related to classification, gt keys and class names must match
             # note: one class name array can be bigger than the other, as long as the overlap is the same
@@ -330,17 +335,19 @@ class Classification(Task):
             raise AssertionError("cannot combine task type '%s' with '%s'" % (str(other.__class__), str(self.__class__)))
 
     def __repr__(self):
-        """Creates a print-friendly representation of a classification task.
+        """Creates a print-friendly representation of an abstract task.
 
         Note that this representation might also be used to check the compatibility of tasks
         without importing the whole framework. Therefore, it should contain all the necessary
-        information about the task.
+        information about the task. The name of the parameters herein should also match the
+        argument names given to the constructor in case we need to recreate a task object from
+        this string.
         """
         return self.__class__.__qualname__ + ": " + str({
-            "input": self.get_input_key(),
-            "gt": self.get_gt_key(),
-            "meta": self.get_meta_keys(),
-            "classes": self.get_class_names()
+            "class_names": self.get_class_names(),
+            "input_key": self.get_input_key(),
+            "label_key": self.get_gt_key(),
+            "meta_keys": self.get_meta_keys(),
         })
 
 # todo: add new task types (objdetecton, segmentation, regression, superres, ...)
