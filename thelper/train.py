@@ -268,7 +268,6 @@ class Trainer:
         self.current_lr = self._get_lr()  # for debug/display purposes only
         if ckptdata is not None:
             self.monitor_best = ckptdata["monitor_best"]
-            self.model.load_state_dict(ckptdata["state_dict"])
             self.optimizer_state = ckptdata["optimizer"]
             self.current_iter = ckptdata["iter"] if "iter" in ckptdata else 0
             self.current_epoch = ckptdata["epoch"]
@@ -585,7 +584,10 @@ class Trainer:
             ckptdata = torch.load(filename_best, map_location="cpu")
             if self.config != ckptdata["config"]:  # todo: dig into members and check only critical ones
                 raise AssertionError("could not load compatible best checkpoint to run test eval")
-            self.model.load_state_dict(ckptdata["state_dict"])
+            if self.save_raw:
+                self.model.load_state_dict(ckptdata["model"])
+            else:
+                self.model = ckptdata["model"]
             best_epoch = ckptdata["epoch"]
             best_iter = ckptdata["iter"] if "iter" in ckptdata else None
             model = self._upload_model(self.model, self.devices)
