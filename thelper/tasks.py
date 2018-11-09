@@ -136,6 +136,13 @@ class Task(object):
         are compatible. It should ideally be overridden in derived classes to specialize
         the compatibility verification.
         """
+        if isinstance(other, str):
+            # assume it is a saved task repr string
+            task_type = other.split(": ")[0]
+            if task_type != "thelper.tasks.Task":
+                return False
+            params = eval(": ".join(other.split(": ")[1:]))
+            other = Task(params["input"], params["gt"], params["meta"])
         if type(other) == Task:
             return (self.get_input_key() == other.get_input_key() and
                     self.get_gt_key() == other.get_gt_key())
@@ -153,8 +160,13 @@ class Task(object):
             raise AssertionError("cannot combine task type '%s' with '%s'" % (str(other.__class__), str(self.__class__)))
 
     def __repr__(self):
-        """Creates a print-friendly representation of an abstract task."""
-        return self.__class__.__name__ + ": " + str({
+        """Creates a print-friendly representation of an abstract task.
+
+        Note that this representation might also be used to check the compatibility of tasks
+        without importing the whole framework. Therefore, it should contain all the necessary
+        information about the task.
+        """
+        return self.__class__.__qualname__ + ": " + str({
             "input": self.get_input_key(),
             "gt": self.get_gt_key(),
             "meta": self.get_meta_keys()
@@ -272,6 +284,16 @@ class Classification(Task):
 
         In this case, an extra check regarding class names is added when all other fields match.
         """
+        if isinstance(other, str):
+            # assume it is a saved task repr string
+            task_type = other.split(": ")[0]
+            params = eval(": ".join(other.split(": ")[1:]))
+            if task_type == "thelper.tasks.Classification":
+                other = Classification(params["classes"], params["input"], params["gt"], params["meta"])
+            elif task_type == "thelper.tasks.Task":
+                other = Task(params["input"], params["gt"], params["meta"])
+            else:
+                return False
         if isinstance(other, Classification):
             # if both tasks are related to classification, gt keys and class names must match
             # note: one class name array can be bigger than the other, as long as the overlap is the same
@@ -308,8 +330,13 @@ class Classification(Task):
             raise AssertionError("cannot combine task type '%s' with '%s'" % (str(other.__class__), str(self.__class__)))
 
     def __repr__(self):
-        """Creates a print-friendly representation of a classification task."""
-        return self.__class__.__name__ + ": " + str({
+        """Creates a print-friendly representation of a classification task.
+
+        Note that this representation might also be used to check the compatibility of tasks
+        without importing the whole framework. Therefore, it should contain all the necessary
+        information about the task.
+        """
+        return self.__class__.__qualname__ + ": " + str({
             "input": self.get_input_key(),
             "gt": self.get_gt_key(),
             "meta": self.get_meta_keys(),
