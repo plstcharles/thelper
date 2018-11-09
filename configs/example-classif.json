@@ -132,9 +132,7 @@
         }
     },
     "model": {
-        "name": "mobilenetv2test",
-        "type": "thelper.modules.mobilenet.MobileNetV2",
-        "params": []
+        "type": "thelper.modules.mobilenet.MobileNetV2"
     },
     "trainer": {
         "type": "thelper.train.ImageClassifTrainer",
