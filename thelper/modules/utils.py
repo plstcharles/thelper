@@ -15,18 +15,23 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-def load_model(config, task, save_dir=None):
+def load_model(config, task, save_dir=None, ckptdata=None):
     """Instantiates a model based on a provided task object.
 
-    The model must be specified as a type-param pair in the provided dictionary. It should derive from
-    :class:`thelper.modules.Module`, or be instantiable through :class:`thelper.modules.ExternalModule` (or
-    one of its specialized classes). The provided task object will be used to make sure that the model has
-    the required input/output layers for the requested objective.
+    The configuration must be given as a dictionary object. This dictionary will be parsed for a 'model' field.
+    This field is expected to be a dictionary itself. It may then specify a type to instantiate as well as the
+    parameters to provide to that class constructor, or a path to a checkpoint from which a model should be loaded.
+
+    All models must derive from :class:`thelper.modules.Module`, or they must be instantiable through
+    :class:`thelper.modules.ExternalModule` (or one of its specialized classes). The provided task object will
+    be used to make sure that the model has the required input/output layers for the requested objective.
+
+    If checkpoint data is provided by the caller, the weights it contains will be loaded into the returned model.
 
     Usage examples inside a session configuration file::
 
         # ...
-        # the content of this field will be passed in this function as 'config'
+        # the function will look for a 'model' field in the provided config dict
         "model": {
             # the type provides the class name to instantiate an object from
             "type": "thelper.modules.mobilenet.MobileNetV2",
@@ -37,9 +42,10 @@ def load_model(config, task, save_dir=None):
         # ...
 
     Args:
-        config: a dictionary that provides the model type and its constructor's parameters.
+        config: a session dictionary that provides a 'model' field containing a dictionary.
         task: a task object that will be passed to the model's constructor in order to specialize it.
         save_dir: if not ``None``, a log file containing model information will be created there.
+        ckptdata: raw checkpoint data loaded via ``torch.load()``; the model will be given its previous state.
 
     Returns:
         The instantiated model, compatible with the interface of both :class:`thelper.modules.Module`
@@ -50,32 +56,89 @@ def load_model(config, task, save_dir=None):
         :class:`thelper.modules.ExternalModule`
         :class:`thelper.tasks.Task`
     """
-    if not issubclass(type(task), thelper.tasks.Task):
+    if not isinstance(task, thelper.tasks.Task):
         raise AssertionError("bad task type passed to load_model")
     if save_dir is not None:
         modules_logger_path = os.path.join(save_dir, "logs", "modules.log")
         modules_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         modules_logger_fh = logging.FileHandler(modules_logger_path)
         modules_logger_fh.setFormatter(modules_logger_format)
-        thelper.modules.logger.addHandler(modules_logger_fh)
-        thelper.modules.logger.info("created modules log for session '%s'" % config["name"])
-    thelper.modules.logger.debug("loading model")
+        logger.addHandler(modules_logger_fh)
+        logger.info("created modules log for session '%s'" % config["name"])
+    logger.debug("loading model")
     if "model" not in config or not config["model"]:
         raise AssertionError("config missing 'model' field")
     model_config = config["model"]
-    if "type" not in model_config or not model_config["type"]:
-        raise AssertionError("model config missing 'type' field")
-    model_type = thelper.utils.import_class(model_config["type"])
-    if "params" not in model_config:
-        raise AssertionError("model config missing 'params' field")
-    params = thelper.utils.keyvals2dict(model_config["params"])
-    if issubclass(model_type, Module):
-        model = model_type(task=task, **params)
-    else:
-        if type(task) == thelper.tasks.Classification:
-            model = thelper.modules.utils.ExternalClassifModule(model_type, task=task, module_config=params)
+    if "ckptdata" in model_config:
+        if ckptdata is not None:
+            logger.warning("config asked to reload ckpt from path, but ckpt already loaded from elsewhere")
         else:
-            model = thelper.modules.utils.ExternalModule(model_type, task=task, config=params)
+            logger.debug("model config asked for an older model to be loaded through a checkpoint")
+            if not isinstance(model_config["ckptdata"], str):
+                raise AssertionError("unexpected model config ckptdata field type (should be path)")
+            map_location = thelper.utils.get_key_def("map_location", model_config, "cpu")
+            ckptdata = torch.load(model_config["ckptdata"], map_location=map_location)
+        if "type" in model_config or "params" in model_config:
+            logger.warning("should not provide 'type' or 'params' fields in model config if loading a checkpoint")
+    new_task, model, model_type, model_params, model_state = None, None, None, None, None
+    if ckptdata is not None:
+        # if checkpoint available, instantiate old model, load weights, and reconfigure for new task
+        if "name" not in ckptdata or  not isinstance(ckptdata["name"], str):
+            raise AssertionError("invalid checkpoint, cannot reload previous session name")
+        new_task = task  # the 'new task' will later be applied to specialize the model, once it is loaded
+        if "model" not in ckptdata or not isinstance(ckptdata["model"], (Module, dict)):
+            raise AssertionError("invalid checkpoint, cannot reload previous model state")
+        if isinstance(ckptdata["model"], Module):
+            logger.debug("loading model object directly from session '%s'" % ckptdata["name"])
+            model = ckptdata["model"]
+        elif isinstance(ckptdata["model"], dict):
+            logger.debug("loading model type/params from session '%s'" % ckptdata["name"])
+            model_state = ckptdata["model"]
+            if "task" not in ckptdata or not isinstance(ckptdata["task"], (thelper.tasks.Task, str)):
+                raise AssertionError("invalid checkpoint, cannot reload previous model task")
+            task = thelper.tasks.load_task(ckptdata["task"]) if isinstance(ckptdata["task"], str) else ckptdata["task"]
+            if "config" not in ckptdata or not isinstance(ckptdata["config"], dict):
+                raise AssertionError("invalid checkpoint, cannot reload previous session config")
+            old_config = ckptdata["config"]
+            if "model" not in old_config or not isinstance(old_config["model"], dict):
+                raise AssertionError("invalid checkpoint, cannot reload previous model config")
+            old_model_config = old_config["config"]
+            if "type" not in old_model_config or not old_model_config["type"]:
+                raise AssertionError("old model config missing 'type' field")
+            model_type = thelper.utils.import_class(old_model_config["type"])
+            model_params = thelper.utils.get_key_def("params", old_model_config, {})
+            if "ckptdata" not in model_config:
+                # ckptdata did not come from config, user provided it; add some extra verifications
+                if "type" not in model_config or model_config["type"] != model_type:
+                    raise AssertionError("model type mismatch between external ckptdata and config")
+                if model_params and ("params" not in model_config or model_config["params"] != model_params):
+                    raise AssertionError("model params mismatch between external ckptdata and config")
+    else:
+        logger.debug("loading model type/params current config")
+        if "type" not in model_config or not model_config["type"]:
+            raise AssertionError("model config missing 'type' field")
+        model_type = thelper.utils.import_class(model_config["type"])
+        model_params = thelper.utils.get_key_def("params", model_config, {})
+    if model is None:
+        # if model not already loaded from checkpoint, instantiate it fully from type/params/task
+        if model_type is None or model_params is None:
+            raise AssertionError("messed up logic above")
+        logger.debug("model_type = %s" % str(model_type))
+        logger.debug("model_params = %s" % str(model_params))
+        logger.debug("task = %s" % str(task))
+        if issubclass(model_type, Module):
+            model = model_type(task=task, **model_params)
+        else:
+            if type(task) == thelper.tasks.Classification:
+                model = ExternalClassifModule(model_type, task=task, config=model_params)
+            else:
+                model = ExternalModule(model_type, task=task, config=model_params)
+        if model_state is not None:
+            logger.debug("loading state dictionary from checkpoint into model")
+            model.load_state_dict(model_state)
+    if new_task is not None:
+        logger.debug("specializing model for task = %s" % str(new_task))
+        model.set_task(new_task)
     if hasattr(model, "summary"):
         model.summary()
     return model
@@ -86,10 +149,10 @@ class Module(torch.nn.Module, ABC):
 
     This interface is built on top of ``torch.nn.Module`` and should remain fully compatible with it.
 
-    All models used in the framework should derive from this interface, and therefore expect a task object
-    as the first argument of their constructor. Their implementation may decide to ignore this object
-    when building their internal layers, but using it should help specialize the network by specifying e.g.
-    the number of classes to support.
+    All models used in the framework should derive from this interface, and therefore expect a task object as
+    the first argument of their constructor. Their implementation may decide to ignore this task object when
+    building their internal layers, but using it should help specialize the network by specifying e.g. the
+    number of classes to support.
 
     .. seealso::
         :func:`thelper.modules.load_model`
@@ -103,19 +166,21 @@ class Module(torch.nn.Module, ABC):
             raise AssertionError("task must derive from thelper.tasks.Task")
         self.task = task
 
-    def _get_derived_name(self):
-        return str(self.__class__.__qualname__)
-
     @abstractmethod
     def forward(self, *input):
         """Transforms an input tensor in order to generate a prediction."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def set_task(self, task):
+        """Adapts the model to support a new task, replacing layers if needed."""
         raise NotImplementedError
 
     def summary(self):
         """Prints a summary of the model using the ``thelper.modules`` logger."""
         params = filter(lambda p: p.requires_grad, self.parameters())
         count = sum([np.prod(p.size()) for p in params])
-        logger.info("module '%s' parameter count: %d" % (self._get_derived_name(), count))
+        logger.info("module '%s' parameter count: %d" % (self.__class__.__qualname__, count))
         logger.info(self)
 
 
@@ -138,16 +203,12 @@ class ExternalModule(Module):
 
     def __init__(self, model_type, task, config=None):
         """Receives a task object to hold internally for model specialization."""
-        super().__init__(task)
+        super().__init__(task=task)
         logger.info("instantiating external module '%s'..." % str(model_type))
         self.model_type = model_type
-        self.task = task
         self.model = model_type(**config)
         if not hasattr(self.model, "forward"):
             raise AssertionError("external module must implement 'forward' method")
-
-    def _get_derived_name(self):
-        return thelper.utils.get_caller_name(0).rsplit(".", 1)[0]
 
     def load_state_dict(self, state_dict, strict=True):
         """Loads the state dict of an external model."""
@@ -161,11 +222,22 @@ class ExternalModule(Module):
         """Transforms an input tensor in order to generate a prediction."""
         return self.model(*input)
 
+    def set_task(self, task):
+        """Stores the new task internally.
+
+        Note that since this external module handler is generic, it does not know what to do with the task,
+        so it just assumes that the model is already set up. Specialized external module handlers will instead
+        attempt to modify the model they wrap.
+        """
+        if task is None or not isinstance(task, thelper.tasks.Task):
+            raise AssertionError("task must derive from thelper.tasks.Task")
+        self.task = task
+
     def summary(self):
         """Prints a summary of the model using the ``thelper.modules`` logger."""
         params = filter(lambda p: p.requires_grad, self.model.parameters())
         count = sum([np.prod(p.size()) for p in params])
-        logger.info("module '%s' parameter count: %d" % (self._get_derived_name(), count))
+        logger.info("module '%s' parameter count: %d" % (thelper.utils.get_caller_name(0).rsplit(".", 1)[0], count))
         logger.info(self.model)
 
 
@@ -185,16 +257,23 @@ class ExternalClassifModule(ExternalModule):
     def __init__(self, model_type, task, config=None):
         """Receives a task object to hold internally for model specialization, and tries to rewire the last 'fc' layer."""
         super().__init__(model_type, task, config=config)
+        self.nb_classes = None
+        self.set_task(task)
+
+    def set_task(self, task):
+        """Rewires the last fully connected layer of the wrapped network to fit the given number of classification targets."""
         if type(task) != thelper.tasks.Classification:
             raise AssertionError("task passed to ExternalClassifModule should be 'thelper.tasks.Classification'")
         self.nb_classes = self.task.get_nb_classes()
-        if hasattr(self.model, "fc"):
-            logger.info("reconnecting fc layer for outputting %d classes..." % self.nb_classes)
-            nb_features = self.model.fc.in_features
-            self.model.fc = torch.nn.Linear(nb_features, self.nb_classes)
-        elif hasattr(self.model, "classifier"):
-            logger.info("reconnecting classifier layer for outputting %d classes..." % self.nb_classes)
-            nb_features = self.model.classifier.in_features
-            self.model.classifier = torch.nn.Linear(nb_features, self.nb_classes)
+        if hasattr(self.model, "fc") and isinstance(self.model.fc, torch.nn.Linear):
+            if self.model.fc.out_features != self.nb_classes:
+                logger.info("reconnecting fc layer for outputting %d classes..." % self.nb_classes)
+                nb_features = self.model.fc.in_features
+                self.model.fc = torch.nn.Linear(nb_features, self.nb_classes)
+        elif hasattr(self.model, "classifier") and isinstance(self.model.classifier, torch.nn.Linear):
+            if self.model.classifier.out_features != self.nb_classes:
+                logger.info("reconnecting classifier layer for outputting %d classes..." % self.nb_classes)
+                nb_features = self.model.classifier.in_features
+                self.model.classifier = torch.nn.Linear(nb_features, self.nb_classes)
         else:
             raise AssertionError("could not reconnect fully connected layer for new classes")

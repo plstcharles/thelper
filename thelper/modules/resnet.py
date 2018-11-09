@@ -139,9 +139,9 @@ class SqueezeExcitationBlock(Module):
 
 class ResNet(thelper.modules.Module):
 
-    def __init__(self, task, name=None, block=BasicBlock, layers=[3, 4, 6, 3], strides=[1, 2, 2, 2],
-                 input_channels=3, flexible_input_res=False, pool_size=7, coordconv=False, radius_channel=True):
-        super().__init__(task, name)
+    def __init__(self, task, block=BasicBlock, layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
+                 flexible_input_res=False, pool_size=7, coordconv=False, radius_channel=True):
+        super().__init__(task)
         if isinstance(block, str):
             block = thelper.utils.import_class(block)
         if not issubclass(block, Module):
@@ -162,22 +162,19 @@ class ResNet(thelper.modules.Module):
         self.layer2 = self._make_layer(block, 128, layers[1], stride=strides[1])
         self.layer3 = self._make_layer(block, 256, layers[2], stride=strides[2])
         self.layer4 = self._make_layer(block, 512, layers[3], stride=strides[3])
-        out_features = 512
+        self.out_features = 512
         self.layer5 = None
         if len(layers) > 4:
             self.layer5 = self._make_layer(block, 1024, layers[4], stride=strides[4])
-            out_features = 1024
-        if isinstance(task, thelper.tasks.Classification):
-            if flexible_input_res:
-                self.avgpool = torch.nn.AdaptiveAvgPool2d(1)
-            else:
-                if pool_size < 1:
-                    raise AssertionError("invalid avg pool size for non-flex resolution")
-                self.avgpool = torch.nn.AvgPool2d(pool_size, stride=1)
-            num_classes = len(task.get_class_names())
-            self.fc = torch.nn.Linear(out_features * block.expansion, num_classes)
+            self.out_features = 1024
+        if flexible_input_res:
+            self.avgpool = torch.nn.AdaptiveAvgPool2d(1)
         else:
-            raise AssertionError("missing impl for non-classif task type")
+            if pool_size < 1:
+                raise AssertionError("invalid avg pool size for non-flex resolution")
+            self.avgpool = torch.nn.AvgPool2d(pool_size, stride=1)
+        self.out_features *= block.expansion
+        self.fc = torch.nn.Linear(self.out_features, 1000)  # output type/count will be specialized by task after init
         for m in self.modules():
             if isinstance(m, torch.nn.Conv2d):
                 torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -186,6 +183,7 @@ class ResNet(thelper.modules.Module):
             elif isinstance(m, torch.nn.BatchNorm2d):
                 torch.nn.init.constant_(m.weight, 1)
                 torch.nn.init.constant_(m.bias, 0)
+        self.set_task(task)
 
     def _make_conv2d(self, *args, **kwargs):
         if self.coordconv:
@@ -222,114 +220,13 @@ class ResNet(thelper.modules.Module):
         x = self.fc(x)
         return x
 
-
-class ResFullConvNet(torch.nn.Module):
-
-    def __init__(self, block, layers, num_classes=1000, input_channels=3):
-        self.inplanes = 64
-        super(ResFullConvNet, self).__init__()
-        self.conv1 = torch.nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.bn1 = torch.nn.BatchNorm2d(64)
-        self.relu = torch.nn.ReLU(inplace=True)
-        self.maxpool = torch.nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-        self.avgpool = torch.nn.AvgPool2d(7, stride=1)
-        self.fcc0 = torch.nn.Conv2d(512, 256, kernel_size=1, stride=1, padding=0, bias=False)
-        self.fcc1 = torch.nn.Conv2d(256, 128, kernel_size=1, stride=1, padding=0, bias=False)
-        self.bn2 = torch.nn.BatchNorm2d(128)
-        self.fcc2 = torch.nn.Conv2d(128, num_classes, kernel_size=1, stride=1, padding=0, bias=False)
-        for m in self.modules():
-            if isinstance(m, torch.nn.Conv2d):
-                torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, torch.nn.BatchNorm2d):
-                torch.nn.init.constant_(m.weight, 1)
-                torch.nn.init.constant_(m.bias, 0)
-
-    def _make_layer(self, block, planes, blocks, stride=1):
-        downsample = None
-        if stride != 1 or self.inplanes != planes * block.expansion:
-            downsample = torch.nn.Sequential(
-                torch.nn.Conv2d(self.inplanes, planes * block.expansion,
-                                kernel_size=1, stride=stride, bias=False),
-                torch.nn.BatchNorm2d(planes * block.expansion),
-            )
-        layers = [block(self.inplanes, planes, stride, downsample)]
-        self.inplanes = planes * block.expansion
-        for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes))
-        return torch.nn.Sequential(*layers)
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        x = self.avgpool(x)
-        x = self.fcc0(x)
-        x = self.relu(x)
-        x = self.fcc1(x)
-        x = self.relu(x)
-        x = self.bn2(x)
-        x = self.fcc2(x)
-        x = torch.squeeze(x)
-        return x
-
-
-class ResFeaturesNet(torch.nn.Module):
-
-    def __init__(self, block, layers, num_classes=1000):
-        self.inplanes = 64
-        super(ResFeaturesNet, self).__init__()
-        self.conv1 = torch.nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.bn1 = torch.nn.BatchNorm2d(64)
-        self.relu = torch.nn.ReLU(inplace=True)
-        self.maxpool = torch.nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-        self.avgpool = torch.nn.AvgPool2d(7, stride=1)
-        self.fc = torch.nn.Linear(512 * block.expansion, num_classes)
-        for m in self.modules():
-            if isinstance(m, torch.nn.Conv2d):
-                torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, torch.nn.BatchNorm2d):
-                torch.nn.init.constant_(m.weight, 1)
-                torch.nn.init.constant_(m.bias, 0)
-
-    def _make_layer(self, block, planes, blocks, stride=1):
-        downsample = None
-        if stride != 1 or self.inplanes != planes * block.expansion:
-            downsample = torch.nn.Sequential(
-                torch.nn.Conv2d(self.inplanes, planes * block.expansion,
-                                kernel_size=1, stride=stride, bias=False),
-                torch.nn.BatchNorm2d(planes * block.expansion),
-            )
-        layers = [block(self.inplanes, planes, stride, downsample)]
-        self.inplanes = planes * block.expansion
-        for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes))
-        return torch.nn.Sequential(*layers)
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        return x
+    def set_task(self, task):
+        if isinstance(task, thelper.tasks.Classification):
+            num_classes = len(task.get_class_names())
+            self.fc = torch.nn.Linear(self.out_features, num_classes)
+        else:
+            raise AssertionError("missing impl for non-classif task type")
+        self.task = task
 
 
 def resnet18(pretrained=False, **kwargs):

@@ -185,8 +185,8 @@ class Block8(torch.nn.Module):
 
 class InceptionResNetV2(thelper.modules.Module):
 
-    def __init__(self, task, name=None, input_channels=3):
-        super().__init__(task, name)
+    def __init__(self, task, input_channels=3):
+        super().__init__(task)
         self.conv2d_1a = BasicConv2d(input_channels, 32, kernel_size=3, stride=2)
         self.conv2d_2a = BasicConv2d(32, 32, kernel_size=3, stride=1)
         self.conv2d_2b = BasicConv2d(32, 64, kernel_size=3, stride=1, padding=1)
@@ -244,12 +244,9 @@ class InceptionResNetV2(thelper.modules.Module):
         )
         self.block8 = Block8(noReLU=True)
         self.conv2d_7b = BasicConv2d(2080, 1536, kernel_size=1, stride=1)
-        if isinstance(task, thelper.tasks.Classification):
-            self.avgpool_1a = torch.nn.AvgPool2d(8, count_include_pad=False)
-            num_classes = len(task.get_class_names())
-            self.last_linear = torch.nn.Linear(1536, num_classes)
-        else:
-            raise AssertionError("missing impl for non-classif task type")
+        self.avgpool_1a = torch.nn.AvgPool2d(8, count_include_pad=False)
+        self.last_linear = torch.nn.Linear(1536, 1000)
+        self.set_task(task)
 
     def features(self, input):
         x = self.conv2d_1a(input)
@@ -279,3 +276,11 @@ class InceptionResNetV2(thelper.modules.Module):
         x = self.features(input)
         x = self.logits(x)
         return x
+
+    def set_task(self, task):
+        if isinstance(task, thelper.tasks.Classification):
+            num_classes = len(task.get_class_names())
+            self.last_linear = torch.nn.Linear(1536, num_classes)
+        else:
+            raise AssertionError("missing impl for non-classif task type")
+        self.task = task

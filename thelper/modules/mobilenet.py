@@ -53,8 +53,8 @@ class InvertedResidual(nn.Module):
 
 class MobileNetV2(thelper.modules.Module):
 
-    def __init__(self, task, name=None, input_size=224, width_mult=1.):
-        super().__init__(task, name=name)
+    def __init__(self, task, input_size=224, width_mult=1.):
+        super().__init__(task)
         # setting of inverted residual blocks
         self.interverted_residual_setting = [
             # t, c, n, s
@@ -89,15 +89,27 @@ class MobileNetV2(thelper.modules.Module):
         # building classifier
         self.classifier = nn.Sequential(
             nn.Dropout(),
-            nn.Linear(self.last_channel, task.get_nb_classes()),
+            nn.Linear(self.last_channel, 1000),
         )
         self._initialize_weights()
+        self.set_task(task)
 
     def forward(self, x):
         x = self.features(x)
         x = x.view(-1, self.last_channel)
         x = self.classifier(x)
         return x
+
+    def set_task(self, task):
+        if isinstance(task, thelper.tasks.Classification):
+            num_classes = len(task.get_class_names())
+            self.classifier = nn.Sequential(
+                nn.Dropout(),
+                nn.Linear(self.last_channel, num_classes),
+            )
+        else:
+            raise AssertionError("missing impl for non-classif task type")
+        self.task = task
 
     def _initialize_weights(self):
         for m in self.modules():
