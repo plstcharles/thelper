@@ -3,40 +3,40 @@
     "datasets": {
         "cifar10_train": {
             "type": "torchvision.datasets.CIFAR10",
-            "params": [
-                {"name": "root", "value": "data/cifar/train"},
-                {"name": "train", "value": true},
-                {"name": "download", "value": true}
-            ],
+            "params": {
+                "root": "data/cifar/train",
+                "train": true,
+                "download": true
+            },
             "task": {
                 "type": "thelper.tasks.Classification",
-                "params": [
-                    {"name": "class_names", "value": [
+                "params": {
+                    "class_names": [
                         "airplane", "car", "bird", "cat", "deer",
                         "dog", "frog", "horse", "ship", "truck"
-                    ]},
-                    {"name": "input_key", "value": "0"},
-                    {"name": "label_key", "value": "1"}
-                ]
+                    ],
+                    "input_key": "0",
+                    "label_key": "1"
+                }
             }
         },
         "cifar10_test": {
             "type": "torchvision.datasets.CIFAR10",
-            "params": [
-                {"name": "root", "value": "data/cifar/test"},
-                {"name": "train", "value": false},
-                {"name": "download", "value": true}
-            ],
+            "params": {
+                "root": "data/cifar/test",
+                "train": false,
+                "download": true
+            },
             "task": {
                 "type": "thelper.tasks.Classification",
-                "params": [
-                    {"name": "class_names", "value": [
+                "params": {
+                    "class_names": [
                         "airplane", "car", "bird", "cat", "deer",
                         "dog", "frog", "horse", "ship", "truck"
-                    ]},
-                    {"name": "input_key", "value": "0"},
-                    {"name": "label_key", "value": "1"}
-                ]
+                    ],
+                    "input_key": "0",
+                    "label_key": "1"
+                }
             }
         }
     },
@@ -54,13 +54,13 @@
             "transforms": [
                 {
                     "operation": "thelper.transforms.Duplicator",
-                    "parameters": {
+                    "params": {
                         "count": 4
                     }
                 },
                 {
                     "operation": "Augmentor.Pipeline",
-                    "parameters": {
+                    "params": {
                         "linked_fate": false,
                         "operations": {
                             "rotate": {"probability": 1, "max_left_rotation": 5, "max_right_rotation": 5},
@@ -76,13 +76,13 @@
             "transforms": [
                 {
                     "operation": "thelper.transforms.Duplicator",
-                    "parameters": {
+                    "params": {
                         "count": 4
                     }
                 },
                 {
                     "operation": "Augmentor.Pipeline",
-                    "parameters": {
+                    "params": {
                         "linked_fate": false,
                         "operations": {
                             "flip_left_right": {"probability": 0.5}
@@ -94,9 +94,9 @@
         "base_transforms": [
             {
                 "operation": "thelper.transforms.ImageTransformWrapper",
-                "parameters": {
+                "params": {
                     "operation": "thelper.transforms.NormalizeMinMax",
-                    "parameters": {
+                    "params": {
                         "min": [127, 127, 127],
                         "max": [255, 255, 255]
                     },
@@ -105,9 +105,9 @@
             },
             {
                 "operation": "thelper.transforms.ImageTransformWrapper",
-                "parameters": {
+                "params": {
                     "operation": "thelper.transforms.Resize",
-                    "parameters": {
+                    "params": {
                         "dsize": [224, 224]
                     },
                     "force_convert": false
@@ -115,7 +115,7 @@
             },
             {
                 "operation": "thelper.transforms.ImageTransformWrapper",
-                "parameters": {
+                "params": {
                     "operation": "torchvision.transforms.ToTensor",
                     "force_convert": false
                 }
@@ -144,37 +144,37 @@
         "optimization": {
             "loss": {
                 "type": "torch.nn.CrossEntropyLoss",
-                "params": []
+                "params": {}
             },
             "optimizer": {
                 "type": "torch.optim.RMSprop",
-                "params": [
-                    {"name": "lr", "value": 0.01},
-                    {"name": "weight_decay", "value": 0.00004}
-                ]
+                "params": {
+                    "lr": 0.01,
+                    "weight_decay": 0.00004
+                }
             },
             "scheduler": {
                 "type": "torch.optim.lr_scheduler.ExponentialLR",
-                "params": [
-                    {"name": "gamma", "value": 0.98}
-                ],
+                "params": {
+                    "gamma": 0.98
+                },
                 "step": 1
             }
         },
         "metrics": {
             "accuracy": {
                 "type": "thelper.optim.CategoryAccuracy",
-                "params": [
-                    {"name": "top_k", "value": 1}
-                ]
+                "params": {
+                    "top_k": 1
+                }
             }
         },
         "test_metrics": {
             "logger": {
                 "type": "thelper.optim.ClassifLogger",
-                "params": [
-                    {"name": "top_k", "value": 3}
-                ]
+                "params": {
+                    "top_k": 3
+                }
             }
         }
     }

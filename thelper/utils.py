@@ -209,37 +209,6 @@ def lreplace(string, old_prefix, new_prefix):
     return re.sub(r'^(?:%s)+' % re.escape(old_prefix), lambda m: new_prefix * (m.end() // len(old_prefix)), string)
 
 
-def keyvals2dict(keyvals):
-    """Returns a dictionary of key-value parameter pairs.
-
-    In JSON format, the expected input would look like this::
-
-        [
-            {"name": <...>, "value": <...>},
-            {"name": <...>, "value": <...>},
-            {"name": <...>, "value": <...>},
-            <...>
-        ]
-
-    Args:
-        keyvals: a list of 2-element dictionaries to be parsed.
-
-    Returns:
-         A dictionary of all flattened parameters.
-    """
-    if not isinstance(keyvals, list):
-        raise AssertionError("expected key-value pair vector")
-    out = {}
-    for idx in range(len(keyvals)):
-        item = keyvals[idx]
-        if not isinstance(item, dict):
-            raise AssertionError("expected items to be dicts")
-        elif "name" not in item or "value" not in item:
-            raise AssertionError("expected 'name' and 'value' fields in each item")
-        out[item["name"]] = item["value"]
-    return out
-
-
 def query_yes_no(question, default=None):
     """Asks the user a yes/no question and returns the answer.
 

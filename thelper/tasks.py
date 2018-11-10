@@ -32,12 +32,12 @@ def load_task(config):
     if config is None or not isinstance(config, (str, dict)):
         raise AssertionError("unexpected config type (should be str or dict)")
     if isinstance(config, dict):
-        if "type" not in config:
-            raise AssertionError("missing field 'type' in task config")
+        if "type" not in config or not isinstance(config["type"], str):
+            raise AssertionError("invalid field 'type' in task config")
         task_type = thelper.utils.import_class(config["type"])
-        if "params" not in config:
-            raise AssertionError("missing field 'params' in task config")
-        task_params = thelper.utils.keyvals2dict(config["params"])
+        if "params" not in config or not isinstance(config["params"], dict):
+            raise AssertionError("invalid field 'params' in task config")
+        task_params = config["params"]
         task = task_type(**task_params)
         if not isinstance(task, thelper.tasks.Task):
             raise AssertionError("the task must be derived from 'thelper.tasks.Task'")

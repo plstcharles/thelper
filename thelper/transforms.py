@@ -59,13 +59,13 @@ def load_transforms(stages):
             "base_transforms": [
                 {
                     "operation": "...",
-                    "parameters": {
+                    "params": {
                         ...
                     }
                 },
                 {
                     "operation": "...",
-                    "parameters": {
+                    "params": {
                         ...
                     }
                 }
@@ -94,9 +94,9 @@ def load_transforms(stages):
         if "operation" not in stage or not stage["operation"]:
             raise AssertionError("stage #%d is missing its operation field" % stage_idx)
         operation_name = stage["operation"]
-        if "parameters" in stage and not isinstance(stage["parameters"], dict):
+        if "params" in stage and not isinstance(stage["params"], dict):
             raise AssertionError("stage #%d parameters are not provided as a dictionary" % stage_idx)
-        operation_params = stage["parameters"] if "parameters" in stage else {}
+        operation_params = stage["params"] if "params" in stage else {}
         if operation_name == "Augmentor.Pipeline":
             augp = Augmentor.Pipeline()
             if "operations" not in operation_params:
@@ -147,7 +147,7 @@ def load_augments(config):
                         # here, we use a single stage, which is actually an augmentor sub-pipeline
                         # that is purely probabilistic (i.e. it does not increase input sample count)
                         "operation": "Augmentor.Pipeline",
-                        "parameters": {
+                        "params": {
                             "operations": {
                                 # the augmentor pipeline defines two operations: rotations and flips
                                 "rotate_random_90": {"probability": 0.75},
@@ -166,15 +166,15 @@ def load_augments(config):
                     # increases the number of samples provided by the dataset parser
                     {
                         "operation": "thelper.transforms.Duplicator",
-                        "parameters": {
+                        "params": {
                             "count": 10
                         }
                     },
                     {
                         "operation": "thelper.transforms.ImageTransformWrapper",
-                        "parameters": {
+                        "params": {
                             "operation": "thelper.transforms.RandomResizedCrop",
-                            "parameters": {
+                            "params": {
                                 "output_size": [224, 224],
                                 "input_size": [0.1, 1.0],
                                 "ratio": 1.0
@@ -349,7 +349,7 @@ class ImageTransformWrapper(object):
         flatten: specifies whether embedded lists/tuples should be flattened or not.
     """
 
-    def __init__(self, operation, parameters=None, probability=1, force_convert=False, linked_fate=True, flatten=False):
+    def __init__(self, operation, params=None, probability=1, force_convert=False, linked_fate=True, flatten=False):
         """Receives and stores a torchvision transform operation for later use.
 
         If the operation is given as a string, it is assumed to be a class name and it will
@@ -359,21 +359,21 @@ class ImageTransformWrapper(object):
 
         Args:
             operation: the wrapped operation (callable object or class name string to import).
-            parameters: the parameters that are passed to the operation when init'd or called.
+            params: the parameters that are passed to the operation when init'd or called.
             probability: the probability that the wrapped operation will be applied.
             force_convert: specifies whether images should be forced into PIL format or not.
             linked_fate: specifies whether images given in a list/tuple should have the same fate or not.
             flatten: specifies whether embedded lists/tuples should be flattened or not.
         """
-        if parameters is not None and not isinstance(parameters, dict):
-            raise AssertionError("expected parameters to be passed in as a dictionary")
+        if params is not None and not isinstance(params, dict):
+            raise AssertionError("expected params to be passed in as a dictionary")
         if isinstance(operation, str):
             operation_type = thelper.utils.import_class(operation)
-            self.operation = operation_type(**parameters) if parameters is not None else operation_type()
-            self.parameters = {}
+            self.operation = operation_type(**params) if params is not None else operation_type()
+            self.params = {}
         else:
             self.operation = operation
-            self.parameters = parameters if parameters is not None else {}
+            self.params = params if params is not None else {}
         if probability < 0 or probability > 1:
             raise AssertionError("invalid probability value (range is [0,1]")
         self.probability = probability
@@ -423,11 +423,11 @@ class ImageTransformWrapper(object):
                         self.operation.set_seed(op_seed)
                     # watch out: if operation is stochastic and we cannot seed above, then there is no
                     # guarantee that the samples will truly have a 'linked fate' (this might cause issues!)
-                    array[idx] = self.operation(array[idx], **self.parameters)
+                    array[idx] = self.operation(array[idx], **self.params)
         else:  # each sample/array will be processed independently below (current seeds are kept)
             for idx in range(len(array)):
                 if self.probability >= 1 or round(np.random.uniform(0, 1), 1) <= self.probability:
-                    array[idx] = self.operation(array[idx], **self.parameters)
+                    array[idx] = self.operation(array[idx], **self.params)
         flat_idx = 0
         for idx, cvt in enumerate(cvt_array):
             if not isinstance(cvt, list):

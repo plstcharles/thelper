@@ -83,7 +83,7 @@ class Annotator:
         if datasets is None or not isinstance(datasets, dict):
             raise AssertionError("invalid input dataset parser dictionary")
         self.config = config
-        self.annotator_config = thelper.utils.keyvals2dict(config["annotator"]["params"]) if "params" in config["annotator"] else {}
+        self.annotator_config = thelper.utils.get_key_def("params", config["annotator"], {})
         self.logger = thelper.utils.get_class_logger()
         self.name = session_name
         self.save_dir = save_dir

@@ -572,10 +572,9 @@ class ExternalMetric(Metric):
         self.metric = thelper.utils.import_class(metric_name)
         self.metric_params = {}
         if metric_params is not None:
-            if isinstance(metric_params, dict):
-                self.metric_params = metric_params
-            elif isinstance(metric_params, list):
-                self.metric_params = thelper.utils.keyvals2dict(metric_params)
+            if not isinstance(metric_params, dict):
+                raise AssertionError("invalid metric params type (should be dict)")
+            self.metric_params = metric_params
         if "classif" in metric_type:
             self.target_name = target_name
             self.target_idx = None

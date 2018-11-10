@@ -279,9 +279,7 @@ def load_datasets(config, data_root, base_transforms=None):
         if "type" not in dataset_config:
             raise AssertionError("missing field 'type' for instantiation of dataset '%s'" % dataset_name)
         dataset_type = thelper.utils.import_class(dataset_config["type"])
-        if "params" not in dataset_config:
-            raise AssertionError("missing field 'params' for instantiation of dataset '%s'" % dataset_name)
-        params = thelper.utils.keyvals2dict(dataset_config["params"])
+        dataset_params = thelper.utils.get_key_def("params", dataset_config, {})
         transforms = None
         if "transforms" in dataset_config and dataset_config["transforms"]:
             transforms = thelper.transforms.load_transforms(dataset_config["transforms"])
@@ -291,7 +289,7 @@ def load_datasets(config, data_root, base_transforms=None):
             transforms = base_transforms
         if issubclass(dataset_type, Dataset):
             # assume that the dataset is derived from thelper.data.Dataset (it is fully sampling-ready)
-            dataset = dataset_type(name=dataset_name, root=data_root, config=params, transforms=transforms)
+            dataset = dataset_type(name=dataset_name, root=data_root, config=dataset_params, transforms=transforms)
             if "task" in dataset_config:
                 logger.warning("'task' field detected in dataset '%s' config; will be ignored (interface should provide it)" % dataset_name)
             task = dataset.get_task()
@@ -300,7 +298,7 @@ def load_datasets(config, data_root, base_transforms=None):
                 raise AssertionError("external dataset '%s' must define task interface in its configuration dict" % dataset_name)
             task = thelper.tasks.load_task(dataset_config["task"])
             # assume that __getitem__ and __len__ are implemented, but we need to make it sampling-ready
-            dataset = ExternalDataset(dataset_name, data_root, dataset_type, task, config=params, transforms=transforms)
+            dataset = ExternalDataset(dataset_name, data_root, dataset_type, task, config=dataset_params, transforms=transforms)
         if task is None:
             raise AssertionError("parsed task interface should not be None anymore (old code doing something strange?)")
         tasks.append(task)
@@ -407,7 +405,7 @@ class DataConfig(object):
                 if "type" not in sampler_config or not sampler_config["type"]:
                     raise AssertionError("missing 'type' field for sampler config")
                 self.sampler_type = thelper.utils.import_class(sampler_config["type"])
-                self.sampler_params = thelper.utils.keyvals2dict(sampler_config["params"]) if "params" in sampler_config else None
+                self.sampler_params = thelper.utils.get_key_def("params", sampler_config, {})
                 logger.debug("will use global sampler with type '%s' and config : %s" % (str(self.sampler_type),
                                                                                          str(self.sampler_params)))
                 self.sampler_pass_labels = False
@@ -684,15 +682,9 @@ class DataConfig(object):
                 dataset = torch.utils.data.ConcatDataset(loader_datasets) if len(loader_datasets) > 1 else loader_datasets[0]
                 if self.sampler_type is not None and sampler_apply:
                     if self.sampler_pass_labels:
-                        if self.sampler_params is not None:
-                            sampler = self.sampler_type(loader_sample_idxs, loader_sample_classes, **self.sampler_params)
-                        else:
-                            sampler = self.sampler_type(loader_sample_idxs, loader_sample_classes)
+                        sampler = self.sampler_type(loader_sample_idxs, loader_sample_classes, **self.sampler_params)
                     else:
-                        if self.sampler_params is not None:
-                            sampler = self.sampler_type(loader_sample_idxs, **self.sampler_params)
-                        else:
-                            sampler = self.sampler_type(loader_sample_idxs)
+                        sampler = self.sampler_type(loader_sample_idxs, **self.sampler_params)
                 else:
                     sampler = torch.utils.data.sampler.SubsetRandomSampler(loader_sample_idxs)
                 loaders.append(torch.utils.data.DataLoader(dataset,

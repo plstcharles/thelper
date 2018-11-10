@@ -343,9 +343,7 @@ class Trainer:
         if "type" not in config or not config["type"]:
             raise AssertionError("loss config missing 'type' field")
         loss_type = thelper.utils.import_class(config["type"])
-        loss_params = {}
-        if "params" in config:
-            loss_params = thelper.utils.keyvals2dict(config["params"])
+        loss_params = thelper.utils.get_key_def("params", config, {})
         if isinstance(self.model.task, thelper.tasks.Classification) and "weight_classes" in config:
             weight_classes = thelper.utils.str2bool(config["weight_classes"])
             if weight_classes:
@@ -393,8 +391,7 @@ class Trainer:
         """Instantiates and returns the optimizer to use for training.
 
         By default, the optimizer will be instantiated with the model parameters given as the first argument of its constructor.
-        All supplementary arguments are expected to be handed in through the configuration via key-value pairs (see
-        :func:`thelper.utils.keyvals2dict` for more information).
+        All supplementary arguments are expected to be handed in through the configuration via a dictionary named 'params'.
         """
         self.logger.debug("loading optimizer")
         if not isinstance(config, dict):
@@ -402,17 +399,14 @@ class Trainer:
         if "type" not in config or not config["type"]:
             raise AssertionError("optimizer config missing 'type' field")
         optimizer_type = thelper.utils.import_class(config["type"])
-        optimizer_params = {}
-        if "params" in config:
-            optimizer_params = thelper.utils.keyvals2dict(config["params"])
+        optimizer_params = thelper.utils.get_key_def("params", config, {})
         optimizer = optimizer_type(filter(lambda p: p.requires_grad, model.parameters()), **optimizer_params)
         return optimizer
 
     def _load_scheduler(self, config, optimizer):
         """Instantiates and returns the learning rate scheduler to use for training.
 
-        All arguments are expected to be handed in through the configuration via key-value pairs (see :func:`thelper.utils.keyvals2dict`
-        for more information).
+        All arguments are expected to be handed in through the configuration via a dictionary named 'params'.
         """
         self.logger.debug("loading scheduler")
         if not isinstance(config, dict):
@@ -420,17 +414,14 @@ class Trainer:
         if "type" not in config or not config["type"]:
             raise AssertionError("scheduler config missing 'type' field")
         scheduler_type = thelper.utils.import_class(config["type"])
-        scheduler_params = {}
-        if "params" in config:
-            scheduler_params = thelper.utils.keyvals2dict(config["params"])
+        scheduler_params = thelper.utils.get_key_def("params", config, {})
         scheduler = scheduler_type(optimizer, **scheduler_params)
         return scheduler
 
     def _load_metrics(self, config):
         """Instantiates and returns the metrics defined in the configuration dictionary.
 
-        All arguments are expected to be handed in through the configuration via key-value pairs (see :func:`thelper.utils.keyvals2dict`
-        for more information).
+        All arguments are expected to be handed in through the configuration via a dictionary named 'params'.
         """
         if not isinstance(config, dict):
             raise AssertionError("config should be provided as a dictionary")
@@ -441,9 +432,7 @@ class Trainer:
             if "type" not in metric_config or not metric_config["type"]:
                 raise AssertionError("metric config missing 'type' field")
             metric_type = thelper.utils.import_class(metric_config["type"])
-            metric_params = {}
-            if "params" in metric_config:
-                metric_params = thelper.utils.keyvals2dict(metric_config["params"])
+            metric_params = thelper.utils.get_key_def("params", metric_config, {})
             metric = metric_type(**metric_params)
             goal = getattr(metric, "goal", None)
             if not callable(goal):
