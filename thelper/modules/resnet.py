@@ -223,7 +223,8 @@ class ResNet(thelper.modules.Module):
     def set_task(self, task):
         if isinstance(task, thelper.tasks.Classification):
             num_classes = len(task.get_class_names())
-            self.fc = torch.nn.Linear(self.out_features, num_classes)
+            if self.fc.out_features != num_classes:
+                self.fc = torch.nn.Linear(self.out_features, num_classes)
         else:
             raise AssertionError("missing impl for non-classif task type")
         self.task = task

@@ -280,7 +280,8 @@ class InceptionResNetV2(thelper.modules.Module):
     def set_task(self, task):
         if isinstance(task, thelper.tasks.Classification):
             num_classes = len(task.get_class_names())
-            self.last_linear = torch.nn.Linear(1536, num_classes)
+            if self.last_linear.out_features != num_classes:
+                self.last_linear = torch.nn.Linear(1536, num_classes)
         else:
             raise AssertionError("missing impl for non-classif task type")
         self.task = task

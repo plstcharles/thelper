@@ -87,9 +87,10 @@ class MobileNetV2(thelper.modules.Module):
         # make it nn.Sequential
         self.features = nn.Sequential(*self.features)
         # building classifier
+        self.classif_features = 1000  # default count, will be updated if needed
         self.classifier = nn.Sequential(
             nn.Dropout(),
-            nn.Linear(self.last_channel, 1000),
+            nn.Linear(self.last_channel, self.classif_features),
         )
         self._initialize_weights()
         self.set_task(task)
@@ -103,10 +104,12 @@ class MobileNetV2(thelper.modules.Module):
     def set_task(self, task):
         if isinstance(task, thelper.tasks.Classification):
             num_classes = len(task.get_class_names())
-            self.classifier = nn.Sequential(
-                nn.Dropout(),
-                nn.Linear(self.last_channel, num_classes),
-            )
+            if num_classes != self.classif_features:
+                self.classifier = nn.Sequential(
+                    nn.Dropout(),
+                    nn.Linear(self.last_channel, num_classes),
+                )
+                self.classif_features = num_classes
         else:
             raise AssertionError("missing impl for non-classif task type")
         self.task = task
