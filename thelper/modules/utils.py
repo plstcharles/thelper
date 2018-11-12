@@ -102,14 +102,14 @@ def load_model(config, task, save_dir=None, ckptdata=None):
             old_config = ckptdata["config"]
             if "model" not in old_config or not isinstance(old_config["model"], dict):
                 raise AssertionError("invalid checkpoint, cannot reload previous model config")
-            old_model_config = old_config["config"]
+            old_model_config = old_config["model"]
             if "type" not in old_model_config or not old_model_config["type"]:
                 raise AssertionError("old model config missing 'type' field")
             model_type = thelper.utils.import_class(old_model_config["type"])
             model_params = thelper.utils.get_key_def("params", old_model_config, {})
             if "ckptdata" not in model_config:
                 # ckptdata did not come from config, user provided it; add some extra verifications
-                if "type" not in model_config or model_config["type"] != model_type:
+                if "type" not in model_config or model_config["type"] != old_model_config["type"]:
                     raise AssertionError("model type mismatch between external ckptdata and config")
                 if model_params and ("params" not in model_config or model_config["params"] != model_params):
                     raise AssertionError("model params mismatch between external ckptdata and config")

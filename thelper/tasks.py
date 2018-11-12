@@ -43,8 +43,12 @@ def load_task(config):
             raise AssertionError("the task must be derived from 'thelper.tasks.Task'")
         return task
     elif isinstance(config, str):
-        task_type = thelper.utils.import_class(repr.split(": ")[0])
-        task_params = eval(": ".join(repr.split(": ")[1:]))
+        task_type_name = config.split(": ")[0]
+        if "." not in task_type_name:
+            # dirty hotfix
+            task_type_name = "thelper.tasks." + task_type_name
+        task_type = thelper.utils.import_class(task_type_name)
+        task_params = eval(": ".join(config.split(": ")[1:]))
         task = task_type(**task_params)
         if not isinstance(task, thelper.tasks.Task):
             raise AssertionError("the task must be derived from 'thelper.tasks.Task'")
@@ -181,7 +185,7 @@ class Task(object):
         argument names given to the constructor in case we need to recreate a task object from
         this string.
         """
-        return self.__class__.__qualname__ + ": " + str({
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + ": " + str({
             "input_key": self.get_input_key(),
             "gt_key": self.get_gt_key(),
             "meta_keys": self.get_meta_keys()
@@ -343,7 +347,7 @@ class Classification(Task):
         argument names given to the constructor in case we need to recreate a task object from
         this string.
         """
-        return self.__class__.__qualname__ + ": " + str({
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + ": " + str({
             "class_names": self.get_class_names(),
             "input_key": self.get_input_key(),
             "label_key": self.get_gt_key(),
