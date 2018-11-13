@@ -570,7 +570,7 @@ class Trainer:
             # reload 'best' model checkpoint on cpu (will remap to current device setup)
             filename_best = os.path.join(self.checkpoint_dir, "ckpt.best.pth")
             self.logger.info("loading best model & initializing final test run")
-            ckptdata = torch.load(filename_best, map_location="cpu")
+            ckptdata = thelper.utils.load_checkpoint(filename_best, map_location="cpu")
             if self.config != ckptdata["config"]:  # todo: dig into members and check only critical ones
                 raise AssertionError("could not load compatible best checkpoint to run test eval")
             if self.save_raw:

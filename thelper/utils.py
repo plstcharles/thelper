@@ -69,6 +69,40 @@ def get_available_cuda_devices(attempts_per_device=5):
     return [device_id for device_id, available in enumerate(devices_available) if available]
 
 
+def load_checkpoint(ckpt, map_location=None):
+    """Loads a session checkpoint via PyTorch, check its compatibility, and returns its data.
+
+    Args:
+        ckpt: a file-like object or a path to the checkpoint file.
+        map_location: a function, string or a dict specifying how to remap storage
+            locations. See ``torch.load`` for more information.
+
+    Returns:
+        Content of the checkpoint (a dictionary).
+    """
+    ckptdata = torch.load(ckpt, map_location=map_location)
+    if not isinstance(ckptdata, dict):
+        raise AssertionError("unexpected checkpoint data type")
+    if "version" not in ckptdata:
+        raise AssertionError("checkpoint missing version tag")
+    if not isinstance(ckptdata["version"], str) or len(ckptdata["version"].split(".")) != 3:
+        raise AssertionError("unexpected checkpoint version formatting")
+    # by default, checkpoints should be from the same minor version, we warn otherwise
+    import thelper
+    vers = [thelper.__version__.split("."), ckptdata["version"].split(".")]
+    if vers[0][0] != vers[1][0]:
+        raise AssertionError("incompatible checkpoint, major version mismatch (%s vs %s)" % (thelper.__version__, ckptdata["version"]))
+    if vers[0][1] != vers[1][1]:
+        answer = query_yes_no("Checkpoint minor version mismatch (%s vs %s); do you want to "
+                              "attempt to load it anyway?" % (thelper.__version__, ckptdata["version"]))
+        if not answer:
+            logger.error("checkpoint out-of-date; user aborted")
+            sys.exit(1)
+    if vers[0] != vers[1]:
+        logger.warning("checkpoint version mismatch with current framework version (%s vs %s)" % (thelper.__version__, ckptdata["version"]))
+    return ckptdata
+
+
 def import_class(fullname):
     """
     General-purpose runtime class importer.

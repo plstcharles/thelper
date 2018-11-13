@@ -317,7 +317,7 @@ def main(args=None):
         if not os.path.isfile(args.ckpt_path):
             raise AssertionError("could not find valid checkpoint at '%s'" % args.ckpt_path)
         thelper.logger.debug("parsing checkpoint at '%s'" % args.ckpt_path)
-        ckptdata = torch.load(args.ckpt_path, map_location=args.map_location)
+        ckptdata = thelper.utils.load_checkpoint(args.ckpt_path, map_location=args.map_location)
         override_config = None
         if args.override_cfg:
             thelper.logger.debug("parsing override config at '%s'" % args.override_cfg)

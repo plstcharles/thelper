@@ -77,7 +77,7 @@ def load_model(config, task, save_dir=None, ckptdata=None):
             if not isinstance(model_config["ckptdata"], str):
                 raise AssertionError("unexpected model config ckptdata field type (should be path)")
             map_location = thelper.utils.get_key_def("map_location", model_config, "cpu")
-            ckptdata = torch.load(model_config["ckptdata"], map_location=map_location)
+            ckptdata = thelper.utils.load_checkpoint(model_config["ckptdata"], map_location=map_location)
         if "type" in model_config or "params" in model_config:
             logger.warning("should not provide 'type' or 'params' fields in model config if loading a checkpoint")
     new_task, model, model_type, model_params, model_state = None, None, None, None, None
