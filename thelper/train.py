@@ -497,10 +497,8 @@ class Trainer:
         self.loss, self.optimizer, self.scheduler = self._load_optimization(model)
         if self.optimizer_state is not None:
             self.optimizer.load_state_dict(self.optimizer_state)
-        if hasattr(self.loss, "summary") and callable(self.loss.summary):
-            self.loss.summary()
-        if hasattr(self.optimizer, "summary") and callable(self.optimizer.summary):
-            self.optimizer.summary()
+        self.logger.debug("loss: %s" % str(self.loss))
+        self.logger.debug("optimizer: %s" % str(self.optimizer))
         start_epoch = self.current_epoch + 1
         train_writer, valid_writer, test_writer = None, None, None
         for epoch in range(start_epoch, self.epochs + 1):
@@ -728,6 +726,8 @@ class Trainer:
             "task": str(self.model.task) if self.save_raw else self.model.task,
             "outputs": self.outputs[epoch],
             "model": self.model.state_dict() if self.save_raw else self.model,
+            "model_type": self.model.get_name(),
+            "model_params": self.model.config if self.model.config else {},
             "optimizer": self.optimizer.state_dict(),
             "monitor_best": self.monitor_best,
             "config": self.config  # note: this is the global app config

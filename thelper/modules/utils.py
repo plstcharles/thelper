@@ -91,28 +91,28 @@ def load_model(config, task, save_dir=None, ckptdata=None):
         if isinstance(ckptdata["model"], Module):
             logger.debug("loading model object directly from session '%s'" % ckptdata["name"])
             model = ckptdata["model"]
+            if model.get_name() != ckptdata["model_type"]:
+                raise AssertionError("old model type mistmatch with ckptdata type")
         elif isinstance(ckptdata["model"], dict):
             logger.debug("loading model type/params from session '%s'" % ckptdata["name"])
             model_state = ckptdata["model"]
             if "task" not in ckptdata or not isinstance(ckptdata["task"], (thelper.tasks.Task, str)):
                 raise AssertionError("invalid checkpoint, cannot reload previous model task")
             task = thelper.tasks.load_task(ckptdata["task"]) if isinstance(ckptdata["task"], str) else ckptdata["task"]
+            if "model_type" not in ckptdata or not isinstance(ckptdata["model_type"], str):
+                raise AssertionError("invalid checkpoint, cannot reload previous model type")
+            model_type = thelper.utils.import_class(ckptdata["model_type"])
+            if "model_params" not in ckptdata or not isinstance(ckptdata["model_params"], dict):
+                raise AssertionError("invalid checkpoint, cannot reload previous model params")
+            model_params = ckptdata["model_params"]
             if "config" not in ckptdata or not isinstance(ckptdata["config"], dict):
                 raise AssertionError("invalid checkpoint, cannot reload previous session config")
             old_config = ckptdata["config"]
             if "model" not in old_config or not isinstance(old_config["model"], dict):
                 raise AssertionError("invalid checkpoint, cannot reload previous model config")
             old_model_config = old_config["model"]
-            if "type" not in old_model_config or not old_model_config["type"]:
-                raise AssertionError("old model config missing 'type' field")
-            model_type = thelper.utils.import_class(old_model_config["type"])
-            model_params = thelper.utils.get_key_def("params", old_model_config, {})
-            if "ckptdata" not in model_config:
-                # ckptdata did not come from config, user provided it; add some extra verifications
-                if "type" not in model_config or model_config["type"] != old_model_config["type"]:
-                    raise AssertionError("model type mismatch between external ckptdata and config")
-                if model_params and ("params" not in model_config or model_config["params"] != model_params):
-                    raise AssertionError("model params mismatch between external ckptdata and config")
+            if "type" in old_model_config and thelper.utils.import_class(old_model_config["type"]) != model_type:
+                raise AssertionError("old model config 'type' field mistmatch with ckptdata type")
     else:
         logger.debug("loading model type/params current config")
         if "type" not in model_config or not model_config["type"]:
@@ -139,6 +139,8 @@ def load_model(config, task, save_dir=None, ckptdata=None):
     if new_task is not None:
         logger.debug("specializing model for task = %s" % str(new_task))
         model.set_task(new_task)
+    if model.config is None:
+        model.config = model_params
     if hasattr(model, "summary"):
         model.summary()
     return model
@@ -159,12 +161,13 @@ class Module(torch.nn.Module, ABC):
         :class:`thelper.tasks.Task`
     """
 
-    def __init__(self, task):
+    def __init__(self, task, config=None):
         """Receives a task object to hold internally for model specialization."""
         super().__init__()
         if task is None or not isinstance(task, thelper.tasks.Task):
             raise AssertionError("task must derive from thelper.tasks.Task")
         self.task = task
+        self.config = config
 
     @abstractmethod
     def forward(self, *input):
@@ -180,8 +183,12 @@ class Module(torch.nn.Module, ABC):
         """Prints a summary of the model using the ``thelper.modules`` logger."""
         params = filter(lambda p: p.requires_grad, self.parameters())
         count = sum([np.prod(p.size()) for p in params])
-        logger.info("module '%s' parameter count: %d" % (self.__class__.__qualname__, count))
+        logger.info("module '%s' parameter count: %d" % (self.get_name(), count))
         logger.info(self)
+
+    def get_name(self):
+        """Returns the name of this module (by default, its fully qualified class name)."""
+        return self.__class__.__module__ + "." + self.__class__.__qualname__
 
 
 class ExternalModule(Module):
@@ -203,7 +210,7 @@ class ExternalModule(Module):
 
     def __init__(self, model_type, task, config=None):
         """Receives a task object to hold internally for model specialization."""
-        super().__init__(task=task)
+        super().__init__(task=task, config=config)
         logger.info("instantiating external module '%s'..." % str(model_type))
         self.model_type = model_type
         self.model = model_type(**config)
@@ -237,8 +244,12 @@ class ExternalModule(Module):
         """Prints a summary of the model using the ``thelper.modules`` logger."""
         params = filter(lambda p: p.requires_grad, self.model.parameters())
         count = sum([np.prod(p.size()) for p in params])
-        logger.info("module '%s' parameter count: %d" % (thelper.utils.get_caller_name(0).rsplit(".", 1)[0], count))
+        logger.info("module '%s' parameter count: %d" % (self.get_name(), count))
         logger.info(self.model)
+
+    def get_name(self):
+        """Returns the name of this module (by default, the fully qualified class name of the external model)."""
+        return self.model_type.__module__ + "." + self.model_type.__qualname__
 
 
 class ExternalClassifModule(ExternalModule):
