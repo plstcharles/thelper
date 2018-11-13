@@ -234,17 +234,17 @@ class Trainer:
         if "train_metrics" in trainer_config and trainer_config["train_metrics"]:
             self.train_metrics = {**self.train_metrics, **self._load_metrics(trainer_config["train_metrics"])}
         for metric_name, metric in self.train_metrics.items():
-            logger.info("parsed train metric '%s' : %s" % (metric_name, str(metric)))
+            logger.info("parsed train metric '%s': %s" % (metric_name, str(metric)))
         self.valid_metrics = deepcopy(metrics)
         if "valid_metrics" in trainer_config and trainer_config["valid_metrics"]:
             self.valid_metrics = {**self.valid_metrics, **self._load_metrics(trainer_config["valid_metrics"])}
         for metric_name, metric in self.valid_metrics.items():
-            logger.info("parsed valid metric '%s' : %s" % (metric_name, str(metric)))
+            logger.info("parsed valid metric '%s': %s" % (metric_name, str(metric)))
         self.test_metrics = deepcopy(metrics)
         if "test_metrics" in trainer_config and trainer_config["test_metrics"]:
             self.test_metrics = {**self.test_metrics, **self._load_metrics(trainer_config["test_metrics"])}
         for metric_name, metric in self.test_metrics.items():
-            logger.info("parsed test metric '%s' : %s" % (metric_name, str(metric)))
+            logger.info("parsed test metric '%s': %s" % (metric_name, str(metric)))
         self.monitor, self.monitor_best = None, None
         if "monitor" in trainer_config and trainer_config["monitor"]:
             self.monitor = trainer_config["monitor"]

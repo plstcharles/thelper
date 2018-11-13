@@ -222,6 +222,12 @@ class Metric(ABC):
         curr_goal = self.goal()
         return curr_goal == Metric.minimize or curr_goal == Metric.maximize
 
+    def __repr__(self):
+        """Returns a generic print-friendly string containing info about this metric."""
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + ": " + str({
+            "goal": self.goal(), "is_scalar": self.is_scalar()
+        })
+
 
 class CategoryAccuracy(Metric):
     r"""Classification accuracy metric interface.

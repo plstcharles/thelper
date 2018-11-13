@@ -163,7 +163,7 @@ def load(config, data_root, save_dir=None):
     if not datasets or task is None:
         raise AssertionError("invalid dataset configuration (got empty list)")
     for dataset_name, dataset in datasets.items():
-        logger.info("dataset '%s' info: %s" % (dataset_name, str(dataset)))
+        logger.info("parsed dataset: %s" % str(dataset))
     logger.info("task info: %s" % str(task))
     logger.debug("splitting datasets and creating loaders...")
     train_idxs, valid_idxs, test_idxs = data_config.get_split(datasets, task)
@@ -784,7 +784,7 @@ class Dataset(torch.utils.data.Dataset, ABC):
 
     def _get_derived_name(self):
         """Returns a pretty-print version of the derived class's name."""
-        dname = str(self.__class__.__qualname__)
+        dname = self.__class__.__module__ + "." + self.__class__.__qualname__
         if self.name:
             dname += "." + self.name
         return dname
@@ -980,7 +980,7 @@ class ExternalDataset(Dataset):
 
     def _get_derived_name(self):
         """Returns a pretty-print version of the external class's name."""
-        dname = str(self.dataset_type)
+        dname = self.dataset_type.__module__ + "." + self.dataset_type.__qualname__
         if self.name:
             dname += "." + self.name
         return dname
