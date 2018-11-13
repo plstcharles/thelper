@@ -83,7 +83,7 @@ def load_model(config, task, save_dir=None, ckptdata=None):
     new_task, model, model_type, model_params, model_state = None, None, None, None, None
     if ckptdata is not None:
         # if checkpoint available, instantiate old model, load weights, and reconfigure for new task
-        if "name" not in ckptdata or  not isinstance(ckptdata["name"], str):
+        if "name" not in ckptdata or not isinstance(ckptdata["name"], str):
             raise AssertionError("invalid checkpoint, cannot reload previous session name")
         new_task = task  # the 'new task' will later be applied to specialize the model, once it is loaded
         if "model" not in ckptdata or not isinstance(ckptdata["model"], (Module, dict)):
