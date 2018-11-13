@@ -1,5 +1,5 @@
 {
-    "name": "example-classif",
+    "name": "example-classif-minitest",
     "datasets": {
         "cifar10_train": {
             "type": "torchvision.datasets.CIFAR10",
