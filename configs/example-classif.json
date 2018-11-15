@@ -1,5 +1,5 @@
 {
-    "name": "example-classif-minitest",
+    "name": "example-classif-5epochs",
     "datasets": {
         "cifar10_train": {
             "type": "torchvision.datasets.CIFAR10",
@@ -46,6 +46,8 @@
         "valid_seed": 0,
         "test_seed": 0,
         "torch_seed": 0,
+        "numpy_seed": 0,
+        "random_seed": 0,
         "workers": 4,
         "pin_memory": false,
         "drop_last": false,
@@ -137,8 +139,8 @@
     "trainer": {
         "type": "thelper.train.ImageClassifTrainer",
         "device": "cuda:all",
-        "epochs": 40,
-        "save_freq": 5,
+        "epochs": 5,
+        "save_freq": 1,
         "monitor": "accuracy",
         "use_tbx": true,
         "optimization": {
