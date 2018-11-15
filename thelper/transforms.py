@@ -17,6 +17,7 @@ import copy
 import itertools
 import logging
 import math
+import random
 
 import Augmentor
 import cv2 as cv
@@ -234,6 +235,7 @@ class AugmentorWrapper(object):
         """
         self.pipeline = pipeline
         self.linked_fate = linked_fate
+        self.seeded_inner_pipeline = False
 
     def __call__(self, samples):
         """Transforms a single image (or a list of images) using the augmentor pipeline.
@@ -265,6 +267,9 @@ class AugmentorWrapper(object):
                         raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
             elif not isinstance(sample, PIL.Image.Image):
                 raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
+        if not self.seeded_inner_pipeline:
+            random.seed(np.random.randint(2 ** 16))
+            self.seeded_inner_pipeline = True
         if self.linked_fate:  # process all samples/arrays with the same operations below
             flat_array = []
             for sample in samples:
@@ -322,6 +327,7 @@ class AugmentorWrapper(object):
     def set_seed(self, seed):
         """Sets the internal seed to use for stochastic ops."""
         np.random.seed(seed)
+        self.seeded_inner_pipeline = False
 
 
 class ImageTransformWrapper(object):
