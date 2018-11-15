@@ -553,7 +553,6 @@ def draw_sample(sample, preds=None, image_key="image", label_key="label", block=
         # if we have a list, it must be due to a duplicate/augmentation transformation stage
         if not all([image.shape == images[0].shape for image in images]):
             raise AssertionError("image shape mismatch throughout list")
-        images = torch.cat(images, 0)
         if labels:
             if not all([image.shape[0] == len(labels) for image in images]):
                 raise AssertionError("image count mistmatch with label count")
@@ -562,6 +561,7 @@ def draw_sample(sample, preds=None, image_key="image", label_key="label", block=
             if not all([image.shape[0] == len(preds) for image in images]):
                 raise AssertionError("image count mistmatch with pred count")
             preds = preds * len(images)
+        images = torch.cat(images, 0)
     if not isinstance(images, torch.Tensor):
         raise AssertionError("expected classification images to be in 4-d tensor format")
     images = images.numpy().copy()
