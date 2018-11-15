@@ -9,6 +9,7 @@ import copy
 import json
 import logging
 import os
+import random
 import sys
 from abc import ABC
 from abc import abstractmethod
@@ -330,6 +331,9 @@ class DataConfig(object):
     - ``numpy_seed`` (optional): specifies the RNG seed to use for numpy-related stochastic operations
       (e.g. for data augmentation). If no seed is specified, the RNG will be initialized with a
       device-specific or time-related seed.
+    - ``random_seed`` (optional): specifies the RNG seed to use for stochastic operations with python's
+      'random' package. If no seed is specified, the RNG will be initialized with a device-specific or
+      time-related seed.
     - ``workers`` (optional, default=1): specifies the number of threads to use to preload batches in
       parallel; can be 0 (loading will be on main thread), or an integer >= 1.
     - ``pin_memory`` (optional, default=False): specifies whether the data loaders will copy tensors
@@ -389,9 +393,11 @@ class DataConfig(object):
         self.valid_seed = self._get_seed(["valid_seed", "valid_split_seed"], config, (int, str))
         self.torch_seed = self._get_seed(["torch_seed"], config, int)
         self.numpy_seed = self._get_seed(["numpy_seed"], config, int)
+        self.random_seed = self._get_seed(["random_seed"], config, int)
         torch.manual_seed(self.torch_seed)
         torch.cuda.manual_seed_all(self.torch_seed)
         np.random.seed(self.numpy_seed)
+        random.seed(self.random_seed)
         self.workers = config["workers"] if "workers" in config and config["workers"] >= 0 else 1
         self.pin_memory = thelper.utils.str2bool(config["pin_memory"]) if "pin_memory" in config else False
         self.drop_last = thelper.utils.str2bool(config["drop_last"]) if "drop_last" in config else False
@@ -711,6 +717,7 @@ class DataConfig(object):
         torch.manual_seed(self.torch_seed + worker_id)
         torch.cuda.manual_seed_all(self.torch_seed + worker_id)
         np.random.seed(self.numpy_seed + worker_id)
+        random.seed(self.random_seed + worker_id)
 
 
 class Dataset(torch.utils.data.Dataset, ABC):
