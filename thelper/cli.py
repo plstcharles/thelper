@@ -44,9 +44,7 @@ def create_session(config, data_root, save_dir):
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
     logger.info("creating new training session '%s'..." % session_name)
-    if "cudnn_benchmark" in config and thelper.utils.str2bool(config["cudnn_benchmark"]):
-        logger.debug("activating benchmark mode for cudnn")
-        torch.backends.cudnn.benchmark = True
+    thelper.utils.setup_cudnn(config)
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
     logger.debug("session will be saved at '%s'" % save_dir)
     task, train_loader, valid_loader, test_loader = thelper.data.load(config, data_root, save_dir)
@@ -100,9 +98,7 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False):
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
     logger.info("loading training session '%s' objects..." % session_name)
-    if "cudnn_benchmark" in config and thelper.utils.str2bool(config["cudnn_benchmark"]):
-        logger.debug("activating benchmark mode for cudnn")
-        torch.backends.cudnn.benchmark = True
+    thelper.utils.setup_cudnn(config)
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config, resume=True)
     logger.debug("session will be saved at '%s'" % save_dir)
     task, train_loader, valid_loader, test_loader = thelper.data.load(config, data_root, save_dir)

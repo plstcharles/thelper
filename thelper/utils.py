@@ -69,6 +69,29 @@ def get_available_cuda_devices(attempts_per_device=5):
     return [device_id for device_id, available in enumerate(devices_available) if available]
 
 
+def setup_cudnn(config):
+    """Parses the provided config for CUDNN flags and sets up PyTorch accordingly."""
+    if "cudnn" in config and isinstance(config["cudnn"], dict):
+        config = config["cudnn"]
+        if "benchmark" in config:
+            cudnn_benchmark_flag = str2bool(config["benchmark"])
+            logger.debug("cudnn benchmark mode = %s" % str(cudnn_benchmark_flag))
+            torch.backends.cudnn.benchmark = cudnn_benchmark_flag
+        if "deterministic" in config:
+            cudnn_deterministic_flag = str2bool(config["deterministic"])
+            logger.debug("cudnn deterministic mode = %s" % str(cudnn_deterministic_flag))
+            torch.backends.cudnn.deterministic = cudnn_deterministic_flag
+    else:
+        if "cudnn_benchmark" in config:
+            cudnn_benchmark_flag = str2bool(config["cudnn_benchmark"])
+            logger.debug("cudnn benchmark mode = %s" % str(cudnn_benchmark_flag))
+            torch.backends.cudnn.benchmark = cudnn_benchmark_flag
+        if "cudnn_deterministic" in config:
+            cudnn_deterministic_flag = str2bool(config["cudnn_deterministic"])
+            logger.debug("cudnn deterministic mode = %s" % str(cudnn_deterministic_flag))
+            torch.backends.cudnn.deterministic = cudnn_deterministic_flag
+
+
 def load_checkpoint(ckpt, map_location=None):
     """Loads a session checkpoint via PyTorch, check its compatibility, and returns its data.
 
