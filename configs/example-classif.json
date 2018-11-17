@@ -1,5 +1,9 @@
 {
-    "name": "example-classif-5epochs",
+    "name": "example-classif",
+    "cudnn": {
+        "benchmark": false,
+        "deterministic": true
+    },
     "datasets": {
         "cifar10_train": {
             "type": "torchvision.datasets.CIFAR10",
