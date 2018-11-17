@@ -4,6 +4,7 @@ This module contains the classes required to train and/or evaluate a model based
 instantiated in launched sessions based on configuration dictionaries, like many other classes of the framework.
 """
 import logging
+import math
 import os
 import platform
 import time
@@ -137,9 +138,6 @@ class Trainer:
         use_tbx: defines whether to use tensorboardX writers for logging or not.
         tbx_root_dir: top-level tensorboard log/event output directory (located within 'save_dir').
         model: model to train; will be uploaded to target device(s) at runtime.
-        loss: model loss function; will be instantiated with the correct parameters at runtime.
-        optimizer: model optimizer; will be instantiated with the correct model location at runtime.
-        scheduler: learning rate scheduler; will be instantiated with the optimizer at runtime.
         config: full configuration dictionary of the session; will be incorporated into all saved checkpoints.
         devices: list of (cuda) device IDs to upload the model/tensors to; can be empty if only the CPU is available.
         monitor: specifies the name of the metric that should be monitored on the validation set for model improvement.
@@ -210,9 +208,6 @@ class Trainer:
             self.logger.debug("tensorboard init : tensorboard --logdir %s --port <your_port>" % self.tbx_root_dir)
         self.train_writer_path, self.valid_writer_path, self.test_writer_path = writer_paths
         self.model = model
-        self.loss = None
-        self.optimizer = None
-        self.scheduler = None
         self.config = config
         devices_str = None
         if "device" in trainer_config:
@@ -265,7 +260,6 @@ class Trainer:
         self.logger.info("created training log for session '%s'" % self.name)
         self.logger.debug("logstamp = %s" % thelper.utils.get_log_stamp())
         self.logger.debug("version = %s" % thelper.utils.get_git_stamp())
-        self.current_lr = self._get_lr()  # for debug/display purposes only
         if ckptdata is not None:
             self.monitor_best = ckptdata["monitor_best"]
             self.optimizer_state = ckptdata["optimizer"]
@@ -316,10 +310,10 @@ class Trainer:
         if "optimizer" not in config or not config["optimizer"]:
             raise AssertionError("optimization config missing 'optimizer' field")
         optimizer = self._load_optimizer(config["optimizer"], model)
-        scheduler = None
+        scheduler, scheduler_step_metric = None, None
         if "scheduler" in config and config["scheduler"]:
-            scheduler = self._load_scheduler(config["scheduler"], optimizer)
-        return loss, optimizer, scheduler
+            scheduler, scheduler_step_metric = self._load_scheduler(config["scheduler"], optimizer)
+        return loss, optimizer, scheduler, scheduler_step_metric
 
     def _load_loss(self, config):
         """Instantiates and returns the loss function to use for training.
@@ -337,6 +331,7 @@ class Trainer:
         - ``weight_norm`` (optional, default=True): specifies whether the weights should be normalized or not.
 
         """
+        # todo: add flag to toggle loss comp in validation?
         self.logger.debug("loading loss")
         if not isinstance(config, dict):
             raise AssertionError("config should be provided as a dictionary")
@@ -416,7 +411,10 @@ class Trainer:
         scheduler_type = thelper.utils.import_class(config["type"])
         scheduler_params = thelper.utils.get_key_def("params", config, {})
         scheduler = scheduler_type(optimizer, **scheduler_params)
-        return scheduler
+        scheduler_step_metric = None
+        if "step_metric" in config:
+            scheduler_step_metric = config["step_metric"]
+        return scheduler, scheduler_step_metric
 
     def _load_metrics(self, config):
         """Instantiates and returns the metrics defined in the configuration dictionary.
@@ -494,19 +492,33 @@ class Trainer:
             raise AssertionError("missing training data, invalid loader!")
         self.logger.debug("uploading model to '%s'..." % str(self.devices))
         model = self._upload_model(self.model, self.devices)
-        self.loss, self.optimizer, self.scheduler = self._load_optimization(model)
+        loss, optimizer, scheduler, scheduler_step_metric = self._load_optimization(model)
         if self.optimizer_state is not None:
-            self.optimizer.load_state_dict(self.optimizer_state)
-        self.logger.debug("loss: %s" % str(self.loss))
-        self.logger.debug("optimizer: %s" % str(self.optimizer))
+            optimizer.load_state_dict(self.optimizer_state)
+            self.optimizer_state = None
+        self.logger.debug("loss: %s" % str(loss))
+        self.logger.debug("optimizer: %s" % str(optimizer))
         start_epoch = self.current_epoch + 1
+        latest_loss = math.inf
         train_writer, valid_writer, test_writer = None, None, None
         for epoch in range(start_epoch, self.epochs + 1):
             self.logger.info("launching training epoch %d for '%s' (dev=%s)" % (epoch, self.name, str(self.devices)))
-            if self.scheduler:
-                self.scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
-                self.current_lr = self.scheduler.get_lr()[0]  # for debug/display purposes only
-                self.logger.debug("learning rate at %.8f" % self.current_lr)
+            if scheduler:
+                # epoch idx is 1-based, scheduler expects 0-based
+                if scheduler_step_metric:
+                    if scheduler_step_metric == "loss":
+                        # todo: use validation loss instead? more stable?
+                        scheduler.step(metrics=latest_loss, epoch=(epoch - 1))
+                    else:
+                        if self.valid_loader and scheduler_step_metric in self.valid_metrics:
+                            scheduler.step(metrics=self.valid_metrics[scheduler_step_metric].eval(), epoch=(epoch - 1))
+                        elif self.train_loader and scheduler_step_metric in self.train_metrics:
+                            scheduler.step(metrics=self.train_metrics[scheduler_step_metric].eval(), epoch=(epoch - 1))
+                        else:
+                            raise AssertionError("cannot use metric '%s' for scheduler step" % scheduler_step_metric)
+                else:
+                    scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
+            self.logger.debug("learning rate at %.8f" % self._get_lr(optimizer))
             model.train()
             if self.use_tbx and not train_writer:
                 train_writer = self.tbx.SummaryWriter(log_dir=self.train_writer_path, comment=self.name)
@@ -517,11 +529,11 @@ class Trainer:
                     metric.set_max_accum(len(self.train_loader))  # used to make scalar metric evals smoother between epochs
                 if metric.needs_reset():
                     metric.reset()  # if a metric needs to be reset between two epochs, do it here
-            loss, self.current_iter = self._train_epoch(model, epoch, self.current_iter, self.devices, self.optimizer,
-                                                        self.train_loader, self.train_metrics, train_writer)
+            latest_loss, self.current_iter = self._train_epoch(model, epoch, self.current_iter, self.devices, loss, optimizer,
+                                                               self.train_loader, self.train_metrics, train_writer)
             self._write_epoch_metrics(epoch, self.train_metrics, train_writer)
             train_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.train_metrics.items()}
-            result = {"train/loss": loss, "train/metrics": train_metric_vals}
+            result = {"train/loss": latest_loss, "train/metrics": train_metric_vals}
             monitor_type_key = "train/metrics"  # if we cannot run validation, will monitor progression on training metrics
             if self.valid_loader:
                 model.eval()
@@ -562,7 +574,7 @@ class Trainer:
                 self.logger.info("(new best checkpoint)")
             if new_best or (epoch % self.save_freq) == 0:
                 self.logger.info("saving checkpoint @ epoch %d" % epoch)
-                self._save(epoch, save_best=new_best)
+                self._save(epoch, optimizer, save_best=new_best)
         self.logger.info("training for session '%s' done" % self.name)
         if self.test_loader:
             # reload 'best' model checkpoint on cpu (will remap to current device setup)
@@ -648,7 +660,7 @@ class Trainer:
         return result
 
     @abstractmethod
-    def _train_epoch(self, model, epoch, iter, dev, optimizer, loader, metrics, writer=None):
+    def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, writer=None):
         """Trains the model for a single epoch using the provided objects.
 
         Args:
@@ -656,6 +668,7 @@ class Trainer:
             epoch: the index of the epoch we are training for.
             iter: the index of the iteration at the start of the current epoch.
             dev: the target device that tensors should be uploaded to.
+            loss: the loss function used to evaluate model fidelity.
             optimizer: the optimizer used for back propagation.
             loader: the data loader used to get transformed training samples.
             metrics: the list of metrics to evaluate after every iteration.
@@ -678,13 +691,12 @@ class Trainer:
         """
         raise NotImplementedError
 
-    def _get_lr(self):
-        """Returns the optimizer's learning rate, or 0 if not training a model."""
-        if self.optimizer:
-            for param_group in self.optimizer.param_groups:
-                if "lr" in param_group:
-                    return param_group["lr"]
-        return 0.0
+    def _get_lr(self, optimizer):
+        """Returns the optimizer's learning rate, or 0 if not found."""
+        for param_group in optimizer.param_groups:
+            if "lr" in param_group:
+                return param_group["lr"]
+        return 0
 
     def _write_epoch_metrics(self, epoch, metrics, writer):
         """Writes the cumulative evaluation result of all metrics using a specific writer."""
@@ -712,7 +724,7 @@ class Trainer:
                     with open(raw_filepath, "w") as fd:
                         fd.write(txt)
 
-    def _save(self, epoch, save_best=False):
+    def _save(self, epoch, optimizer, save_best=False):
         """Saves a session checkpoint containing all the information required to resume training."""
         # logically, this should only be called during training (i.e. with a valid optimizer)
         log_stamp = thelper.utils.get_log_stamp()
@@ -725,10 +737,11 @@ class Trainer:
             "version": thelper.__version__,
             "task": str(self.model.task) if self.save_raw else self.model.task,
             "outputs": self.outputs[epoch],
+            # we save model type/params here in case those are not in the current config
             "model": self.model.state_dict() if self.save_raw else self.model,
             "model_type": self.model.get_name(),
             "model_params": self.model.config if self.model.config else {},
-            "optimizer": self.optimizer.state_dict(),
+            "optimizer": optimizer.state_dict(),
             "monitor_best": self.monitor_best,
             "config": self.config  # note: this is the global app config
         }
@@ -803,7 +816,7 @@ class ImageClassifTrainer(Trainer):
             label_idx = torch.LongTensor(label_idx)
         return input, label_idx
 
-    def _train_epoch(self, model, epoch, iter, dev, optimizer, loader, metrics, writer=None):
+    def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, writer=None):
         """Trains the model for a single epoch using the provided objects.
 
         Args:
@@ -811,6 +824,7 @@ class ImageClassifTrainer(Trainer):
             epoch: the index of the epoch we are training for.
             iter: the index of the iteration at the start of the current epoch.
             dev: the target device that tensors should be uploaded to.
+            loss: the loss function used to evaluate model fidelity.
             optimizer: the optimizer used for back propagation.
             loader: the data loader used to get transformed training samples.
             metrics: the list of metrics to evaluate after every iteration.
@@ -822,7 +836,7 @@ class ImageClassifTrainer(Trainer):
             raise AssertionError("no available data to load")
         if not isinstance(metrics, dict):
             raise AssertionError("expect metrics as dict object")
-        total_loss = 0
+        epoch_loss = 0
         epoch_size = len(loader)
         self.logger.debug("fetching data loader samples...")
         for sample_idx, sample in enumerate(loader):
@@ -837,25 +851,33 @@ class ImageClassifTrainer(Trainer):
                 if not self.warned_no_shuffling_augments:
                     self.logger.warning("using training augmentation without global shuffling, gradient steps might be affected")
                     self.warned_no_shuffling_augments = True
-                curr_loss = 0
-                for input_idx in range(len(input)):
-                    pred = model(self._upload_tensor(input[input_idx], dev))
-                    loss = self.loss(pred, label)
-                    loss.backward()
-                    curr_loss += loss.item()
-                total_loss += curr_loss / len(input)
+                iter_loss = None
+                iter_pred = None
+                augs_count = len(input)
+                for input_idx in range(augs_count):
+                    aug_pred = model(self._upload_tensor(input[input_idx], dev))
+                    aug_loss = loss(aug_pred, label)
+                    aug_loss.backward()
+                    if iter_pred is None:
+                        iter_loss = aug_loss.clone().detach()
+                        iter_pred = aug_pred.clone().detach()
+                    else:
+                        iter_loss += aug_loss.detach()
+                        iter_pred += aug_pred.detach()
+                iter_loss /= augs_count
+                iter_pred /= augs_count
             else:
-                pred = model(self._upload_tensor(input, dev))
-                loss = self.loss(pred, label)
-                loss.backward()
-                total_loss += loss.item()
+                iter_pred = model(self._upload_tensor(input, dev))
+                iter_loss = loss(iter_pred, label)
+                iter_loss.backward()
+            epoch_loss += iter_loss.item()
             optimizer.step()
             if iter is not None:
                 iter += 1
             if metrics:
                 meta = {key: sample[key] for key in self.meta_keys}
                 for metric in metrics.values():
-                    metric.accumulate(pred.cpu(), label.cpu(), meta=meta)
+                    metric.accumulate(iter_pred.cpu(), label.cpu(), meta=meta)
             if self.monitor is not None:
                 monitor_output = "{}: {:.2f}".format(self.monitor, metrics[self.monitor].eval())
             else:
@@ -867,20 +889,21 @@ class ImageClassifTrainer(Trainer):
                     sample_idx,
                     epoch_size,
                     (sample_idx / epoch_size) * 100.0,
-                    loss.item(),
+                    iter_loss.item(),
                     monitor_output
                 )
             )
             if writer and iter is not None:
-                writer.add_scalar("iter/loss", loss.item(), iter)
-                writer.add_scalar("iter/lr", self.current_lr, iter)
+                writer.add_scalar("iter/loss", iter_loss.item(), iter)
+                writer.add_scalar("iter/lr", self._get_lr(optimizer), iter)
                 for metric_name, metric in metrics.items():
                     if metric.is_scalar():  # only useful assuming that scalar metrics are smoothed...
                         writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
+        epoch_loss /= epoch_size
         if writer:
-            writer.add_scalar("epoch/loss", total_loss / epoch_size, epoch)
-            writer.add_scalar("epoch/lr", self.current_lr, epoch)
-        return total_loss / epoch_size, iter
+            writer.add_scalar("epoch/loss", epoch_loss, epoch)
+            writer.add_scalar("epoch/lr", self._get_lr(optimizer), epoch)
+        return epoch_loss, iter
 
     def _eval_epoch(self, model, epoch, iter, dev, loader, metrics, writer=None):
         """Evaluates the model using the provided objects.
