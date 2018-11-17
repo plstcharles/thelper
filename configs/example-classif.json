@@ -160,11 +160,16 @@
                 }
             },
             "scheduler": {
-                "type": "torch.optim.lr_scheduler.ExponentialLR",
+                "type": "torch.optim.lr_scheduler.ReduceLROnPlateau",
                 "params": {
-                    "gamma": 0.98
+                    "mode": "max",
+                    "factor": 0.1,
+                    "patience": 10,
+                    "verbose": true,
+                    "threshold": 0.0001,
+                    "threshold_mode": "rel"
                 },
-                "step": 1
+                "step_metric": "accuracy"
             }
         },
         "metrics": {
