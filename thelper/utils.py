@@ -107,7 +107,7 @@ def load_checkpoint(ckpt, map_location=None):
     if not isinstance(ckptdata, dict):
         raise AssertionError("unexpected checkpoint data type")
     if "version" not in ckptdata:
-        raise AssertionError("checkpoint missing version tag")
+        raise AssertionError("checkpoint at '%s' missing internal version tag" % ckpt)
     if not isinstance(ckptdata["version"], str) or len(ckptdata["version"].split(".")) != 3:
         raise AssertionError("unexpected checkpoint version formatting")
     # by default, checkpoints should be from the same minor version, we warn otherwise
