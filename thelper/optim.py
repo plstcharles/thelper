@@ -348,6 +348,12 @@ class CategoryAccuracy(Metric):
         """Returns the scalar optimization goal of this metric (maximization)."""
         return Metric.maximize
 
+    def __repr__(self):
+        """Returns a generic print-friendly string containing info about this metric."""
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + ": " + str({
+            "top_k": self.top_k
+        })
+
 
 class BinaryAccuracy(Metric):
     r"""Binary classification accuracy metric interface.
