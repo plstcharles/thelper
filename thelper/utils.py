@@ -221,9 +221,27 @@ def get_git_stamp():
         repo = git.Repo(search_parent_directories=True)
         sha = repo.head.object.hexsha
         return str(sha)
-    except:  # noqa: E722
-        pass
-    return "unknown"
+    except (ImportError, AttributeError):
+        return "unknown"
+
+
+def get_env_list():
+    """Returns a list of all packages installed in the current environment.
+
+    If the required packages cannot be imported, the returned list will be empty. Note that some
+    packages may not be properly detected by this approach, and it is pretty hacky, so use it with
+    a grain of salt (i.e. logging is fine).
+    """
+    try:
+        import pip
+        pkgs = pip.get_installed_distributions()
+        return sorted(["%s %s" % (pkg.key, pkg.version) for pkg in pkgs])
+    except (ImportError, AttributeError):
+        try:
+            import pkg_resources as pkgr
+            return sorted([str(pkg) for pkg in pkgr.working_set])
+        except (ImportError, AttributeError):
+            return []
 
 
 def str2size(input_str):
