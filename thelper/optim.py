@@ -914,7 +914,7 @@ class ConfusionMatrix(Metric):
         else:
             return "\n" + str(confmat)
 
-    def get_tbx_image(self):
+    def render(self):
         """Returns the confusion matrix as a numpy-compatible RGBA image drawn by pyplot."""
         if self.pred is None:
             return None
@@ -1171,7 +1171,7 @@ class ROCCurve(Metric):
         elif self.target_fpr is not None:
             return "for target fpr = %.5f, tpr = 0.0 at threshold = max" % self.target_fpr
 
-    def get_tbx_image(self):
+    def render(self):
         """Returns the ROC curve as a numpy-compatible RGBA image drawn by pyplot."""
         if self.score is None:
             return None
@@ -1369,7 +1369,7 @@ class ClassifLogger(Metric):
         """Returns ``None``, as this class only produces log files in the session directory."""
         return None
 
-    def get_tbx_image(self):
+    def render(self):
         """Returns an image of predicted outputs as a numpy-compatible RGBA image drawn by pyplot."""
         if self.viz_count == 0:
             return None

@@ -704,8 +704,8 @@ class Trainer:
         for metric_name, metric in metrics.items():
             if metric.is_scalar():
                 writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
-            if hasattr(metric, "get_tbx_image") and callable(metric.get_tbx_image):
-                img = metric.get_tbx_image()
+            if hasattr(metric, "render") and callable(metric.render):
+                img = metric.render()
                 if img is not None:
                     writer.add_image(writer.prefix + "/%s" % metric_name, img, epoch)
                     raw_filename = "%s-%s-%04d.png" % (writer.prefix, metric_name, epoch)
