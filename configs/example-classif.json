@@ -175,6 +175,9 @@
                 "params": {
                     "top_k": 1
                 }
+            },
+            "confmat": {
+                "type": "thelper.optim.ConfusionMatrix"
             }
         },
         "test_metrics": {
