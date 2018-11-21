@@ -180,7 +180,7 @@ def load_augments(config):
                                 "input_size": [0.1, 1.0],
                                 "ratio": 1.0
                             },
-                            "force_convert": false
+                            "linked_fate": false
                         }
                     },
                 ]
@@ -235,90 +235,67 @@ class AugmentorWrapper(object):
         """
         self.pipeline = pipeline
         self.linked_fate = linked_fate
-        self.seeded_inner_pipeline = False
 
-    def __call__(self, samples):
+    def __call__(self, samples, force_linked_fate=False, op_seed=None, in_cvts=None):
         """Transforms a single image (or a list of images) using the augmentor pipeline.
 
         Args:
-            samples: the image(s) to transform. Should be a numpy array or a PIL image (or a list of).
+            samples: the image(s) to transform (can also contain embedded lists/tuples of images).
+            force_linked_fate: override flag for recursive use allowing forced linking of arrays.
+            op_seed: seed to set before calling the wrapped operation.
+            in_cvts: holds the input conversion flag array (for recursive usage).
 
         Returns:
-            The transformed image(s), with the same type as the input.
+            The transformed image(s), with the same list/tuple formatting as the input.
         """
-        in_list = True
-        if samples is not None and not isinstance(samples, list):
-            in_list = False
+        out_cvts = in_cvts is not None
+        out_list = isinstance(samples, (list, tuple))
+        if samples is None or (out_list and not samples):
+            return ([], []) if out_cvts else []
+        elif not out_list:
             samples = [samples]
-        elif not samples:
-            return samples
-        cvt_array = [False] * len(samples)
-        for idx, sample in enumerate(samples):
-            if isinstance(sample, np.ndarray):
-                samples[idx] = PIL.Image.fromarray(samples[idx])
-                cvt_array[idx] = True
-            elif isinstance(sample, list):
-                cvt_array[idx] = [False] * len(sample)
-                for idx2, sample2 in enumerate(sample):
-                    if isinstance(sample2, np.ndarray):
-                        samples[idx][idx2] = PIL.Image.fromarray(samples[idx][idx2])
-                        cvt_array[idx][idx2] = True
-                    elif not isinstance(sample2, PIL.Image.Image):
-                        raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
-            elif not isinstance(sample, PIL.Image.Image):
-                raise AssertionError("unexpected input sample type (must be np.ndarray or PIL.Image)")
-        if not self.seeded_inner_pipeline:
-            random.seed(np.random.randint(2 ** 16))
-            self.seeded_inner_pipeline = True
-        if self.linked_fate:  # process all samples/arrays with the same operations below
-            flat_array = []
-            for sample in samples:
-                if isinstance(sample, list):
-                    for s in sample:
-                        flat_array.append(s)
+        skip_unpack = in_cvts is not None and isinstance(in_cvts, bool) and in_cvts
+        if self.linked_fate or force_linked_fate:  # process all samples/arrays with the same operations below
+            if not skip_unpack:
+                samples, cvts = ImageTransformWrapper._unpack(samples, convert_pil=True)
+                if not isinstance(samples, (list, tuple)):
+                    samples = [samples]
+                    cvts = [cvts]
+            else:
+                cvts = in_cvts
+            if op_seed is None:
+                op_seed = np.random.randint(np.iinfo(np.int32).max)
+            np.random.seed(op_seed)
+            prev_state = np.random.get_state()
+            for idx, _ in enumerate(samples):
+                if not isinstance(samples[idx], PIL.Image.Image):
+                    samples[idx], cvts[idx] = self(samples[idx], force_linked_fate=True, op_seed=op_seed, in_cvts=cvts[idx])
                 else:
-                    flat_array.append(sample)
-            for operation in self.pipeline.operations:
-                r = round(np.random.uniform(0, 1), 1)
-                if r <= operation.probability:
-                    flat_array = operation.perform_operation(flat_array)
-            flat_idx = 0
-            for idx, cvt in enumerate(cvt_array):
-                if not isinstance(cvt, list):
-                    samples[idx] = np.asarray(flat_array[flat_idx]) if cvt else flat_array[flat_idx]
-                    flat_idx += 1
+                    np.random.set_state(prev_state)
+                    random.seed(np.random.randint(np.iinfo(np.int32).max))
+                    for operation in self.pipeline.operations:
+                        r = round(np.random.uniform(0, 1), 1)
+                        if r <= operation.probability:
+                            samples[idx] = operation.perform_operation([samples[idx]])[0]
+        else:  # each element of the top array will be processed independently below (current seeds are kept)
+            cvts = [False] * len(samples)
+            for idx, _ in enumerate(samples):
+                samples[idx], cvts[idx] = ImageTransformWrapper._unpack(samples[idx], convert_pil=True)
+                if not isinstance(samples[idx], PIL.Image.Image):
+                    samples[idx], cvts[idx] = self(samples[idx], force_linked_fate=True, op_seed=op_seed, in_cvts=cvts[idx])
                 else:
-                    for idx2, cvt2 in enumerate(cvt):
-                        samples[idx][idx2] = np.asarray(flat_array[flat_idx]) if cvt2 else flat_array[flat_idx]
-                        flat_idx += 1
-            if flat_idx != len(flat_array):
-                raise AssertionError("messed up logic somewhere")
-        else:  # each sample/array must be processed independently below
-            indep_arrays = []
-            for sample in samples:
-                if isinstance(sample, list):
-                    for s in sample:
-                        indep_arrays.append(s)
-                else:
-                    indep_arrays.append([sample])
-            for idx, array in enumerate(indep_arrays):
-                for operation in self.pipeline.operations:
-                    r = round(np.random.uniform(0, 1), 1)
-                    if r <= operation.probability:
-                        indep_arrays[idx] = operation.perform_operation(array)
-            for idx, cvt in enumerate(cvt_array):
-                if not isinstance(cvt, list):
-                    if len(indep_arrays[idx]) != 1:
-                        raise AssertionError("messed up logic somewhere")
-                    samples[idx] = np.asarray(indep_arrays[idx][0]) if cvt else indep_arrays[idx][0]
-                else:
-                    if len(samples[idx]) != len(indep_arrays[idx]) or len(samples[idx]) != len(cvt):
-                        raise AssertionError("messed up logic somewhere")
-                    for idx2, cvt2 in enumerate(cvt):
-                        samples[idx][idx2] = np.asarray(indep_arrays[idx][idx2]) if cvt2 else indep_arrays[idx][idx2]
-        if not in_list and len(samples) == 1:
+                    random.seed(np.random.randint(np.iinfo(np.int32).max))
+                    for operation in self.pipeline.operations:
+                        r = round(np.random.uniform(0, 1), 1)
+                        if r <= operation.probability:
+                            samples[idx] = operation.perform_operation([samples[idx]])[0]
+        samples, cvts = ImageTransformWrapper._pack(samples, cvts, convert_pil=True)
+        if len(samples) != len(cvts):
+            raise AssertionError("messed up packing/unpacking logic")
+        if (skip_unpack or not out_list) and len(samples) == 1:
             samples = samples[0]
-        return samples
+            cvts = cvts[0]
+        return (samples, cvts) if out_cvts else samples
 
     def __repr__(self):
         """Create a print-friendly representation of inner augmentation stages."""
@@ -327,7 +304,6 @@ class AugmentorWrapper(object):
     def set_seed(self, seed):
         """Sets the internal seed to use for stochastic ops."""
         np.random.seed(seed)
-        self.seeded_inner_pipeline = False
 
 
 class ImageTransformWrapper(object):
@@ -348,14 +324,13 @@ class ImageTransformWrapper(object):
 
     Attributes:
         operation: the wrapped operation (callable object or class name string to import).
-        parameters: the parameters that are passed to the operation when init'd or called.
+        params: the parameters that are passed to the operation when init'd or called.
         probability: the probability that the wrapped operation will be applied.
-        force_convert: specifies whether images should be forced into PIL format or not.
+        convert_pil: specifies whether images should be converted into PIL format or not.
         linked_fate: specifies whether images given in a list/tuple should have the same fate or not.
-        flatten: specifies whether embedded lists/tuples should be flattened or not.
     """
 
-    def __init__(self, operation, params=None, probability=1, force_convert=False, linked_fate=True, flatten=False):
+    def __init__(self, operation, params=None, probability=1, convert_pil=False, linked_fate=True):
         """Receives and stores a torchvision transform operation for later use.
 
         If the operation is given as a string, it is assumed to be a class name and it will
@@ -367,9 +342,8 @@ class ImageTransformWrapper(object):
             operation: the wrapped operation (callable object or class name string to import).
             params: the parameters that are passed to the operation when init'd or called.
             probability: the probability that the wrapped operation will be applied.
-            force_convert: specifies whether images should be forced into PIL format or not.
+            convert_pil: specifies whether images should be forced into PIL format or not.
             linked_fate: specifies whether images given in a list/tuple should have the same fate or not.
-            flatten: specifies whether embedded lists/tuples should be flattened or not.
         """
         if params is not None and not isinstance(params, dict):
             raise AssertionError("expected params to be passed in as a dictionary")
@@ -383,71 +357,123 @@ class ImageTransformWrapper(object):
         if probability < 0 or probability > 1:
             raise AssertionError("invalid probability value (range is [0,1]")
         self.probability = probability
-        self.force_convert = force_convert
+        self.convert_pil = convert_pil
         self.linked_fate = linked_fate
-        self.flatten = flatten
 
-    def __call__(self, samples):
+    @staticmethod
+    def _unpack(sample, force_flatten=False, convert_pil=False):
+        if isinstance(sample, (list, tuple)):
+            if len(sample) > 1:
+                if not force_flatten:
+                    return sample, [False] * len(sample)
+                flat_samples = []
+                cvts = []
+                for s in sample:
+                    out, cvt = ImageTransformWrapper._unpack(s, force_flatten=force_flatten)
+                    if isinstance(cvt, (list, tuple)):
+                        if not isinstance(out, (list, tuple)):
+                            raise AssertionError("unexpected out/cvt types")
+                        flat_samples += list(out)
+                        cvts += list(cvt)
+                    else:
+                        flat_samples.append(out)
+                        cvts.append(cvt)
+                return flat_samples, cvts
+            else:
+                sample = sample[0]
+        if convert_pil:
+            if isinstance(sample, torch.Tensor):
+                sample = sample.numpy()
+            if isinstance(sample, np.ndarray) and sample.ndim > 2 and sample.shape[2] > 1 and (sample.dtype != np.uint8):
+                # PIL images cannot handle multi-channel non-byte arrays; we handle these manually
+                flat_samples = []
+                for c in range(sample.shape[2]):
+                    flat_samples.append(PIL.Image.fromarray(sample[..., c]))
+                return flat_samples, True  # this is the only case where an array can be paired with a single cvt flag
+            else:
+                out = PIL.Image.fromarray(np.squeeze(sample))
+                return out, True
+        return sample, False
+
+    @staticmethod
+    def _pack(samples, cvts, convert_pil=False):
+        if not isinstance(samples, (list, tuple)) or not isinstance(cvts, (list, tuple)) or len(samples) != len(cvts):
+            if not convert_pil or not isinstance(cvts, bool) or not cvts:
+                raise AssertionError("unexpected cvts len w/ pil conversion (bad logic somewhere)")
+            if not all([isinstance(s, PIL.Image.Image) for s in samples]):
+                raise AssertionError("unexpected packed list sample types")
+            samples = [np.asarray(s) for s in samples]
+            if not all([s.ndim == 2 for s in samples]):
+                raise AssertionError("unexpected packed list sample depths")
+            samples = [np.expand_dims(s, axis=2) for s in samples]
+            return [np.concatenate(samples, axis=2)], [False]
+        for idx, cvt in enumerate(cvts):
+            if not isinstance(cvt, (list, tuple)):
+                if not isinstance(cvt, bool):
+                    raise AssertionError("unexpected cvt type")
+                if cvt:
+                    if isinstance(samples[idx], (list, tuple)):
+                        raise AssertionError("unexpected packed sample type")
+                    samples[idx] = np.asarray(samples[idx])
+                    cvts[idx] = False
+        return samples, cvts
+
+    def __call__(self, samples, force_linked_fate=False, op_seed=None, in_cvts=None):
         """Transforms a single image (or embedded lists/tuples of images) using a wrapped operation.
 
         Args:
             samples: the image(s) to transform (can also contain embedded lists/tuples of images).
+            force_linked_fate: override flag for recursive use allowing forced linking of arrays.
+            op_seed: seed to set before calling the wrapped operation.
+            in_cvts: holds the input conversion flag array (for recursive usage).
 
         Returns:
-            The transformed image(s), with the same list/tuple formatting as the input (if any).
+            The transformed image(s), with the same list/tuple formatting as the input.
         """
-        in_list = True
-        if samples is not None and not isinstance(samples, (list, tuple)):
-            in_list = False
+        out_cvts = in_cvts is not None
+        out_list = isinstance(samples, (list, tuple))
+        if samples is None or (out_list and not samples):
+            return ([], []) if out_cvts else []
+        elif not out_list:
             samples = [samples]
-        elif not samples:
-            return samples
-        array, cvt_array = [], []
-        for idx, sample in enumerate(samples):
-            if isinstance(sample, (list, tuple)) and self.flatten:
-                array += []
-                cvt_array += []
-                for s in sample:
-                    if self.force_convert and not isinstance(s, (list, tuple)):
-                        array[idx].append(PIL.Image.fromarray(s))
-                        cvt_array[idx].append(True)
-                    else:
-                        array[idx].append(s)
-                        cvt_array[idx].append(False)
+        skip_unpack = in_cvts is not None and isinstance(in_cvts, bool) and in_cvts
+        if self.linked_fate or force_linked_fate:  # process all samples/arrays with the same operations below
+            if not skip_unpack:
+                samples, cvts = self._unpack(samples, convert_pil=self.convert_pil)
+                if not isinstance(samples, (list, tuple)):
+                    samples = [samples]
+                    cvts = [cvts]
             else:
-                if self.force_convert and not isinstance(sample, (list, tuple)):
-                    array.append(PIL.Image.fromarray(sample))
-                    cvt_array.append(True)
-                else:
-                    array.append(sample)
-                    cvt_array.append(False)
-        if self.linked_fate:  # process all samples/arrays with the same operations below
+                cvts = in_cvts
             if self.probability >= 1 or round(np.random.uniform(0, 1), 1) <= self.probability:
-                op_seed = np.random.randint(2 ** 16)
-                for idx in range(len(array)):
-                    if hasattr(self.operation, "set_seed") and callable(self.operation.set_seed):
-                        self.operation.set_seed(op_seed)
-                    # watch out: if operation is stochastic and we cannot seed above, then there is no
-                    # guarantee that the samples will truly have a 'linked fate' (this might cause issues!)
-                    array[idx] = self.operation(array[idx], **self.params)
-        else:  # each sample/array will be processed independently below (current seeds are kept)
-            for idx in range(len(array)):
+                if op_seed is None:
+                    op_seed = np.random.randint(np.iinfo(np.int32).max)
+                for idx, _ in enumerate(samples):
+                    if isinstance(samples[idx], (list, tuple)):
+                        samples[idx], cvts[idx] = self(samples[idx], force_linked_fate=True, op_seed=op_seed, in_cvts=cvts[idx])
+                    else:
+                        if hasattr(self.operation, "set_seed") and callable(self.operation.set_seed):
+                            self.operation.set_seed(op_seed)
+                        # watch out: if operation is stochastic and we cannot seed above, then there is no
+                        # guarantee that the samples will truly have a 'linked fate' (this might cause issues!)
+                        samples[idx] = self.operation(samples[idx], **self.params)
+        else:  # each element of the top array will be processed independently below (current seeds are kept)
+            cvts = [False] * len(samples)
+            for idx, _ in enumerate(samples):
+                samples[idx], cvts[idx] = self._unpack(samples[idx], convert_pil=self.convert_pil)
                 if self.probability >= 1 or round(np.random.uniform(0, 1), 1) <= self.probability:
-                    array[idx] = self.operation(array[idx], **self.params)
-        flat_idx = 0
-        for idx, cvt in enumerate(cvt_array):
-            if not isinstance(cvt, list):
-                samples[idx] = np.asarray(array[flat_idx]) if cvt else array[flat_idx]
-                flat_idx += 1
-            else:
-                for idx2, cvt2 in enumerate(cvt):
-                    samples[idx][idx2] = np.asarray(array[flat_idx]) if cvt2 else array[flat_idx]
-                    flat_idx += 1
-        if flat_idx != len(array):
-            raise AssertionError("messed up logic somewhere")
-        if not in_list and len(samples) == 1:
+                    if isinstance(samples[idx], (list, tuple)):
+                        # we will now force fate linkage for all subelements of this array
+                        samples[idx], cvts[idx] = self(samples[idx], force_linked_fate=True, op_seed=op_seed, in_cvts=cvts[idx])
+                    else:
+                        samples[idx] = self.operation(samples[idx], **self.params)
+        samples, cvts = ImageTransformWrapper._pack(samples, cvts, convert_pil=self.convert_pil)
+        if len(samples) != len(cvts):
+            raise AssertionError("messed up packing/unpacking logic")
+        if (skip_unpack or not out_list) and len(samples) == 1:
             samples = samples[0]
-        return samples
+            cvts = cvts[0]
+        return (samples, cvts) if out_cvts else samples
 
     def __repr__(self):
         """Create a print-friendly representation of inner augmentation stages."""
