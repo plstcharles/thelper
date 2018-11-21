@@ -133,7 +133,6 @@ class Trainer:
         optimization_config: dictionary of optim-related parameters, parsed at training time.
         save_freq: frequency of checkpoint saves while training (i.e. save every X epochs).
         save_raw: specifies whether to save raw types or thelper objects in checkpoints.
-        save_dir: top-level session save directory.
         checkpoint_dir: session checkpoint output directory (located within 'save_dir').
         use_tbx: defines whether to use tensorboardX writers for logging or not.
         tbx_root_dir: top-level tensorboard log/event output directory (located within 'save_dir').
@@ -159,7 +158,15 @@ class Trainer:
         if "trainer" not in config or not config["trainer"]:
             raise AssertionError("config missing 'trainer' field")
         trainer_config = config["trainer"]
+        train_logger_path = os.path.join(save_dir, "logs", "trainer.log")
+        train_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
+        train_logger_fh = logging.FileHandler(train_logger_path)
+        train_logger_fh.setFormatter(train_logger_format)
         self.logger = thelper.utils.get_class_logger()
+        self.logger.addHandler(train_logger_fh)
+        self.logger.info("created training log for session '%s'" % session_name)
+        self.logger.debug("logstamp = %s" % thelper.utils.get_log_stamp())
+        self.logger.debug("version = %s" % thelper.utils.get_git_stamp())
         self.name = session_name
         self.train_loader = train_loader
         self.valid_loader = valid_loader
@@ -180,8 +187,7 @@ class Trainer:
         if self.save_freq < 1:
             raise AssertionError("checkpoint save frequency should be integer great or equal to 1")
         self.save_raw = thelper.utils.str2bool(thelper.utils.get_key_def("save_raw", trainer_config, True))
-        self.save_dir = save_dir
-        self.checkpoint_dir = os.path.join(self.save_dir, "checkpoints")
+        self.checkpoint_dir = os.path.join(save_dir, "checkpoints")
         if not os.path.exists(self.checkpoint_dir):
             os.mkdir(self.checkpoint_dir)
         self.use_tbx = False
@@ -189,7 +195,7 @@ class Trainer:
             self.use_tbx = thelper.utils.str2bool(trainer_config["use_tbx"])
         writer_paths = [None, None, None]
         if self.use_tbx:
-            self.tbx_root_dir = os.path.join(self.save_dir, "tbx_logs", self.name)
+            self.tbx_root_dir = os.path.join(save_dir, "tbx_logs", self.name)
             if not os.path.exists(self.tbx_root_dir):
                 os.makedirs(self.tbx_root_dir)
             timestr = time.strftime("%Y%m%d-%H%M%S")
@@ -229,17 +235,17 @@ class Trainer:
         if "train_metrics" in trainer_config and trainer_config["train_metrics"]:
             self.train_metrics = {**self.train_metrics, **self._load_metrics(trainer_config["train_metrics"])}
         for metric_name, metric in self.train_metrics.items():
-            logger.info("parsed train metric '%s': %s" % (metric_name, str(metric)))
+            self.logger.info("parsed train metric '%s': %s" % (metric_name, str(metric)))
         self.valid_metrics = deepcopy(metrics)
         if "valid_metrics" in trainer_config and trainer_config["valid_metrics"]:
             self.valid_metrics = {**self.valid_metrics, **self._load_metrics(trainer_config["valid_metrics"])}
         for metric_name, metric in self.valid_metrics.items():
-            logger.info("parsed valid metric '%s': %s" % (metric_name, str(metric)))
+            self.logger.info("parsed valid metric '%s': %s" % (metric_name, str(metric)))
         self.test_metrics = deepcopy(metrics)
         if "test_metrics" in trainer_config and trainer_config["test_metrics"]:
             self.test_metrics = {**self.test_metrics, **self._load_metrics(trainer_config["test_metrics"])}
         for metric_name, metric in self.test_metrics.items():
-            logger.info("parsed test metric '%s': %s" % (metric_name, str(metric)))
+            self.logger.info("parsed test metric '%s': %s" % (metric_name, str(metric)))
         self.monitor, self.monitor_best = None, None
         if "monitor" in trainer_config and trainer_config["monitor"]:
             self.monitor = trainer_config["monitor"]
@@ -252,14 +258,6 @@ class Trainer:
                 self.monitor_best = thelper.optim.Metric.minimize
             else:
                 raise AssertionError("monitored metric does not return proper optimization goal")
-        train_logger_path = os.path.join(self.save_dir, "logs", "trainer.log")
-        train_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
-        train_logger_fh = logging.FileHandler(train_logger_path)
-        train_logger_fh.setFormatter(train_logger_format)
-        self.logger.addHandler(train_logger_fh)
-        self.logger.info("created training log for session '%s'" % self.name)
-        self.logger.debug("logstamp = %s" % thelper.utils.get_log_stamp())
-        self.logger.debug("version = %s" % thelper.utils.get_git_stamp())
         if ckptdata is not None:
             self.monitor_best = ckptdata["monitor_best"]
             self.optimizer_state = ckptdata["optimizer"]
