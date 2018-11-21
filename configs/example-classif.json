@@ -105,8 +105,7 @@
                     "params": {
                         "min": [127, 127, 127],
                         "max": [255, 255, 255]
-                    },
-                    "force_convert": false
+                    }
                 }
             },
             {
@@ -115,15 +114,13 @@
                     "operation": "thelper.transforms.Resize",
                     "params": {
                         "dsize": [224, 224]
-                    },
-                    "force_convert": false
+                    }
                 }
             },
             {
                 "operation": "thelper.transforms.ImageTransformWrapper",
                 "params": {
-                    "operation": "torchvision.transforms.ToTensor",
-                    "force_convert": false
+                    "operation": "torchvision.transforms.ToTensor"
                 }
             }
         ],
