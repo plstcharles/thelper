@@ -931,6 +931,73 @@ class ClassificationDataset(Dataset):
         return self.task
 
 
+class ImageFolderDataset(ClassificationDataset):
+    """Image folder dataset specialization interface for classification tasks.
+
+    This specialization is used to parse simple image subfolders, and it essentially replaces the very
+    basic ``torchvision.datasets.ImageFolder`` interface with similar functionalities. It it used to provide
+    a proper task interface as well as path metadata in each loaded packet for metrics/logging output.
+
+    .. seealso::
+        :class:`thelper.data.ImageDataset`
+        :class:`thelper.data.ClassificationDataset`
+    """
+
+    def __init__(self, name, root, config=None, transforms=None, bypass_deepcopy=False):
+        """Image folder dataset parser constructor."""
+        if "root" in config and config["root"] and isinstance(config["root"], str):
+            if root is not None:
+                logger.warning("root dir already specified in config; will ignore data root '%s'" % root)
+            root = config["root"]
+        if root is None or not os.path.isdir(root):
+            raise AssertionError("invalid input data root '%s'" % root)
+        class_map = {}
+        for child in os.listdir(root):
+            if os.path.isdir(os.path.join(root, child)):
+                class_map[child] = []
+        if not class_map:
+            raise AssertionError("could not find any image folders at '%s'" % root)
+        image_exts = [".jpg", ".jpeg", ".bmp", ".png", ".ppm", ".pgm", ".tif"]
+        self.image_key = thelper.utils.get_key_def("image_key", config, "image")
+        self.path_key = thelper.utils.get_key_def("path_key", config, "path")
+        self.idx_key = thelper.utils.get_key_def("idx_key", config, "idx")
+        self.label_key = thelper.utils.get_key_def("label_key", config, "label")
+        samples = []
+        for class_name in class_map:
+            class_folder = os.path.join(root, class_name)
+            for folder, subfolder, files in os.walk(class_folder):
+                for file in files:
+                    ext = os.path.splitext(file)[1].lower()
+                    if ext in image_exts:
+                        class_map[class_name].append(len(samples))
+                        samples.append({
+                            self.path_key: os.path.join(folder, file),
+                            self.label_key: class_name
+                        })
+        meta_keys = [self.path_key, self.idx_key]
+        super().__init__(name, root, class_names=list(class_map.keys()),
+                         input_key=self.image_key, label_key=self.label_key, meta_keys=meta_keys,
+                         config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
+        self.samples = samples
+
+    def __getitem__(self, idx):
+        """Returns the data sample (a dictionary) for a specific (0-based) index."""
+        if idx < 0 or idx >= len(self.samples):
+            raise AssertionError("sample index is out-of-range")
+        sample = self.samples[idx]
+        image_path = sample[self.path_key]
+        image = cv.imread(image_path)
+        if image is None:
+            raise AssertionError("invalid image at '%s'" % image_path)
+        if self.transforms:
+            image = self.transforms(image)
+        return {
+            self.image_key: image,
+            self.idx_key: idx,
+            **sample
+        }
+
+
 class ExternalDataset(Dataset):
     """External dataset interface.
 
