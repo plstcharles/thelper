@@ -224,8 +224,8 @@ def main(args=None):
     """
     ap = argparse.ArgumentParser(description='thelper model trainer application')
     ap.add_argument("--version", default=False, action="store_true", help="prints the version of the library and exits")
-    ap.add_argument("-l", "--log", default="thelper.log", type=str, help="path to the top-level log file (default: 'thelper.log')")
-    ap.add_argument("-v", "--verbose", action="count", default=3, help="set logging terminal verbosity level (additive)")
+    ap.add_argument("-l", "--log", default=None, type=str, help="path to the top-level log file (default: None)")
+    ap.add_argument("-v", "--verbose", action="count", default=0, help="set logging terminal verbosity level (additive)")
     ap.add_argument("-d", "--data-root", default=None, type=str, help="path to the root directory passed to dataset interfaces for parsing")
     subparsers = ap.add_subparsers(title="Operating mode", dest="mode")
     new_ap = subparsers.add_parser("new", help="creates a new session from a config file")
@@ -246,6 +246,8 @@ def main(args=None):
     annot_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session save directory)")
     annot_ap.add_argument("save_dir", type=str, help="path to the root directory where annotations should be saved")
     args = ap.parse_args(args=args)
+    if args.verbose == 0:
+        args.verbose = 3
     if args.verbose > 2:
         log_level = logging.NOTSET
     elif args.verbose > 1:
