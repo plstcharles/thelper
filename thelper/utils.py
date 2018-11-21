@@ -715,7 +715,7 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
     fig = plt.figure(num="confmat", figsize=size_inch, dpi=dpi, facecolor="w", edgecolor="k")
     fig.clf()
     ax = fig.add_subplot(1, 1, 1)
-    ax.imshow(confmat, cmap=plt.cm.hot)
+    ax.imshow(confmat, cmap=plt.cm.Blues)
     labels = [clipstr(label, 9) for label in class_list]
     tick_marks = np.arange(len(labels))
     ax.set_xlabel("Predicted", fontsize=7)
@@ -728,6 +728,7 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
     ax.set_yticklabels(labels, fontsize=4, va="center")
     ax.yaxis.set_label_position("left")
     ax.yaxis.tick_left()
+    thresh = confmat.max() / 2.
     for i, j in itertools.product(range(confmat.shape[0]), range(confmat.shape[1])):
         if not normalize:
             txt = ("%d" % confmat[i, j]) if confmat[i, j] != 0 else "."
@@ -736,7 +737,7 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
                 txt = "%.02f" % confmat[i, j]
             else:
                 txt = "~0" if confmat[i, j] > 0 else "."
-        color = "blue" if i != j else "green"
+        color = "white" if confmat[i, j] > thresh else "black"
         ax.text(j, i, txt, horizontalalignment="center", fontsize=4, verticalalignment="center", color=color)
     fig.set_tight_layout(True)
     return fig
