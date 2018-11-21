@@ -1180,10 +1180,11 @@ class ROCCurve(Metric):
         array = thelper.utils.fig2array(fig)
         return array
 
-    def get_tbx_text(self):
+    def print(self):
         """Returns the logged metadata of badly predicted samples if logging is activated, and ``None`` otherwise.
 
-        The returned object is a print-friendly string that can be consumed directly by tensorboardX.
+        The returned object is a print-friendly CSV string that can be consumed directly by tensorboardX. Note
+        that this string might be very long if the dataset is large (i.e. it will contain one line per sample).
         """
         if self.log_params is None:
             return None  # do not generate log text unless requested
@@ -1375,11 +1376,11 @@ class ClassifLogger(Metric):
             return None
         raise NotImplementedError  # TODO
 
-    def get_tbx_text(self):
+    def print(self):
         """Returns the logged metadata of predicted samples.
 
-        The returned object is a print-friendly string that can be consumed directly by tensorboardX. Note that
-        this string might be very long if the dataset is large.
+        The returned object is a print-friendly CSV string that can be consumed directly by tensorboardX. Note
+        that this string might be very long if the dataset is large (i.e. it will contain one line per sample).
         """
         if self.score is None:
             return None

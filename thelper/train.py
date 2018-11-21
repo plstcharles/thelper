@@ -711,16 +711,15 @@ class Trainer:
                     raw_filename = "%s-%s-%04d.png" % (writer.prefix, metric_name, epoch)
                     raw_filepath = os.path.join(writer.path, raw_filename)
                     cv.imwrite(raw_filepath, img[..., [2, 1, 0]])
-            if hasattr(metric, "get_tbx_text") and callable(metric.get_tbx_text):
-                txt = metric.get_tbx_text()
-                if txt:
-                    writer.add_text(writer.prefix + "/%s" % metric_name, txt, epoch)
-                    # as backup, save raw text since tensorboardX can fail
-                    # see https://github.com/lanpa/tensorboardX/issues/134
-                    raw_filename = "%s-%s-%04d.txt" % (writer.prefix, metric_name, epoch)
-                    raw_filepath = os.path.join(writer.path, raw_filename)
-                    with open(raw_filepath, "w") as fd:
-                        fd.write(txt)
+            txt = None
+            if hasattr(metric, "print") and callable(metric.print):
+                txt = metric.print()
+            if not txt:
+                txt = str(metric.eval())
+            raw_filename = "%s-%s-%04d.txt" % (writer.prefix, metric_name, epoch)
+            raw_filepath = os.path.join(writer.path, raw_filename)
+            with open(raw_filepath, "w") as fd:
+                fd.write(txt)
 
     def _save(self, epoch, optimizer, save_best=False):
         """Saves a session checkpoint containing all the information required to resume training."""
