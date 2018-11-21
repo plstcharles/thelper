@@ -197,7 +197,7 @@ class Trainer:
             self.use_tbx = thelper.utils.str2bool(trainer_config["use_tbx"])
         writer_paths = [None, None, None]
         if self.use_tbx:
-            self.tbx_root_dir = os.path.join(save_dir, "tbx_logs", self.name)
+            self.tbx_root_dir = os.path.join(save_dir, "output", self.name)
             if not os.path.exists(self.tbx_root_dir):
                 os.makedirs(self.tbx_root_dir)
             timestr = time.strftime("%Y%m%d-%H%M%S")
