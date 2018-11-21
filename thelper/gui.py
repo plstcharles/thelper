@@ -101,7 +101,7 @@ class Annotator:
         self.logger.addHandler(annot_logger_fh)
         self.logger.info("created annotation log for session '%s'" % self.name)
         logstamp = thelper.utils.get_log_stamp()
-        repover = thelper.utils.get_git_stamp()
+        repover = thelper.__version__ + ":" + thelper.utils.get_git_stamp()
         self.logger.debug("logstamp = %s" % logstamp)
         self.logger.debug("version = %s" % repover)
         config_backup_path = os.path.join(save_dir, "logs", "config." + logstamp + ".json")
@@ -286,10 +286,12 @@ class ImageSegmentAnnotator(Annotator):
             annot_dir = os.path.join(self.annotations_dir, dataset_name)
             if not os.path.isdir(annot_dir):
                 os.mkdir(annot_dir)
+            logstamp = thelper.utils.get_log_stamp()
+            repover = thelper.__version__ + ":" + thelper.utils.get_git_stamp()
             log_content = {
                 "session_name": session_name,
-                "logstamp": thelper.utils.get_log_stamp(),
-                "version": thelper.utils.get_git_stamp(),
+                "logstamp": logstamp,
+                "version": repover,
                 "dataset": str(dataset),
             }
             if hasattr(dataset, "samples") and isinstance(dataset.samples, list):

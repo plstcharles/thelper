@@ -132,7 +132,7 @@ def load(config, data_root, save_dir=None):
         :class:`thelper.samplers.WeightedSubsetRandomSampler`
     """
     logstamp = thelper.utils.get_log_stamp()
-    repover = thelper.utils.get_git_stamp()
+    repover = thelper.__version__ + ":" + thelper.utils.get_git_stamp()
     session_name = config["name"] if "name" in config else "session"
     if save_dir is not None:
         data_logger_path = os.path.join(save_dir, "logs", "data.log")

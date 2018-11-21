@@ -165,8 +165,10 @@ class Trainer:
         self.logger = thelper.utils.get_class_logger()
         self.logger.addHandler(train_logger_fh)
         self.logger.info("created training log for session '%s'" % session_name)
-        self.logger.debug("logstamp = %s" % thelper.utils.get_log_stamp())
-        self.logger.debug("version = %s" % thelper.utils.get_git_stamp())
+        logstamp = thelper.utils.get_log_stamp()
+        repover = thelper.__version__ + ":" + thelper.utils.get_git_stamp()
+        self.logger.debug("logstamp = %s" % logstamp)
+        self.logger.debug("version = %s" % repover)
         self.name = session_name
         self.train_loader = train_loader
         self.valid_loader = valid_loader
