@@ -846,16 +846,18 @@ class ConfusionMatrix(Metric):
         matrix: report generator function, called at evaluation time to generate the output string.
         class_names: holds the list of class label names provided by the dataset parser. If it is not
             provided when the constructor is called, it will be set by the trainer at runtime.
+        draw_normalized: defines whether rendered confusion matrices should be normalized or not.
         pred: queue used to store the top-1 (best) predicted class indices at each iteration.
         gt: queue used to store the groundtruth class indices at each iteration.
     """
 
-    def __init__(self, class_names=None):
+    def __init__(self, class_names=None, draw_normalized=True):
         """Receives the optional class label names used to decorate the output string.
 
         Args:
             class_names: holds the list of class label names provided by the dataset parser. If it is not
                 provided when the constructor is called, it will be set by the trainer at runtime.
+            draw_normalized: defines whether rendered confusion matrices should be normalized or not.
         """
 
         def gen_matrix(y_true, y_pred, _class_names):
@@ -873,6 +875,7 @@ class ConfusionMatrix(Metric):
             self.set_class_names(class_names)
         self.pred = None
         self.gt = None
+        self.draw_normalized = draw_normalized
 
     def set_class_names(self, class_names):
         """Sets the class label names that must be predicted by the model.
@@ -920,7 +923,7 @@ class ConfusionMatrix(Metric):
             return None
         confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_names)
         if self.class_names:
-            fig = thelper.utils.draw_confmat(confmat, self.class_names)
+            fig = thelper.utils.draw_confmat(confmat, self.class_names, normalize=self.draw_normalized)
             array = thelper.utils.fig2array(fig)
             return array
         else:
