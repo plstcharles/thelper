@@ -721,15 +721,19 @@ class Trainer:
                     raw_filename = "%s-%s-%04d.png" % (writer.prefix, metric_name, epoch)
                     raw_filepath = os.path.join(writer.path, raw_filename)
                     cv.imwrite(raw_filepath, img[..., [2, 1, 0]])
-            txt = None
-            if hasattr(metric, "print") and callable(metric.print):
-                txt = metric.print()
+            txt = metric.print() if hasattr(metric, "print") and callable(metric.print) else None
             if not txt:
-                txt = str(metric.eval())
-            raw_filename = "%s-%s-%04d.txt" % (writer.prefix, metric_name, epoch)
-            raw_filepath = os.path.join(writer.path, raw_filename)
-            with open(raw_filepath, "w") as fd:
-                fd.write(txt)
+                eval_res = metric.eval()
+                if eval_res is not None:
+                    if isinstance(eval_res, float):
+                        txt = "%.4f" % eval_res  # make sure we always have decent precision
+                    else:
+                        txt = str(eval_res)
+            if txt:
+                raw_filename = "%s-%s-%04d.txt" % (writer.prefix, metric_name, epoch)
+                raw_filepath = os.path.join(writer.path, raw_filename)
+                with open(raw_filepath, "w") as fd:
+                    fd.write(txt)
 
     def _save(self, epoch, optimizer, save_best=False):
         """Saves a session checkpoint containing all the information required to resume training."""
