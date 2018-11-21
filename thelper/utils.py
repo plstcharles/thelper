@@ -710,7 +710,7 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
     if not isinstance(confmat, np.ndarray) or not isinstance(class_list, list):
         raise AssertionError("invalid inputs")
     if normalize:
-        confmat = confmat.astype("float") / confmat.sum(axis=1)[:, np.newaxis]
+        confmat = confmat.astype(np.float) / confmat.sum(axis=1)[:, np.newaxis]
         confmat = np.nan_to_num(confmat)
     fig = plt.figure(num="confmat", figsize=size_inch, dpi=dpi, facecolor="w", edgecolor="k")
     fig.clf()
@@ -729,9 +729,15 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
     ax.yaxis.set_label_position("left")
     ax.yaxis.tick_left()
     for i, j in itertools.product(range(confmat.shape[0]), range(confmat.shape[1])):
-        str = format(confmat[i, j], "d") if confmat[i, j] != 0 else "."
+        if not normalize:
+            txt = ("%d" % confmat[i, j]) if confmat[i, j] != 0 else "."
+        else:
+            if confmat[i, j] >= 0.01:
+                txt = "%.02f" % confmat[i, j]
+            else:
+                txt = "~0" if confmat[i, j] > 0 else "."
         color = "blue" if i != j else "green"
-        ax.text(j, i, str, horizontalalignment="center", fontsize=3, verticalalignment="center", color=color)
+        ax.text(j, i, txt, horizontalalignment="center", fontsize=4, verticalalignment="center", color=color)
     fig.set_tight_layout(True)
     return fig
 
