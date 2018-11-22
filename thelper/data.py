@@ -974,6 +974,9 @@ class ImageFolderDataset(ClassificationDataset):
                             self.path_key: os.path.join(folder, file),
                             self.label_key: class_name
                         })
+        class_map = {k: v for k, v in class_map.items() if len(v) > 0}
+        if not class_map:
+            raise AssertionError("could not locate any subdir in '%s' with images to load" % root)
         meta_keys = [self.path_key, self.idx_key]
         super().__init__(name, root, class_names=list(class_map.keys()),
                          input_key=self.image_key, label_key=self.label_key, meta_keys=meta_keys,
