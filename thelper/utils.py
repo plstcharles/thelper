@@ -558,7 +558,7 @@ def draw_classifs(images, labels_gt, labels_pred=None, labels_map=None):
     return fig
 
 
-def draw_sample(sample, preds=None, image_key="image", label_key="label", block=False):
+def draw_sample(sample, preds=None, image_key="image", label_key="label", mask_key="mask", block=False):
     """Draws and returns a figure of image samples using pyplot."""
     if not isinstance(sample, dict):
         raise AssertionError("expected dict-based sample")
@@ -613,7 +613,12 @@ def draw_sample(sample, preds=None, image_key="image", label_key="label", block=
     if preds and images.shape[0] != len(preds):
         raise AssertionError("images/predictions count mismatch")
     images = np.transpose(images, (0, 2, 3, 1))  # BxCxHxW to BxHxWxC
-    masks = sample["mask"].numpy().copy() if "mask" in sample else None
+    masks = None
+    if mask_key in sample:
+        if isinstance(sample[mask_key], torch.Tensor):
+            masks = sample[mask_key].numpy().copy()
+        if isinstance(sample[mask_key], np.ndarray):
+            masks = sample[mask_key].copy()
     if masks is not None:
         # masks should have same dim count, but 2nd always equal to 1 (single channel)
         if masks.ndim != 4 or masks.shape[1] != 1:
