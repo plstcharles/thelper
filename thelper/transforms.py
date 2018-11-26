@@ -384,10 +384,10 @@ class ImageTransformWrapper(object):
         if convert_pil:
             if isinstance(sample, torch.Tensor):
                 sample = sample.numpy()
-            if isinstance(sample, np.ndarray) and sample.ndim > 2 and sample.shape[2] > 1 and (sample.dtype != np.uint8):
+            if isinstance(sample, np.ndarray) and sample.ndim > 2 and sample.shape[-1] > 1 and (sample.dtype != np.uint8):
                 # PIL images cannot handle multi-channel non-byte arrays; we handle these manually
                 flat_samples = []
-                for c in range(sample.shape[2]):
+                for c in range(sample.shape[-1]):
                     flat_samples.append(PIL.Image.fromarray(sample[..., c]))
                 return flat_samples, True  # this is the only case where an array can be paired with a single cvt flag
             else:
