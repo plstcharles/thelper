@@ -217,10 +217,17 @@ if on_rtd:
             return MagicMock()
 
     MOCK_MODULES = [
-        'PIL',
-        'torch',
         'argparse',
-        'numpy'
+        'augmentor',
+        'cv2',
+        'matplotlib',
+        'numpy',
+        'PIL',
+        'pynput',
+        'sklearn',
+        'tensorboardX',
+        'torch',
+        'torchvision',
     ]
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 

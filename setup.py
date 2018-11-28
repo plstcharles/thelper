@@ -47,6 +47,8 @@ class OptionalBuildExt(build_ext):
         print("*" * 80)
 
 
+on_rtd = os.environ.get('READTHEDOCS') == 'True'
+
 setuptools.setup(
     name="thelper",
     version="0.0.2",
@@ -88,7 +90,7 @@ setuptools.setup(
         "scikit-learn>=0.19.1",
         "torchvision>=0.2.1",
         "tensorboardX==1.2.0",  # 1.4.0 causes issues with some image types?
-    ],
+    ] if not on_rtd else [],  # bypass deps install on rtd
     python_requires="~=3.5",
     extras_require={
         "rst": ["docutils>=0.11"],
