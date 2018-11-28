@@ -478,15 +478,15 @@ class ExternalMetric(Metric):
 
     For now, two metric handling modes (both related to classification) are supported:
 
-      * ``classif_best``: the wrapper will accumulate the predicted and groundtruth classification
-        labels forwarded by the trainer and provide them to the external metric for evaluation. If
-        a target label name is specified, then only classifications related to that label will be
-        accumulated. This is the handling mode required for count-based classification metrics such
+      * ``classif_best``: the wrapper will accumulate the predicted and groundtruth classification \
+        labels forwarded by the trainer and provide them to the external metric for evaluation. If \
+        a target label name is specified, then only classifications related to that label will be \
+        accumulated. This is the handling mode required for count-based classification metrics such \
         as accuracy, F-Measure, precision, recall, etc.
 
-      * ``classif_score``: the wrapper will accumulate the prediction score of the targeted label
-        along with a boolean that indicates whether this label was the groundtruth label or not. This
-        is the handling mode required for score-based classification metrics such as when computing
+      * ``classif_score``: the wrapper will accumulate the prediction score of the targeted label \
+        along with a boolean that indicates whether this label was the groundtruth label or not. This \
+        is the handling mode required for score-based classification metrics such as when computing \
         the area under the ROC curve (AUC).
 
     Usage examples inside a session configuration file::
@@ -940,7 +940,7 @@ class ConfusionMatrix(Metric):
 
 
 class ROCCurve(Metric):
-    r"""Receiver operating characteristic curve computation interface.
+    """Receiver operating characteristic curve computation interface.
 
     This class provides an interface to ``sklearn.metrics.roc_curve`` and ``sklearn.metrics.roc_auc_score``
     that can produce various types of ROC-related information including the area under the curve (AUC), the

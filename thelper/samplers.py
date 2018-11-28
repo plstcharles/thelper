@@ -59,16 +59,16 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
 
     The currently implemented strategies are:
 
-      * ``random``: will return a list of randomly picked samples based on the multinomial
-        distribution of the initial class weights. This sampling is done with replacement,
+      * ``random``: will return a list of randomly picked samples based on the multinomial \
+        distribution of the initial class weights. This sampling is done with replacement, \
         meaning that each index is picked independently of the already-picked ones.
 
-      * ``uniform``: will rebalance the dataset by normalizing the sample count of all classes,
-        oversampling and undersampling as required to distribute all samples equally. All
+      * ``uniform``: will rebalance the dataset by normalizing the sample count of all classes, \
+        oversampling and undersampling as required to distribute all samples equally. All \
         removed or duplicated samples are selected randomly without replacement.
 
-      * ``root``: will rebalance the dataset by normalizing class weight using an n-th degree
-        root. More specifically, for a list of initial class weights :math:`W^0=\{w_1^0, w_2^0, ... w_n^0\}`,
+      * ``root``: will rebalance the dataset by normalizing class weight using an n-th degree \
+        root. More specifically, for a list of initial class weights :math:`W^0=\{w_1^0, w_2^0, ... w_n^0\}`, \
         we compute the adjusted weight :math:`w_i` of each class via:
 
         .. math::
