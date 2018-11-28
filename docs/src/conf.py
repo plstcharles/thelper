@@ -215,7 +215,7 @@ def skip(app, what, name, obj, skip, options):
 
 def run_apidoc(_):
     if on_rtd:
-        argv = ["-o", ".", "../thelper/"]
+        argv = ["-o", ".", "../../thelper"]
     else:
         argv = ["-f", "-o", "./src/", "../thelper"]
     try:
