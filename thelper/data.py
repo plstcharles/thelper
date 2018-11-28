@@ -11,7 +11,6 @@ import logging
 import os
 import random
 import sys
-from abc import ABC
 from abc import abstractmethod
 from collections import Counter
 
@@ -720,7 +719,7 @@ class DataConfig(object):
         random.seed(self.random_seed + worker_id)
 
 
-class Dataset(torch.utils.data.Dataset, ABC):
+class Dataset(torch.utils.data.Dataset):
     """Abstract dataset parsing interface that holds a task and a list of sample dictionaries.
 
     This interface helps fix a failure of PyTorch's dataset interface (``torch.utils.data.Dataset``):

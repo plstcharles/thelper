@@ -19,7 +19,7 @@ model_urls = {
 }
 
 
-class Module(torch.nn.Module, abc.ABC):
+class Module(torch.nn.Module):
     expansion = 1
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, coordconv=False, radius_channel=True):

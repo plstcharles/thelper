@@ -1,6 +1,5 @@
 import logging
 import os
-from abc import ABC
 from abc import abstractmethod
 
 import numpy as np
@@ -146,7 +145,7 @@ def load_model(config, task, save_dir=None, ckptdata=None):
     return model
 
 
-class Module(torch.nn.Module, ABC):
+class Module(torch.nn.Module):
     """Model inteface used to hold a task object.
 
     This interface is built on top of ``torch.nn.Module`` and should remain fully compatible with it.

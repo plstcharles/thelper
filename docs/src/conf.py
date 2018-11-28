@@ -204,13 +204,36 @@ epub_exclude_files = ['search.html']
 
 
 # -- Extension configuration -------------------------------------------------
+on_rtd = os.environ.get('READTHEDOCS') == 'True'
 
-from unittest.mock import MagicMock
-
-class Mock(MagicMock):
-    @classmethod
-    def __getattr__(cls, name):
-        return MagicMock()
+if on_rtd:
+    autodoc_mock_imports = [
+        'argparse',
+        'augmentor',
+        'cv2',
+        'git',
+        'matplotlib',
+        'numpy',
+        'PIL',
+        'PIL.Image',
+        'pip',
+        'pynput',
+        'pynput.keyboard',
+        'sklearn',
+        'sklearn.metrics',
+        'tensorboardX',
+        'torch',
+        'torch.nn',
+        'torch.nn.functional',
+        'torch.optim',
+        'torch.utils',
+        'torch.utils.data',
+        'torch.utils.data.sampler',
+        'torch.utils.model_zoo',
+        'torchvision',
+        'torchvision.transforms',
+        'torchvision.utils',
+    ]
 
 
 def skip(app, what, name, obj, skip, options):
@@ -219,37 +242,8 @@ def skip(app, what, name, obj, skip, options):
     return skip
 
 def run_apidoc(_):
-    on_rtd = os.environ.get('READTHEDOCS') == 'True'
     if on_rtd:
         argv = ["-o", ".", "../../thelper"]
-        MOCK_MODULES = [
-            'argparse',
-            'augmentor',
-            'cv2',
-            'git',
-            'matplotlib',
-            'numpy',
-            'PIL',
-            'PIL.Image',
-            'pip',
-            'pynput',
-            'pynput.keyboard',
-            'sklearn',
-            'sklearn.metrics',
-            'tensorboardX',
-            'torch',
-            'torch.nn',
-            'torch.nn.functional',
-            'torch.optim',
-            'torch.utils',
-            'torch.utils.data',
-            'torch.utils.data.sampler',
-            'torch.utils.model_zoo',
-            'torchvision',
-            'torchvision.transforms',
-            'torchvision.utils',
-        ]
-        sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
     else:
         argv = ["-f", "-o", "./src/", "../thelper"]
     try:
