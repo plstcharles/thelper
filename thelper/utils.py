@@ -710,10 +710,17 @@ def draw_roc_curve(fpr, tpr, labels=None, size_inch=(5, 5), dpi=320):
     return fig
 
 
-def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False):
+def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False, keep_unset=False):
     """Draws and returns an a confusion matrix figure using pyplot."""
     if not isinstance(confmat, np.ndarray) or not isinstance(class_list, list):
         raise AssertionError("invalid inputs")
+    if confmat.ndim != 2:
+        raise AssertionError("invalid confmat shape")
+    if not keep_unset and "<unset>" in class_list:
+        unset_idx = class_list.index("<unset>")
+        del class_list[unset_idx]
+        np.delete(confmat, unset_idx, 0)
+        np.delete(confmat, unset_idx, 1)
     if normalize:
         confmat = confmat.astype(np.float) / confmat.sum(axis=1)[:, np.newaxis]
         confmat = np.nan_to_num(confmat)
