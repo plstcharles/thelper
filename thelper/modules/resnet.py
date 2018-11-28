@@ -1,5 +1,3 @@
-import abc
-
 import torch
 import torch.nn
 import torch.utils.model_zoo
