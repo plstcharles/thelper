@@ -722,8 +722,8 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
         np.delete(confmat, unset_idx, 0)
         np.delete(confmat, unset_idx, 1)
     if normalize:
-        confmat = confmat.astype(np.float) / confmat.sum(axis=1)[:, np.newaxis]
-        confmat = np.nan_to_num(confmat)
+        row_sums = confmat.sum(axis=1)[:, np.newaxis]
+        confmat = np.nan_to_num(confmat.astype(np.float) / np.maximum(row_sums, 0.0001))
     fig = plt.figure(num="confmat", figsize=size_inch, dpi=dpi, facecolor="w", edgecolor="k")
     fig.clf()
     ax = fig.add_subplot(1, 1, 1)
