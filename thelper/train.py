@@ -886,7 +886,7 @@ class ImageClassifTrainer(Trainer):
             if iter is not None:
                 iter += 1
             if metrics:
-                meta = {key: sample[key] for key in self.meta_keys}
+                meta = {key: sample[key] if key in sample else None for key in self.meta_keys}
                 for metric in metrics.values():
                     metric.accumulate(iter_pred.cpu(), label.cpu(), meta=meta)
             if self.monitor is not None:
