@@ -193,20 +193,36 @@ def get_caller_name(skip=2):
     return ".".join(name)
 
 
-def get_key(key, dict):
+def get_key(key, config):
     """Returns a value given a dictionary key, throwing if not available."""
-    if key not in dict:
-        raise AssertionError("config dictionary missing '%s' field" % key)
+    if isinstance(key, list):
+        if len(key) <= 1:
+            raise AssertionError("must provide at least two valid keys to test")
+        for k in key:
+            if k in config:
+                return config[k]
+        raise AssertionError("config dictionary missing a field named as one of '%s'" % str(key))
     else:
-        return dict[key]
+        if key not in config:
+            raise AssertionError("config dictionary missing '%s' field" % key)
+        else:
+            return config[key]
 
 
-def get_key_def(key, dict, default=None):
+def get_key_def(key, config, default=None):
     """Returns a value given a dictionary key, or the default value if it cannot be found."""
-    if key not in dict:
+    if isinstance(key, list):
+        if len(key) <= 1:
+            raise AssertionError("must provide at least two valid keys to test")
+        for k in key:
+            if k in config:
+                return config[k]
         return default
     else:
-        return dict[key]
+        if key not in config:
+            return default
+        else:
+            return config[key]
 
 
 def get_log_stamp():
