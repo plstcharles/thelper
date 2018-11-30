@@ -305,14 +305,13 @@ class Classification(Task):
         """
         if isinstance(other, Classification):
             # if both tasks are related to classification, gt keys and class names must match
-            # note: one class name array can be bigger than the other, as long as the overlap is the same
             return (self.get_input_key() == other.get_input_key() and (
                 # REALLY DIRTY HACK FOR CHECKPOINT BACKWARD COMPAT HERE, TO BE REMOVED ASAP @@@@@@
                 (hasattr(self, "label_key") and isinstance(self.label_key, str) and
                  (other.get_gt_key() is None or self.label_key == other.get_gt_key())) or
                 # line below is ok, should be default check later on
                 (self.get_gt_key() is None or other.get_gt_key() is None or self.get_gt_key() == other.get_gt_key())
-            ) and all([cls1 == cls2 for cls1, cls2 in zip(self.get_class_names(), other.get_class_names())]))
+            ) and all([cls in self.get_class_names() for cls in other.get_class_names()]))
         elif type(other) == Task:
             # if 'other' simply has no gt, compatibility rests on input key only
             return self.get_input_key() == other.get_input_key() and other.get_gt_key() is None
