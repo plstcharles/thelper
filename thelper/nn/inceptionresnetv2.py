@@ -3,8 +3,8 @@
 import torch
 import torch.nn
 
-import thelper.modules
-import thelper.modules.coordconv
+import thelper.nn
+import thelper.nn.coordconv
 
 
 class BasicConv2d(torch.nn.Module):
@@ -183,7 +183,7 @@ class Block8(torch.nn.Module):
         return out
 
 
-class InceptionResNetV2(thelper.modules.Module):
+class InceptionResNetV2(thelper.nn.Module):
 
     def __init__(self, task, input_channels=3):
         super().__init__(task)

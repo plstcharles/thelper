@@ -33,7 +33,7 @@ def load_trainer(session_name, save_dir, config, model, loaders, ckptdata=None):
         session_name: name of the training session used for printing and to create internal tensorboardX directories.
         save_dir: path to the session directory where logs and checkpoints will be saved.
         config: full configuration dictionary that will be parsed for trainer parameters and saved in checkpoints.
-        model: model to train/evaluate; should be compatible with :class:`thelper.modules.Module` and expose a task.
+        model: model to train/evaluate; should be compatible with :class:`thelper.nn.Module`.
         loaders: a tuple containing the training/validation/test data loaders (a loader can be ``None`` if empty).
         ckptdata: raw checkpoint to parse data from when resuming a session (if ``None``, will start from scratch).
 

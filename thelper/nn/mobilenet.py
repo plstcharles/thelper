@@ -51,7 +51,7 @@ class InvertedResidual(nn.Module):
             return self.conv(x)
 
 
-class MobileNetV2(thelper.modules.Module):
+class MobileNetV2(thelper.nn.Module):
 
     def __init__(self, task, input_size=224, width_mult=1.):
         super().__init__(task)

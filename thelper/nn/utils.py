@@ -7,7 +7,7 @@ import torch
 import torch.nn
 
 import thelper
-import thelper.modules
+import thelper.nn
 import thelper.tasks
 import thelper.utils
 
@@ -21,8 +21,8 @@ def load_model(config, task, save_dir=None, ckptdata=None):
     This field is expected to be a dictionary itself. It may then specify a type to instantiate as well as the
     parameters to provide to that class constructor, or a path to a checkpoint from which a model should be loaded.
 
-    All models must derive from :class:`thelper.modules.Module`, or they must be instantiable through
-    :class:`thelper.modules.ExternalModule` (or one of its specialized classes). The provided task object will
+    All models must derive from :class:`thelper.nn.Module`, or they must be instantiable through
+    :class:`thelper.nn.ExternalModule` (or one of its specialized classes). The provided task object will
     be used to make sure that the model has the required input/output layers for the requested objective.
 
     If checkpoint data is provided by the caller, the weights it contains will be loaded into the returned model.
@@ -33,7 +33,7 @@ def load_model(config, task, save_dir=None, ckptdata=None):
         # the function will look for a 'model' field in the provided config dict
         "model": {
             # the type provides the class name to instantiate an object from
-            "type": "thelper.modules.mobilenet.MobileNetV2",
+            "type": "thelper.nn.mobilenet.MobileNetV2",
             # the parameters listed below are passed to the model's constructor
             "params": [
                 # ...
@@ -47,12 +47,12 @@ def load_model(config, task, save_dir=None, ckptdata=None):
         ckptdata: raw checkpoint data loaded via ``torch.load()``; the model will be given its previous state.
 
     Returns:
-        The instantiated model, compatible with the interface of both :class:`thelper.modules.Module`
+        The instantiated model, compatible with the interface of both :class:`thelper.nn.Module`
         and ``torch.nn.Module``.
 
     .. seealso::
-        :class:`thelper.modules.Module`
-        :class:`thelper.modules.ExternalModule`
+        :class:`thelper.nn.Module`
+        :class:`thelper.nn.ExternalModule`
         :class:`thelper.tasks.Task`
     """
     if not isinstance(task, thelper.tasks.Task):
@@ -156,7 +156,7 @@ class Module(torch.nn.Module):
     number of classes to support.
 
     .. seealso::
-        :func:`thelper.modules.load_model`
+        :func:`thelper.nn.load_model`
         :class:`thelper.tasks.Task`
     """
 
@@ -179,7 +179,7 @@ class Module(torch.nn.Module):
         raise NotImplementedError
 
     def summary(self):
-        """Prints a summary of the model using the ``thelper.modules`` logger."""
+        """Prints a summary of the model using the ``thelper.nn`` logger."""
         params = filter(lambda p: p.requires_grad, self.parameters())
         count = sum([np.prod(p.size()) for p in params])
         logger.info("module '%s' parameter count: %d" % (self.get_name(), count))
@@ -194,16 +194,16 @@ class ExternalModule(Module):
     """Model inteface used to hold a task object for an external implementation.
 
     This interface is built on top of ``torch.nn.Module`` and should remain fully compatible with it. It is
-    automatically used when instantiating a model via :func:`thelper.modules.load_model` that is not derived
-    from :class:`thelper.modules.Module`. Its only purpose is to hold the task object, and redirect
-    :func:`thelper.modules.Module.forward` to the actual model's transformation function. It can also be
+    automatically used when instantiating a model via :func:`thelper.nn.load_model` that is not derived
+    from :class:`thelper.nn.Module`. Its only purpose is to hold the task object, and redirect
+    :func:`thelper.nn.Module.forward` to the actual model's transformation function. It can also be
     specialized to automatically adapt some external models after their construction using the knowledge
     contained in the task object.
 
     .. seealso::
-        :class:`thelper.modules.Module`
-        :class:`thelper.modules.ExternalClassifModule`
-        :func:`thelper.modules.load_model`
+        :class:`thelper.nn.Module`
+        :class:`thelper.nn.ExternalClassifModule`
+        :func:`thelper.nn.load_model`
         :class:`thelper.tasks.Task`
     """
 
@@ -240,7 +240,7 @@ class ExternalModule(Module):
         self.task = task
 
     def summary(self):
-        """Prints a summary of the model using the ``thelper.modules`` logger."""
+        """Prints a summary of the model using the ``thelper.nn`` logger."""
         params = filter(lambda p: p.requires_grad, self.model.parameters())
         count = sum([np.prod(p.size()) for p in params])
         logger.info("module '%s' parameter count: %d" % (self.get_name(), count))
@@ -258,9 +258,9 @@ class ExternalClassifModule(ExternalModule):
     the number of classes to predict defined in the task object.
 
     .. seealso::
-        :class:`thelper.modules.Module`
-        :class:`thelper.modules.ExternalModule`
-        :func:`thelper.modules.load_model`
+        :class:`thelper.nn.Module`
+        :class:`thelper.nn.ExternalModule`
+        :func:`thelper.nn.load_model`
         :class:`thelper.tasks.Task`
     """
 

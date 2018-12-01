@@ -2,8 +2,8 @@ import torch
 import torch.nn
 import torch.utils.model_zoo
 
-import thelper.modules
-import thelper.modules.coordconv
+import thelper.nn
+import thelper.nn.coordconv
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152']
@@ -31,7 +31,7 @@ class Module(torch.nn.Module):
 
     def _make_conv2d(self, *args, **kwargs):
         if self.coordconv:
-            return thelper.modules.coordconv.CoordConv2d(*args, radius_channel=self.radius_channel, **kwargs)
+            return thelper.nn.coordconv.CoordConv2d(*args, radius_channel=self.radius_channel, **kwargs)
         else:
             return torch.nn.Conv2d(*args, **kwargs)
 
@@ -135,7 +135,7 @@ class SqueezeExcitationBlock(Module):
         return out
 
 
-class ResNet(thelper.modules.Module):
+class ResNet(thelper.nn.Module):
 
     def __init__(self, task, block=BasicBlock, layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
                  flexible_input_res=False, pool_size=7, coordconv=False, radius_channel=True):
@@ -143,7 +143,7 @@ class ResNet(thelper.modules.Module):
         if isinstance(block, str):
             block = thelper.utils.import_class(block)
         if not issubclass(block, Module):
-            raise AssertionError("block type must be subclass of thelper.modules.resnet.Module")
+            raise AssertionError("block type must be subclass of thelper.nn.resnet.Module")
         if not isinstance(layers, list) or not isinstance(strides, list):
             raise AssertionError("expected layers/strides to be provided as list of ints")
         if len(layers) != len(strides):
@@ -176,7 +176,7 @@ class ResNet(thelper.modules.Module):
         for m in self.modules():
             if isinstance(m, torch.nn.Conv2d):
                 torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, thelper.modules.coordconv.CoordConv2d):
+            elif isinstance(m, thelper.nn.coordconv.CoordConv2d):
                 torch.nn.init.kaiming_normal_(m.conv.weight, mode='fan_out', nonlinearity='relu')
             elif isinstance(m, torch.nn.BatchNorm2d):
                 torch.nn.init.constant_(m.weight, 1)
@@ -185,7 +185,7 @@ class ResNet(thelper.modules.Module):
 
     def _make_conv2d(self, *args, **kwargs):
         if self.coordconv:
-            return thelper.modules.coordconv.CoordConv2d(*args, radius_channel=self.radius_channel, **kwargs)
+            return thelper.nn.coordconv.CoordConv2d(*args, radius_channel=self.radius_channel, **kwargs)
         else:
             return torch.nn.Conv2d(*args, **kwargs)
 

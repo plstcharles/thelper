@@ -135,7 +135,7 @@
         }
     },
     "model": {
-        "type": "thelper.modules.mobilenet.MobileNetV2"
+        "type": "thelper.nn.mobilenet.MobileNetV2"
     },
     "trainer": {
         "type": "thelper.train.ImageClassifTrainer",
