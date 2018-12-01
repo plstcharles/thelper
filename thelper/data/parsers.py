@@ -1,3 +1,8 @@
+"""Dataset parsers module.
+
+This module contains dataset parser interfaces and base classes that define basic i/o
+operations so that the framework can automatically interact with training data.
+"""
 
 import logging
 import os
@@ -239,7 +244,7 @@ class ImageFolderDataset(ClassificationDataset):
             if os.path.isdir(os.path.join(self.root, child)):
                 class_map[child] = []
         if not class_map:
-            raise AssertionError("could not find any image folders at '%s'" % root)
+            raise AssertionError("could not find any image folders at '%s'" % self.root)
         image_exts = [".jpg", ".jpeg", ".bmp", ".png", ".ppm", ".pgm", ".tif"]
         self.image_key = thelper.utils.get_key_def("image_key", config, "image")
         self.path_key = thelper.utils.get_key_def("path_key", config, "path")

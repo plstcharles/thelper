@@ -1,3 +1,10 @@
+"""Neural network and model package.
+
+This package contains classes that define blocks and modules used in various neural network
+architectures. Most of these classes have been adapted from external sources; see their individual
+headers for more information.
+"""
+
 import logging
 
 import thelper.nn.utils  # noqa: F401

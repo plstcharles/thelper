@@ -1,9 +1,6 @@
-"""Dataset parsing/loading utility functions.
+"""Dataset utility functions and tools.
 
-This module contains classes and functions whose role is to fetch the data required to train, validate,
-and test a model. The :func:`thelper.data.create_loaders` function contained herein is responsible for preparing
-the task and data loaders for a training session. This module also contains the base interfaces for dataset
-parsers.
+This module contains utility functions and tools used to instantiate data loaders and parsers.
 """
 
 import copy

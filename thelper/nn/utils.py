@@ -1,3 +1,9 @@
+"""Neural network utility functions and classes.
+
+This module contains base interfaces and utility functions used to define and instantiate
+neural network models.
+"""
+
 import logging
 import os
 from abc import abstractmethod
