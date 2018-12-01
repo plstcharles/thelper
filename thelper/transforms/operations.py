@@ -10,6 +10,7 @@ All important parameters for an operation should also be passed in the
 constructor and exposed in the operation's ``__repr__`` function so that
 external parsers can discover exactly how to reproduce their behavior.
 """
+
 import copy
 import itertools
 import logging

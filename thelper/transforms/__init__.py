@@ -26,4 +26,4 @@ from thelper.transforms.utils import load_augments  # noqa: F401
 from thelper.transforms.wrappers import AugmentorWrapper  # noqa: F401
 from thelper.transforms.wrappers import ImageTransformWrapper  # noqa: F401
 
-logger = logging.getLogger("thelper.tasks")
+logger = logging.getLogger("thelper.transforms")
