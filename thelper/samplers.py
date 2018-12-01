@@ -92,8 +92,8 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
     Example configuration file::
 
         # ...
-        # the sampler is defined inside the 'data_config' field
-        "data_config": {
+        # the sampler is defined inside the 'loaders' field
+        "loaders": {
             # ...
             # this field is completely optional, and can be omitted entirely
             "sampler": {
@@ -120,7 +120,7 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
         label_counts: number of samples in each class for the ``uniform`` and ``root`` strategies
 
     .. seealso::
-        :func:`thelper.data.load`
+        :func:`thelper.data.create_loaders`
     """
 
     def __init__(self, indices, labels, stype="uniform", scale=1.0):

@@ -19,7 +19,7 @@ import thelper
 logging.basicConfig(level=logging.INFO)
 
 
-def create_session(config, data_root, save_dir):
+def create_session(config, save_dir):
     """Creates a session to train a model.
 
     All generated outputs (model checkpoints and logs) will be saved in a directory named after the
@@ -27,11 +27,8 @@ def create_session(config, data_root, save_dir):
 
     Args:
         config: a dictionary that provides all required data configuration and trainer parameters; see
-            :class:`thelper.train.Trainer` and :func:`thelper.data.load` for more information. Here, it
-            is only expected to contain a ``name`` field that specifies the name of the session.
-        data_root: the path to the dataset root directory that will be passed to the dataset interfaces
-            for them to figure out where the training/validation/testing data is located. This path may
-            be unused if the dataset interfaces already know where to look via config parameters.
+            :class:`thelper.train.Trainer` and :func:`thelper.data.create_loaders` for more information.
+            Here, it is only expected to contain a ``name`` field that specifies the name of the session.
         save_dir: the path to the root directory where the session directory should be saved. Note that
             this is not the path to the session directory itself, but its parent, which may also contain
             other session directories.
@@ -47,7 +44,7 @@ def create_session(config, data_root, save_dir):
     thelper.utils.setup_cudnn(config)
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
     logger.debug("session will be saved at '%s'" % save_dir)
-    task, train_loader, valid_loader, test_loader = thelper.data.load(config, data_root, save_dir)
+    task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config, save_dir)
     model = thelper.modules.load_model(config, task, save_dir=save_dir)
     loaders = (train_loader, valid_loader, test_loader)
     trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loaders)
@@ -57,7 +54,7 @@ def create_session(config, data_root, save_dir):
     return 0
 
 
-def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False):
+def resume_session(ckptdata, save_dir, config=None, eval_only=False):
     """Resumes a previously created training session.
 
     Since the saved checkpoints contain the original session's configuration, the ``config`` argument
@@ -75,15 +72,12 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False):
     Args:
         ckptdata: raw checkpoint data loaded via ``torch.load()``; it will be parsed by the various
             parts of the framework that need to reload their previous state.
-        data_root: the path to the dataset root directory that will be passed to the dataset interfaces
-            for them to figure out where the training/validation/testing data is located. This path may
-            be unused if the dataset interfaces already know where to look via config parameters.
         save_dir: the path to the root directory where the session directory should be saved. Note that
             this is not the path to the session directory itself, but its parent, which may also contain
             other session directories.
         config: a dictionary that provides all required data configuration and trainer parameters; see
-            :class:`thelper.train.Trainer` and :func:`thelper.data.load` for more information. Here, it
-            is only expected to contain a ``name`` field that specifies the name of the session.
+            :class:`thelper.train.Trainer` and :func:`thelper.data.create_loaders` for more information.
+            Here, it is only expected to contain a ``name`` field that specifies the name of the session.
         eval_only: specifies whether training should be resumed or the model should only be evaluated.
 
     .. seealso::
@@ -101,7 +95,7 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False):
     thelper.utils.setup_cudnn(config)
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config, resume=True)
     logger.debug("session will be saved at '%s'" % save_dir)
-    task, train_loader, valid_loader, test_loader = thelper.data.load(config, data_root, save_dir)
+    task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config, save_dir)
     model = thelper.modules.load_model(config, task, save_dir=save_dir, ckptdata=ckptdata)
     loaders = (None if eval_only else train_loader, valid_loader, test_loader)
     trainer = thelper.train.load_trainer(session_name, save_dir, config, model, loaders, ckptdata=ckptdata)
@@ -115,7 +109,7 @@ def resume_session(ckptdata, data_root, save_dir, config=None, eval_only=False):
     return 0
 
 
-def visualize_data(config, data_root):
+def visualize_data(config):
     """Displays the images used in a training session.
 
     This mode does not generate any output, and is only used to visualize the transformed images used
@@ -125,14 +119,11 @@ def visualize_data(config, data_root):
 
     Args:
         config: a dictionary that provides all required data configuration parameters; see
-            :func:`thelper.data.load` for more information.
-        data_root: the path to the dataset root directory that will be passed to the dataset interfaces
-            for them to figure out where the training/validation/testing data is located. This path may
-            be unused if the dataset interfaces already know where to look via config parameters.
+            :func:`thelper.data.create_loaders` for more information.
     """
     logger = thelper.utils.get_func_logger()
     logger.info("creating visualization session...")
-    task, train_loader, valid_loader, test_loader = thelper.data.load(config, data_root)
+    task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config)
     if not isinstance(task, thelper.tasks.Classification):
         raise AssertionError("missing impl, viz mode expects images + labels")
     loader_map = {
@@ -160,7 +151,7 @@ def visualize_data(config, data_root):
     return 0
 
 
-def annotate_data(config, data_root, save_dir):
+def annotate_data(config, save_dir):
     """Launches an annotation session for a dataset using a specialized GUI tool.
 
     Note that the annotation type must be supported by the GUI tool. The annotations created by the user
@@ -168,10 +159,7 @@ def annotate_data(config, data_root, save_dir):
 
     Args:
         config: a dictionary that provides all required dataset and GUI tool configuration parameters; see
-            :func:`thelper.data.load_datasets` and :class:`thelper.gui.XXXX` for more information.
-        data_root: the path to the dataset root directory that will be passed to the dataset interfaces
-            for them to figure out where the data to annotate is located. This path may be unused if the
-            dataset interfaces already know where to look via config parameters.
+            :func:`thelper.data.create_parsers` and :mod:`thelper.gui` for more information.
         save_dir: the path to the root directory where the session directory should be saved. Note that
             this is not the path to the session directory itself, but its parent, which may also contain
             other session directories.
@@ -197,7 +185,7 @@ def annotate_data(config, data_root, save_dir):
     logger.debug("loading datasets templates")
     if not isinstance(datasets_config, dict):
         raise AssertionError("invalid datasets config type")
-    datasets, _ = thelper.data.load_datasets(datasets_config, data_root)
+    datasets, _ = thelper.data.create_parsers(datasets_config)
     annotator = thelper.gui.load_annotator(session_name, save_dir, config, datasets)
     logger.debug("starting annotator")
     annotator.run()
@@ -226,7 +214,6 @@ def main(args=None):
     ap.add_argument("--version", default=False, action="store_true", help="prints the version of the library and exits")
     ap.add_argument("-l", "--log", default=None, type=str, help="path to the top-level log file (default: None)")
     ap.add_argument("-v", "--verbose", action="count", default=0, help="set logging terminal verbosity level (additive)")
-    ap.add_argument("-d", "--data-root", default=None, type=str, help="path to the root directory passed to dataset interfaces for parsing")
     subparsers = ap.add_subparsers(title="Operating mode", dest="mode")
     new_ap = subparsers.add_parser("new", help="creates a new session from a config file")
     new_ap.add_argument("cfg_path", type=str, help="path to the session configuration file")
@@ -274,10 +261,6 @@ def main(args=None):
     logger_ch.setLevel(log_level)
     logger_ch.setFormatter(logger_format)
     thelper.logger.addHandler(logger_ch)
-    if args.data_root:
-        thelper.logger.debug("checking dataset root '%s'..." % args.data_root)
-        if not os.path.exists(args.data_root) or not os.path.isdir(args.data_root):
-            raise AssertionError("invalid data root folder at '%s'; please specify a valid path via --data-root=PATH")
     if args.mode == "new" or args.mode == "cl_new":
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
         config = json.load(open(args.cfg_path))
@@ -287,7 +270,7 @@ def main(args=None):
                 if ("train_device" in trainer_config or "valid_device" in trainer_config or
                         "test_device" in trainer_config or "device" in trainer_config):
                     raise AssertionError("cannot specify device in config for cluster sessions, it is determined at runtime")
-        return create_session(config, args.data_root, args.save_dir)
+        return create_session(config, args.save_dir)
     elif args.mode == "resume":
         if os.path.isdir(args.ckpt_path):
             thelper.logger.debug("will search directory '%s' for a checkpoint to load..." % args.ckpt_path)
@@ -323,7 +306,7 @@ def main(args=None):
         save_dir = args.save_dir
         if save_dir is None:
             save_dir = os.path.abspath(os.path.join(os.path.dirname(args.ckpt_path), "../.."))
-        return resume_session(ckptdata, args.data_root, save_dir, config=override_config, eval_only=args.eval_only)
+        return resume_session(ckptdata, save_dir, config=override_config, eval_only=args.eval_only)
     elif args.mode == "viz" or args.mode == "annot":
         if os.path.isdir(args.cfg_path):
             thelper.logger.debug("will search directory '%s' for a config to load..." % args.cfg_path)
@@ -342,9 +325,9 @@ def main(args=None):
                 raise AssertionError("no config file found at path '%s'" % args.cfg_path)
             config = json.load(open(args.cfg_path))
         if args.mode == "viz":
-            return visualize_data(config, args.data_root)
+            return visualize_data(config)
         elif args.mode == "annot":
-            return annotate_data(config, args.data_root, args.save_dir)
+            return annotate_data(config, args.save_dir)
 
 
 if __name__ == "__main__":

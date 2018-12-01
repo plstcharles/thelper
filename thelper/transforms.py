@@ -52,9 +52,9 @@ def load_transforms(stages):
     Usage examples inside a session configuration file::
 
         # ...
-        # the 'data_config' field can contain several transformation pipelines
-        # (see 'thelper.data.load' for more information on these pipelines)
-        "data_config": {
+        # the 'loaders' field can contain several transformation pipelines
+        # (see 'thelper.data.create_loaders' for more information on these pipelines)
+        "loaders": {
             # ...
             # the 'base_transforms' operations are applied to all loaded samples
             "base_transforms": [
@@ -82,7 +82,7 @@ def load_transforms(stages):
     .. seealso::
         :class:`thelper.transforms.AugmentorWrapper`
         :func:`thelper.transforms.load_augments`
-        :func:`thelper.data.load`
+        :func:`thelper.data.create_loaders`
     """
     if not isinstance(stages, list):
         raise AssertionError("expected stages to be provided as a list")
@@ -135,9 +135,9 @@ def load_augments(config):
     Usage examples inside a session configuration file::
 
         # ...
-        # the 'data_config' field can contain several augmentation pipelines
-        # (see 'thelper.data.load' for more information on these pipelines)
-        "data_config": {
+        # the 'loaders' field can contain several augmentation pipelines
+        # (see 'thelper.data.create_loaders' for more information on these pipelines)
+        "loaders": {
             # ...
             # the 'train_augments' operations are applied to training samples only
             "train_augments": {
@@ -198,7 +198,7 @@ def load_augments(config):
     .. seealso::
         :class:`thelper.transforms.AugmentorWrapper`
         :func:`thelper.transforms.load_transforms`
-        :func:`thelper.data.load`
+        :func:`thelper.data.create_loaders`
     """
     if not isinstance(config, dict):
         raise AssertionError("augmentation config should be provided as dictionary")

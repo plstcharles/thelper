@@ -65,7 +65,7 @@ def get_global_task(tasks):
 
     .. seealso::
         :class:`thelper.tasks.Task`
-        :func:`thelper.data.load_datasets`
+        :func:`thelper.data.create_parsers`
     """
     if tasks is None:
         return None

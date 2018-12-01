@@ -44,7 +44,7 @@
             }
         }
     },
-    "data_config": {
+    "loaders": {
         "batch_size": 32,
         "shuffle": true,
         "valid_seed": 0,
