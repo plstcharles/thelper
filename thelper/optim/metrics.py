@@ -3,7 +3,7 @@
 This module contains classes that implement metrics used to monitor training sessions and evaluate models.
 These metrics should all inherit from :class:`thelper.optim.metrics.Metric` to allow them to be dynamically
 instantiated by the framework from a configuration file, and evaluated automatically inside a training
-session. For more information on this, refer to :class:`thelper.train.Trainer`.
+session. For more information on this, refer to :class:`thelper.train.trainers.Trainer`.
 """
 
 import copy
@@ -26,8 +26,9 @@ logger = logging.getLogger(__name__)
 class Metric(ABC):
     """Abstract metric interface.
 
-    This interface defines basic functions required so that :class:`thelper.train.Trainer` can figure
-    out how to instantiate, update, reset, and optimize a given metric while training/evaluating a model.
+    This interface defines basic functions required so that :class:`thelper.train.trainers.Trainer` can
+    figure out how to instantiate, update, reset, and optimize a given metric while training/evaluating
+    a model.
 
     Not all metrics are required to be 'optimizable'; in other words, they do not always need to
     return a scalar value and define a goal. For example, a class can derive from this interface
@@ -228,8 +229,9 @@ class CategoryAccuracy(Metric):
         """Sets the moving average window size.
 
         This is fairly useful as the total size of the training dataset is unlikely to be known when
-        metrics are instantiated. The current implementation of :class:`thelper.train.Trainer` will look
-        for this member function and automatically call it with the dataset size when it is available.
+        metrics are instantiated. The current implementation of :class:`thelper.train.trainers.Trainer`
+        will look for this member function and automatically call it with the dataset size when it is
+        available.
         """
         self.max_accum = max_accum
 
@@ -343,8 +345,9 @@ class BinaryAccuracy(Metric):
         """Sets the moving average window size.
 
         This is fairly useful as the total size of the training dataset is unlikely to be known when
-        metrics are instantiated. The current implementation of :class:`thelper.train.Trainer` will look
-        for this member function and automatically call it with the dataset size when it is available.
+        metrics are instantiated. The current implementation of :class:`thelper.train.trainers.Trainer`
+        will look for this member function and automatically call it with the dataset size when it is
+        available.
         """
         self.max_accum = max_accum
 
@@ -497,8 +500,9 @@ class ExternalMetric(Metric):
         target class index. This is required as predictions are not mapped to their original names
         (in string format) before being forwarded to this object by the trainer.
 
-        The current implementation of :class:`thelper.train.Trainer` will automatically call this
-        function at runtime if it is available, and provide the dataset's classes as a list of strings.
+        The current implementation of :class:`thelper.train.trainers.Trainer` will automatically call
+        this function at runtime if it is available, and provide the dataset's classes as a list of
+        strings.
         """
         if "classif" in self.metric_type:
             if not isinstance(class_names, list):
@@ -585,8 +589,9 @@ class ExternalMetric(Metric):
         """Sets the moving average window size.
 
         This is fairly useful as the total size of the training dataset is unlikely to be known when
-        metrics are instantiated. The current implementation of :class:`thelper.train.Trainer` will look
-        for this member function and automatically call it with the dataset size when it is available.
+        metrics are instantiated. The current implementation of :class:`thelper.train.trainers.Trainer`
+        will look for this member function and automatically call it with the dataset size when it is
+        available.
         """
         self.max_accum = max_accum
 
@@ -661,8 +666,9 @@ class ClassifReport(Metric):
     def set_class_names(self, class_names):
         """Sets the class label names that must be predicted by the model.
 
-        The current implementation of :class:`thelper.train.Trainer` will automatically call this
-        function at runtime if it is available, and provide the dataset's classes as a list of strings.
+        The current implementation of :class:`thelper.train.trainers.Trainer` will automatically
+        call this function at runtime if it is available, and provide the dataset's classes as a
+        list of strings.
         """
         if class_names and not isinstance(class_names, list):
             raise AssertionError("expected class names to be list")
@@ -769,8 +775,9 @@ class ConfusionMatrix(Metric):
     def set_class_names(self, class_names):
         """Sets the class label names that must be predicted by the model.
 
-        The current implementation of :class:`thelper.train.Trainer` will automatically call this
-        function at runtime if it is available, and provide the dataset's classes as a list of strings.
+        The current implementation of :class:`thelper.train.trainers.Trainer` will automatically
+        call this function at runtime if it is available, and provide the dataset's classes as a
+        list of strings.
         """
         if not isinstance(class_names, list):
             raise AssertionError("expected class names to be list")
@@ -992,8 +999,9 @@ class ROCCurve(Metric):
 
         This allows the target class name to be mapped to a target class index.
 
-        The current implementation of :class:`thelper.train.Trainer` will automatically call this
-        function at runtime if it is available, and provide the dataset's classes as a list of strings.
+        The current implementation of :class:`thelper.train.trainers.Trainer` will automatically
+        call this function at runtime if it is available, and provide the dataset's classes as a
+        list of strings.
         """
         if not isinstance(class_names, list):
             raise AssertionError("expected list for class names")
@@ -1214,8 +1222,9 @@ class ClassifLogger(Metric):
 
         This allows the target class name to be mapped to a target class index.
 
-        The current implementation of :class:`thelper.train.Trainer` will automatically call this
-        function at runtime if it is available, and provide the dataset's classes as a list of strings.
+        The current implementation of :class:`thelper.train.trainers.Trainer` will automatically
+        call this function at runtime if it is available, and provide the dataset's classes as a
+        list of strings.
         """
         if not isinstance(class_names, list):
             raise AssertionError("expected list for class names")

@@ -27,7 +27,7 @@ class Classification(Task):
 
     .. seealso::
         | :class:`thelper.tasks.utils.Task`
-        | :class:`thelper.train.ImageClassifTrainer`
+        | :class:`thelper.train.trainers.ImageClassifTrainer`
     """
 
     def __init__(self, class_names, input_key, label_key, meta_keys=None):

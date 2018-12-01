@@ -21,38 +21,6 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-def load_trainer(session_name, save_dir, config, model, loaders, ckptdata=None):
-    """Instantiates the trainer object based on the type contained in the config dictionary.
-
-    The trainer type is expected to be in the configuration dictionary's `trainer` field, under the `type` key. For more
-    information on the configuration, refer to :class:`thelper.train.Trainer`. The instantiated type must be compatible
-    with the constructor signature of :class:`thelper.train.Trainer`. The object's constructor will be given the full
-    config dictionary and the checkpoint data for resuming the session (if available).
-
-    Args:
-        session_name: name of the training session used for printing and to create internal tensorboardX directories.
-        save_dir: path to the session directory where logs and checkpoints will be saved.
-        config: full configuration dictionary that will be parsed for trainer parameters and saved in checkpoints.
-        model: model to train/evaluate; should be compatible with :class:`thelper.nn.utils.Module`.
-        loaders: a tuple containing the training/validation/test data loaders (a loader can be ``None`` if empty).
-        ckptdata: raw checkpoint to parse data from when resuming a session (if ``None``, will start from scratch).
-
-    Returns:
-        The fully-constructed trainer object, ready to begin model training/evaluation.
-
-    .. seealso::
-        | :class:`thelper.train.Trainer`
-
-    """
-    if "trainer" not in config or not config["trainer"]:
-        raise AssertionError("config missing 'trainer' field")
-    trainer_config = config["trainer"]
-    if "type" not in trainer_config or not trainer_config["type"]:
-        raise AssertionError("trainer config missing 'type' field")
-    trainer_type = thelper.utils.import_class(trainer_config["type"])
-    return trainer_type(session_name, save_dir, model, loaders, config, ckptdata=ckptdata)
-
-
 class Trainer:
     """Abstract trainer interface that defines basic session i/o and setup operations.
 
@@ -60,7 +28,7 @@ class Trainer:
     setup, metrics and goal setup, and loss/optimizer setup. It also provides utilities for uploading models and tensors
     on specific devices, and for saving the state of a session. This interface should be specialized for every task by
     implementing the ``_train_epoch`` and ``_train_epoch`` functions in a derived class. See
-    :class:`thelper.train.ImageClassifTrainer` for an example.
+    :class:`thelper.train.trainers.ImageClassifTrainer` for an example.
 
     The parameters that will be parsed by this interface from a configuration dictionary are the following:
 
@@ -144,8 +112,8 @@ class Trainer:
     TODO: move static utils to their related modules
 
     .. seealso::
-        | :class:`thelper.train.ImageClassifTrainer`
-        | :func:`thelper.train.load_trainer`
+        | :class:`thelper.train.trainers.ImageClassifTrainer`
+        | :func:`thelper.train.utils.create_trainer`
     """
 
     def __init__(self, session_name, save_dir, model, loaders, config, ckptdata=None):
@@ -476,7 +444,7 @@ class Trainer:
 
         This function will train the model until the required number of epochs is reached, and then evaluate it on the test data. The
         setup of loggers, tensorboard writers is done here, so is model improvement tracking via monitored metrics. However, the code
-        related to loss computation and backpropagation is implemented in a derived class via :func:`thelper.train.Trainer._train_epoch`.
+        related to loss computation and backpropagation is implemented in a derived class via :func:`thelper.train.trainers.Trainer._train_epoch`.
         """
         if not self.train_loader:
             raise AssertionError("missing training data, invalid loader!")
@@ -606,7 +574,7 @@ class Trainer:
 
         This function will evaluate the model using the test data (or the validation data, if no test data is available), and return the
         results. Note that the code related to the forwarding of samples inside the model itself is implemented in a derived class via
-        :func:`thelper.train.Trainer._train_epoch`.
+        :func:`thelper.train.trainers.Trainer._train_epoch`.
         """
         if not self.valid_loader and not self.test_loader:
             raise AssertionError("missing validation/test data, invalid loaders!")
@@ -751,12 +719,12 @@ class Trainer:
 class ImageClassifTrainer(Trainer):
     """Trainer interface specialized for image classification.
 
-    This class implements the abstract functions of :class:`thelper.train.Trainer` required to train/evaluate
+    This class implements the abstract functions of :class:`thelper.train.trainers.Trainer` required to train/evaluate
     a model for image classification or recognition. It also provides a utility function for fetching i/o packets
     (images, class labels) from a sample, and that converts those into tensors for forwarding and loss estimation.
 
     .. seealso::
-        | :class:`thelper.train.Trainer`
+        | :class:`thelper.train.trainers.Trainer`
     """
 
     def __init__(self, session_name, save_dir, model, loaders, config, ckptdata=None):

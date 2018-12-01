@@ -77,7 +77,7 @@ class CustomStepLR(torch.optim.lr_scheduler._LRScheduler):
         milestones: original milestones map provided in the constructor.
 
     .. seealso::
-        | :class:`thelper.train.Trainer`
+        | :class:`thelper.train.trainers.Trainer`
     """
 
     def __init__(self, optimizer, milestones, last_epoch=-1):
