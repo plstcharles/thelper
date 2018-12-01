@@ -329,10 +329,11 @@ class Trainer:
     def _load_loss(self, config):
         """Instantiates and returns the loss function to use for training.
 
-        This function supports an extra special parameter if the task is related to classification : ``weight_classes``. If
-        this parameter is found and positive (boolean), then the loss function will apply weights to the computed loss of each
-        class. The strategy used to compute these weights is related to the one in :class:`thelper.data.samplers.WeightedSubsetRandomSampler`.
-        The exact parameters that are expected for class reweighting are the following:
+        This function supports an extra special parameter if the task is related to classification : ``weight_classes``.
+        If this parameter is found and positive (boolean), then the loss function will apply weights to the computed
+        loss of each class. The strategy used to compute these weights is related to the one in
+        :class:`thelper.data.samplers.WeightedSubsetRandomSampler`. The exact parameters that are expected for class
+        reweighting are the following:
 
         - ``weight_param_name`` (optional, default="weight"): name of the loss constructor parameter that expects the weight list.
         - ``weight_param_pass_tensor`` (optional, default=True): specifies whether the weights should be passed as a tensor or list.
