@@ -56,8 +56,6 @@ class Trainer:
             "save_freq": 5,
             # monitor validation accuracy and save best model based on that
             "monitor": "accuracy",
-            # turn on tensorboardX logging for real-time monitoring
-            "use_tbx": true,
             # optimization parameters block
             "optimization": {
                 # all types & params below provided by PyTorch
@@ -103,7 +101,6 @@ class Trainer:
         save_raw: specifies whether to save raw types or thelper objects in checkpoints.
         checkpoint_dir: session checkpoint output directory (located within 'save_dir').
         use_tbx: defines whether to use tensorboardX writers for logging or not.
-        tbx_root_dir: top-level tensorboard log/event output directory (located within 'save_dir').
         model: model to train; will be uploaded to target device(s) at runtime.
         config: full configuration dictionary of the session; will be incorporated into all saved checkpoints.
         devices: list of (cuda) device IDs to upload the model/tensors to; can be empty if only the CPU is available.
@@ -168,29 +165,29 @@ class Trainer:
         self.checkpoint_dir = os.path.join(save_dir, "checkpoints")
         if not os.path.exists(self.checkpoint_dir):
             os.mkdir(self.checkpoint_dir)
+        output_root_dir = os.path.join(save_dir, "output", self.name)
+        if not os.path.exists(output_root_dir):
+            os.makedirs(output_root_dir)
         self.use_tbx = False
         if "use_tbx" in trainer_config:
             self.use_tbx = thelper.utils.str2bool(trainer_config["use_tbx"])
-        writer_paths = [None, None, None]
-        if self.use_tbx:
-            self.tbx_root_dir = os.path.join(save_dir, "output", self.name)
-            if not os.path.exists(self.tbx_root_dir):
-                os.makedirs(self.tbx_root_dir)
-            timestr = time.strftime("%Y%m%d-%H%M%S")
-            train_foldername = "train-%s-%s" % (platform.node(), timestr)
-            valid_foldername = "valid-%s-%s" % (platform.node(), timestr)
-            test_foldername = "test-%s-%s" % (platform.node(), timestr)
-            foldernames = [train_foldername, valid_foldername, test_foldername]
-            for idx, (loader, foldername) in enumerate(zip(loaders, foldernames)):
-                if loader:
-                    tbx_dir = os.path.join(self.tbx_root_dir, foldername)
-                    if os.path.exists(tbx_dir):
-                        raise AssertionError("tbx session paths should be unique")
-                    writer_paths[idx] = tbx_dir
-            import tensorboardX
-            self.tbx = tensorboardX
-            self.logger.debug("tensorboard init : tensorboard --logdir %s --port <your_port>" % self.tbx_root_dir)
-        self.train_writer_path, self.valid_writer_path, self.test_writer_path = writer_paths
+            if self.use_tbx:
+                import tensorboardX
+                self.tbx = tensorboardX
+                self.logger.debug("tensorboard init : tensorboard --logdir %s --port <your_port>" % output_root_dir)
+        timestr = time.strftime("%Y%m%d-%H%M%S")
+        train_foldername = "train-%s-%s" % (platform.node(), timestr)
+        valid_foldername = "valid-%s-%s" % (platform.node(), timestr)
+        test_foldername = "test-%s-%s" % (platform.node(), timestr)
+        foldernames = [train_foldername, valid_foldername, test_foldername]
+        output_paths = [None, None, None]
+        for idx, (loader, foldername) in enumerate(zip(loaders, foldernames)):
+            if loader:
+                out_dir = os.path.join(output_root_dir, foldername)
+                if os.path.exists(out_dir):
+                    raise AssertionError("output session paths should be unique")
+                output_paths[idx] = out_dir
+        self.train_output_path, self.valid_output_path, self.test_output_path = output_paths
         self.model = model
         self.config = config
         devices_str = None
@@ -481,9 +478,7 @@ class Trainer:
             self.logger.debug("learning rate at %.8f" % self._get_lr(optimizer))
             model.train()
             if self.use_tbx and not train_writer:
-                train_writer = self.tbx.SummaryWriter(log_dir=self.train_writer_path, comment=self.name)
-                setattr(train_writer, "path", self.train_writer_path)  # for external usage, if needed
-                setattr(train_writer, "prefix", "train")  # to prefix data added to tbx logs (if needed)
+                train_writer = self.tbx.SummaryWriter(log_dir=self.train_output_path, comment=self.name)
             for metric in self.train_metrics.values():
                 if hasattr(metric, "set_max_accum") and callable(metric.set_max_accum):
                     metric.set_max_accum(len(self.train_loader))  # used to make scalar metric evals smoother between epochs
@@ -491,21 +486,19 @@ class Trainer:
                     metric.reset()  # if a metric needs to be reset between two epochs, do it here
             latest_loss, self.current_iter = self._train_epoch(model, epoch, self.current_iter, self.devices, loss, optimizer,
                                                                self.train_loader, self.train_metrics, train_writer)
-            self._write_epoch_metrics(epoch, self.train_metrics, train_writer)
+            self._write_epoch_metrics(epoch, self.train_metrics, train_writer, self.train_output_path, "train")
             train_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.train_metrics.items()}
             result = {"train/loss": latest_loss, "train/metrics": train_metric_vals}
             monitor_type_key = "train/metrics"  # if we cannot run validation, will monitor progression on training metrics
             if self.valid_loader:
                 model.eval()
                 if self.use_tbx and not valid_writer:
-                    valid_writer = self.tbx.SummaryWriter(log_dir=self.valid_writer_path, comment=self.name)
-                    setattr(valid_writer, "path", self.valid_writer_path)  # for external usage, if needed
-                    setattr(valid_writer, "prefix", "valid")  # to prefix data added to tbx logs (if needed)
+                    valid_writer = self.tbx.SummaryWriter(log_dir=self.valid_output_path, comment=self.name)
                 for metric in self.valid_metrics.values():
                     metric.reset()  # force reset here, we always evaluate from a clean state
                 self._eval_epoch(model, epoch, self.current_iter, self.devices,
                                  self.valid_loader, self.valid_metrics, valid_writer)
-                self._write_epoch_metrics(epoch, self.valid_metrics, valid_writer)
+                self._write_epoch_metrics(epoch, self.valid_metrics, valid_writer, self.valid_output_path, "valid")
                 valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()}
                 result = {**result, "valid/metrics": valid_metric_vals}
                 monitor_type_key = "valid/metrics"  # since validation is available, use that to monitor progression
@@ -552,14 +545,12 @@ class Trainer:
             model = self._upload_model(self.model, self.devices)
             model.eval()
             if self.use_tbx and not test_writer:
-                test_writer = self.tbx.SummaryWriter(log_dir=self.test_writer_path, comment=self.name)
-                setattr(test_writer, "path", self.test_writer_path)  # for external usage, if needed
-                setattr(test_writer, "prefix", "test")  # to prefix data added to tbx logs (if needed)
+                test_writer = self.tbx.SummaryWriter(log_dir=self.test_output_path, comment=self.name)
             for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
             self._eval_epoch(model, best_epoch, best_iter, self.devices,
                              self.test_loader, self.test_metrics, test_writer)
-            self._write_epoch_metrics(best_epoch, self.test_metrics, test_writer)
+            self._write_epoch_metrics(best_epoch, self.test_metrics, test_writer, self.test_output_path, "test")
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
             self.outputs[best_epoch] = {**ckptdata["outputs"], "test/metrics": test_metric_vals}
             for key, value in self.outputs[best_epoch].items():
@@ -587,26 +578,22 @@ class Trainer:
         valid_writer, test_writer = None, None
         if self.test_loader:
             if self.use_tbx and not test_writer:
-                test_writer = self.tbx.SummaryWriter(log_dir=self.test_writer_path, comment=self.name)
-                setattr(test_writer, "path", self.test_writer_path)  # for external usage, if needed
-                setattr(test_writer, "prefix", "test")  # to prefix data added to tbx logs (if needed)
+                test_writer = self.tbx.SummaryWriter(log_dir=self.test_output_path, comment=self.name)
             for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
             self._eval_epoch(model, self.current_epoch, self.current_iter, self.devices,
                              self.test_loader, self.test_metrics, test_writer)
-            self._write_epoch_metrics(self.current_epoch, self.test_metrics, test_writer)
+            self._write_epoch_metrics(self.current_epoch, self.test_metrics, test_writer, self.test_output_path, "test")
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
             result = {**result, **test_metric_vals}
         elif self.valid_loader:
             if self.use_tbx and not valid_writer:
-                valid_writer = self.tbx.SummaryWriter(log_dir=self.valid_writer_path, comment=self.name)
-                setattr(valid_writer, "path", self.valid_writer_path)  # for external usage, if needed
-                setattr(valid_writer, "prefix", "valid")  # to prefix data added to tbx logs (if needed)
+                valid_writer = self.tbx.SummaryWriter(log_dir=self.valid_output_path, comment=self.name)
             for metric in self.valid_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
             self._eval_epoch(model, self.current_epoch, self.current_iter, self.devices,
                              self.valid_loader, self.valid_metrics, valid_writer)
-            self._write_epoch_metrics(self.current_epoch, self.valid_metrics, valid_writer)
+            self._write_epoch_metrics(self.current_epoch, self.valid_metrics, valid_writer, self.valid_output_path, "valid")
             valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()}
             result = {**result, **valid_metric_vals}
         for key, value in result.items():
@@ -658,20 +645,20 @@ class Trainer:
                 return param_group["lr"]
         return 0
 
-    def _write_epoch_metrics(self, epoch, metrics, writer):
+    def _write_epoch_metrics(self, epoch, metrics, tbx_writer, output_path, prefix):
         """Writes the cumulative evaluation result of all metrics using a specific writer."""
-        if not self.use_tbx or writer is None:
-            return
         self.logger.debug("writing epoch metrics")
         for metric_name, metric in metrics.items():
             if metric.is_scalar():
-                writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
+                if tbx_writer is not None:
+                    tbx_writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
             if hasattr(metric, "render") and callable(metric.render):
                 img = metric.render()
                 if img is not None:
-                    writer.add_image(writer.prefix + "/%s" % metric_name, img, epoch)
-                    raw_filename = "%s-%s-%04d.png" % (writer.prefix, metric_name, epoch)
-                    raw_filepath = os.path.join(writer.path, raw_filename)
+                    if tbx_writer is not None:
+                        tbx_writer.add_image(prefix + "/%s" % metric_name, img, epoch)
+                    raw_filename = "%s-%s-%04d.png" % (prefix, metric_name, epoch)
+                    raw_filepath = os.path.join(output_path, raw_filename)
                     cv.imwrite(raw_filepath, img[..., [2, 1, 0]])
             txt = metric.print() if hasattr(metric, "print") and callable(metric.print) else None
             if not txt:
@@ -682,8 +669,8 @@ class Trainer:
                     else:
                         txt = str(eval_res)
             if txt:
-                raw_filename = "%s-%s-%04d.txt" % (writer.prefix, metric_name, epoch)
-                raw_filepath = os.path.join(writer.path, raw_filename)
+                raw_filename = "%s-%s-%04d.txt" % (prefix, metric_name, epoch)
+                raw_filepath = os.path.join(output_path, raw_filename)
                 with open(raw_filepath, "w") as fd:
                     fd.write(txt)
 
