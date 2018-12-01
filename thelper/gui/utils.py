@@ -1,8 +1,6 @@
-"""Graphical User Interface (GUI) tools module.
+"""Graphical User Interface (GUI) utility module.
 
-This module contains various tools to simplify user interactions with data or models. Since the
-training framework is CLI-based, these tools are not used to train models, but can be helpful when
-debugging them. They can also be used to annotate and explore datasets.
+This module contains various tools and utilities used to instantiate annotators and GUI elements.
 """
 import abc
 import collections
@@ -18,7 +16,7 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-def load_annotator(session_name, save_dir, config, datasets):
+def create_annotator(session_name, save_dir, config, datasets):
     """Instantiates a GUI annotation tool based on the type contained in the config dictionary.
 
     The tool type is expected to be in the configuration dictionary's `annotator` field, under the `type` key. For more
@@ -69,7 +67,7 @@ class Annotator:
 
     .. seealso::
         :class:`thelper.gui.ImageSegmentAnnotator`
-        :func:`thelper.gui.load_annotator`
+        :func:`thelper.gui.create_annotator`
     """
 
     def __init__(self, session_name, config, save_dir, datasets):

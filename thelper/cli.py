@@ -186,7 +186,7 @@ def annotate_data(config, save_dir):
     if not isinstance(datasets_config, dict):
         raise AssertionError("invalid datasets config type")
     datasets, _ = thelper.data.create_parsers(datasets_config)
-    annotator = thelper.gui.load_annotator(session_name, save_dir, config, datasets)
+    annotator = thelper.gui.create_annotator(session_name, save_dir, config, datasets)
     logger.debug("starting annotator")
     annotator.run()
     logger.debug("all done")
