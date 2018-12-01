@@ -308,13 +308,13 @@ def create_parsers(config, base_transforms=None):
 
     Returns:
         A 2-element tuple that contains: 1) the list of dataset interfaces/parsers that were instantiated; and
-        2) a task object compatible with all of those (see :class:`thelper.tasks.Task` for more information).
+        2) a task object compatible with all of those (see :class:`thelper.tasks.utils.Task` for more information).
 
     .. seealso::
         | :func:`thelper.data.utils.create_loaders`
         | :class:`thelper.data.parsers.Dataset`
         | :class:`thelper.data.parsers.ExternalDataset`
-        | :class:`thelper.tasks.Task`
+        | :class:`thelper.tasks.utils.Task`
     """
     datasets = {}
     tasks = []
@@ -339,14 +339,14 @@ def create_parsers(config, base_transforms=None):
         else:
             if "task" not in dataset_config or not dataset_config["task"]:
                 raise AssertionError("external dataset '%s' must define task interface in its configuration dict" % dataset_name)
-            task = thelper.tasks.load_task(dataset_config["task"])
+            task = thelper.tasks.create_task(dataset_config["task"])
             # assume that __getitem__ and __len__ are implemented, but we need to make it sampling-ready
             dataset = thelper.data.ExternalDataset(dataset_name, dataset_type, task, config=dataset_params, transforms=transforms)
         if task is None:
             raise AssertionError("parsed task interface should not be None anymore (old code doing something strange?)")
         tasks.append(task)
         datasets[dataset_name] = dataset
-    return datasets, thelper.tasks.get_global_task(tasks)
+    return datasets, thelper.tasks.create_global_task(tasks)
 
 
 class _LoaderFactory(object):

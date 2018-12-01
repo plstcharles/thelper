@@ -59,7 +59,7 @@ def load_model(config, task, save_dir=None, ckptdata=None):
     .. seealso::
         | :class:`thelper.nn.utils.Module`
         | :class:`thelper.nn.utils.ExternalModule`
-        | :class:`thelper.tasks.Task`
+        | :class:`thelper.tasks.utils.Task`
     """
     if not isinstance(task, thelper.tasks.Task):
         raise AssertionError("bad task type passed to load_model")
@@ -103,7 +103,7 @@ def load_model(config, task, save_dir=None, ckptdata=None):
             model_state = ckptdata["model"]
             if "task" not in ckptdata or not isinstance(ckptdata["task"], (thelper.tasks.Task, str)):
                 raise AssertionError("invalid checkpoint, cannot reload previous model task")
-            task = thelper.tasks.load_task(ckptdata["task"]) if isinstance(ckptdata["task"], str) else ckptdata["task"]
+            task = thelper.tasks.create_task(ckptdata["task"]) if isinstance(ckptdata["task"], str) else ckptdata["task"]
             if "model_type" not in ckptdata or not isinstance(ckptdata["model_type"], str):
                 raise AssertionError("invalid checkpoint, cannot reload previous model type")
             model_type = thelper.utils.import_class(ckptdata["model_type"])
@@ -163,7 +163,7 @@ class Module(torch.nn.Module):
 
     .. seealso::
         | :func:`thelper.nn.utils.load_model`
-        | :class:`thelper.tasks.Task`
+        | :class:`thelper.tasks.utils.Task`
     """
 
     def __init__(self, task, config=None):
@@ -210,7 +210,7 @@ class ExternalModule(Module):
         | :class:`thelper.nn.utils.Module`
         | :class:`thelper.nn.utils.ExternalClassifModule`
         | :func:`thelper.nn.utils.load_model`
-        | :class:`thelper.tasks.Task`
+        | :class:`thelper.tasks.utils.Task`
     """
 
     def __init__(self, model_type, task, config=None):
@@ -267,7 +267,7 @@ class ExternalClassifModule(ExternalModule):
         | :class:`thelper.nn.utils.Module`
         | :class:`thelper.nn.utils.ExternalModule`
         | :func:`thelper.nn.utils.load_model`
-        | :class:`thelper.tasks.Task`
+        | :class:`thelper.tasks.utils.Task`
     """
 
     def __init__(self, model_type, task, config=None):
