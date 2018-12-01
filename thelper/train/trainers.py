@@ -365,8 +365,9 @@ class Trainer:
     def _load_optimizer(self, config, model):
         """Instantiates and returns the optimizer to use for training.
 
-        By default, the optimizer will be instantiated with the model parameters given as the first argument of its constructor.
-        All supplementary arguments are expected to be handed in through the configuration via a dictionary named 'params'.
+        By default, the optimizer will be instantiated with the model parameters given as the first argument
+        of its constructor. All supplementary arguments are expected to be handed in through the configuration
+        via a dictionary named 'params'.
         """
         self.logger.debug("loading optimizer")
         if not isinstance(config, dict):
@@ -442,9 +443,10 @@ class Trainer:
     def train(self):
         """Starts the training process.
 
-        This function will train the model until the required number of epochs is reached, and then evaluate it on the test data. The
-        setup of loggers, tensorboard writers is done here, so is model improvement tracking via monitored metrics. However, the code
-        related to loss computation and backpropagation is implemented in a derived class via :func:`thelper.train.trainers.Trainer._train_epoch`.
+        This function will train the model until the required number of epochs is reached, and then evaluate it
+        on the test data. The setup of loggers, tensorboard writers is done here, so is model improvement tracking
+        via monitored metrics. However, the code related to loss computation and backpropagation is implemented in
+        a derived class via :func:`thelper.train.trainers.Trainer._train_epoch`.
         """
         if not self.train_loader:
             raise AssertionError("missing training data, invalid loader!")
@@ -572,9 +574,9 @@ class Trainer:
     def eval(self):
         """Starts the evaluation process.
 
-        This function will evaluate the model using the test data (or the validation data, if no test data is available), and return the
-        results. Note that the code related to the forwarding of samples inside the model itself is implemented in a derived class via
-        :func:`thelper.train.trainers.Trainer._train_epoch`.
+        This function will evaluate the model using the test data (or the validation data, if no test data is available),
+        and return the results. Note that the code related to the forwarding of samples inside the model itself is implemented
+        in a derived class via :func:`thelper.train.trainers.Trainer._train_epoch`.
         """
         if not self.valid_loader and not self.test_loader:
             raise AssertionError("missing validation/test data, invalid loaders!")
