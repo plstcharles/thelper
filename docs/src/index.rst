@@ -9,7 +9,7 @@ Contents
    installation
    documentation
    usage
-   modules
+   thelper
    contributing
    authors
    changelog
