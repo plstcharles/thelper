@@ -67,18 +67,18 @@ def create_loaders(config, save_dir=None):
       in the data loaders. This can be used for example to help rebalance a dataset based on its
       class distribution. See :mod:`thelper.data.samplers` for more information.
     - ``augments`` (optional): provides a list of transformation operations used to augment all samples
-      of a dataset. See :func:`thelper.transforms.load_augments` for more info.
+      of a dataset. See :func:`thelper.transforms.utils.load_augments` for more info.
     - ``train_augments`` (optional): provides a list of transformation operations used to augment the
-      training samples of a dataset. See :func:`thelper.transforms.load_augments` for more info.
+      training samples of a dataset. See :func:`thelper.transforms.utils.load_augments` for more info.
     - ``valid_augments`` (optional): provides a list of transformation operations used to augment the
-      validation samples of a dataset. See :func:`thelper.transforms.load_augments` for more info.
+      validation samples of a dataset. See :func:`thelper.transforms.utils.load_augments` for more info.
     - ``test_augments`` (optional): provides a list of transformation operations used to augment the
-      test samples of a dataset. See :func:`thelper.transforms.load_augments` for more info.
+      test samples of a dataset. See :func:`thelper.transforms.utils.load_augments` for more info.
     - ``eval_augments`` (optional): provides a list of transformation operations used to augment the
-      validation and test samples of a dataset. See :func:`thelper.transforms.load_augments` for more info.
+      validation and test samples of a dataset. See :func:`thelper.transforms.utils.load_augments` for more info.
     - ``base_transforms`` (optional): provides a list of transformation operations to apply to all
       loaded samples. This list will be passed to the constructor of all instantiated dataset parsers.
-      See :func:`thelper.transforms.load_transforms` for more info.
+      See :func:`thelper.transforms.utils.load_transforms` for more info.
     - ``train_split`` (optional): provides the proportion of samples of each dataset to hand off to the
       training data loader. These proportions are given in a dictionary format (``name: ratio``).
     - ``valid_split`` (optional): provides the proportion of samples of each dataset to hand off to the
@@ -104,15 +104,15 @@ def create_loaders(config, save_dir=None):
                 # ...
             },
             "train_augments": { # training data augmentation operations
-                # see 'thelper.transforms.load_augments'
+                # see 'thelper.transforms.utils.load_augments'
                 # ...
             },
             "eval_augments": { # evaluation (valid/test) data augmentation operations
-                # see 'thelper.transforms.load_augments'
+                # see 'thelper.transforms.utils.load_augments'
                 # ...
             },
             "base_transforms": { # global sample transformation operations
-                # see 'thelper.transforms.load_transforms'
+                # see 'thelper.transforms.utils.load_transforms'
                 # ...
             },
             # finally, we define a 80%-10%-10% split for our data
@@ -171,8 +171,8 @@ def create_loaders(config, save_dir=None):
 
     .. seealso::
         | :func:`thelper.data.create_parsers`
-        | :func:`thelper.transforms.load_augments`
-        | :func:`thelper.transforms.load_transforms`
+        | :func:`thelper.transforms.utils.load_augments`
+        | :func:`thelper.transforms.utils.load_transforms`
     """
     logstamp = thelper.utils.get_log_stamp()
     repover = thelper.__version__ + ":" + thelper.utils.get_git_stamp()
@@ -358,8 +358,8 @@ class _LoaderFactory(object):
 
     .. seealso::
         | :func:`thelper.data.utils.create_loaders`
-        | :func:`thelper.transforms.load_augments`
-        | :func:`thelper.transforms.load_transforms`
+        | :func:`thelper.transforms.utils.load_augments`
+        | :func:`thelper.transforms.utils.load_transforms`
     """
 
     def __init__(self, config):
