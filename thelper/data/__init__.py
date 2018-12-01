@@ -8,6 +8,7 @@ for dataset parsers.
 
 import logging
 
+import thelper.data.parsers  # noqa: F401
 import thelper.data.utils  # noqa: F401
 from thelper.data.parsers import ClassificationDataset  # noqa: F401
 from thelper.data.parsers import Dataset  # noqa: F401

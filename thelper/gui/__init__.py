@@ -7,6 +7,7 @@ but can be helpful when debugging them. They can also be used to annotate and ex
 
 import logging
 
+import thelper.gui.annotators  # noqa: F401
 import thelper.gui.utils  # noqa: F401
 from thelper.gui.annotators import Annotator  # noqa: F401
 from thelper.gui.annotators import ImageSegmentAnnotator  # noqa: F401

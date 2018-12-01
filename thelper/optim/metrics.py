@@ -1,17 +1,11 @@
-"""Optimization/metrics module.
+"""Metrics module.
 
-This module contains metrics implementations used to monitor training sessions and evaluate models,
-and optimization methods used to control the learning behavior of these models.
-
-The metric classes should all inherit from ``thelper.optim.Metric`` to allow them to be dynamically
-instantiated by the framework from a configuration file and evaluated automatically inside a training
+This module contains classes that implement metrics used to monitor training sessions and evaluate models.
+These metrics should all inherit from :class:`thelper.optim.metrics.Metric` to allow them to be dynamically
+instantiated by the framework from a configuration file, and evaluated automatically inside a training
 session. For more information on this, refer to :class:`thelper.train.Trainer`.
-
-Todo:
-    * split module into 'metrics' and 'optim' submodules.
 """
 
-import bisect
 import copy
 import logging
 from abc import ABC
@@ -27,111 +21,6 @@ import torch.nn.functional
 import thelper.utils
 
 logger = logging.getLogger(__name__)
-
-
-class CustomStepLR(torch.optim.lr_scheduler._LRScheduler):
-    """Sets the learning rate of each parameter group using a dictionary of preset scaling factors
-    for epoch-based milestones.
-
-    This class can be useful for tuning the learning rate scheduling behavior of a training session
-    beyond what is already possible using PyTorch's existing LR scheduler classes.
-
-    Usage example in Python::
-
-        # Assuming the optimizer uses lr = 0.05, we hard-code a slow startup...
-        # lr = 0.00625   if epoch < 2        (1/8 scale before epoch 2)
-        # lr = 0.0125    if 2 <= epoch < 3   (1/4 scale before epoch 3)
-        # lr = 0.025     if 3 <= epoch < 4   (1/2 scale before epoch 4)
-        # lr = 0.05      if 4 <= epoch < 30  (default scale between epoch 4 and 30)
-        # lr = 0.005     if 30 <= epoch < 80 (1/10 scale past epoch 30)
-        # lr = 0.0005    if epoch >= 80      (1/100 scale past epoch 80)
-        scheduler = CustomStepLR(optimizer, milestone_map={
-            1: 1/8,
-            2: 1/4,
-            3: 1/2,
-            4: 1,
-            30: 0.1,
-            80: 0.01
-        })
-        for epoch in range(100):
-            scheduler.step(epoch)
-            train(...)
-            validate(...)
-
-    Usage example inside a session configuration file::
-
-        # ...
-        # lists the model optimization parameters for the training session
-        "optimization": {
-            # lists the optimizer arguments (type, parameters, LR, ...)
-            "optimizer": {
-                # ...
-            },
-            # lists the scheduler arguments (field can be omitted if no scheduler is needed)
-            "scheduler": {
-                # the type used to instantiate the scheduler
-                "type": "thelper.optim.CustomStepLR",
-                # the parameters passed to the scheduler's constructor
-                "params": [
-                    # by default, the optimizer is passed automatically;
-                    # we only need to specify the extra parameters here
-                    {"name": "milestones", "value": {
-                        "1": 1,  # after epoch 1, scale the LR by 1
-                        "10": 0.1, # after epoch 10, scale the LR by 0.1
-                        "20": 0.01,  # ... and so on
-                        "30": 0.001,
-                        "40": 0.0001
-                    }}
-                ]
-            }
-        },
-        # ...
-
-    Attributes:
-        stages: list of epochs where a new scaling factor is to be applied.
-        scales: list of scaling factors to apply at each stage.
-        milestones: original milestones map provided in the constructor.
-
-    .. seealso::
-        | :class:`thelper.train.Trainer`
-    """
-
-    def __init__(self, optimizer, milestones, last_epoch=-1):
-        """Receives the optimizer, milestone scaling factor, and initialization state.
-
-        If the milestones do not include the first epoch, then its scaling factor is set to 1. When
-        last_epoch is -1, the training is assumed to start from scratch.
-
-        Args:
-            optimizer: Wrapped optimizer (PyTorch-compatible object).
-            milestones: Map of epoch indices tied to scaling factors. Keys must be increasing.
-            last_epoch: The index of last epoch. Default: -1.
-        """
-        if not isinstance(milestones, dict):
-            raise AssertionError("milestones should be provided as a dictionary")
-        self.stages = []
-        if len(milestones) > 0:
-            if isinstance(list(milestones.keys())[0], str):  # fixup for json-based config loaders
-                self.stages = [int(key) for key in milestones.keys()]
-            elif isinstance(list(milestones.keys())[0], int):
-                self.stages = list(milestones.keys())
-            else:
-                raise AssertionError("milestone stages should be epoch indices (integers)")
-            if self.stages != sorted(self.stages):
-                raise AssertionError("milestone stages should be increasing integers")
-            if not isinstance(list(milestones.values())[0], (float, int)):
-                raise AssertionError("milestone scaling factors should be int/float")
-        self.scales = [float(scale) for scale in milestones.values()]
-        if 1 not in self.stages:
-            self.stages.insert(0, int(1))
-            self.scales.insert(0, float(1))
-        self.milestones = milestones
-        super().__init__(optimizer, last_epoch)
-
-    def get_lr(self):
-        """Returns the learning rate to use given the current epoch and scaling factors."""
-        stage = min(bisect.bisect_right(self.stages, self.last_epoch), len(self.stages) - 1)
-        return [base_lr * self.scales[stage] for base_lr in self.base_lrs]
 
 
 class Metric(ABC):
@@ -211,7 +100,7 @@ class Metric(ABC):
     def goal(self):
         """Returns the scalar optimization goal of the metric, if available.
 
-        The returned goal can be the ``minimize`` or ``maximize`` members of ``thelper.optim.Metric``
+        The returned goal can be the ``minimize`` or ``maximize`` members of ``thelper.optim.metrics.Metric``
         if the class's evaluation returns a scalar value, and ``None`` otherwise. The trainer will
         check this value to see if monitoring the metric's evaluation result progression is possible.
         """
@@ -253,7 +142,7 @@ class CategoryAccuracy(Metric):
             # this is the name of the example metric; it is used for lookup/printing only
             "top_5_accuracy": {
                 # this type is used to instantiate the accuracy metric
-                "type": "thelper.optim.CategoryAccuracy",
+                "type": "thelper.optim.metrics.CategoryAccuracy",
                 # these parameters are passed to the wrapper's constructor
                 "params": [
                     # the top prediction count to check for a match with the groundtruth
@@ -277,7 +166,7 @@ class CategoryAccuracy(Metric):
         window size (max_accum).
 
         Note that by default, even if max_accum is not provided here, it can still be set by the
-        trainer at runtime through the :func:`thelper.optim.CategoryAccuracy.set_max_accum` function.
+        trainer at runtime through the :func:`thelper.optim.metrics.CategoryAccuracy.set_max_accum` function.
         This is fairly useful as the total size of the training dataset is unlikely to be known when
         metrics are instantiated.
         """
@@ -377,7 +266,7 @@ class BinaryAccuracy(Metric):
             # this is the name of the example metric; it is used for lookup/printing only
             "accuracy": {
                 # this type is used to instantiate the accuracy metric
-                "type": "thelper.optim.BinaryAccuracy",
+                "type": "thelper.optim.metrics.BinaryAccuracy",
                 # there are no useful parameters to give to the constructor
                 "params": []
             },
@@ -396,7 +285,7 @@ class BinaryAccuracy(Metric):
         """Receives the moving average window size (max_accum).
 
         Note that by default, even if max_accum is not provided here, it can still be set by the
-        trainer at runtime through the :func:`thelper.optim.BinaryAccuracy.set_max_accum` function.
+        trainer at runtime through the :func:`thelper.optim.metrics.BinaryAccuracy.set_max_accum` function.
         This is fairly useful as the total size of the training dataset is unlikely to be known when
         metrics are instantiated.
         """
@@ -498,7 +387,7 @@ class ExternalMetric(Metric):
             # this is the name of the first example metric; it is used for lookup/printing only
             "f1_score_reject": {
                 # this type is used to instantiate the wrapper
-                "type": "thelper.optim.ExternalMetric",
+                "type": "thelper.optim.metrics.ExternalMetric",
                 # these parameters are passed to the wrapper's constructor
                 "params": [
                     # the external class to import
@@ -516,7 +405,7 @@ class ExternalMetric(Metric):
             # this is the name of the second example metric; it is used for lookup/printing only
             "roc_auc_accept": {
                 # this type is used to instantiate the wrapper
-                "type": "thelper.optim.ExternalMetric",
+                "type": "thelper.optim.metrics.ExternalMetric",
                 # these parameters are passed to the wrapper's constructor
                 "params": [
                     # the external class to import
@@ -555,7 +444,7 @@ class ExternalMetric(Metric):
                  goal=None, class_names=None, max_accum=None, force_softmax=True):
         """Receives all necessary arguments for wrapper initialization and external metric instantiation.
 
-        See :class:`thelper.optim.ExternalMetric` for information on arguments.
+        See :class:`thelper.optim.metrics.ExternalMetric` for information on arguments.
         """
         if not isinstance(metric_name, str):
             raise AssertionError("metric_name must be fully qualifiied class name to import")
@@ -712,7 +601,7 @@ class ClassifReport(Metric):
     This class provides a simple interface to ``sklearn.metrics.classification_report`` so that all
     count-based metrics can be reported at once under a string-based representation. Note that since
     the evaluation result is a string, this metric cannot be used to directly monitor training
-    progression, and thus returns ``None`` in :func:`thelper.optim.ClassifReport.goal`.
+    progression, and thus returns ``None`` in :func:`thelper.optim.metrics.ClassifReport.goal`.
 
     Usage example inside a session configuration file::
 
@@ -723,7 +612,7 @@ class ClassifReport(Metric):
             # this is the name of the example metric; it is used for lookup/printing only
             "classifreport": {
                 # this type is used to instantiate the classification report metric
-                "type": "thelper.optim.ClassifReport",
+                "type": "thelper.optim.metrics.ClassifReport",
                 # we do not need to provide any parameters to the constructor, defaults are fine
                 "params": []
             },
@@ -820,7 +709,7 @@ class ConfusionMatrix(Metric):
     This class provides a simple interface to ``sklearn.metrics.confusion_matrix`` so that a full
     confusion matrix can be easily reported under a string-based representation. Note that since
     the evaluation result is a string, this metric cannot be used to directly monitor training
-    progression, and thus returns ``None`` in :func:`thelper.optim.ConfusionMatrix.goal`.
+    progression, and thus returns ``None`` in :func:`thelper.optim.metrics.ConfusionMatrix.goal`.
 
     It also offers a tensorboardX-compatible output image that can be saved locally or posted to
     tensorboard for browser-based visualization.
@@ -834,7 +723,7 @@ class ConfusionMatrix(Metric):
             # this is the name of the example metric; it is used for lookup/printing only
             "confmat": {
                 # this type is used to instantiate the confusion matrix report metric
-                "type": "thelper.optim.ConfusionMatrix",
+                "type": "thelper.optim.metrics.ConfusionMatrix",
                 # we do not need to provide any parameters to the constructor, defaults are fine
                 "params": []
             },
@@ -951,7 +840,7 @@ class ROCCurve(Metric):
     operating point is set, it will instead return the false positive/negative prediction rate of the model
     at that point (also as a print-friendly string). Since this evaluation result is not a scalar, this metric
     cannot be directly used to monitor the progression of a model during a training session, and thus returns
-    ``None`` in :func:`thelper.optim.ROCCurve.goal`.
+    ``None`` in :func:`thelper.optim.metrics.ROCCurve.goal`.
 
     Usage examples inside a session configuration file::
 
@@ -962,7 +851,7 @@ class ROCCurve(Metric):
             # this is the name of the first example; it will output the AUC of the "reject" class
             "roc_reject_auc": {
                 # this type is used to instantiate the ROC metric
-                "type": "thelper.optim.ROCCurve",
+                "type": "thelper.optim.metrics.ROCCurve",
                 # these parameters are passed to the constructor
                 "params": [
                     # the name of the class to evaluate
@@ -972,7 +861,7 @@ class ROCCurve(Metric):
             # this is the name of the second example; it will output the FPR at TPR=0.99
             "roc_reject_0.99tpr": {
                 # this type is used to instantiate the ROC metric
-                "type": "thelper.optim.ROCCurve",
+                "type": "thelper.optim.metrics.ROCCurve",
                 # these parameters are passed to the constructor
                 "params": [
                     # the name of the class to evaluate
@@ -1252,7 +1141,7 @@ class ClassifLogger(Metric):
 
     This class provides a simple logging interface for accumulating and saving the predictions of a classifier.
     Note that since the evaluation result is always ``None``, this metric cannot be used to directly monitor
-    training progression, and thus also returns ``None`` in :func:`thelper.optim.ClassifLogger.goal`.
+    training progression, and thus also returns ``None`` in :func:`thelper.optim.metrics.ClassifLogger.goal`.
 
     It also optionally offers tensorboardX-compatible output images that can be saved locally or posted to
     tensorboard for browser-based visualization.
@@ -1266,7 +1155,7 @@ class ClassifLogger(Metric):
             # this is the name of the example metric; it is used for lookup/printing only
             "logger": {
                 # this type is used to instantiate the confusion matrix report metric
-                "type": "thelper.optim.ClassifLogger",
+                "type": "thelper.optim.metrics.ClassifLogger",
                 "params": [
                     # log the three 'best' predictions for each sample
                     {"name": "top_k", "value": 3},

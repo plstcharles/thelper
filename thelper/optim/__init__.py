@@ -1,0 +1,21 @@
+"""Optimization/metrics package.
+
+This package contains metrics implementations used to monitor training sessions and evaluate models,
+and optimization methods used to control the learning behavior of these models.
+"""
+
+import logging
+
+import thelper.optim.metrics  # noqa: F401
+import thelper.optim.schedulers  # noqa: F401
+from thelper.optim.metrics import BinaryAccuracy  # noqa: F401
+from thelper.optim.metrics import CategoryAccuracy  # noqa: F401
+from thelper.optim.metrics import ClassifLogger  # noqa: F401
+from thelper.optim.metrics import ClassifReport  # noqa: F401
+from thelper.optim.metrics import ConfusionMatrix  # noqa: F401
+from thelper.optim.metrics import ExternalMetric  # noqa: F401
+from thelper.optim.metrics import Metric  # noqa: F401
+from thelper.optim.metrics import ROCCurve  # noqa: F401
+from thelper.optim.schedulers import CustomStepLR  # noqa: F401
+
+logger = logging.getLogger("thelper.data")
