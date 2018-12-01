@@ -1,3 +1,8 @@
+"""Top-level package for the 'thelper' framework.
+
+Running ``import thelper`` will recursively import all important subpackages and modules.
+"""
+
 import logging
 
 import thelper.cli  # noqa: F401
