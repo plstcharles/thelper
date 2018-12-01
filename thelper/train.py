@@ -238,22 +238,25 @@ class Trainer:
         if ("metrics" in trainer_config and trainer_config["metrics"]) or \
            ("base_metrics" in trainer_config and trainer_config["base_metrics"]):
             self.logger.debug("loading base metrics")
-            metrics = self._load_metrics(trainer_config["metrics"] if "metrics" in trainer_config else trainer_config["base_metrics"])
+            if "metrics" in trainer_config:
+                metrics = thelper.optim.create_metrics(trainer_config["metrics"])
+            else:
+                metrics = thelper.optim.create_metrics(trainer_config["base_metrics"])
         else:
             metrics = {}
         self.train_metrics = deepcopy(metrics)
         if "train_metrics" in trainer_config and trainer_config["train_metrics"]:
-            self.train_metrics = {**self.train_metrics, **self._load_metrics(trainer_config["train_metrics"])}
+            self.train_metrics = {**self.train_metrics, **thelper.optim.create_metrics(trainer_config["train_metrics"])}
         for metric_name, metric in self.train_metrics.items():
             self.logger.info("parsed train metric '%s': %s" % (metric_name, str(metric)))
         self.valid_metrics = deepcopy(metrics)
         if "valid_metrics" in trainer_config and trainer_config["valid_metrics"]:
-            self.valid_metrics = {**self.valid_metrics, **self._load_metrics(trainer_config["valid_metrics"])}
+            self.valid_metrics = {**self.valid_metrics, **thelper.optim.create_metrics(trainer_config["valid_metrics"])}
         for metric_name, metric in self.valid_metrics.items():
             self.logger.info("parsed valid metric '%s': %s" % (metric_name, str(metric)))
         self.test_metrics = deepcopy(metrics)
         if "test_metrics" in trainer_config and trainer_config["test_metrics"]:
-            self.test_metrics = {**self.test_metrics, **self._load_metrics(trainer_config["test_metrics"])}
+            self.test_metrics = {**self.test_metrics, **thelper.optim.create_metrics(trainer_config["test_metrics"])}
         for metric_name, metric in self.test_metrics.items():
             self.logger.info("parsed test metric '%s': %s" % (metric_name, str(metric)))
         self.monitor, self.monitor_best = None, None
@@ -423,28 +426,6 @@ class Trainer:
         if "step_metric" in config:
             scheduler_step_metric = config["step_metric"]
         return scheduler, scheduler_step_metric
-
-    def _load_metrics(self, config):
-        """Instantiates and returns the metrics defined in the configuration dictionary.
-
-        All arguments are expected to be handed in through the configuration via a dictionary named 'params'.
-        """
-        if not isinstance(config, dict):
-            raise AssertionError("config should be provided as a dictionary")
-        metrics = {}
-        for name, metric_config in config.items():
-            if not isinstance(metric_config, dict):
-                raise AssertionError("metric config should be provided as a dictionary")
-            if "type" not in metric_config or not metric_config["type"]:
-                raise AssertionError("metric config missing 'type' field")
-            metric_type = thelper.utils.import_class(metric_config["type"])
-            metric_params = thelper.utils.get_key_def("params", metric_config, {})
-            metric = metric_type(**metric_params)
-            goal = getattr(metric, "goal", None)
-            if not callable(goal):
-                raise AssertionError("expected metric to define 'goal' based on parent interface")
-            metrics[name] = metric
-        return metrics
 
     def _load_devices(self, devices_str=None):
         """Validates and returns the list of CUDA devices available on the system."""

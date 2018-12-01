@@ -8,6 +8,7 @@ import logging
 
 import thelper.optim.metrics  # noqa: F401
 import thelper.optim.schedulers  # noqa: F401
+import thelper.optim.utils  # noqa: F401
 from thelper.optim.metrics import BinaryAccuracy  # noqa: F401
 from thelper.optim.metrics import CategoryAccuracy  # noqa: F401
 from thelper.optim.metrics import ClassifLogger  # noqa: F401
@@ -17,5 +18,6 @@ from thelper.optim.metrics import ExternalMetric  # noqa: F401
 from thelper.optim.metrics import Metric  # noqa: F401
 from thelper.optim.metrics import ROCCurve  # noqa: F401
 from thelper.optim.schedulers import CustomStepLR  # noqa: F401
+from thelper.optim.utils import create_metrics  # noqa: F401
 
 logger = logging.getLogger("thelper.data")
