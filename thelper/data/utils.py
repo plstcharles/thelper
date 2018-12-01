@@ -65,7 +65,7 @@ def create_loaders(config, save_dir=None):
       or not if the dataset size is not a multiple of the batch size.
     - ``sampler`` (optional): specifies a type of sampler and its constructor parameters to be used
       in the data loaders. This can be used for example to help rebalance a dataset based on its
-      class distribution. See :class:`thelper.samplers.WeightedSubsetRandomSampler` for more info.
+      class distribution. See :mod:`thelper.data.samplers` for more information.
     - ``augments`` (optional): provides a list of transformation operations used to augment all samples
       of a dataset. See :func:`thelper.transforms.load_augments` for more info.
     - ``train_augments`` (optional): provides a list of transformation operations used to augment the
@@ -100,7 +100,7 @@ def create_loaders(config, save_dir=None):
             "shuffle": true,  # specifies that the data should be shuffled
             "workers": 4,  # number of threads to pre-fetch data batches with
             "sampler": {  # we can use a data sampler to rebalance classes (optional)
-                # see e.g. 'thelper.samplers.WeightedSubsetRandomSampler'
+                # see e.g. 'thelper.data.samplers.WeightedSubsetRandomSampler'
                 # ...
             },
             "train_augments": { # training data augmentation operations
@@ -173,7 +173,6 @@ def create_loaders(config, save_dir=None):
         | :func:`thelper.data.create_parsers`
         | :func:`thelper.transforms.load_augments`
         | :func:`thelper.transforms.load_transforms`
-        | :class:`thelper.samplers.WeightedSubsetRandomSampler`
     """
     logstamp = thelper.utils.get_log_stamp()
     repover = thelper.__version__ + ":" + thelper.utils.get_git_stamp()
@@ -361,7 +360,6 @@ class _LoaderFactory(object):
         | :func:`thelper.data.utils.create_loaders`
         | :func:`thelper.transforms.load_augments`
         | :func:`thelper.transforms.load_transforms`
-        | :class:`thelper.samplers.WeightedSubsetRandomSampler`
     """
 
     def __init__(self, config):
@@ -706,3 +704,41 @@ class _LoaderFactory(object):
         torch.cuda.manual_seed_all(self.torch_seed + worker_id)
         np.random.seed(self.numpy_seed + worker_id)
         random.seed(self.random_seed + worker_id)
+
+
+def get_class_weights(label_map, stype, invmax, maxw=float('inf'), minw=0.0, norm=True):
+    """Returns a map of adjusted class weights based on a given rebalancing strategy.
+
+    Args:
+        label_map: map of index lists tied to class labels.
+        stype: weighting strategy ('uniform', `linear`, or 'rootX'); see :class:`thelper.data.samplers.WeightedSubsetRandomSampler`
+            for more information on these.
+        invmax: specifies whether to max-invert the weight vector (thus creating cost factors) or not (default=True).
+        maxw: maximum allowed weight value (applied after invmax, if required).
+        minw: minimum allowed weight value (applied after invmax, if required).
+        norm: specifies whether the returned weights should be normalized (default=True, i.e. normalized).
+
+    Returns:
+        Map of adjusted weights tied to class labels.
+
+    .. seealso::
+        | :class:`thelper.data.samplers.WeightedSubsetRandomSampler`
+    """
+    if stype == "uniform":
+        label_weights = {label: 1.0 / len(label_map) for label in label_map}
+    elif stype == "linear" or "root" in stype:
+        if stype == "root" or stype == "linear":
+            rpow = 1.0
+        else:
+            rpow = 1.0 / float(stype.split("root", 1)[1])
+        tot_count = sum([len(idxs) for idxs in label_map.values()])
+        label_weights = {label: (len(idxs) / tot_count) ** rpow for label, idxs in label_map.items()}
+    else:
+        raise AssertionError("unknown label weighting strategy")
+    if invmax:
+        label_weights = {label: max(label_weights.values()) / max(weight, 1e-6) for label, weight in label_weights.items()}
+    label_weights = {label: min(max(weight, minw), maxw) for label, weight in label_weights.items()}
+    if norm:
+        tot_weight = sum([w for w in label_weights.values()])
+        label_weights = {label: weight / tot_weight for label, weight in label_weights.items()}
+    return label_weights

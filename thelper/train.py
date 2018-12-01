@@ -15,7 +15,7 @@ import cv2 as cv
 import torch
 import torch.optim
 
-import thelper.samplers
+import thelper.data.samplers
 import thelper.utils
 
 logger = logging.getLogger(__name__)
@@ -331,7 +331,7 @@ class Trainer:
 
         This function supports an extra special parameter if the task is related to classification : ``weight_classes``. If
         this parameter is found and positive (boolean), then the loss function will apply weights to the computed loss of each
-        class. The strategy used to compute these weights is related to the one in :class:`thelper.samplers.WeightedSubsetRandomSampler`.
+        class. The strategy used to compute these weights is related to the one in :class:`thelper.data.samplers.WeightedSubsetRandomSampler`.
         The exact parameters that are expected for class reweighting are the following:
 
         - ``weight_param_name`` (optional, default="weight"): name of the loss constructor parameter that expects the weight list.
@@ -381,8 +381,8 @@ class Trainer:
                     weight_norm = True
                     if "weight_norm" in config:
                         weight_norm = thelper.utils.str2bool(config["weight_norm"])
-                    weight_distrib = thelper.samplers.get_class_weights(samples_map, weight_distrib, invmax=True,
-                                                                        maxw=weight_max, minw=weight_min, norm=weight_norm)
+                    weight_distrib = thelper.data.utils.get_class_weights(samples_map, weight_distrib, invmax=True,
+                                                                          maxw=weight_max, minw=weight_min, norm=weight_norm)
                 else:
                     raise AssertionError("unexpected weight distribution strategy (should be map or string)")
                 weight_list = [weight_distrib[label] if label in weight_distrib else 1.0 for label in samples_map]
