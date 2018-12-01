@@ -193,27 +193,39 @@ def get_caller_name(skip=2):
     return ".".join(name)
 
 
-def get_key(key, config):
+def get_key(key, config, msg=None):
     """Returns a value given a dictionary key, throwing if not available."""
     if isinstance(key, list):
         if len(key) <= 1:
-            raise AssertionError("must provide at least two valid keys to test")
+            if msg is not None:
+                raise AssertionError(msg)
+            else:
+                raise AssertionError("must provide at least two valid keys to test")
         for k in key:
             if k in config:
                 return config[k]
-        raise AssertionError("config dictionary missing a field named as one of '%s'" % str(key))
+        if msg is not None:
+            raise AssertionError(msg)
+        else:
+            raise AssertionError("config dictionary missing a field named as one of '%s'" % str(key))
     else:
         if key not in config:
-            raise AssertionError("config dictionary missing '%s' field" % key)
+            if msg is not None:
+                raise AssertionError(msg)
+            else:
+                raise AssertionError("config dictionary missing '%s' field" % key)
         else:
             return config[key]
 
 
-def get_key_def(key, config, default=None):
+def get_key_def(key, config, default=None, msg=None):
     """Returns a value given a dictionary key, or the default value if it cannot be found."""
     if isinstance(key, list):
         if len(key) <= 1:
-            raise AssertionError("must provide at least two valid keys to test")
+            if msg is not None:
+                raise AssertionError(msg)
+            else:
+                raise AssertionError("must provide at least two valid keys to test")
         for k in key:
             if k in config:
                 return config[k]
@@ -885,12 +897,3 @@ def get_file_paths(input_path, data_root, allow_glob=False, can_be_dir=False):
         elif not os.path.isfile(input_path) and not (can_be_dir and os.path.isdir(input_path)):
             raise AssertionError("invalid input file at path '%s'" % input_path)
     return [input_path]
-
-
-def check_key(key, tdict, tdict_name, msg=''):
-    """Verifies that a key is inside a given dictionary; throws if the key is missing."""
-    if key not in tdict:
-        if msg == '':
-            raise AssertionError("%s missing '%s' field" % (tdict_name, key))
-        else:
-            raise AssertionError(msg)
