@@ -120,7 +120,7 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
         label_counts: number of samples in each class for the ``uniform`` and ``root`` strategies
 
     .. seealso::
-        :func:`thelper.data.create_loaders`
+        | :func:`thelper.data.utils.create_loaders`
     """
 
     def __init__(self, indices, labels, stype="uniform", scale=1.0):

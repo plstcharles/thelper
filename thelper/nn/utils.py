@@ -27,8 +27,8 @@ def load_model(config, task, save_dir=None, ckptdata=None):
     This field is expected to be a dictionary itself. It may then specify a type to instantiate as well as the
     parameters to provide to that class constructor, or a path to a checkpoint from which a model should be loaded.
 
-    All models must derive from :class:`thelper.nn.Module`, or they must be instantiable through
-    :class:`thelper.nn.ExternalModule` (or one of its specialized classes). The provided task object will
+    All models must derive from :class:`thelper.nn.utils.Module`, or they must be instantiable through
+    :class:`thelper.nn.utils.ExternalModule` (or one of its specialized classes). The provided task object will
     be used to make sure that the model has the required input/output layers for the requested objective.
 
     If checkpoint data is provided by the caller, the weights it contains will be loaded into the returned model.
@@ -53,13 +53,13 @@ def load_model(config, task, save_dir=None, ckptdata=None):
         ckptdata: raw checkpoint data loaded via ``torch.load()``; the model will be given its previous state.
 
     Returns:
-        The instantiated model, compatible with the interface of both :class:`thelper.nn.Module`
+        The instantiated model, compatible with the interface of both :class:`thelper.nn.utils.Module`
         and ``torch.nn.Module``.
 
     .. seealso::
-        :class:`thelper.nn.Module`
-        :class:`thelper.nn.ExternalModule`
-        :class:`thelper.tasks.Task`
+        | :class:`thelper.nn.utils.Module`
+        | :class:`thelper.nn.utils.ExternalModule`
+        | :class:`thelper.tasks.Task`
     """
     if not isinstance(task, thelper.tasks.Task):
         raise AssertionError("bad task type passed to load_model")
@@ -162,8 +162,8 @@ class Module(torch.nn.Module):
     number of classes to support.
 
     .. seealso::
-        :func:`thelper.nn.load_model`
-        :class:`thelper.tasks.Task`
+        | :func:`thelper.nn.utils.load_model`
+        | :class:`thelper.tasks.Task`
     """
 
     def __init__(self, task, config=None):
@@ -200,17 +200,17 @@ class ExternalModule(Module):
     """Model inteface used to hold a task object for an external implementation.
 
     This interface is built on top of ``torch.nn.Module`` and should remain fully compatible with it. It is
-    automatically used when instantiating a model via :func:`thelper.nn.load_model` that is not derived
-    from :class:`thelper.nn.Module`. Its only purpose is to hold the task object, and redirect
-    :func:`thelper.nn.Module.forward` to the actual model's transformation function. It can also be
+    automatically used when instantiating a model via :func:`thelper.nn.utils.load_model` that is not derived
+    from :class:`thelper.nn.utils.Module`. Its only purpose is to hold the task object, and redirect
+    :func:`thelper.nn.utils.Module.forward` to the actual model's transformation function. It can also be
     specialized to automatically adapt some external models after their construction using the knowledge
     contained in the task object.
 
     .. seealso::
-        :class:`thelper.nn.Module`
-        :class:`thelper.nn.ExternalClassifModule`
-        :func:`thelper.nn.load_model`
-        :class:`thelper.tasks.Task`
+        | :class:`thelper.nn.utils.Module`
+        | :class:`thelper.nn.utils.ExternalClassifModule`
+        | :func:`thelper.nn.utils.load_model`
+        | :class:`thelper.tasks.Task`
     """
 
     def __init__(self, model_type, task, config=None):
@@ -264,10 +264,10 @@ class ExternalClassifModule(ExternalModule):
     the number of classes to predict defined in the task object.
 
     .. seealso::
-        :class:`thelper.nn.Module`
-        :class:`thelper.nn.ExternalModule`
-        :func:`thelper.nn.load_model`
-        :class:`thelper.tasks.Task`
+        | :class:`thelper.nn.utils.Module`
+        | :class:`thelper.nn.utils.ExternalModule`
+        | :func:`thelper.nn.utils.load_model`
+        | :class:`thelper.tasks.Task`
     """
 
     def __init__(self, model_type, task, config=None):

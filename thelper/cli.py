@@ -27,14 +27,14 @@ def create_session(config, save_dir):
 
     Args:
         config: a dictionary that provides all required data configuration and trainer parameters; see
-            :class:`thelper.train.Trainer` and :func:`thelper.data.create_loaders` for more information.
+            :class:`thelper.train.Trainer` and :func:`thelper.data.utils.create_loaders` for more information.
             Here, it is only expected to contain a ``name`` field that specifies the name of the session.
         save_dir: the path to the root directory where the session directory should be saved. Note that
             this is not the path to the session directory itself, but its parent, which may also contain
             other session directories.
 
     .. seealso::
-        :class:`thelper.train.Trainer`
+        | :class:`thelper.train.Trainer`
     """
     logger = thelper.utils.get_func_logger()
     if "name" not in config or not config["name"]:
@@ -76,12 +76,12 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
             this is not the path to the session directory itself, but its parent, which may also contain
             other session directories.
         config: a dictionary that provides all required data configuration and trainer parameters; see
-            :class:`thelper.train.Trainer` and :func:`thelper.data.create_loaders` for more information.
+            :class:`thelper.train.Trainer` and :func:`thelper.data.utils.create_loaders` for more information.
             Here, it is only expected to contain a ``name`` field that specifies the name of the session.
         eval_only: specifies whether training should be resumed or the model should only be evaluated.
 
     .. seealso::
-        :class:`thelper.train.Trainer`
+        | :class:`thelper.train.Trainer`
     """
     logger = thelper.utils.get_func_logger()
     if not config:
@@ -119,7 +119,7 @@ def visualize_data(config):
 
     Args:
         config: a dictionary that provides all required data configuration parameters; see
-            :func:`thelper.data.create_loaders` for more information.
+            :func:`thelper.data.utils.create_loaders` for more information.
     """
     logger = thelper.utils.get_func_logger()
     logger.info("creating visualization session...")
@@ -159,7 +159,8 @@ def annotate_data(config, save_dir):
 
     Args:
         config: a dictionary that provides all required dataset and GUI tool configuration parameters; see
-            :func:`thelper.data.create_parsers` and :mod:`thelper.gui` for more information.
+            :func:`thelper.data.utils.create_parsers` and :func:`thelper.gui.utils.create_annotator` for more
+            information.
         save_dir: the path to the root directory where the session directory should be saved. Note that
             this is not the path to the session directory itself, but its parent, which may also contain
             other session directories.
@@ -206,9 +207,9 @@ def main(args=None):
         using ``-m=cpu``).
 
     .. seealso::
-        :func:`thelper.cli.create_session`
-        :func:`thelper.cli.resume_session`
-        :func:`thelper.cli.visualize_data`
+        | :func:`thelper.cli.create_session`
+        | :func:`thelper.cli.resume_session`
+        | :func:`thelper.cli.visualize_data`
     """
     ap = argparse.ArgumentParser(description='thelper model trainer application')
     ap.add_argument("--version", default=False, action="store_true", help="prints the version of the library and exits")

@@ -26,8 +26,8 @@ def load_task(config):
     for direct instantiation.
 
     .. seealso::
-        :class:`thelper.tasks.Task`
-        :func:`thelper.tasks.Task.__repr__`
+        | :class:`thelper.tasks.Task`
+        | :func:`thelper.tasks.Task.__repr__`
     """
     if config is None or not isinstance(config, (str, dict)):
         raise AssertionError("unexpected config type (should be str or dict)")
@@ -64,8 +64,8 @@ def get_global_task(tasks):
     Otherwise, the returned task object can be used to replace the subtasks of all used datasets.
 
     .. seealso::
-        :class:`thelper.tasks.Task`
-        :func:`thelper.data.create_parsers`
+        | :class:`thelper.tasks.Task`
+        | :func:`thelper.data.utils.create_parsers`
     """
     if tasks is None:
         return None
@@ -109,7 +109,7 @@ class Task(object):
         meta_keys: the list of extra keys provided by the data parser inside each sample.
 
     .. seealso::
-        :class:`thelper.tasks.Classification`
+        | :class:`thelper.tasks.Classification`
     """
 
     def __init__(self, input_key, gt_key=None, meta_keys=None):
@@ -207,8 +207,8 @@ class Classification(Task):
         meta_keys: the list of extra keys provided by the data parser inside each sample.
 
     .. seealso::
-        :class:`thelper.tasks.Task`
-        :class:`thelper.train.ImageClassifTrainer`
+        | :class:`thelper.tasks.Task`
+        | :class:`thelper.train.ImageClassifTrainer`
     """
 
     def __init__(self, class_names, input_key, label_key, meta_keys=None):

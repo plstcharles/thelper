@@ -20,9 +20,9 @@ def create_annotator(session_name, save_dir, config, datasets):
     """Instantiates a GUI annotation tool based on the type contained in the config dictionary.
 
     The tool type is expected to be in the configuration dictionary's `annotator` field, under the `type` key. For more
-    information on the configuration, refer to :class:`thelper.gui.Annotator`. The instantiated type must be compatible
-    with the constructor signature of :class:`thelper.gui.Annotator`. The object's constructor will be given the full
-    config dictionary.
+    information on the configuration, refer to :class:`thelper.gui.annotators.Annotator`. The instantiated type must be
+    compatible with the constructor signature of :class:`thelper.gui.annotators.Annotator`. The object's constructor will
+    be given the full config dictionary.
 
     Args:
         session_name: name of the annotation session used for printing and to create output directories.
@@ -34,7 +34,7 @@ def create_annotator(session_name, save_dir, config, datasets):
         The fully-constructed annotator object, ready to begin annotation via its ``run()`` function.
 
     .. seealso::
-        :class:`thelper.gui.Annotator`
+        | :class:`thelper.gui.annotators.Annotator`
 
     """
     if "annotator" not in config or not config["annotator"]:
@@ -66,8 +66,8 @@ class Annotator:
         # ...
 
     .. seealso::
-        :class:`thelper.gui.ImageSegmentAnnotator`
-        :func:`thelper.gui.create_annotator`
+        | :class:`thelper.gui.annotators.ImageSegmentAnnotator`
+        | :func:`thelper.gui.utils.create_annotator`
     """
 
     def __init__(self, session_name, config, save_dir, datasets):
@@ -143,7 +143,7 @@ class ImageSegmentAnnotator(Annotator):
     - ``default_fill_id``: the label id to fill all new masks with (default=0).
 
     .. seealso::
-        :class:`thelper.gui.Annotator`
+        | :class:`thelper.gui.annotators.Annotator`
     """
 
     # static variables used for callbacks and comms with other classes

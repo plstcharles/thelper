@@ -53,7 +53,7 @@ def load_transforms(stages):
 
         # ...
         # the 'loaders' field can contain several transformation pipelines
-        # (see 'thelper.data.create_loaders' for more information on these pipelines)
+        # (see 'thelper.data.utils.create_loaders' for more information on these pipelines)
         "loaders": {
             # ...
             # the 'base_transforms' operations are applied to all loaded samples
@@ -80,9 +80,9 @@ def load_transforms(stages):
         A transformation pipeline object compatible with the ``torchvision.transforms`` interfaces.
 
     .. seealso::
-        :class:`thelper.transforms.AugmentorWrapper`
-        :func:`thelper.transforms.load_augments`
-        :func:`thelper.data.create_loaders`
+        | :class:`thelper.transforms.AugmentorWrapper`
+        | :func:`thelper.transforms.load_augments`
+        | :func:`thelper.data.utils.create_loaders`
     """
     if not isinstance(stages, list):
         raise AssertionError("expected stages to be provided as a list")
@@ -136,7 +136,7 @@ def load_augments(config):
 
         # ...
         # the 'loaders' field can contain several augmentation pipelines
-        # (see 'thelper.data.create_loaders' for more information on these pipelines)
+        # (see 'thelper.data.utils.create_loaders' for more information on these pipelines)
         "loaders": {
             # ...
             # the 'train_augments' operations are applied to training samples only
@@ -196,9 +196,9 @@ def load_augments(config):
         a bool specifying whether this pipeline should be appended or prefixed to the base transforms.
 
     .. seealso::
-        :class:`thelper.transforms.AugmentorWrapper`
-        :func:`thelper.transforms.load_transforms`
-        :func:`thelper.data.create_loaders`
+        | :class:`thelper.transforms.AugmentorWrapper`
+        | :func:`thelper.transforms.load_transforms`
+        | :func:`thelper.data.utils.create_loaders`
     """
     if not isinstance(config, dict):
         raise AssertionError("augmentation config should be provided as dictionary")
@@ -225,7 +225,7 @@ class AugmentorWrapper(object):
         linked_fate: specifies whether input list samples should all have the same fate or not.
 
     .. seealso::
-        :func:`thelper.transforms.load_transforms`
+        | :func:`thelper.transforms.load_transforms`
     """
 
     def __init__(self, pipeline, linked_fate=True):

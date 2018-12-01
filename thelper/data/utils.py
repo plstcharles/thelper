@@ -35,7 +35,7 @@ def create_loaders(config, save_dir=None):
     parameters required for establishing the dataset split, shuffling seeds, and batch size (these are
     listed and detailed below); and ``datasets``, which lists the dataset parser interfaces to instantiate
     as well as their parameters. For more information on the ``datasets`` field, refer to
-    :func:`thelper.data.create_parsers`.
+    :func:`thelper.data.utils.create_parsers`.
 
     The parameters expected in the 'loaders' configuration field are the following:
 
@@ -145,7 +145,7 @@ def create_loaders(config, save_dir=None):
                 "params": [
                     # ...
                 ],
-                # if it does not derive from 'thelper.data.Dataset', a task is needed:
+                # if it does not derive from 'thelper.data.parsers.Dataset', a task is needed:
                 "task": {
                     # this type must derive from 'thelper.tasks.Task'
                     "type": "...",
@@ -170,11 +170,10 @@ def create_loaders(config, save_dir=None):
         2) the training data loader; 3) the validation data loader; and 4) the test data loader.
 
     .. seealso::
-        :class:`thelper.data.LoaderFactory`
-        :func:`thelper.data.create_parsers`
-        :func:`thelper.transforms.load_augments`
-        :func:`thelper.transforms.load_transforms`
-        :class:`thelper.samplers.WeightedSubsetRandomSampler`
+        | :func:`thelper.data.create_parsers`
+        | :func:`thelper.transforms.load_augments`
+        | :func:`thelper.transforms.load_transforms`
+        | :class:`thelper.samplers.WeightedSubsetRandomSampler`
     """
     logstamp = thelper.utils.get_log_stamp()
     repover = thelper.__version__ + ":" + thelper.utils.get_git_stamp()
@@ -285,7 +284,7 @@ def create_loaders(config, save_dir=None):
             # now, always overwrite, as it can get too big otherwise
             with open(dataset_log_file, "w") as fd:
                 json.dump(log_content, fd, indent=4, sort_keys=False)
-    train_loader, valid_loader, test_loader = loader_factory.get_loaders(datasets, train_idxs, valid_idxs, test_idxs)
+    train_loader, valid_loader, test_loader = loader_factory.create_loaders(datasets, train_idxs, valid_idxs, test_idxs)
     return task, train_loader, valid_loader, test_loader
 
 
@@ -294,14 +293,14 @@ def create_parsers(config, base_transforms=None):
 
     This function will instantiate dataset parsers as defined in a name-type-param dictionary. If multiple
     datasets are instantiated, this function will also verify their task compatibility and return the global
-    task. The dataset interfaces themselves should be derived from :class:`thelper.data.Dataset`, be
-    compatible with :class:`thelper.data.ExternalDataset`, or should provide a 'task' field specifying all the
-    information related to sample dictionary keys and model i/o. An example configuration is provided in
-    :func:`thelper.data.create_parsers`.
+    task. The dataset interfaces themselves should be derived from :class:`thelper.data.parsers.Dataset`, be
+    compatible with :class:`thelper.data.parsers.ExternalDataset`, or should provide a 'task' field specifying
+    all the information related to sample dictionary keys and model i/o. An example configuration is provided
+    in :func:`thelper.data.utils.create_parsers`.
 
-    The keys in ``config`` are treated as unique dataset names and are used for lookups (e.g. for splitting
-    in :class:`thelper.data.LoaderFactory`). The value associated to each key (or dataset name) should be a
-    type-params dictionary that can be parsed to instantiate the dataset interface.
+    The keys in ``config`` are treated as unique dataset names and are used for lookups. The value associated
+    to each key (or dataset name) should be a type-params dictionary that can be parsed to instantiate the
+    dataset interface.
 
     Args:
         config: a dictionary that provides unique dataset names and parameters needed for instantiation.
@@ -313,10 +312,10 @@ def create_parsers(config, base_transforms=None):
         2) a task object compatible with all of those (see :class:`thelper.tasks.Task` for more information).
 
     .. seealso::
-        :func:`thelper.data.create_loaders`
-        :class:`thelper.data.Dataset`
-        :class:`thelper.data.ExternalDataset`
-        :class:`thelper.tasks.Task`
+        | :func:`thelper.data.utils.create_loaders`
+        | :class:`thelper.data.parsers.Dataset`
+        | :class:`thelper.data.parsers.ExternalDataset`
+        | :class:`thelper.tasks.Task`
     """
     datasets = {}
     tasks = []
@@ -333,7 +332,7 @@ def create_parsers(config, base_transforms=None):
         elif base_transforms is not None:
             transforms = base_transforms
         if issubclass(dataset_type, thelper.data.Dataset):
-            # assume that the dataset is derived from thelper.data.Dataset (it is fully sampling-ready)
+            # assume that the dataset is derived from thelper.data.parsers.Dataset (it is fully sampling-ready)
             dataset = dataset_type(name=dataset_name, config=dataset_params, transforms=transforms)
             if "task" in dataset_config:
                 logger.warning("'task' field detected in dataset '%s' config; will be ignored (interface should provide it)" % dataset_name)
@@ -356,13 +355,13 @@ class _LoaderFactory(object):
 
     This class is responsible for parsing the parameters contained in the 'loaders' field of a
     configuration dictionary, instantiating the data loaders, and shuffling/splitting the samples.
-    An example configuration is presented in :func:`thelper.data.create_loaders`.
+    An example configuration is presented in :func:`thelper.data.utils.create_loaders`.
 
     .. seealso::
-        :func:`thelper.data.create_loaders`
-        :func:`thelper.transforms.load_augments`
-        :func:`thelper.transforms.load_transforms`
-        :class:`thelper.samplers.WeightedSubsetRandomSampler`
+        | :func:`thelper.data.utils.create_loaders`
+        | :func:`thelper.transforms.load_augments`
+        | :func:`thelper.transforms.load_transforms`
+        | :class:`thelper.samplers.WeightedSubsetRandomSampler`
     """
 
     def __init__(self, config):
@@ -626,7 +625,7 @@ class _LoaderFactory(object):
             train_idxs, valid_idxs, test_idxs = self._get_raw_split(dataset_indices)
         return train_idxs, valid_idxs, test_idxs
 
-    def get_loaders(self, datasets, train_idxs, valid_idxs, test_idxs):
+    def create_loaders(self, datasets, train_idxs, valid_idxs, test_idxs):
         """Returns the data loaders for the train/valid/test sets based on a prior split.
 
         This function essentially takes the dataset parser interfaces and indices maps, and instantiates

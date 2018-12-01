@@ -33,7 +33,7 @@ def load_trainer(session_name, save_dir, config, model, loaders, ckptdata=None):
         session_name: name of the training session used for printing and to create internal tensorboardX directories.
         save_dir: path to the session directory where logs and checkpoints will be saved.
         config: full configuration dictionary that will be parsed for trainer parameters and saved in checkpoints.
-        model: model to train/evaluate; should be compatible with :class:`thelper.nn.Module`.
+        model: model to train/evaluate; should be compatible with :class:`thelper.nn.utils.Module`.
         loaders: a tuple containing the training/validation/test data loaders (a loader can be ``None`` if empty).
         ckptdata: raw checkpoint to parse data from when resuming a session (if ``None``, will start from scratch).
 
@@ -41,7 +41,7 @@ def load_trainer(session_name, save_dir, config, model, loaders, ckptdata=None):
         The fully-constructed trainer object, ready to begin model training/evaluation.
 
     .. seealso::
-        :class:`thelper.train.Trainer`
+        | :class:`thelper.train.Trainer`
 
     """
     if "trainer" not in config or not config["trainer"]:
@@ -144,8 +144,8 @@ class Trainer:
     TODO: move static utils to their related modules
 
     .. seealso::
-        :class:`thelper.train.ImageClassifTrainer`
-        :func:`thelper.train.load_trainer`
+        | :class:`thelper.train.ImageClassifTrainer`
+        | :func:`thelper.train.load_trainer`
     """
 
     def __init__(self, session_name, save_dir, model, loaders, config, ckptdata=None):
@@ -774,7 +774,7 @@ class ImageClassifTrainer(Trainer):
     (images, class labels) from a sample, and that converts those into tensors for forwarding and loss estimation.
 
     .. seealso::
-        :class:`thelper.train.Trainer`
+        | :class:`thelper.train.Trainer`
     """
 
     def __init__(self, session_name, save_dir, model, loaders, config, ckptdata=None):

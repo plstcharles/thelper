@@ -38,8 +38,8 @@ class Annotator:
         # ...
 
     .. seealso::
-        :class:`thelper.gui.ImageSegmentAnnotator`
-        :func:`thelper.gui.create_annotator`
+        | :class:`thelper.gui.annotators.ImageSegmentAnnotator`
+        | :func:`thelper.gui.utils.create_annotator`
     """
 
     def __init__(self, session_name, config, save_dir, datasets):
@@ -115,7 +115,7 @@ class ImageSegmentAnnotator(Annotator):
     - ``default_fill_id``: the label id to fill all new masks with (default=0).
 
     .. seealso::
-        :class:`thelper.gui.Annotator`
+        | :class:`thelper.gui.annotators.Annotator`
     """
 
     # static variables used for callbacks and comms with other classes
