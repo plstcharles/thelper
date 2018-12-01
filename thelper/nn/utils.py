@@ -20,7 +20,7 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-def load_model(config, task, save_dir=None, ckptdata=None):
+def create_model(config, task, save_dir=None, ckptdata=None):
     """Instantiates a model based on a provided task object.
 
     The configuration must be given as a dictionary object. This dictionary will be parsed for a 'model' field.
@@ -62,7 +62,7 @@ def load_model(config, task, save_dir=None, ckptdata=None):
         | :class:`thelper.tasks.utils.Task`
     """
     if not isinstance(task, thelper.tasks.Task):
-        raise AssertionError("bad task type passed to load_model")
+        raise AssertionError("bad task type passed to create_model")
     if save_dir is not None:
         modules_logger_path = os.path.join(save_dir, "logs", "modules.log")
         modules_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
@@ -162,7 +162,7 @@ class Module(torch.nn.Module):
     number of classes to support.
 
     .. seealso::
-        | :func:`thelper.nn.utils.load_model`
+        | :func:`thelper.nn.utils.create_model`
         | :class:`thelper.tasks.utils.Task`
     """
 
@@ -200,7 +200,7 @@ class ExternalModule(Module):
     """Model inteface used to hold a task object for an external implementation.
 
     This interface is built on top of ``torch.nn.Module`` and should remain fully compatible with it. It is
-    automatically used when instantiating a model via :func:`thelper.nn.utils.load_model` that is not derived
+    automatically used when instantiating a model via :func:`thelper.nn.utils.create_model` that is not derived
     from :class:`thelper.nn.utils.Module`. Its only purpose is to hold the task object, and redirect
     :func:`thelper.nn.utils.Module.forward` to the actual model's transformation function. It can also be
     specialized to automatically adapt some external models after their construction using the knowledge
@@ -209,7 +209,7 @@ class ExternalModule(Module):
     .. seealso::
         | :class:`thelper.nn.utils.Module`
         | :class:`thelper.nn.utils.ExternalClassifModule`
-        | :func:`thelper.nn.utils.load_model`
+        | :func:`thelper.nn.utils.create_model`
         | :class:`thelper.tasks.utils.Task`
     """
 
@@ -266,7 +266,7 @@ class ExternalClassifModule(ExternalModule):
     .. seealso::
         | :class:`thelper.nn.utils.Module`
         | :class:`thelper.nn.utils.ExternalModule`
-        | :func:`thelper.nn.utils.load_model`
+        | :func:`thelper.nn.utils.create_model`
         | :class:`thelper.tasks.utils.Task`
     """
 
