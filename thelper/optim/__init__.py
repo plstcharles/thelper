@@ -20,4 +20,4 @@ from thelper.optim.metrics import ROCCurve  # noqa: F401
 from thelper.optim.schedulers import CustomStepLR  # noqa: F401
 from thelper.optim.utils import create_metrics  # noqa: F401
 
-logger = logging.getLogger("thelper.data")
+logger = logging.getLogger("thelper.optim")
