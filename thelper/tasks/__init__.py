@@ -10,8 +10,8 @@ import logging
 import thelper.tasks.classif  # noqa: F401
 import thelper.tasks.utils  # noqa: F401
 from thelper.tasks.classif import Classification  # noqa: F401
+from thelper.tasks.utils import Task  # noqa: F401
 from thelper.tasks.utils import create_global_task  # noqa: F401
 from thelper.tasks.utils import create_task  # noqa: F401
-from thelper.tasks.utils import Task  # noqa: F401
 
 logger = logging.getLogger("thelper.tasks")

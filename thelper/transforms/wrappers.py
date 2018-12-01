@@ -5,7 +5,6 @@ of images) or for external libraries (e.g. Augmentor).
 """
 
 import logging
-
 import random
 
 import numpy as np
