@@ -4,6 +4,7 @@ This module contains base interfaces and utility functions used to define and in
 neural network models.
 """
 
+import inspect
 import logging
 import os
 from abc import abstractmethod
@@ -131,7 +132,7 @@ def create_model(config, task, save_dir=None, ckptdata=None):
         logger.debug("model_type = %s" % str(model_type))
         logger.debug("model_params = %s" % str(model_params))
         logger.debug("task = %s" % str(task))
-        if issubclass(model_type, Module):
+        if inspect.isclass(model_type) and issubclass(model_type, thelper.nn.utils.Module):
             model = model_type(task=task, **model_params)
         else:
             if type(task) == thelper.tasks.Classification:
