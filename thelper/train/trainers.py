@@ -521,10 +521,8 @@ class Trainer:
             if self.monitor is not None:
                 if monitor_val is None:
                     raise AssertionError("training/validation did not produce required monitoring variable '%s'" % self.monitor)
-                if new_best:
-                    self.logger.info("epoch %d, monitored %s = %s  (new best value)" % (epoch, self.monitor, monitor_val))
-                else:
-                    self.logger.info("epoch %d, monitored %s = %s  (previous best = %s)" % (epoch, self.monitor, monitor_val, self.monitor_best))
+                best_str = "(new best value)" if new_best else ("(previous best = %s)" % self.monitor_best)
+                self.logger.info("epoch %d, monitored %s = %s  %s" % (epoch, self.monitor, monitor_val, best_str))
             self.outputs[epoch] = result
             if new_best or (epoch % self.save_freq) == 0:
                 self.logger.info("saving checkpoint @ epoch %d" % epoch)

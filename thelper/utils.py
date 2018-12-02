@@ -413,7 +413,6 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
     save_dir = os.path.join(save_dir, dir_name)
     if not resume:
         overwrite = str2bool(config["overwrite"]) if config is not None and "overwrite" in config else False
-        old_dir_name = dir_name
         time.sleep(0.5)  # to make sure all debug/info prints are done, and we see the question
         while os.path.exists(save_dir) and not overwrite:
             overwrite = query_yes_no("Training session at '%s' already exists; overwrite?" % save_dir)
