@@ -69,6 +69,12 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
         predicted by the model) should remain the same. This is a limitation of the framework that
         should be addressed in a future update.
 
+    .. warning::
+        A resumed session will not restore the state of the RNGs used originally as those are not saved
+        in the checkpoint. This means that we cannot expect a training session resumed from a certain
+        checkpoint to result in the same final output as a session created from scratch and that was
+        run for its entire length.
+
     Args:
         ckptdata: raw checkpoint data loaded via ``torch.load()``; it will be parsed by the various
             parts of the framework that need to reload their previous state.
