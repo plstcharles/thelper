@@ -1,0 +1,80 @@
+{
+    "name": "example-classif-minimalist",
+    "datasets": {
+        "cifar10": {
+            "type": "torchvision.datasets.CIFAR10",
+            "params": {
+                "root": "data/cifar/train",
+                "download": true
+            },
+            "task": {
+                "type": "thelper.tasks.Classification",
+                "params": {
+                    "class_names": [
+                        "airplane", "car", "bird", "cat", "deer",
+                        "dog", "frog", "horse", "ship", "truck"
+                    ],
+                    "input_key": "0",
+                    "label_key": "1"
+                }
+            }
+        }
+    },
+    "loaders": {
+        "batch_size": 32,
+        "base_transforms": [
+            {
+                "operation": "thelper.transforms.NormalizeMinMax",
+                "params": {
+                    "min": [127, 127, 127],
+                    "max": [255, 255, 255]
+                }
+            },
+            {
+                "operation": "thelper.transforms.Resize",
+                "params": {
+                    "dsize": [224, 224]
+                }
+            },
+            {
+                "operation": "torchvision.transforms.ToTensor"
+            }
+        ],
+        "train_split": {
+            "cifar10": 0.9
+        },
+        "valid_split": {
+            "cifar10": 0.1
+        }
+    },
+    "model": {
+        "type" : "torchvision.models.resnet.resnet18",
+        "params": {
+            "pretrained": true
+        }
+    },
+    "trainer": {
+        "type": "thelper.train.ImageClassifTrainer",
+        "epochs": 5,
+        "monitor": "accuracy",
+        "optimization": {
+            "loss": {
+                "type": "torch.nn.CrossEntropyLoss"
+            },
+            "optimizer": {
+                "type": "torch.optim.Adam",
+                "params": {
+                    "lr": 0.001
+                }
+            }
+        },
+        "metrics": {
+            "accuracy": {
+                "type": "thelper.optim.CategoryAccuracy",
+                "params": {
+                    "top_k": 1
+                }
+            }
+        }
+    }
+}
