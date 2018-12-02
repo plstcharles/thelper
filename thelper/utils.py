@@ -418,8 +418,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
         while os.path.exists(save_dir) and not overwrite:
             overwrite = query_yes_no("Training session at '%s' already exists; overwrite?" % save_dir)
             if not overwrite:
-                dir_name = query_string("Please provide a new directory name (old=%s):" % old_dir_name)
-                save_dir = os.path.join(save_dir, dir_name)
+                save_dir = query_string("Please provide a new save directory path:")
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
         if config is not None:
