@@ -1313,7 +1313,9 @@ class ClassifLogger(Metric):
                 )
             if self.meta_keys is not None and self.meta_keys:
                 for key in self.meta_keys:
-                    val = self.meta[key][sample_idx]
+                    val = None
+                    if key in self.meta and self.meta[key] is not None:
+                        val = self.meta[key][sample_idx]
                     if isinstance(val, torch.Tensor) and val.numel() == 1:
                         res += "," + str(val.item())
                     else:
