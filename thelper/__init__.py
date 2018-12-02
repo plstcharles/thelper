@@ -17,4 +17,4 @@ import thelper.utils  # noqa: F401
 logger = logging.getLogger("thelper")
 
 __url__ = "https://github.com/plstcharles/thelper"
-__version__ = "0.0.2"
+__version__ = "0.1.0"

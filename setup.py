@@ -51,7 +51,7 @@ on_rtd = os.environ.get('READTHEDOCS') == 'True'
 
 setuptools.setup(
     name="thelper",
-    version="0.0.2",
+    version="0.1.0",
     license="Apache Software License 2.0",
     description="Provides training help & tools for PyTorch-based machine learning projects.",
     long_description="%s\n%s" % (
