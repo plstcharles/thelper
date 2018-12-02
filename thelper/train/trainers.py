@@ -521,10 +521,11 @@ class Trainer:
             if self.monitor is not None:
                 if monitor_val is None:
                     raise AssertionError("training/validation did not produce required monitoring variable '%s'" % self.monitor)
-                self.logger.info("epoch %d, %s = %s  (best = %s)" % (epoch, self.monitor, monitor_val, self.monitor_best))
+                if new_best:
+                    self.logger.info("epoch %d, monitored %s = %s  (new best value)" % (epoch, self.monitor, monitor_val))
+                else:
+                    self.logger.info("epoch %d, monitored %s = %s  (previous best = %s)" % (epoch, self.monitor, monitor_val, self.monitor_best))
             self.outputs[epoch] = result
-            if new_best:
-                self.logger.info("(new best checkpoint)")
             if new_best or (epoch % self.save_freq) == 0:
                 self.logger.info("saving checkpoint @ epoch %d" % epoch)
                 self._save(epoch, optimizer, save_best=new_best)
@@ -647,7 +648,9 @@ class Trainer:
 
     def _write_epoch_metrics(self, epoch, metrics, tbx_writer, output_path, prefix):
         """Writes the cumulative evaluation result of all metrics using a specific writer."""
-        self.logger.debug("writing epoch metrics")
+        self.logger.debug("writing epoch metrics to '%s'" % output_path)
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
         for metric_name, metric in metrics.items():
             if metric.is_scalar():
                 if tbx_writer is not None:
