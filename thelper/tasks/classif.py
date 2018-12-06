@@ -12,12 +12,12 @@ logger = logging.getLogger(__name__)
 
 
 class Classification(Task):
-    """Interface for input-to-label classification tasks.
+    """Interface for input labeling/classification tasks.
 
-    This specialization requests that the model provides prediction scores for each predefined
-    label (or class) given an input tensor. The label names are used here to help categorize
-    samples, and to assure that two tasks are only identical when their label counts and
-    ordering match.
+    This specialization requests that when given an input tensor, the trained model should
+    provide prediction scores for each predefined label (or class). The label names are used
+    here to help categorize samples, and to assure that two tasks are only identical when their
+    label counts and ordering match.
 
     Attributes:
         class_names: list of label (class) names to predict (each name should be a string).
@@ -27,7 +27,7 @@ class Classification(Task):
 
     .. seealso::
         | :class:`thelper.tasks.utils.Task`
-        | :class:`thelper.train.trainers.ImageClassifTrainer`
+        | :class:`thelper.train.classif.ImageClassifTrainer`
     """
 
     def __init__(self, class_names, input_key, label_key, meta_keys=None):
@@ -124,13 +124,9 @@ class Classification(Task):
         """
         if isinstance(other, Classification):
             # if both tasks are related to classification, gt keys and class names must match
-            return (self.get_input_key() == other.get_input_key() and (
-                # REALLY DIRTY HACK FOR CHECKPOINT BACKWARD COMPAT HERE, TO BE REMOVED ASAP @@@@@@
-                (hasattr(self, "label_key") and isinstance(self.label_key, str) and
-                 (other.get_gt_key() is None or self.label_key == other.get_gt_key())) or
-                # line below is ok, should be default check later on
-                (self.get_gt_key() is None or other.get_gt_key() is None or self.get_gt_key() == other.get_gt_key())
-            ) and all([cls in self.get_class_names() for cls in other.get_class_names()]))
+            return (self.get_input_key() == other.get_input_key() and
+                    (self.get_gt_key() is None or other.get_gt_key() is None or self.get_gt_key() == other.get_gt_key()) and
+                    all([cls in self.get_class_names() for cls in other.get_class_names()]))
         elif type(other) == Task:
             # if 'other' simply has no gt, compatibility rests on input key only
             return self.get_input_key() == other.get_input_key() and other.get_gt_key() is None
@@ -146,25 +142,18 @@ class Classification(Task):
             meta_keys = list(set(self.get_meta_keys() + other.get_meta_keys()))
             # cannot use set for class names, order needs to stay intact!
             class_names = self.get_class_names() + [name for name in other.get_class_names() if name not in self.get_class_names()]
-            return Classification(class_names, self.get_input_key(), self.get_gt_key(), meta_keys)
+            return Classification(class_names, self.get_input_key(), self.get_gt_key(), meta_keys=meta_keys)
         elif type(other) == Task:
             if not self.check_compat(other):
                 raise AssertionError("cannot create compatible task instance between:\n"
                                      "\tself: %s\n\tother: %s" % (str(self), str(other)))
             meta_keys = list(set(self.get_meta_keys() + other.get_meta_keys()))
-            return Classification(self.get_class_names(), self.get_input_key(), self.get_gt_key(), meta_keys)
+            return Classification(self.get_class_names(), self.get_input_key(), self.get_gt_key(), meta_keys=meta_keys)
         else:
             raise AssertionError("cannot combine task type '%s' with '%s'" % (str(other.__class__), str(self.__class__)))
 
     def __repr__(self):
-        """Creates a print-friendly representation of an abstract task.
-
-        Note that this representation might also be used to check the compatibility of tasks
-        without importing the whole framework. Therefore, it should contain all the necessary
-        information about the task. The name of the parameters herein should also match the
-        argument names given to the constructor in case we need to recreate a task object from
-        this string.
-        """
+        """Creates a print-friendly representation of a classification task."""
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + ": " + str({
             "class_names": self.get_class_names(),
             "input_key": self.get_input_key(),
