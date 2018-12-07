@@ -2,7 +2,7 @@
     "name": "example-segm-annot",
     "overwrite": true,
     "datasets": {
-        "bark_raw": {
+        "OUTPUT_FOLDER_NAME": {
             "type": "thelper.data.ImageDataset",
             "params": {
                 "root": "PATH_TO_IMAGE_FOLDER_TO_ANNOTATE"
