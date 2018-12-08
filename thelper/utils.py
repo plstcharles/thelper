@@ -4,6 +4,7 @@ This module only contains non-ML specific functions, i/o helpers,
 and matplotlib/pyplot drawing calls.
 """
 import copy
+import errno
 import glob
 import importlib
 import inspect
@@ -140,6 +141,61 @@ def load_checkpoint(ckpt,               # type: Union[AnyStr, io.FileIO]
         logger.warning("checkpoint version mismatch with current framework version (%s vs %s)" %
                        (thelper.__version__, ckptdata["version"]))
     return ckptdata
+
+
+def download_file(url, root, filename, md5=None):
+    """Downloads a file from a given URL to a local destination.
+
+    Args:
+        url: path to query for the file (query will be based on urllib).
+        root: destination folder where the file should be saved.
+        filename: destination name for the file.
+        md5: optional, for md5 integrity check.
+
+    Returns:
+        The path to the downloaded file.
+    """
+    # inspired from torchvision.datasets.utils.download_url; no dep check
+    from six.moves import urllib
+    root = os.path.expanduser(root)
+    fpath = os.path.join(root, filename)
+    try:
+        os.makedirs(root)
+    except OSError as e:
+        if e.errno == errno.EEXIST:
+            pass
+        else:
+            raise
+    if not os.path.isfile(fpath):
+        logger.info("Downloading %s to %s ..." % (url, fpath))
+        urllib.request.urlretrieve(url, fpath)
+    if md5 is not None:
+        import hashlib
+        md5o = hashlib.md5()
+        with open(fpath, 'rb') as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                md5o.update(chunk)
+        md5c = md5o.hexdigest()
+        if md5c != md5:
+            raise AssertionError("md5 check failed for '%s'" % fpath)
+    return fpath
+
+
+def extract_tar(filepath, root, flags="r:gz"):
+    """Extracts the content of a tar file to a specific location.
+
+    Args:
+        filepath: location of the tar archive.
+        root: where to extract the archive's content.
+        flags: extra flags passed to ``tarfile.open``.
+    """
+    import tarfile
+    cwd = os.getcwd()
+    tar = tarfile.open(filepath, flags)
+    os.chdir(root)
+    tar.extractall()
+    tar.close()
+    os.chdir(cwd)
 
 
 def resolve_import(fullname):
