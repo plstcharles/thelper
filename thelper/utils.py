@@ -169,6 +169,8 @@ def download_file(url, root, filename, md5=None):
     if not os.path.isfile(fpath):
         logger.info("Downloading %s to %s ..." % (url, fpath))
         urllib.request.urlretrieve(url, fpath, reporthook)
+        sys.stdout.write("\r")
+        sys.stdout.flush()
     if md5 is not None:
         import hashlib
         md5o = hashlib.md5()
@@ -214,6 +216,8 @@ def extract_tar(filepath, root, flags="r:gz"):
     tar.extractall()
     tar.close()
     os.chdir(cwd)
+    sys.stdout.write("\r")
+    sys.stdout.flush()
 
 
 def reporthook(count, block_size, total_size):
@@ -477,7 +481,7 @@ def query_yes_no(question, default=None, bypass=None):
     sys.stderr.flush()
     time.sleep(0.01)
     while True:
-        sys.stdout.write(question + prompt)
+        sys.stdout.write(question + prompt + "\n>> ")
         choice = input().lower()
         if default is not None and choice == "":
             if isinstance(default, str):
@@ -519,7 +523,7 @@ def query_string(question, choices=None, default=None, allow_empty=False, bypass
             msg += "\n\t(choices=%s)" % str(choices)
         if default is not None:
             msg += "\n\t(default=%s)" % default
-        sys.stdout.write(msg + "\n")
+        sys.stdout.write(msg + "\n>> ")
         answer = input()
         if answer == "":
             if default is not None:
