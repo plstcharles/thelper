@@ -168,7 +168,7 @@ def download_file(url, root, filename, md5=None):
             raise
     if not os.path.isfile(fpath):
         logger.info("Downloading %s to %s ..." % (url, fpath))
-        urllib.request.urlretrieve(url, fpath)
+        urllib.request.urlretrieve(url, fpath, reporthook)
     if md5 is not None:
         import hashlib
         md5o = hashlib.md5()
@@ -196,6 +196,21 @@ def extract_tar(filepath, root, flags="r:gz"):
     tar.extractall()
     tar.close()
     os.chdir(cwd)
+
+
+def reporthook(count, block_size, total_size):
+    """Report hook used to display a download progression bar when using urllib requests."""
+    global start_time
+    if count == 0:
+        start_time = time.time()
+        return
+    duration = time.time() - start_time
+    progress_size = int(count * block_size)
+    speed = str(int(progress_size / (1024 * duration))) if duration > 0 else "?"
+    percent = min(int(count * block_size * 100 / total_size), 100)
+    sys.stdout.write("\r\t=> %d%% (%d MB) @ %s KB/s" %
+                     (percent, progress_size / (1024 * 1024), speed))
+    sys.stdout.flush()
 
 
 def resolve_import(fullname):
