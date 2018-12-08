@@ -189,9 +189,27 @@ def extract_tar(filepath, root, flags="r:gz"):
         root: where to extract the archive's content.
         flags: extra flags passed to ``tarfile.open``.
     """
+    import io
     import tarfile
+
+    class _FileWrapper(io.FileIO):
+        def __init__(self, path, *args, **kwargs):
+            self.start_time = time.time()
+            self._size = os.path.getsize(path)
+            super().__init__(path, *args, **kwargs)
+
+        def read(self, *args, **kwargs):
+            duration = time.time() - self.start_time
+            progress_size = self.tell()
+            speed = str(int(progress_size / (1024 * duration))) if duration > 0 else "?"
+            percent = min(int(progress_size * 100 / self._size), 100)
+            sys.stdout.write("\r\t=> extracted %d%% (%d MB) @ %s KB/s..." %
+                             (percent, progress_size / (1024 * 1024), speed))
+            sys.stdout.flush()
+            return io.FileIO.read(self, *args, **kwargs)
+
     cwd = os.getcwd()
-    tar = tarfile.open(filepath, flags)
+    tar = tarfile.open(fileobj=_FileWrapper(filepath), mode=flags)
     os.chdir(root)
     tar.extractall()
     tar.close()
@@ -208,7 +226,7 @@ def reporthook(count, block_size, total_size):
     progress_size = int(count * block_size)
     speed = str(int(progress_size / (1024 * duration))) if duration > 0 else "?"
     percent = min(int(count * block_size * 100 / total_size), 100)
-    sys.stdout.write("\r\t=> %d%% (%d MB) @ %s KB/s" %
+    sys.stdout.write("\r\t=> downloaded %d%% (%d MB) @ %s KB/s..." %
                      (percent, progress_size / (1024 * 1024), speed))
     sys.stdout.flush()
 
