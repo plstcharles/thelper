@@ -122,45 +122,51 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
 def visualize_data(config):
     """Displays the images used in a training session.
 
-    This mode does not generate any output, and is only used to visualize the transformed images used
+    This mode does not generate any output, and is only used to visualize the (transformed) images used
     in a training session. This is useful to debug the data augmentation and base transformation pipelines
     and make sure the modified images are valid. It does not attempt to load a model or instantiate a
     trainer, meaning the related fields are not required inside ``config``.
 
+    If the configuration dictionary includes a 'loaders' field, it will be parsed and used. Otherwise,
+    if only a 'datasets' field is available, basic loaders will be instantiated to load the data.
+
     Args:
         config: a dictionary that provides all required data configuration parameters; see
             :func:`thelper.data.utils.create_loaders` for more information.
+
+    .. seealso::
+        | :func:`thelper.data.utils.create_loaders`
+        | :func:`thelper.data.utils.create_parsers`
     """
     logger = thelper.utils.get_func_logger()
     if "bypass_queries" in config and config["bypass_queries"]:
         logger.warning("cannot bypass queries in visualization mode")
     logger.info("creating visualization session...")
-    task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config)
-    if not isinstance(task, thelper.tasks.Classification):
-        raise AssertionError("missing impl, viz mode expects images + labels")
-    loader_map = {
-        "train": train_loader,
-        "valid": valid_loader,
-        "test": test_loader
-    }
-    choice = thelper.utils.query_string("Which loader would you like to visualize?", choices=list(loader_map.keys()), default="train")
-    loader = loader_map[choice]
-    if loader is None:
-        logger.info("loader is empty, all done")
-        return 0
-    batch_count = len(loader)
-    logger.info("initializing '%s' loader with %d batches..." % (choice, batch_count))
-    for batch_idx, samples in enumerate(loader):
-        logger.debug("at batch = %d / %d" % (batch_idx, batch_count))
-        if "idx" in samples:
-            indices = samples["idx"]
-            if isinstance(indices, torch.Tensor):
-                logger.debug("(indices = %s)" % indices.tolist())
-            else:
-                logger.debug("(indices = %s)" % indices)
-        thelper.utils.draw_sample(samples, image_key=task.get_input_key(), label_key=task.get_gt_key(), block=True)
-    logger.info("all done")
-    return 0
+    if thelper.utils.get_key_def(["data_config", "loaders"], config, default=None) is None:
+        logger.info("no dataloaders config found, will use basic instances for each dataset parser")
+        datasets, task = thelper.data.create_parsers(config)
+        loader_map = {dataset_name: torch.utils.data.DataLoader(dataset) for dataset_name, dataset in datasets.items()}
+    else:
+        task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config)
+        loader_map = {"train": train_loader, "valid": valid_loader, "test": test_loader}
+    while True:
+        choice = thelper.utils.query_string("Which loader would you like to visualize?", choices=list(loader_map.keys()))
+        loader = loader_map[choice]
+        if loader is None:
+            logger.info("loader '%s' is empty" % choice)
+            continue
+        batch_count = len(loader)
+        logger.info("initializing loader '%s' with %d batches..." % (choice, batch_count))
+        for batch_idx, samples in enumerate(loader):
+            logger.debug("at batch = %d / %d" % (batch_idx, batch_count))
+            if "idx" in samples:
+                indices = samples["idx"]
+                if isinstance(indices, torch.Tensor):
+                    logger.debug("(indices = %s)" % indices.tolist())
+                else:
+                    logger.debug("(indices = %s)" % indices)
+            thelper.utils.draw_sample(samples, image_key=task.get_input_key(), label_key=task.get_gt_key(), block=True)
+        logger.info("all done")
 
 
 def annotate_data(config, save_dir):
