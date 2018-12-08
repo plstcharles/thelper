@@ -41,7 +41,6 @@ class Dataset(torch.utils.data.Dataset):
     :func:`thelper.data.parsers.Dataset.get_task`, and store its samples as dictionaries in ``self.samples``.
 
     Attributes:
-        name: printable and key-compatible name of the dataset currently being instantiated.
         config: dictionary of extra parameters that are required by the dataset interface.
         transforms: function or object that should be applied to all loaded samples in order to
             return the data in the requested transformed/augmented state.
@@ -58,7 +57,7 @@ class Dataset(torch.utils.data.Dataset):
         | :class:`thelper.data.parsers.ExternalDataset`
     """
 
-    def __init__(self, name, config=None, transforms=None, bypass_deepcopy=False):
+    def __init__(self, config=None, transforms=None, bypass_deepcopy=False):
         """Dataset parser constructor.
 
         In order for derived datasets to be instantiated automatically be the framework from a
@@ -67,7 +66,6 @@ class Dataset(torch.utils.data.Dataset):
         a dictionary.
 
         Args:
-            name: printable and key-compatible name of the dataset currently being instantiated.
             config: dictionary of extra parameters that are required by the dataset interface.
             transforms: function or object that should be applied to all loaded samples in order to
                 return the data in the requested transformed/augmented state.
@@ -77,9 +75,6 @@ class Dataset(torch.utils.data.Dataset):
                 internal state or a buffer, it would cause problems in multi-threaded data loaders.
         """
         super().__init__()
-        if not name:
-            raise AssertionError("dataset name must not be empty (lookup might fail)")
-        self.name = name
         self.config = config
         self.transforms = transforms
         self.bypass_deepcopy = bypass_deepcopy  # will determine if we deepcopy in each loader
@@ -87,10 +82,7 @@ class Dataset(torch.utils.data.Dataset):
 
     def _get_derived_name(self):
         """Returns a pretty-print version of the derived class's name."""
-        dname = self.__class__.__module__ + "." + self.__class__.__qualname__
-        if self.name:
-            dname += "." + self.name
-        return dname
+        return self.__class__.__module__ + "." + self.__class__.__qualname__
 
     def __len__(self):
         """Returns the total number of samples available from this dataset interface."""
@@ -129,13 +121,13 @@ class ImageDataset(Dataset):
         | :class:`thelper.data.parsers.Dataset`
     """
 
-    def __init__(self, name, config=None, transforms=None, bypass_deepcopy=False):
+    def __init__(self, config=None, transforms=None, bypass_deepcopy=False):
         """Image dataset parser constructor.
 
         This baseline constructor matches the signature of :class:`thelper.data.parsers.Dataset`, and simply
         forwards its parameters.
         """
-        super().__init__(name, config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
+        super().__init__(config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
         self.root = thelper.utils.get_key("root", config)
         if self.root is None or not os.path.isdir(self.root):
             raise AssertionError("invalid input data root '%s'" % self.root)
@@ -186,7 +178,7 @@ class ClassificationDataset(Dataset):
         | :class:`thelper.data.parsers.Dataset`
     """
 
-    def __init__(self, name, class_names, input_key, label_key, meta_keys=None, config=None,
+    def __init__(self, class_names, input_key, label_key, meta_keys=None, config=None,
                  transforms=None, bypass_deepcopy=False):
         """Classification dataset parser constructor.
 
@@ -196,7 +188,6 @@ class ClassificationDataset(Dataset):
         a dictionary.
 
         Args:
-            name: printable and key-compatible name of the dataset currently being instantiated.
             class_names: list of all class names (or labels) that will be associated with the samples.
             input_key: key used to index the input data in the loaded samples.
             label_key: key used to index the label (or class name) in the loaded samples.
@@ -209,7 +200,7 @@ class ClassificationDataset(Dataset):
                 only use a shallow copy. This is false by default, as if the dataset parser contains an
                 internal state or a buffer, it would cause problems in multi-threaded data loaders.
         """
-        super().__init__(name, config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
+        super().__init__(config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
         self.task = thelper.tasks.Classification(class_names, input_key, label_key, meta_keys=meta_keys)
 
     @abstractmethod
@@ -237,7 +228,7 @@ class SegmentationDataset(Dataset):
         | :class:`thelper.data.parsers.Dataset`
     """
 
-    def __init__(self, name, class_names, input_key, label_map_key, meta_keys=None, dontcare=None,
+    def __init__(self, class_names, input_key, label_map_key, meta_keys=None, dontcare=None,
                  config=None, transforms=None, bypass_deepcopy=False):
         """Segmentation dataset parser constructor.
 
@@ -247,7 +238,6 @@ class SegmentationDataset(Dataset):
         a dictionary.
 
         Args:
-            name: printable and key-compatible name of the dataset currently being instantiated.
             class_names: list of all class names (or labels) that must be predicted in the image.
             input_key: key used to index the input image in the loaded samples.
             label_map_key: key used to index the label map in the loaded samples.
@@ -260,7 +250,7 @@ class SegmentationDataset(Dataset):
                 only use a shallow copy. This is false by default, as if the dataset parser contains an
                 internal state or a buffer, it would cause problems in multi-threaded data loaders.
         """
-        super().__init__(name, config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
+        super().__init__(config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
         self.task = thelper.tasks.Segmentation(class_names, input_key, label_map_key,
                                                meta_keys=meta_keys, dontcare=dontcare)
 
@@ -286,7 +276,7 @@ class ImageFolderDataset(ClassificationDataset):
         | :class:`thelper.data.parsers.ClassificationDataset`
     """
 
-    def __init__(self, name, config=None, transforms=None, bypass_deepcopy=False):
+    def __init__(self, config=None, transforms=None, bypass_deepcopy=False):
         """Image folder dataset parser constructor."""
         self.root = thelper.utils.get_key("root", config)
         if self.root is None or not os.path.isdir(self.root):
@@ -318,7 +308,7 @@ class ImageFolderDataset(ClassificationDataset):
         if not class_map:
             raise AssertionError("could not locate any subdir in '%s' with images to load" % self.root)
         meta_keys = [self.path_key, self.idx_key]
-        super().__init__(name, class_names=list(class_map.keys()), input_key=self.image_key,
+        super().__init__(class_names=list(class_map.keys()), input_key=self.image_key,
                          label_key=self.label_key, meta_keys=meta_keys, config=config,
                          transforms=transforms, bypass_deepcopy=bypass_deepcopy)
         self.samples = samples
@@ -367,11 +357,10 @@ class ExternalDataset(Dataset):
         | :class:`thelper.data.parsers.Dataset`
     """
 
-    def __init__(self, name, dataset_type, task, config=None, transforms=None, bypass_deepcopy=False):
+    def __init__(self, dataset_type, task, config=None, transforms=None, bypass_deepcopy=False):
         """External dataset parser constructor.
 
         Args:
-            name: printable and key-compatible name of the dataset currently being instantiated.
             dataset_type: fully qualified name of the dataset object to instantiate
             task: fully constructed task object providing key information for sample loading.
             config: dictionary of extra parameters that are required by the dataset interface.
@@ -382,8 +371,7 @@ class ExternalDataset(Dataset):
                 only use a shallow copy. This is false by default, as if the dataset parser contains an
                 internal state or a buffer, it would cause problems in multi-threaded data loaders.
         """
-        super().__init__(name, config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
-        logger.info("instantiating external dataset '%s'..." % name)
+        super().__init__(config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
         if not dataset_type or not hasattr(dataset_type, "__getitem__") or not hasattr(dataset_type, "__len__"):
             raise AssertionError("external dataset type must implement '__getitem__' and '__len__' methods")
         if task is None or not isinstance(task, thelper.tasks.Task):
@@ -396,10 +384,7 @@ class ExternalDataset(Dataset):
 
     def _get_derived_name(self):
         """Returns a pretty-print version of the external class's name."""
-        dname = self.dataset_type.__module__ + "." + self.dataset_type.__qualname__
-        if self.name:
-            dname += "." + self.name
-        return dname
+        return self.dataset_type.__module__ + "." + self.dataset_type.__qualname__
 
     def __getitem__(self, idx):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
@@ -435,10 +420,12 @@ class ExternalDataset(Dataset):
             # could add checks to see if the sample already behaves like a dict? todo
             raise AssertionError("no clue how to convert given data sample into dictionary")
         if warn_partial_transform and not self.warned_partial_transform:
-            logger.warning("blindly transforming sample parts for dataset '%s'; consider using a proper interface" % self.name)
+            logger.warning("blindly transforming sample parts for dataset '%s';"
+                           " consider using a proper interface" % self._get_derived_name())
             self.warned_partial_transform = True
         if warn_dictionary and not self.warned_dictionary:
-            logger.warning("dataset '%s' not returning samples as dictionaries; will blindly map elements to their indices" % self.name)
+            logger.warning("dataset '%s' not returning samples as dictionaries;"
+                           " will blindly map elements to their indices" % self._get_derived_name())
             self.warned_dictionary = True
         return out_sample
 
