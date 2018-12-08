@@ -177,7 +177,7 @@ class ClassificationDataset(Dataset):
     This specialization receives some extra parameters in its constructor and automatically defines
     its task (:class:`thelper.tasks.classif.Classification`) based on those. The derived class must still
     implement :func:`thelper.data.parsers.ClassificationDataset.__getitem__`, and it must still store its
-    samples as dictionaries in ``self.samples`` to obtain a proper implementation behavior.
+    samples as dictionaries in ``self.samples`` to behave properly.
 
     Attributes:
         task: classification task object containing the key information passed in the constructor.
@@ -190,7 +190,7 @@ class ClassificationDataset(Dataset):
                  transforms=None, bypass_deepcopy=False):
         """Classification dataset parser constructor.
 
-        In order for derived datasets to be instantiated automatically be the framework from a
+        In order for derived datasets to be instantiated automatically by the framework from a
         configuration file, the signature of their constructors should match the one shown here.
         This means all required extra parameters must be passed in the 'config' argument, which is
         a dictionary.
@@ -211,6 +211,58 @@ class ClassificationDataset(Dataset):
         """
         super().__init__(name, config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
         self.task = thelper.tasks.Classification(class_names, input_key, label_key, meta_keys=meta_keys)
+
+    @abstractmethod
+    def __getitem__(self, idx):
+        """Returns the data sample (a dictionary) for a specific (0-based) index."""
+        raise NotImplementedError
+
+    def get_task(self):
+        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
+        return self.task
+
+
+class SegmentationDataset(Dataset):
+    """Segmentation dataset specialization interface.
+
+    This specialization receives some extra parameters in its constructor and automatically defines
+    its task (:class:`thelper.tasks.segm.Segmentation`) based on those. The derived class must still
+    implement :func:`thelper.data.parsers.SegmentationDataset.__getitem__`, and it must still store its
+    samples as dictionaries in ``self.samples`` to behave properly.
+
+    Attributes:
+        task: segmentation task object containing the key information passed in the constructor.
+
+    .. seealso::
+        | :class:`thelper.data.parsers.Dataset`
+    """
+
+    def __init__(self, name, class_names, input_key, label_map_key, meta_keys=None, dontcare=None,
+                 config=None, transforms=None, bypass_deepcopy=False):
+        """Segmentation dataset parser constructor.
+
+        In order for derived datasets to be instantiated automatically by the framework from a
+        configuration file, the signature of their constructors should match the one shown here.
+        This means all required extra parameters must be passed in the 'config' argument, which is
+        a dictionary.
+
+        Args:
+            name: printable and key-compatible name of the dataset currently being instantiated.
+            class_names: list of all class names (or labels) that must be predicted in the image.
+            input_key: key used to index the input image in the loaded samples.
+            label_map_key: key used to index the label map in the loaded samples.
+            meta_keys: list of extra keys that will be available in the loaded samples.
+            config: dictionary of extra parameters that are required by the dataset interface.
+            transforms: function or object that should be applied to all loaded samples in order to
+                return the data in the requested transformed/augmented state.
+            bypass_deepcopy: specifies whether this dataset interface can avoid the (possibly costly)
+                deep copy inside :func:`thelper.data.utils._LoaderFactory.create_loaders`, and instead
+                only use a shallow copy. This is false by default, as if the dataset parser contains an
+                internal state or a buffer, it would cause problems in multi-threaded data loaders.
+        """
+        super().__init__(name, config=config, transforms=transforms, bypass_deepcopy=bypass_deepcopy)
+        self.task = thelper.tasks.Segmentation(class_names, input_key, label_map_key,
+                                               meta_keys=meta_keys, dontcare=dontcare)
 
     @abstractmethod
     def __getitem__(self, idx):
