@@ -197,19 +197,7 @@ def create_loaders(config, save_dir=None):
     loaders_config = thelper.utils.get_key(["data_config", "loaders"], config)
     # noinspection PyProtectedMember
     loader_factory = thelper.data.utils._LoaderFactory(loaders_config)
-    logger.debug("parsing datasets configuration")
-    if "datasets" not in config or not config["datasets"]:
-        raise AssertionError("config missing 'datasets' field (can be dict or str)")
-    datasets_config = config["datasets"]
-    if isinstance(datasets_config, str):
-        if os.path.isfile(datasets_config) and os.path.splitext(datasets_config)[1] == ".json":
-            datasets_config = json.load(open(datasets_config))
-        else:
-            raise AssertionError("'datasets' string should point to valid json file")
-    logger.debug("loading datasets templates")
-    if not isinstance(datasets_config, dict):
-        raise AssertionError("invalid datasets config type")
-    datasets, task = create_parsers(datasets_config, loader_factory.get_base_transforms())
+    datasets, task = create_parsers(config, loader_factory.get_base_transforms())
     if not datasets or task is None:
         raise AssertionError("invalid dataset configuration (got empty list)")
     for dataset_name, dataset in datasets.items():
@@ -301,12 +289,15 @@ def create_parsers(config, base_transforms=None):
     all the information related to sample dictionary keys and model i/o. An example configuration is provided
     in :func:`thelper.data.utils.create_parsers`.
 
-    The keys in ``config`` are treated as unique dataset names and are used for lookups. The value associated
-    to each key (or dataset name) should be a type-params dictionary that can be parsed to instantiate the
-    dataset interface.
+    The provided configuration will be parsed for a 'datasets' dictionary entry. The keys in this dictionary
+    are treated as unique dataset names and are used for lookups. The value associated to each key (or dataset
+    name) should be a type-params dictionary that can be parsed to instantiate the dataset interface.
+
+    An example configuration dictionary is given in :func:`thelper.data.utils.create_loaders`.
 
     Args:
-        config: a dictionary that provides unique dataset names and parameters needed for instantiation.
+        config: a dictionary that provides unique dataset names and parameters needed for instantiation under
+            the 'datasets' field.
         base_transforms: the transform operation that should be applied to all loaded samples, and that
             will be provided to the constructor of all instantiated dataset parsers.
 
@@ -320,6 +311,19 @@ def create_parsers(config, base_transforms=None):
         | :class:`thelper.data.parsers.ExternalDataset`
         | :class:`thelper.tasks.utils.Task`
     """
+    if not isinstance(config, dict):
+        raise AssertionError("unexpected session config type")
+    if "datasets" not in config or not config["datasets"]:
+        raise AssertionError("config missing 'datasets' field (must contain dict or str value)")
+    config = config["datasets"]  # no need to keep the full config here
+    if isinstance(config, str):
+        if os.path.isfile(config) and os.path.splitext(config)[1] == ".json":
+            config = json.load(open(config))
+        else:
+            raise AssertionError("'datasets' string should point to valid json file")
+    logger.debug("loading datasets templates")
+    if not isinstance(config, dict):
+        raise AssertionError("invalid datasets config type (must be dictionary)")
     datasets = {}
     tasks = []
     for dataset_name, dataset_config in config.items():

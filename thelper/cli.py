@@ -188,19 +188,7 @@ def annotate_data(config, save_dir):
     logger.info("creating annotation session '%s'..." % session_name)
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
     logger.debug("session will be saved at '%s'" % save_dir)
-    logger.info("parsing datasets configuration")
-    if "datasets" not in config or not config["datasets"]:
-        raise AssertionError("config missing 'datasets' field (can be dict or str)")
-    datasets_config = config["datasets"]
-    if isinstance(datasets_config, str):
-        if os.path.isfile(datasets_config) and os.path.splitext(datasets_config)[1] == ".json":
-            datasets_config = json.load(open(datasets_config))
-        else:
-            raise AssertionError("'datasets' string should point to valid json file")
-    logger.debug("loading datasets templates")
-    if not isinstance(datasets_config, dict):
-        raise AssertionError("invalid datasets config type")
-    datasets, _ = thelper.data.create_parsers(datasets_config)
+    datasets, _ = thelper.data.create_parsers(config)
     annotator = thelper.gui.create_annotator(session_name, save_dir, config, datasets)
     logger.debug("starting annotator")
     annotator.run()
