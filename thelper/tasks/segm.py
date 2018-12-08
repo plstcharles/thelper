@@ -59,10 +59,15 @@ class Segmentation(Task):
             raise AssertionError("should have at least one class!")
         if len(self.class_map) != len(set(self.class_map)):
             raise AssertionError("class set should not contain duplicates")
-        if "dontcare" in self.class_map:
+        if "dontcare" in self.class_map and dontcare is None:
             raise AssertionError("'dontcare' class name is reserved")
-        if dontcare is not None and not isinstance(dontcare, (int, float)):
-            raise AssertionError("'dontcare' value should be int or float")
+        if dontcare is not None:
+            if not isinstance(dontcare, (int, float)):
+                raise AssertionError("'dontcare' value should be int or float")
+            if "dontcare" in self.class_map and dontcare != self.class_map["dontcare"]:
+                raise AssertionError("'dontcare' value mismatch with pre-existing class map")
+            elif "dontcare" not in self.class_map and any([dontcare == val for val in self.class_map.values()]):
+                raise AssertionError("'dontcare' value matches a pre-existing class name that is not 'dontcare'")
         self.dontcare = dontcare
 
     def get_class_names(self):
