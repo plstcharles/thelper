@@ -108,6 +108,7 @@ class Task(object):
 
     .. seealso::
         | :class:`thelper.tasks.classif.Classification`
+        | :class:`thelper.tasks.segm.Segmentation`
     """
 
     def __init__(self, input_key, gt_key=None, meta_keys=None):
