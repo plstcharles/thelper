@@ -993,6 +993,20 @@ def draw_bboxes(image, rects, labels=None, confidences=None, win_size=None, thic
     return display_image
 
 
+def get_label_color_mapping(idx):
+    """Returns the PASCAL VOC color triplet for a given label index."""
+    # https://gist.github.com/wllhf/a4533e0adebe57e3ed06d4b50c8419ae
+    def bitget(byteval, ch):
+        return (byteval & (1 << ch)) != 0
+    r = g = b = 0
+    for j in range(8):
+        r = r | (bitget(idx, 0) << 7 - j)
+        g = g | (bitget(idx, 1) << 7 - j)
+        b = b | (bitget(idx, 2) << 7 - j)
+        idx = idx >> 3
+    return np.array([r, g, b], dtype=np.uint8)
+
+
 def apply_color_map(image, colormap, dst=None):
     """Applies a color map to an image of 8-bit color indices; works similarly to cv2.applyColorMap (v3.3.1)."""
     if not isinstance(image, np.ndarray) or image.ndim != 2 or image.dtype != np.uint8:
