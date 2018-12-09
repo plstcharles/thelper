@@ -1,0 +1,16 @@
+{
+    "name": "example-segm-viz",
+    "datasets": {
+        "pascalvoc": {
+            "type": "thelper.data.PASCALVOC",
+            "params": {
+                "root": "data/pascalvoc",
+                "task": "segm",
+                "subset": "trainval",
+                "download": true,
+                "preload": false
+            }
+        }
+    },
+    "viz_block": false
+}
