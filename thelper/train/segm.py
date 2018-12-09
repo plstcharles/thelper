@@ -56,9 +56,9 @@ class ImageSegmTrainer(Trainer):
             label_map = sample[self.label_map_key]
             if isinstance(label_map, list):
                 for idx in range(len(label_map)):
-                    label_map[idx] = torch.LongTensor(label_map[idx])
+                    label_map[idx] = torch.ByteTensor(label_map[idx])
             else:
-                label_map = torch.LongTensor(label_map)
+                label_map = torch.ByteTensor(label_map)
         return input, label_map
 
     def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, writer=None):
@@ -108,7 +108,7 @@ class ImageSegmTrainer(Trainer):
                 augs_count = len(input)
                 for aug_idx in range(augs_count):
                     aug_pred = model(self._upload_tensor(input[aug_idx], dev))
-                    aug_loss = loss(aug_pred, label_map[aug_idx])
+                    aug_loss = loss(aug_pred, label_map[aug_idx].long())
                     aug_loss.backward()  # test backprop all at once? @@@
                     if iter_pred is None:
                         iter_loss = aug_loss.clone().detach()
@@ -122,7 +122,8 @@ class ImageSegmTrainer(Trainer):
                 iter_loss /= augs_count
             else:
                 iter_pred = model(self._upload_tensor(input, dev))
-                iter_loss = loss(iter_pred, label_map)
+                # todo: find a more efficient way to compute loss w/ byte vals directly?
+                iter_loss = loss(iter_pred, label_map.long())
                 iter_loss.backward()
                 if metrics:
                     for metric in metrics.values():
