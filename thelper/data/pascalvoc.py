@@ -219,18 +219,23 @@ class PASCALVOC(Dataset):
 
     def __getitem__(self, idx):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
-        if self.preload:
-            return self.samples[idx]
         sample = self.samples[idx]
-        image = cv.imread(sample[self.image_path_key])
-        if image is None:
-            raise AssertionError("could not load image '%s' via opencv" % sample[self.image_path_key])
-        gt = None
-        if self.task_name == "segm":
-            gt = cv.imread(sample[self.gt_path_key])
-            if gt is None or gt.shape != image.shape:
-                raise AssertionError("unexpected gt shape for sample '%s'" % sample[self.sample_name_key])
-            gt = self.encode_label_map(gt)
+        if not self.preload:
+            image = cv.imread(sample[self.image_path_key])
+            if image is None:
+                raise AssertionError("could not load image '%s' via opencv" % sample[self.image_path_key])
+            gt = None
+            if self.task_name == "segm":
+                gt = cv.imread(sample[self.gt_path_key])
+                if gt is None or gt.shape != image.shape:
+                    raise AssertionError("unexpected gt shape for sample '%s'" % sample[self.sample_name_key])
+                gt = self.encode_label_map(gt)
+        else:
+            image = sample[self.image_key]
+            gt = sample[self.gt_key]
+        if self.transforms:
+            image = self.transforms(image)
+            # TODO : gt maps are not currently transformed! (need refact w/ dict keys)
         return {
             self.sample_name_key: sample[self.sample_name_key],
             self.image_path_key: sample[self.image_path_key],
