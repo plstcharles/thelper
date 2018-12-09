@@ -146,9 +146,12 @@ class PASCALVOC(Dataset):
         action = "preloading" if self.preload else "initializing"
         logger.info("%s pascal voc dataset for task='%s' and set='%s'..." % (action, self.task_name, subset))
         self.samples = []
-        try:
-            from tqdm import tqdm
-        except ImportError:
+        if self.preload:
+            try:
+                from tqdm import tqdm
+            except ImportError:
+                def tqdm(x): return x
+        else:
             def tqdm(x): return x
         for sample_name in tqdm(sample_names):
             annotation_file_path = os.path.join(dataset_path, "Annotations", sample_name + ".xml")
