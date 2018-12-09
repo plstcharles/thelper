@@ -9,6 +9,7 @@ for dataset parsers.
 import logging
 
 import thelper.data.parsers  # noqa: F401
+import thelper.data.pascalvoc  # noqa: F401
 import thelper.data.samplers  # noqa: F401
 import thelper.data.utils  # noqa: F401
 from thelper.data.parsers import ClassificationDataset  # noqa: F401
@@ -16,6 +17,7 @@ from thelper.data.parsers import Dataset  # noqa: F401
 from thelper.data.parsers import ExternalDataset  # noqa: F401
 from thelper.data.parsers import ImageDataset  # noqa: F401
 from thelper.data.parsers import ImageFolderDataset  # noqa: F401
+from thelper.data.pascalvoc import PASCALVOC  # noqa: F401
 from thelper.data.samplers import WeightedSubsetRandomSampler  # noqa: F401
 from thelper.data.utils import create_loaders  # noqa: F401
 from thelper.data.utils import create_parsers  # noqa: F401
