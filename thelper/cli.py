@@ -128,7 +128,10 @@ def visualize_data(config):
     trainer, meaning the related fields are not required inside ``config``.
 
     If the configuration dictionary includes a 'loaders' field, it will be parsed and used. Otherwise,
-    if only a 'datasets' field is available, basic loaders will be instantiated to load the data.
+    if only a 'datasets' field is available, basic loaders will be instantiated to load the data. The
+    'loaders' field can also be ignored if 'viz_ignore_loaders' is found within the config and set
+    to ``True``. Each minibatch will be displayed via pyplot. The display will block and wait for user
+    input, unless 'viz_block' is found within the config and set to ``False``.
 
     Args:
         config: a dictionary that provides all required data configuration parameters; see
@@ -138,17 +141,26 @@ def visualize_data(config):
         | :func:`thelper.data.utils.create_loaders`
         | :func:`thelper.data.utils.create_parsers`
     """
+    # todo: move all 'viz' miniconfig stuff to its own section in the config file?
     logger = thelper.utils.get_func_logger()
     if "bypass_queries" in config and config["bypass_queries"]:
         logger.warning("cannot bypass queries in visualization mode")
     logger.info("creating visualization session...")
-    if thelper.utils.get_key_def(["data_config", "loaders"], config, default=None) is None:
-        logger.info("no dataloaders config found, will use basic instances for each dataset parser")
+    ignore_loaders = thelper.utils.get_key_def("viz_ignore_loaders", config, default=False)
+    if thelper.utils.get_key_def(["data_config", "loaders"], config, default=None) is None or ignore_loaders:
         datasets, task = thelper.data.create_parsers(config)
-        loader_map = {dataset_name: torch.utils.data.DataLoader(dataset) for dataset_name, dataset in datasets.items()}
+        loader_map = {dataset_name: torch.utils.data.DataLoader(dataset,) for dataset_name, dataset in datasets.items()}
+        # we assume no transforms were done in the parser, and images are given as read by opencv
+        ch_transpose = False
+        flip_bgr = True
     else:
         task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config)
         loader_map = {"train": train_loader, "valid": valid_loader, "test": test_loader}
+        # we assume transforms were done in the loader, and images are given as expected by pytorch
+        ch_transpose = True
+        flip_bgr = False
+    redraw = None
+    block = thelper.utils.get_key_def("viz_block", config, default=True)
     while True:
         choice = thelper.utils.query_string("Which loader would you like to visualize?", choices=list(loader_map.keys()))
         loader = loader_map[choice]
@@ -165,7 +177,10 @@ def visualize_data(config):
                     logger.debug("(indices = %s)" % indices.tolist())
                 else:
                     logger.debug("(indices = %s)" % indices)
-            thelper.utils.draw_sample(samples, image_key=task.get_input_key(), label_key=task.get_gt_key(), block=True)
+            fig, axes = thelper.utils.draw_minibatch(samples, task, ch_transpose=ch_transpose,
+                                                     flip_bgr=flip_bgr, block=block, redraw=redraw)
+            if not block:
+                redraw = [fig, axes]
         logger.info("all done")
 
 
