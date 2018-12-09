@@ -673,6 +673,19 @@ def get_bgr_from_hsl(hue, sat, light):
             int(np.clip(round(h2rgb(p, q, h + 1 / 3) * 255), 0, 255)))
 
 
+def get_displayable_image(image):
+    """Returns a 'displayable' image that has been normalized and padded to three channels."""
+    if image.ndim != 3:
+        raise AssertionError("indexing should return a pre-squeezed array")
+    if image.shape[2] == 2:
+        image = np.dstack((image, image[:, :, 0]))
+    elif image.shape[2] > 3:
+        image = image[..., :3]
+    image_normalized = np.empty_like(image, dtype=np.uint8).copy()  # copy needed here due to ocv 3.3 bug
+    cv.normalize(image, image_normalized, 0, 255, cv.NORM_MINMAX, dtype=cv.CV_8U)
+    return image_normalized
+
+
 def draw_histogram(data, bins=50, xlabel="", ylabel="Proportion"):
     """Draws and returns a histogram figure using pyplot."""
     fig, ax = plt.subplots()
