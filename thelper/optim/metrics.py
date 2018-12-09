@@ -195,10 +195,10 @@ class CategoryAccuracy(Metric):
         """
         if gt is None:
             return  # only accumulating results when groundtruth available
-        top_k = pred.topk(self.top_k, 1)[1]
-        true_k = gt.view(len(gt), 1).expand_as(top_k)
-        self.correct.append(top_k.eq(true_k).float().sum().item())
-        self.total.append(len(pred))
+        top_k = pred.topk(self.top_k, 1)[1].view(pred.shape[0], self.top_k, -1)
+        true_k = gt.view(len(gt), -1).expand_as(top_k)
+        self.correct.append(top_k.long().eq(true_k.long()).float().sum().item())
+        self.total.append(pred.numel())
         if self.max_accum and len(self.correct) > self.max_accum:
             self.correct.popleft()
             self.total.popleft()
