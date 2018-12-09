@@ -399,7 +399,11 @@ class ExternalDataset(Dataset):
             out_sample_list = []
             for idx, subs in enumerate(sample):
                 if isinstance(subs, (np.ndarray, PIL.Image.Image, torch.Tensor)):
-                    out_sample_list.append(self.transforms(subs) if self.transforms else subs)
+                    if self.transforms:
+                        subs = self.transforms(subs)
+                    if isinstance(subs, PIL.Image.Image):
+                        subs = np.array(subs)
+                    out_sample_list.append(subs)
                 else:
                     out_sample_list.append(subs)  # don't transform it, it will probably fail
                     warn_partial_transform = bool(self.transforms)
@@ -409,7 +413,11 @@ class ExternalDataset(Dataset):
             out_sample = {}
             for key, subs in sample.keys():
                 if isinstance(subs, (np.ndarray, PIL.Image.Image, torch.Tensor)):
-                    out_sample[key] = self.transforms(subs) if self.transforms else subs
+                    if self.transforms:
+                        subs = self.transforms(subs)
+                    if isinstance(subs, PIL.Image.Image):
+                        subs = np.array(subs)
+                    out_sample[key] = subs
                 else:
                     out_sample[key] = subs  # don't transform it, it will probably fail
                     warn_partial_transform = bool(self.transforms)
