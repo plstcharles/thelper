@@ -29,16 +29,19 @@ class Segmentation(Task):
         input_key: the key used to fetch input tensors from a sample dictionary.
         label_map_key: the key used to fetch label (class) maps from a sample dictionary.
         meta_keys: the list of extra keys provided by the data parser inside each sample.
+        color_map: map of class name-color pairs to use when displaying results.
 
     .. seealso::
         | :class:`thelper.tasks.utils.Task`
         | :class:`thelper.train.segm.ImageSegmTrainer`
     """
 
-    def __init__(self, class_names, input_key, label_map_key, meta_keys=None, dontcare=None):
+    def __init__(self, class_names, input_key, label_map_key,
+                 meta_keys=None, dontcare=None, color_map=None):
         """Receives and stores the class (or label) names to predict, the input tensor key,
         the groundtruth label (class) map key, the extra (meta) keys produced by the dataset
-        parser(s), and the 'dontcare' label value that might be present in gt maps (if any).
+        parser(s), the 'dontcare' label value that might be present in gt maps (if any), and
+        the color map used to swap label indices for colors when displaying results.
 
         The class names can be provided as a list of strings, as a path to a json file that
         contains such a list, or as a map of predefined name-value pairs to use in gt maps.
@@ -69,6 +72,19 @@ class Segmentation(Task):
             elif "dontcare" not in self.class_map and any([dontcare == val for val in self.class_map.values()]):
                 raise AssertionError("'dontcare' value matches a pre-existing class name that is not 'dontcare'")
         self.dontcare = dontcare
+        self.color_map = None
+        if color_map is not None:
+            if not isinstance(color_map, dict):
+                raise AssertionError("color map should be given as dictionary")
+            self.color_map = {}
+            for key, val in color_map.items():
+                if key not in self.class_map and key != "dontcare":
+                    raise AssertionError("unknown color map entry '%s'" % key)
+                if isinstance(val, (list, tuple)):
+                    val = np.ndarray(val)
+                if not isinstance(val, np.ndarray) or val.size != 3:
+                    raise AssertionError("color values should be given as triplets")
+                self.color_map[key] = val
 
     def get_class_names(self):
         """Returns the list of class names to be predicted by the model."""
@@ -119,6 +135,10 @@ class Segmentation(Task):
     def get_dontcare_val(self):
         """Returns the 'dontcare' label value for this segmentation task (can be ``None``)."""
         return self.dontcare
+
+    def get_color_map(self):
+        """Returns the color map used to swap label indices for colors when displaying results."""
+        return self.color_map
 
     def check_compat(self, other):
         """Returns whether the current task is compatible with the provided one or not."""
