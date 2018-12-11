@@ -12,6 +12,7 @@ import json
 import logging
 import math
 import os
+import io
 import platform
 import re
 import sys
@@ -20,9 +21,12 @@ import time
 import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
+# noinspection PyPackageRequirements
 import PIL.Image
 import sklearn.metrics
 import torch
+
+from typing import Any, AnyStr, Callable, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +43,7 @@ class Struct(object):
 
 
 def get_available_cuda_devices(attempts_per_device=5):
+    # type: (Optional[int]) -> List[int]
     """
     Tests all visible cuda devices and returns a list of available ones.
 
@@ -57,6 +62,7 @@ def get_available_cuda_devices(attempts_per_device=5):
                     logger.debug("testing availability of cuda device #%d (%s)" % (
                         device_id, torch.cuda.get_device_name(device_id)
                     ))
+                # noinspection PyBroadException
                 try:
                     torch.cuda.set_device(device_id)
                     test_val = torch.cuda.FloatTensor([1])
@@ -92,7 +98,9 @@ def setup_cudnn(config):
             torch.backends.cudnn.deterministic = cudnn_deterministic_flag
 
 
-def load_checkpoint(ckpt, map_location=None):
+def load_checkpoint(ckpt,               # type: Union[AnyStr, io.FileIO]
+                    map_location=None,  # type: Optional[Union[Callable, AnyStr, Dict[AnyStr, AnyStr]]]
+                    ):                  # type: (...) -> Dict[AnyStr, Any]
     """Loads a session checkpoint via PyTorch, check its compatibility, and returns its data.
 
     Args:
@@ -103,6 +111,10 @@ def load_checkpoint(ckpt, map_location=None):
     Returns:
         Content of the checkpoint (a dictionary).
     """
+
+    if not map_location and not get_available_cuda_devices():
+        map_location = 'cpu'
+
     ckptdata = torch.load(ckpt, map_location=map_location)
     if not isinstance(ckptdata, dict):
         raise AssertionError("unexpected checkpoint data type")
@@ -112,17 +124,20 @@ def load_checkpoint(ckpt, map_location=None):
         raise AssertionError("unexpected checkpoint version formatting")
     # by default, checkpoints should be from the same minor version, we warn otherwise
     import thelper
-    vers = [thelper.__version__.split("."), ckptdata["version"].split(".")]
-    if vers[0][0] != vers[1][0]:
-        raise AssertionError("incompatible checkpoint, major version mismatch (%s vs %s)" % (thelper.__version__, ckptdata["version"]))
-    if vers[0][1] != vers[1][1]:
+    versions = [thelper.__version__.split("."), ckptdata["version"].split(".")]
+
+    if versions[0][0] != versions[1][0]:
+        raise AssertionError("incompatible checkpoint, major version mismatch (%s vs %s)" %
+                             (thelper.__version__, ckptdata["version"]))
+    if versions[0][1] != versions[1][1]:
         answer = query_yes_no("Checkpoint minor version mismatch (%s vs %s); do you want to "
                               "attempt to load it anyway?" % (thelper.__version__, ckptdata["version"]))
         if not answer:
             logger.error("checkpoint out-of-date; user aborted")
             sys.exit(1)
-    if vers[0] != vers[1]:
-        logger.warning("checkpoint version mismatch with current framework version (%s vs %s)" % (thelper.__version__, ckptdata["version"]))
+    if versions[0] != versions[1]:
+        logger.warning("checkpoint version mismatch with current framework version (%s vs %s)" %
+                       (thelper.__version__, ckptdata["version"]))
     return ckptdata
 
 
@@ -136,9 +151,9 @@ def import_class(fullname):
     Returns:
         The imported class.
     """
-    modulename, classname = fullname.rsplit('.', 1)
-    module = importlib.import_module(modulename)
-    return getattr(module, classname)
+    module_name, class_name = fullname.rsplit('.', 1)
+    module = importlib.import_module(module_name)
+    return getattr(module, class_name)
 
 
 def get_class_logger(skip=0):
@@ -164,32 +179,33 @@ def get_caller_name(skip=2):
     """
 
     def stack_(frame):
-        framelist = []
+        frame_list = []
         while frame:
-            framelist.append(frame)
+            frame_list.append(frame)
             frame = frame.f_back
-        return framelist
+        return frame_list
 
+    # noinspection PyProtectedMember
     stack = stack_(sys._getframe(1))
     start = 0 + skip
     if len(stack) < start + 1:
         return ""
-    parentframe = stack[start]
+    parent_frame = stack[start]
     name = []
-    module = inspect.getmodule(parentframe)
+    module = inspect.getmodule(parent_frame)
     # `modname` can be None when frame is executed directly in console
     if module:
         name.append(module.__name__)
-    # detect classname
-    if "self" in parentframe.f_locals:
+    # detect class name
+    if "self" in parent_frame.f_locals:
         # I don't know any way to detect call from the object method
         # XXX: there seems to be no way to detect static method call - it will
         #      be just a function call
-        name.append(parentframe.f_locals["self"].__class__.__name__)
-    codename = parentframe.f_code.co_name
+        name.append(parent_frame.f_locals["self"].__class__.__name__)
+    codename = parent_frame.f_code.co_name
     if codename != "<module>":  # top level usually
         name.append(codename)  # function or a method
-    del parentframe
+    del parent_frame
     return ".".join(name)
 
 
@@ -262,6 +278,7 @@ def get_env_list():
     """
     try:
         import pip
+        # noinspection PyUnresolvedReferences
         pkgs = pip.get_installed_distributions()
         return sorted(["%s %s" % (pkg.key, pkg.version) for pkg in pkgs])
     except (ImportError, AttributeError):
@@ -406,7 +423,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
     Returns:
         The path to the created save directory for this session.
     """
-    logger = get_func_logger()
+    func_logger = get_func_logger()
     save_dir = out_root
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -432,12 +449,14 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
             if os.path.exists(config_backup_path):
                 config_backup = json.load(open(config_backup_path, "r"))
                 if config_backup != config:
-                    query_msg = "Config backup in '%s' differs from config loaded through checkpoint; overwrite?" % config_backup_path
+                    query_msg = "Config backup in '%s' differs from config loaded through checkpoint; overwrite?" \
+                                % config_backup_path
                     answer = query_yes_no(query_msg)
                     if answer:
-                        logger.warning("config mismatch with previous run; will overwrite latest backup in save directory")
+                        func_logger.warning("config mismatch with previous run; "
+                                            "will overwrite latest backup in save directory")
                     else:
-                        logger.error("config mismatch with previous run; user aborted")
+                        func_logger.error("config mismatch with previous run; user aborted")
                         sys.exit(1)
             with open(config_backup_path, "w") as fd:
                 json.dump(config, fd, indent=4, sort_keys=False)
@@ -499,18 +518,18 @@ def get_bgr_from_hsl(hue, sat, light):
     if light == 1:
         return 255, 255, 255
 
-    def h2rgb(p, q, t):
-        if t < 0:
-            t += 1
-        if t > 1:
-            t -= 1
-        if t < 1 / 6:
-            return p + (q - p) * 6 * t
-        if t < 1 / 2:
-            return q
-        if t < 2 / 3:
-            return p + (q - p) * (2 / 3 - t) * 6
-        return p
+    def h2rgb(_p, _q, _t):
+        if _t < 0:
+            _t += 1
+        if _t > 1:
+            _t -= 1
+        if _t < 1 / 6:
+            return _p + (_q - _p) * 6 * _t
+        if _t < 1 / 2:
+            return _q
+        if _t < 2 / 3:
+            return _p + (_q - _p) * (2 / 3 - _t) * 6
+        return _p
 
     q = light * (1 + sat) if (light < 0.5) else light + sat - light*sat
     p = 2 * light - q
@@ -549,7 +568,11 @@ def draw_popbars(labels, counts, xlabel="", ylabel="Pop. Count"):
     return fig
 
 
-def draw_classifs(images, labels_gt, labels_pred=None, labels_map=None):
+def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarray]
+                  labels_gt=None,       # type: Optional[List[AnyStr]]
+                  labels_pred=None,     # type: Optional[List[AnyStr]]
+                  labels_map=None,      # type: Optional[Dict[AnyStr, AnyStr]]
+                  ):                    # type: (...) -> Union[plt.Figure, None]
     """Draws and returns a figure of classification results using pyplot."""
     nb_imgs = len(images) if isinstance(images, list) else images.shape[images.ndim - 1]
     if nb_imgs < 1:
@@ -557,7 +580,7 @@ def draw_classifs(images, labels_gt, labels_pred=None, labels_map=None):
     grid_size_x = int(math.ceil(math.sqrt(nb_imgs)))
     grid_size_y = int(math.ceil(nb_imgs / grid_size_x))
     if grid_size_x * grid_size_y < nb_imgs:
-        raise AssertionError("bad gridding for subplots")
+        raise AssertionError("bad griding for subplots")
     fig, axes = plt.subplots(grid_size_y, grid_size_x)
     plt.tight_layout()
     if nb_imgs == 1:
@@ -598,7 +621,8 @@ def draw_sample(sample, preds=None, image_key="image", label_key="label", mask_k
              (isinstance(sample[key1], list) or (isinstance(sample[key1], torch.Tensor) and sample[key1].dim() == 1)):
             image_key, label_key = key2, key1
         else:
-            raise AssertionError("missing classification-related fields in sample dict, and could not find proper default types")
+            raise AssertionError("missing classification-related fields in sample dict, "
+                                 "and could not find proper default types")
     if image_key not in sample:
         raise AssertionError("images not available in sample via key '%s'" % image_key)
     images = sample[image_key]
@@ -622,12 +646,13 @@ def draw_sample(sample, preds=None, image_key="image", label_key="label", mask_k
             raise AssertionError("image shape mismatch throughout list")
         if labels:
             if not all([image.shape[0] == len(labels) for image in images]):
-                raise AssertionError("image count mistmatch with label count")
+                raise AssertionError("image count mismatch with label count")
             labels = labels * len(images)
         if preds:
             if not all([image.shape[0] == len(preds) for image in images]):
-                raise AssertionError("image count mistmatch with pred count")
+                raise AssertionError("image count mismatch with pred count")
             preds = preds * len(images)
+        # noinspection PyUnresolvedReferences
         images = torch.cat(images, 0)
     if not isinstance(images, torch.Tensor):
         raise AssertionError("expected classification images to be in 4-d tensor format")
@@ -671,25 +696,35 @@ def draw_sample(sample, preds=None, image_key="image", label_key="label", mask_k
     return fig
 
 
-def draw_errbars(labels, min, max, stddev, mean, xlabel="", ylabel="Raw Value"):
+def draw_errbars(labels,                # type: List[AnyStr]
+                 min_values,            # type: np.ndarray
+                 max_values,            # type: np.ndarray
+                 stddev_values,         # type: np.ndarray
+                 mean_values,           # type: np.ndarray
+                 xlabel="",             # type: np.ndarray
+                 ylabel="Raw Value"     # type: np.ndarray
+                 ):                     # type: (...) -> plt.Figure
     """Draws and returns an error bar histogram figure using pyplot."""
-    if min.shape != max.shape or min.shape != stddev.shape or min.shape != mean.shape:
+    if min_values.shape != max_values.shape \
+            or min_values.shape != stddev_values.shape \
+            or min_values.shape != mean_values.shape:
         raise AssertionError("input dim mismatch")
-    if len(min.shape) != 1 and len(min.shape) != 2:
+    if len(min_values.shape) != 1 and len(min_values.shape) != 2:
         raise AssertionError("input dim unexpected")
-    if len(min.shape) == 1:
-        np.expand_dims(min, 1)
-        np.expand_dims(max, 1)
-        np.expand_dims(stddev, 1)
-        np.expand_dims(mean, 1)
-    nb_subplots = min.shape[1]
+    if len(min_values.shape) == 1:
+        np.expand_dims(min_values, 1)
+        np.expand_dims(max_values, 1)
+        np.expand_dims(stddev_values, 1)
+        np.expand_dims(mean_values, 1)
+    nb_subplots = min_values.shape[1]
     fig, axs = plt.subplots(nb_subplots)
     xrange = range(len(labels))
     for ax_idx in range(nb_subplots):
         ax = axs[ax_idx]
         ax.locator_params(nbins=nb_subplots)
-        ax.errorbar(xrange, mean[:, ax_idx], stddev[:, ax_idx], fmt='ok', lw=3)
-        ax.errorbar(xrange, mean[:, ax_idx], [mean[:, ax_idx] - min[:, ax_idx], max[:, ax_idx] - mean[:, ax_idx]],
+        ax.errorbar(xrange, mean_values[:, ax_idx], stddev_values[:, ax_idx], fmt='ok', lw=3)
+        ax.errorbar(xrange, mean_values[:, ax_idx], [mean_values[:, ax_idx] - min_values[:, ax_idx],
+                                                     max_values[:, ax_idx] - mean_values[:, ax_idx]],
                     fmt='.k', ecolor='gray', lw=1)
         ax.set_xticks(xrange)
         ax.set_xticklabels(labels, visible=(ax_idx == nb_subplots - 1))
@@ -811,10 +846,10 @@ def draw_bboxes(image, rects, labels=None, confidences=None, win_size=None, thic
 
 
 def apply_color_map(image, colormap, dst=None):
-    """Applies a color map to an image of 8-bit color indices; works similarily to cv2.applyColorMap (v3.3.1)."""
-    if image is None or not isinstance(image, np.ndarray) or image.ndim != 2 or image.dtype != np.uint8:
+    """Applies a color map to an image of 8-bit color indices; works similarly to cv2.applyColorMap (v3.3.1)."""
+    if not isinstance(image, np.ndarray) or image.ndim != 2 or image.dtype != np.uint8:
         raise AssertionError("invalid input image")
-    if colormap is None or not isinstance(colormap, np.ndarray) or colormap.shape != (256, 1, 3) or colormap.dtype != np.uint8:
+    if not isinstance(colormap, np.ndarray) or colormap.shape != (256, 1, 3) or colormap.dtype != np.uint8:
         raise AssertionError("invalid color map")
     out_shape = (image.shape[0], image.shape[1], 3)
     if dst is None:
@@ -830,19 +865,19 @@ def stringify_confmat(confmat, class_list, hide_zeroes=False, hide_diagonal=Fals
     """Transforms a confusion matrix array obtained in list or numpy format into a printable string."""
     if not isinstance(confmat, np.ndarray) or not isinstance(class_list, list):
         raise AssertionError("invalid inputs")
-    columnwidth = 9
-    empty_cell = " " * columnwidth
-    fst_empty_cell = (columnwidth - 3) // 2 * " " + "t/p" + (columnwidth - 3) // 2 * " "
+    column_width = 9
+    empty_cell = " " * column_width
+    fst_empty_cell = (column_width - 3) // 2 * " " + "t/p" + (column_width - 3) // 2 * " "
     if len(fst_empty_cell) < len(empty_cell):
         fst_empty_cell = " " * (len(empty_cell) - len(fst_empty_cell)) + fst_empty_cell
     res = "\t" + fst_empty_cell + " "
     for label in class_list:
-        res += ("%{0}s".format(columnwidth) % clipstr(label, columnwidth)) + " "
-    res += ("%{0}s".format(columnwidth) % "total") + "\n"
+        res += ("%{0}s".format(column_width) % clipstr(label, column_width)) + " "
+    res += ("%{0}s".format(column_width) % "total") + "\n"
     for idx_true, label in enumerate(class_list):
-        res += ("\t%{0}s".format(columnwidth) % clipstr(label, columnwidth)) + " "
+        res += ("\t%{0}s".format(column_width) % clipstr(label, column_width)) + " "
         for idx_pred, _ in enumerate(class_list):
-            cell = "%{0}d".format(columnwidth) % int(confmat[idx_true, idx_pred])
+            cell = "%{0}d".format(column_width) % int(confmat[idx_true, idx_pred])
             if hide_zeroes:
                 cell = cell if int(confmat[idx_true, idx_pred]) != 0 else empty_cell
             if hide_diagonal:
@@ -850,11 +885,11 @@ def stringify_confmat(confmat, class_list, hide_zeroes=False, hide_diagonal=Fals
             if hide_threshold:
                 cell = cell if confmat[idx_true, idx_pred] > hide_threshold else empty_cell
             res += cell + " "
-        res += ("%{0}d".format(columnwidth) % int(confmat[idx_true, :].sum())) + "\n"
-    res += ("\t%{0}s".format(columnwidth) % "total") + " "
+        res += ("%{0}d".format(column_width) % int(confmat[idx_true, :].sum())) + "\n"
+    res += ("\t%{0}s".format(column_width) % "total") + " "
     for idx_pred, _ in enumerate(class_list):
-        res += ("%{0}d".format(columnwidth) % int(confmat[:, idx_pred].sum())) + " "
-    res += ("%{0}d".format(columnwidth) % int(confmat.sum())) + "\n"
+        res += ("%{0}d".format(column_width) % int(confmat[:, idx_pred].sum())) + " "
+    res += ("%{0}d".format(column_width) % int(confmat.sum())) + "\n"
     return res
 
 
@@ -875,7 +910,7 @@ def get_glob_paths(input_glob_pattern, can_be_dir=False):
         raise AssertionError("invalid input glob pattern '%s'" % input_glob_pattern)
     for file_path in glob_file_paths:
         if not os.path.isfile(file_path) and not (can_be_dir and os.path.isdir(file_path)):
-            raise AssertionError("invalid input file at globbed path '%s'" % file_path)
+            raise AssertionError("invalid input file at globed path '%s'" % file_path)
     return glob_file_paths
 
 
