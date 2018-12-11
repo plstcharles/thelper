@@ -1043,7 +1043,7 @@ class ROCCurve(Metric):
                         self.meta[key] += _meta[key]
                     elif isinstance(_meta[key], torch.Tensor):
                         self.meta[key] = torch.cat((self.meta[key], _meta[key]), 0)
-                    else:
+                    elif not (_meta[key] is None and self.meta[key] is None):
                         raise AssertionError("missing impl for meta concat w/ type '%s'" % str(type(_meta[key])))
 
     def eval(self):
@@ -1125,7 +1125,9 @@ class ROCCurve(Metric):
                     pred_label_score,
                 )
                 for key in self.log_meta_keys:
-                    val = self.meta[key][sample_idx]
+                    val = None
+                    if key in self.meta and self.meta[key] is not None:
+                        val = self.meta[key][sample_idx]
                     if isinstance(val, torch.Tensor) and val.numel() == 1:
                         res += "," + str(val.item())
                     else:
