@@ -3,6 +3,7 @@
 This module contains the interface required to train and/or evaluate a model based on different tasks. The trainers
 based on this interface are instantiated in launched sessions based on configuration dictionaries.
 """
+import inspect
 import logging
 import math
 import os
@@ -302,18 +303,26 @@ class Trainer:
     def _load_loss(self, config):
         """Instantiates and returns the loss function to use for training.
 
-        This function supports an extra special parameter if the task is related to classification : ``weight_classes``.
-        If this parameter is found and positive (boolean), then the loss function will apply weights to the computed
-        loss of each class. The strategy used to compute these weights is related to the one in
-        :class:`thelper.data.samplers.WeightedSubsetRandomSampler`. The exact parameters that are expected for class
-        reweighting are the following:
+        This function supports an extra special parameter if the task is related to classification:
+        ``weight_classes``. If this parameter is found and positive (boolean), then the loss function
+        will apply weights to the computed loss of each class. The strategy used to compute these weights
+        is related to the one in :class:`thelper.data.samplers.WeightedSubsetRandomSampler`. The exact
+        parameters that are expected for class reweighting are the following:
 
-        - ``weight_param_name`` (optional, default="weight"): name of the loss constructor parameter that expects the weight list.
+        - ``weight_param_name`` (optional, default="weight"): name of the constructor parameter that expects the weight list.
         - ``weight_param_pass_tensor`` (optional, default=True): specifies whether the weights should be passed as a tensor or list.
         - ``weight_distribution`` (mandatory): the dictionary of weights assigned to each class, or the rebalancing strategy to use.
         - ``weight_max`` (optional, default=inf): the maximum weight that can be assigned to a class.
         - ``weight_min`` (optional, default=0): the minimum weight that can be assigned to a class.
         - ``weight_norm`` (optional, default=True): specifies whether the weights should be normalized or not.
+
+        This function also supports an extra special parameter if the task is related to semantic segmentation:
+        ``ignore_index``. If this parameter is found and not ``None`` (integer), then the loss function will ignore
+        the given value when computing the loss of a sample. The exact parameters that are expected in this case are
+        the following:
+
+        - ``ignore_index_param_name`` (optional, default="ignore_index"): name of the constructor parameter that expects the ignore value.
+        - ``ignore_index_label_name`` (optional, default="dontcare"): name of the label to pass the ignore value from.
 
         """
         # todo: add flag to toggle loss comp in validation?
@@ -325,6 +334,7 @@ class Trainer:
         loss_type = thelper.utils.import_class(config["type"])
         loss_params = thelper.utils.get_key_def("params", config, {})
         if isinstance(self.model.task, thelper.tasks.Classification) and "weight_classes" in config:
+            # todo: also support reweighting w/ other compatible tasks? (e.g. semantic segmentation)
             weight_classes = thelper.utils.str2bool(config["weight_classes"])
             if weight_classes:
                 if self.train_loader is None or not self.train_loader:
@@ -364,6 +374,15 @@ class Trainer:
                     loss_params[weight_param_name] = self._upload_tensor(torch.FloatTensor(weight_list), dev=self.devices)
                 else:
                     loss_params[weight_param_name] = weight_list
+        if isinstance(self.model.task, thelper.tasks.Segmentation):
+            ignore_index_param_name = thelper.utils.get_key_def("ignore_index_param_name", config, "ignore_index")
+            ignore_index_label_name = thelper.utils.get_key_def("ignore_index_label_name", config, "dontcare")
+            loss_sig = inspect.signature(loss_type)
+            if ignore_index_param_name in loss_sig.parameters:
+                if ignore_index_label_name != "dontcare":
+                    loss_params[ignore_index_param_name] = self.model.task.get_class_idxs_map()[ignore_index_label_name]
+                else:
+                    loss_params[ignore_index_param_name] = self.model.task.get_dontcare_val()
         loss = loss_type(**loss_params)
         return loss
 
