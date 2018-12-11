@@ -10,6 +10,8 @@ dependencies:
   - opencv
   - scikit-learn
   - gitpython
+  - git
+  - mock
   - pip:
     - augmentor
     - tensorboardX==1.2
