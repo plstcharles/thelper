@@ -12,3 +12,5 @@ scipy
 scikit-learn
 augmentor
 tensorboardX==1.2
+pip
+git
