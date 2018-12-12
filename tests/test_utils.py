@@ -1,7 +1,8 @@
-import thelper
-import thelper.utils as tu
 # noinspection PyPackageRequirements
 import mock
+
+import thelper
+import thelper.utils as tu
 
 
 # noinspection PyUnusedLocal

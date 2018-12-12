@@ -8,8 +8,7 @@ session. For more information on this, refer to :class:`thelper.train.trainers.T
 
 import copy
 import logging
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from collections import deque
 
 import numpy as np

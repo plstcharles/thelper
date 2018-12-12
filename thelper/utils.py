@@ -7,16 +7,17 @@ import copy
 import glob
 import importlib
 import inspect
+import io  # noqa: F401
 import itertools
 import json
 import logging
 import math
 import os
-import io
 import platform
 import re
 import sys
 import time
+from typing import Any, AnyStr, Callable, Dict, List, Optional, Union  # noqa: F401
 
 import cv2 as cv
 import matplotlib.pyplot as plt
@@ -25,8 +26,6 @@ import numpy as np
 import PIL.Image
 import sklearn.metrics
 import torch
-
-from typing import Any, AnyStr, Callable, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
