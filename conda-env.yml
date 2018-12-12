@@ -10,7 +10,6 @@ dependencies:
   - opencv
   - scikit-learn
   - gitpython
-  - git
   - mock
   - pip:
     - augmentor
