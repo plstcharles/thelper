@@ -151,14 +151,14 @@ def visualize_data(config):
         datasets, task = thelper.data.create_parsers(config)
         loader_map = {dataset_name: torch.utils.data.DataLoader(dataset,) for dataset_name, dataset in datasets.items()}
         # we assume no transforms were done in the parser, and images are given as read by opencv
-        ch_transpose = False
-        flip_bgr = True
+        ch_transpose = thelper.utils.get_key_def("viz_ch_transpose", config, False)
+        flip_bgr = thelper.utils.get_key_def("viz_flip_bgr", config, False)
     else:
         task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config)
         loader_map = {"train": train_loader, "valid": valid_loader, "test": test_loader}
         # we assume transforms were done in the loader, and images are given as expected by pytorch
-        ch_transpose = True
-        flip_bgr = False
+        ch_transpose = thelper.utils.get_key_def("viz_ch_transpose", config, True)
+        flip_bgr = thelper.utils.get_key_def("viz_flip_bgr", config, False)
     redraw = None
     block = thelper.utils.get_key_def("viz_block", config, default=True)
     while True:
