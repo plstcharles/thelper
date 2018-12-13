@@ -224,6 +224,7 @@ class PASCALVOC(Dataset):
             image = cv.imread(sample[self.image_path_key])
             if image is None:
                 raise AssertionError("could not load image '%s' via opencv" % sample[self.image_path_key])
+            image = image[..., ::-1]  # BGR to RGB
             gt = None
             if self.task_name == "segm":
                 gt = cv.imread(sample[self.gt_path_key])
