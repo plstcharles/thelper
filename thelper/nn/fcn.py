@@ -1,5 +1,6 @@
 # inspired from https://github.com/meetshah1995/pytorch-semseg/blob/master/ptsemseg/models/fcn.py
 
+import numpy as np
 import torch
 import torch.nn
 import torch.nn.functional
@@ -7,8 +8,21 @@ import torch.nn.functional
 import thelper.nn
 
 
+def get_upsampling_weight(in_channels, out_channels, kernel_size):
+    factor = (kernel_size + 1) // 2
+    if kernel_size % 2 == 1:
+        center = factor - 1
+    else:
+        center = factor - 0.5
+    og = np.ogrid[:kernel_size, :kernel_size]
+    filt = (1 - abs(og[0] - center) / factor) * (1 - abs(og[1] - center) / factor)
+    weight = np.zeros((in_channels, out_channels, kernel_size, kernel_size), dtype=np.float32)
+    weight[list(range(in_channels)), list(range(out_channels)), :, :] = filt
+    return torch.from_numpy(weight).float()
+
+
 class FCN32s(thelper.nn.Module):
-    def __init__(self, task, learned_billinear=False, init_vgg16=True):
+    def __init__(self, task, init_vgg16=True):
         super().__init__(task)
         self.conv_block1 = torch.nn.Sequential(
             torch.nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=100),
@@ -52,23 +66,23 @@ class FCN32s(thelper.nn.Module):
             torch.nn.MaxPool2d(2, stride=2, ceil_mode=True),
         )  # res = 1/32
         self.classifier = None
+        self.upscaler = None
         self.set_task(task)
-        self.learned_billinear = learned_billinear
-        if self.learned_billinear:
-            raise NotImplementedError
         if init_vgg16:
             import torchvision
             vgg16 = torchvision.models.vgg16(pretrained=True)
             self.init_vgg16_params(vgg16)
 
     def forward(self, x):
-        conv1 = self.conv_block1(x)
-        conv2 = self.conv_block2(conv1)
-        conv3 = self.conv_block3(conv2)
-        conv4 = self.conv_block4(conv3)
-        conv5 = self.conv_block5(conv4)
-        score = self.classifier(conv5)
-        out = torch.nn.functional.upsample(score, x.size()[2:], mode="bilinear")
+        conv = self.conv_block1(x)
+        conv = self.conv_block2(conv)
+        conv = self.conv_block3(conv)
+        conv = self.conv_block4(conv)
+        conv = self.conv_block5(conv)
+        score = self.classifier(conv)
+        out = self.upscaler(score)
+        out = out[:, :, 19:(19 + x.size()[2]), 19:(19 + x.size()[3])].contiguous()
+        #out = torch.nn.functional.upsample(score, x.size()[2:], mode="nearest")
         return out
 
     def set_task(self, task):
@@ -76,14 +90,17 @@ class FCN32s(thelper.nn.Module):
             num_classes = len(task.get_class_names())
             if self.classifier is None or self.classifier[-1].out_features != num_classes:
                 self.classifier = torch.nn.Sequential(
-                    torch.nn.Conv2d(512, 4096, 7),
+                    torch.nn.Conv2d(512, 4096, kernel_size=7, stride=1, padding=0),
                     torch.nn.ReLU(inplace=True),
                     torch.nn.Dropout2d(),
-                    torch.nn.Conv2d(4096, 4096, 1),
+                    torch.nn.Conv2d(4096, 4096, kernel_size=1, stride=1, padding=0),
                     torch.nn.ReLU(inplace=True),
                     torch.nn.Dropout2d(),
-                    torch.nn.Conv2d(4096, num_classes, 1),
+                    torch.nn.Conv2d(4096, num_classes, kernel_size=1, stride=1, padding=0),
                 )
+                self.upscaler = torch.nn.ConvTranspose2d(num_classes, num_classes,
+                                                         kernel_size=64, stride=32, bias=False)
+                self.upscaler.weight.data.copy_(get_upsampling_weight(num_classes, num_classes, 64))
         else:
             raise AssertionError("missing impl for non-segm task type")
         self.task = task
