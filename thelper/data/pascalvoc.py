@@ -32,41 +32,32 @@ class PASCALVOC(Dataset):
         | :class:`thelper.data.parsers.Dataset`
     """
 
-    _label_idx_map = {
-        0: "background",
-        1: "aeroplane",
-        2: "bicycle",
-        3: "bird",
-        4: "boat",
-        5: "bottle",
-        6: "bus",
-        7: "car",
-        8: "cat",
-        9: "chair",
-        10: "cow",
-        11: "diningtable",
-        12: "dog",
-        13: "horse",
-        14: "motorbike",
-        15: "person",
-        16: "pottedplant",
-        17: "sheep",
-        18: "sofa",
-        19: "train",
-        20: "tvmonitor",
-        255: "dontcare"
+    _label_name_map = {
+        "background": 0,
+        "aeroplane": 1,
+        "bicycle": 2,
+        "bird": 3,
+        "boat": 4,
+        "bottle": 5,
+        "bus": 6,
+        "car": 7,
+        "cat": 8,
+        "chair": 9,
+        "cow": 10,
+        "diningtable": 11,
+        "dog": 12,
+        "horse": 13,
+        "motorbike": 14,
+        "person": 15,
+        "pottedplant": 16,
+        "sheep": 17,
+        "sofa": 18,
+        "train": 19,
+        "tvmonitor": 20,
+        "dontcare": 255,
     }
 
     _dontcare_val = 255
-
-    _label_name_map = {
-        name: idx for idx, name in _label_idx_map.items()
-    }
-
-    _label_colors = {
-        idx: thelper.utils.get_label_color_mapping(idx)[::-1] for idx in _label_idx_map
-    }
-
     _supported_tasks = ["detect", "segm"]
     _supported_subsets = ["train", "trainval", "val", "test"]
     _train_archive_name = "VOCtrainval_11-May-2012.tar"
@@ -123,28 +114,62 @@ class PASCALVOC(Dataset):
         meta_keys = [self.sample_name_key, self.image_path_key, self.gt_path_key]
         self.gt_key = None
         self.task = None
-        imageset_name = None
+        image_set_name = None
+        valid_sample_names = None
+        target_labels = thelper.utils.get_key_def("target_labels", config, None)
+        if target_labels is not None:
+            if not isinstance(target_labels, list):
+                target_labels = [target_labels]
+            if not target_labels or not all([label in self._label_name_map for label in target_labels]):
+                raise AssertionError("target labels should be given as list of names (strings) that already exist")
+            self.label_name_map = {}
+            for name in self._label_name_map:
+                if name in target_labels or name == "background" or name == "dontcare":
+                    self.label_name_map[name] = len(self.label_name_map) if name != "dontcare" else self._dontcare_val
+        else:
+            self.label_name_map = self._label_name_map
+        self.label_colors = {idx: thelper.utils.get_label_color_mapping(self._label_name_map[name])[::-1]
+                             for name, idx in self.label_name_map.items()}
         if self.task_name == "detect":
             self.gt_key = thelper.utils.get_key_def("bboxes_key", config, "bboxes")
             # self.task = thelper.tasks.Detection(...)
-            imageset_name = "Main"
+            image_set_name = "Main"
             raise NotImplementedError
         elif self.task_name == "segm":
             self.gt_key = thelper.utils.get_key_def("label_map_key", config, "label_map")
-            color_map = {name: self._label_colors[idx][::-1] for name, idx in self._label_name_map.items()}
-            self.task = thelper.tasks.Segmentation(self._label_name_map, input_key=self.image_key,
+            color_map = {name: self.label_colors[idx][::-1] for name, idx in self.label_name_map.items()}
+            self.task = thelper.tasks.Segmentation(self.label_name_map, input_key=self.image_key,
                                                    label_map_key=self.gt_key, meta_keys=meta_keys,
                                                    dontcare=self._dontcare_val,
                                                    color_map=color_map)
-            imageset_name = "Segmentation"
-        imageset_path = os.path.join(imagesets_path, imageset_name, subset + ".txt")
+            image_set_name = "Segmentation"
+            # if using target labels, must rely on image set luts to confirm content
+            if target_labels is not None:
+                valid_sample_names = set()
+                for label in self.label_name_map:
+                    if label == "background" or label == "dontcare":
+                        continue
+                    with open(os.path.join(imagesets_path, "Main", label + "_" + subset + ".txt")) as image_subset_fd:
+                        for line in image_subset_fd:
+                            sample_name, val = line.split()
+                            if int(val) > 0:
+                                valid_sample_names.add(sample_name)
+        imageset_path = os.path.join(imagesets_path, image_set_name, subset + ".txt")
         if not os.path.isfile(imageset_path):
             raise AssertionError("cannot locate sample set file at '%s'" % imageset_path)
         image_folder_path = os.path.join(dataset_path, "JPEGImages")
         if not os.path.isdir(image_folder_path):
             raise AssertionError("cannot locate image folder at '%s'" % image_folder_path)
-        with open(imageset_path) as fd:
-            sample_names = fd.read().splitlines()
+        with open(imageset_path) as image_subset_fd:
+            if valid_sample_names is None:
+                sample_names = image_subset_fd.read().splitlines()
+            else:
+                sample_names = set()
+                for sample_name in image_subset_fd:
+                    sample_name = sample_name.strip()
+                    if sample_name in valid_sample_names:
+                        sample_names.add(sample_name)
+                sample_names = list(sample_names)
         action = "preloading" if self.preload else "initializing"
         logger.info("%s pascal voc dataset for task='%s' and set='%s'..." % (action, self.task_name, subset))
         self.samples = []
@@ -192,9 +217,12 @@ class PASCALVOC(Dataset):
                     if not use_truncated and obj.find("truncated").text == "1":
                         continue
                     bbox = obj.find("bndbox")
+                    label = obj.find("name").text
+                    if label not in self.label_name_map:
+                        continue  # user is skipping some labels from the complete set
                     gt.append({
                         "label": obj.find("name").text,
-                        "id": self._label_name_map[obj.find("name").text],
+                        "id": self.label_name_map[label],
                         "bbox": {
                             "xmax": bbox.find("xmax").text,
                             "xmin": bbox.find("xmin").text,
@@ -253,7 +281,7 @@ class PASCALVOC(Dataset):
         if not isinstance(label_map, np.ndarray) or label_map.ndim != 2:
             raise AssertionError("unexpected label map type/shape, should be 2D np.ndarray")
         output = np.full(list(label_map.shape) + [3], fill_value=self._dontcare_val, dtype=np.uint8)
-        for label_idx, label_color in self._label_colors.items():
+        for label_idx, label_color in self.label_colors.items():
             output[np.where(label_map == label_idx)] = label_color
         return output
 
@@ -263,6 +291,6 @@ class PASCALVOC(Dataset):
             raise AssertionError("unexpected label map type/shape, should be 3D np.ndarray")
         output = np.full(label_map.shape[:2], fill_value=self._dontcare_val, dtype=np.uint8)
         # TODO: loss might not like uint8, check for useless convs later
-        for label_idx, label_color in self._label_colors.items():
+        for label_idx, label_color in self.label_colors.items():
             output = np.where(np.all(label_map == label_color, axis=2), label_idx, output)
         return output
