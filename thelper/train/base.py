@@ -229,9 +229,12 @@ class Trainer:
         self.monitor, self.monitor_best = None, None
         if "monitor" in trainer_config and trainer_config["monitor"]:
             self.monitor = trainer_config["monitor"]
-            if self.monitor not in self.train_metrics:
-                raise AssertionError("monitored metric with name '%s' should be declared in config 'metrics' field" % self.monitor)
-            self.monitor_goal = self.train_metrics[self.monitor].goal()
+            if self.monitor not in self.train_metrics and self.monitor not in self.valid_metrics:
+                raise AssertionError("metric with name '%s' should be declared in training and/or validation metrics" % self.monitor)
+            if self.monitor in self.train_metrics:
+                self.monitor_goal = self.train_metrics[self.monitor].goal()
+            elif self.monitor in self.valid_metrics:
+                self.monitor_goal = self.valid_metrics[self.monitor].goal()
             if self.monitor_goal == thelper.optim.Metric.minimize:
                 self.monitor_best = thelper.optim.Metric.maximize
             elif self.monitor_goal == thelper.optim.Metric.maximize:

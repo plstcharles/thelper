@@ -132,12 +132,11 @@ class ImageSegmTrainer(Trainer):
             optimizer.step()
             if iter is not None:
                 iter += 1
-                if self.monitor is not None:
-                    monitor_output = "{}: {:.2f}".format(self.monitor, metrics[self.monitor].eval())
-                else:
-                    monitor_output = "(not monitoring)"
+                monitor_output = ""
+                if self.monitor is not None and self.monitor in metrics:
+                    monitor_output = "   {}: {:.2f}".format(self.monitor, metrics[self.monitor].eval())
                 self.logger.info(
-                    "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}   {}".format(
+                    "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}{}".format(
                         epoch,
                         iter,
                         sample_idx,
