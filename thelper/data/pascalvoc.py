@@ -57,6 +57,8 @@ class PASCALVOC(Dataset):
         255: "dontcare"
     }
 
+    _dontcare_val = 255
+
     _label_name_map = {
         name: idx for idx, name in _label_idx_map.items()
     }
@@ -132,7 +134,7 @@ class PASCALVOC(Dataset):
             color_map = {name: self._label_colors[idx][::-1] for name, idx in self._label_name_map.items()}
             self.task = thelper.tasks.Segmentation(self._label_name_map, input_key=self.image_key,
                                                    label_map_key=self.gt_key, meta_keys=meta_keys,
-                                                   dontcare=self._label_name_map["dontcare"],
+                                                   dontcare=self._dontcare_val,
                                                    color_map=color_map)
             imageset_name = "Segmentation"
         imageset_path = os.path.join(imagesets_path, imageset_name, subset + ".txt")
@@ -147,10 +149,7 @@ class PASCALVOC(Dataset):
         logger.info("%s pascal voc dataset for task='%s' and set='%s'..." % (action, self.task_name, subset))
         self.samples = []
         if self.preload:
-            try:
-                from tqdm import tqdm
-            except ImportError:
-                def tqdm(x): return x
+            from tqdm import tqdm
         else:
             def tqdm(x): return x
         for sample_name in tqdm(sample_names):
@@ -253,8 +252,7 @@ class PASCALVOC(Dataset):
         """Returns a color image from a label indices map."""
         if not isinstance(label_map, np.ndarray) or label_map.ndim != 2:
             raise AssertionError("unexpected label map type/shape, should be 2D np.ndarray")
-        dontcare_val = self._label_colors[self._label_name_map["dontcare"]]
-        output = np.full(list(label_map.shape) + [3], fill_value=dontcare_val, dtype=np.uint8)
+        output = np.full(list(label_map.shape) + [3], fill_value=self._dontcare_val, dtype=np.uint8)
         for label_idx, label_color in self._label_colors.items():
             output[np.where(label_map == label_idx)] = label_color
         return output
@@ -263,8 +261,7 @@ class PASCALVOC(Dataset):
         """Returns a map of label indices from a color image."""
         if not isinstance(label_map, np.ndarray) or label_map.ndim != 3 or label_map.dtype != np.uint8:
             raise AssertionError("unexpected label map type/shape, should be 3D np.ndarray")
-        dontcare_val = self._label_name_map["dontcare"]
-        output = np.full(label_map.shape[:2], fill_value=dontcare_val, dtype=np.uint8)
+        output = np.full(label_map.shape[:2], fill_value=self._dontcare_val, dtype=np.uint8)
         # TODO: loss might not like uint8, check for useless convs later
         for label_idx, label_color in self._label_colors.items():
             output = np.where(np.all(label_map == label_color, axis=2), label_idx, output)
