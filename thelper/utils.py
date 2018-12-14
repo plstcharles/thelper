@@ -819,7 +819,7 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
                 raise AssertionError("expected classification labels to be in list or 1-d tensor format")
             if isinstance(labels, torch.Tensor):
                 labels = labels.tolist()
-        if preds:
+        if preds is not None:
             if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and preds.dim() == 1):
                 raise AssertionError("expected classification predictions to be in list or 1-d tensor format")
             if isinstance(preds, torch.Tensor):
@@ -832,7 +832,7 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
                 if not all([image.shape[0] == len(labels) for image in images]):
                     raise AssertionError("image count mismatch with label count")
                 labels = labels * len(images)
-            if preds:
+            if preds is not None:
                 if not all([image.shape[0] == len(preds) for image in images]):
                     raise AssertionError("image count mismatch with preds count")
                 preds = preds * len(images)
@@ -852,7 +852,7 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
             raise AssertionError("images/predictions count mismatch")
         image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
         class_names_map = {idx: name for name, idx in task.get_class_idxs_map().items()}
-        fig, axes = draw_classifs(image_list, labels, preds, class_names_map, redraw=redraw)
+        redraw = draw_classifs(image_list, labels_gt=labels, labels_pred=preds, labels_map=class_names_map, redraw=redraw)
     elif isinstance(task, thelper.tasks.Segmentation):
         mask_key = task.get_gt_key()
         masks = None
@@ -861,8 +861,8 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
             if not isinstance(masks, torch.Tensor) or masks.dim() != 3:
                 raise AssertionError("expected segmentation masks to be in 3-d tensor format (BxHxW)")
             masks = masks.numpy().copy()
-        if preds:
-            if not isinstance(preds, torch.Tensor) or masks.dim() != 3:
+        if preds is not None:
+            if not isinstance(preds, torch.Tensor) or preds.dim() != 3:
                 raise AssertionError("expected segmentation preds to be in 3-d tensor format (BxHxW)")
             preds = preds.numpy().copy()
         if not isinstance(images, torch.Tensor) or images.dim() != 4:
@@ -882,14 +882,14 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
             idx_color_map = {idx: name_color_map[name] for name, idx in task.get_class_idxs_map().items()}
         else:
             idx_color_map = {idx: get_label_color_mapping(idx) for idx in task.get_class_idxs_map().values()}
-        fig, axes = draw_segments(image_list, masks, preds, idx_color_map, redraw=redraw)
+        redraw = draw_segments(image_list, masks_gt=masks, masks_pred=preds, labels_color_map=idx_color_map, redraw=redraw)
     else:
         raise AssertionError("unhandled drawing mode, missing impl")
     if block:
         plt.show(block=block)
-    else:
-        plt.pause(0.01)
-    return fig, axes
+        return None
+    plt.pause(0.5)
+    return redraw
 
 
 def draw_errbars(labels,                # type: List[AnyStr]
@@ -1058,7 +1058,7 @@ def get_label_color_mapping(idx):
 
 def apply_color_map(image, colormap, dst=None):
     """Applies a color map to an image of 8-bit color indices; works similarly to cv2.applyColorMap (v3.3.1)."""
-    if not isinstance(image, np.ndarray) or image.ndim != 2 or image.dtype != np.uint8:
+    if not isinstance(image, np.ndarray) or image.ndim != 2:
         raise AssertionError("invalid input image")
     if not isinstance(colormap, np.ndarray) or colormap.shape != (256, 1, 3) or colormap.dtype != np.uint8:
         raise AssertionError("invalid color map")
