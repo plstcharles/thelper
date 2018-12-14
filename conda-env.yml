@@ -11,6 +11,7 @@ dependencies:
   - scikit-learn
   - gitpython
   - mock
+  - tqdm
   - pip:
     - augmentor
     - tensorboardX==1.2
