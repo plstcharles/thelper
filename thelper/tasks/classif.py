@@ -77,7 +77,7 @@ class Classification(Task):
         given for ``unset_key``.
 
         Args:
-            samples: a list of samples to split, where each sample is a dictionary.
+            samples: the samples to split, where each sample is provided as a dictionary.
             unset_key: a key under which all unlabeled samples should be kept (``None`` = ignore).
 
         Returns:
@@ -85,8 +85,6 @@ class Classification(Task):
         """
         if samples is None or not samples:
             raise AssertionError("provided invalid sample list")
-        elif not isinstance(samples, list) or not isinstance(samples[0], dict):
-            raise AssertionError("dataset samples should be given as list of dictionaries")
         sample_idxs = {class_name: [] for class_name in self.class_names}
         if unset_key is not None and not isinstance(unset_key, str):
             raise AssertionError("unset class name key should be string, just like other class names")

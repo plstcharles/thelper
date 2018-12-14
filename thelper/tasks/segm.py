@@ -9,6 +9,7 @@ import os
 import numpy as np
 import PIL.Image
 import torch
+import tqdm
 
 from thelper.tasks.utils import Task
 
@@ -53,24 +54,28 @@ class Segmentation(Task):
             with open(class_names, "r") as fd:
                 class_names = json.load(fd)
         if isinstance(class_names, list):
-            self.class_map = {class_name: class_idx for class_idx, class_name in enumerate(class_names)}
+            class_map = {class_name: class_idx for class_idx, class_name in enumerate(class_names)}
         elif isinstance(class_names, dict):
-            self.class_map = class_names
+            class_map = class_names
         else:
             raise AssertionError("expected class names to be provided as a list or a map of pixel values")
-        if len(self.class_map) < 1:
-            raise AssertionError("should have at least one class!")
-        if len(self.class_map) != len(set(self.class_map)):
-            raise AssertionError("class set should not contain duplicates")
-        if "dontcare" in self.class_map and dontcare is None:
+        if "dontcare" in class_map and dontcare is None:
             raise AssertionError("'dontcare' class name is reserved")
         if dontcare is not None:
             if not isinstance(dontcare, (int, float)):
                 raise AssertionError("'dontcare' value should be int or float")
-            if "dontcare" in self.class_map and dontcare != self.class_map["dontcare"]:
-                raise AssertionError("'dontcare' value mismatch with pre-existing class map")
-            elif "dontcare" not in self.class_map and any([dontcare == val for val in self.class_map.values()]):
-                raise AssertionError("'dontcare' value matches a pre-existing class name that is not 'dontcare'")
+            if "dontcare" in class_map:
+                if dontcare != class_map["dontcare"]:
+                    raise AssertionError("'dontcare' value mismatch with pre-existing class map")
+                del class_map["dontcare"]
+            else:
+                if any([dontcare == val for val in class_map.values()]):
+                    raise AssertionError("'dontcare' value matches a pre-existing class name that is not 'dontcare'")
+        if len(class_map) < 1:
+            raise AssertionError("should have at least one class!")
+        if len(class_map) != len(set(class_map)):
+            raise AssertionError("class set should not contain duplicates")
+        self.class_map = class_map
         self.dontcare = dontcare
         self.color_map = None
         if color_map is not None:
@@ -102,12 +107,10 @@ class Segmentation(Task):
         """Given a list of samples, returns a map of element counts for each class label."""
         if samples is None or not samples:
             raise AssertionError("provided invalid sample list")
-        elif not isinstance(samples, list) or not isinstance(samples[0], dict):
-            raise AssertionError("dataset samples should be given as list of dictionaries")
         elem_counts = {class_name: 0 for class_name in self.class_map}
         label_map_key = self.get_gt_key()
         warned_unknown_value_flag = False
-        for sample_idx, sample in enumerate(samples):
+        for sample_idx, sample in tqdm.tqdm(enumerate(samples), desc="cumulating label counts", total=len(samples)):
             if label_map_key is None or label_map_key not in sample:
                 continue
             else:
@@ -121,7 +124,7 @@ class Segmentation(Task):
                 # here, we assume labels are given as some integer type that corresponds to class name indices
                 curr_elem_counts = {class_name: np.count_nonzero(labels == class_val) for class_name, class_val in self.class_map.items()}
                 dontcare_elem_count = 0 if self.dontcare is None else np.count_nonzero(labels == self.dontcare)
-                if (sum(curr_elem_counts) + dontcare_elem_count) != labels.size and not warned_unknown_value_flag:
+                if (sum(curr_elem_counts.values()) + dontcare_elem_count) != labels.size and not warned_unknown_value_flag:
                     logger.warning("some label maps contain values that are unknown (i.e. with no proper class mapping)")
                     warned_unknown_value_flag = True
                 for class_name in self.class_map:
