@@ -109,6 +109,7 @@ class Task(object):
     .. seealso::
         | :class:`thelper.tasks.classif.Classification`
         | :class:`thelper.tasks.segm.Segmentation`
+        | :class:`thelper.tasks.regr.Regression`
     """
 
     def __init__(self, input_key, gt_key=None, meta_keys=None):
