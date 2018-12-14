@@ -131,7 +131,6 @@ def create_model(config, task, save_dir=None, ckptdata=None):
             raise AssertionError("messed up logic above")
         logger.debug("model_type = %s" % str(model_type))
         logger.debug("model_params = %s" % str(model_params))
-        logger.debug("task = %s" % str(task))
         if inspect.isclass(model_type) and issubclass(model_type, thelper.nn.utils.Module):
             model = model_type(task=task, **model_params)
         else:

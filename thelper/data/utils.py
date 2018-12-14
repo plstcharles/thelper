@@ -465,7 +465,7 @@ class _LoaderFactory(object):
                 raise AssertionError("unexpected value type for field '%s'" % key)
             return config[key]
         seed = np.random.randint(2 ** 16)
-        logger.info("setting '%s' to %d" % (key, seed))
+        logger.info("setting '%s' to %d" % (prefixes[0], seed))
         return seed
 
     @staticmethod
