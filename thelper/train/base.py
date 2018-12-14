@@ -729,7 +729,8 @@ class Trainer:
             "model_type": self.model.get_name(),
             "model_params": self.model.config if self.model.config else {},
             "optimizer": optimizer.state_dict() if optimizer is not None else None,
-            "scheduler": scheduler.state_dict() if scheduler is not None else None,
+            "scheduler": scheduler.state_dict() if (scheduler is not None and
+                                                    hasattr(scheduler, "state_dict")) else None,
             "monitor_best": self.monitor_best,
             "config": self.config  # note: this is the global app config
         }
