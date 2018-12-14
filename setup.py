@@ -49,6 +49,9 @@ class OptionalBuildExt(build_ext):
 
 on_rtd = os.environ.get('READTHEDOCS') == 'True'
 
+with open("requirements.txt") as reqfd:
+    install_requires = reqfd.read()
+
 setuptools.setup(
     name="thelper",
     version="0.1.1",
@@ -80,17 +83,7 @@ setuptools.setup(
         "Programming Language :: Python :: Implementation :: CPython",
     ],
     keywords=["pytorch", "trainer", "loader"],
-    install_requires=[
-        "augmentor>=0.2.2",
-        "matplotlib>=2.2.2",
-        "numpy>=1.14.0",
-        "opencv-python>=3.3.0",
-        "torch>=0.4.0",
-        "pynput>=1.4",
-        "scikit-learn>=0.19.1",
-        "torchvision>=0.2.1",
-        "tensorboardX==1.2.0",  # 1.4.0 causes issues with some image types?
-    ] if not on_rtd else [],  # bypass deps install on rtd
+    install_requires=install_requires if not on_rtd else [],  # bypass deps install on rtd
     python_requires="~=3.5",
     extras_require={
         "rst": ["docutils>=0.11"],
