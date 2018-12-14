@@ -311,9 +311,10 @@ class Trainer:
         one in :class:`thelper.data.samplers.WeightedSubsetRandomSampler`. The exact parameters that are expected for
         class reweighting are the following:
 
-        - ``weight_distribution`` (mandatory, toggle): the dictionary of weights assigned to each class, or the rebalancing
-          strategy to use. If omitted entirely, no class weighting will be performed.
-        - ``weight_param_name`` (optional, default="weight"): name of the constructor parameter that expects the weight list.
+        - ``weight_distribution`` (mandatory, toggle): the dictionary of weights assigned to each class, or the
+          rebalancing strategy to use. If omitted entirely, no class weighting will be performed.
+        - ``weight_param_name`` (optional, default="weight"): name of the constructor parameter that expects the
+          weight list.
         - ``weight_max`` (optional, default=inf): the maximum weight that can be assigned to a class.
         - ``weight_min`` (optional, default=0): the minimum weight that can be assigned to a class.
         - ``weight_norm`` (optional, default=True): specifies whether the weights should be normalized or not.
@@ -323,7 +324,8 @@ class Trainer:
         the given value when computing the loss of a sample. The exact parameters that are expected in this case are
         the following:
 
-        - ``ignore_index_param_name`` (optional, default="ignore_index"): name of the constructor parameter that expects the ignore value.
+        - ``ignore_index_param_name`` (optional, default="ignore_index"): name of the constructor parameter that expects
+          the ignore value.
         - ``ignore_index_label_name`` (optional, default="dontcare"): name of the label to pass the ignore value from.
 
         """

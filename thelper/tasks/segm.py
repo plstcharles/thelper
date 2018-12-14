@@ -190,5 +190,3 @@ class Segmentation(Task):
             "meta_keys": self.get_meta_keys(),
             "dontcare": self.get_dontcare_val()
         })
-
-# todo: add new task types (objdetecton, segmentation, regression, superres, ...)

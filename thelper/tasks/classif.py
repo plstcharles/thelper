@@ -158,5 +158,3 @@ class Classification(Task):
             "label_key": self.get_gt_key(),
             "meta_keys": self.get_meta_keys(),
         })
-
-# todo: add new task types (objdetecton, segmentation, regression, superres, ...)
