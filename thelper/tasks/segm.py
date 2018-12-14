@@ -2,6 +2,7 @@
 
 This module contains a class that defines the objectives of models/trainers for segmentation tasks.
 """
+import copy
 import json
 import logging
 import os
@@ -56,7 +57,7 @@ class Segmentation(Task):
         if isinstance(class_names, list):
             class_map = {class_name: class_idx for class_idx, class_name in enumerate(class_names)}
         elif isinstance(class_names, dict):
-            class_map = class_names
+            class_map = copy.copy(class_names)
         else:
             raise AssertionError("expected class names to be provided as a list or a map of pixel values")
         if "dontcare" in class_map and dontcare is None:
