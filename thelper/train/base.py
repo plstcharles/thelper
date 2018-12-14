@@ -303,15 +303,14 @@ class Trainer:
     def _load_loss(self, config):
         """Instantiates and returns the loss function to use for training.
 
-        This function supports an extra special parameter if the task is related to classification:
-        ``weight_classes``. If this parameter is found and positive (boolean), then the loss function
-        will apply weights to the computed loss of each class. The strategy used to compute these weights
-        is related to the one in :class:`thelper.data.samplers.WeightedSubsetRandomSampler`. The exact
-        parameters that are expected for class reweighting are the following:
+        If the task is related to image classification or semantic segmentation, the classes can be weighted based
+        on extra parameters in the ``loss`` configuration. The strategy used to compute the weights is related to the
+        one in :class:`thelper.data.samplers.WeightedSubsetRandomSampler`. The exact parameters that are expected for
+        class reweighting are the following:
 
+        - ``weight_distribution`` (mandatory, toggle): the dictionary of weights assigned to each class, or the rebalancing
+          strategy to use. If omitted entirely, no class weighting will be performed.
         - ``weight_param_name`` (optional, default="weight"): name of the constructor parameter that expects the weight list.
-        - ``weight_param_pass_tensor`` (optional, default=True): specifies whether the weights should be passed as a tensor or list.
-        - ``weight_distribution`` (mandatory): the dictionary of weights assigned to each class, or the rebalancing strategy to use.
         - ``weight_max`` (optional, default=inf): the maximum weight that can be assigned to a class.
         - ``weight_min`` (optional, default=0): the minimum weight that can be assigned to a class.
         - ``weight_norm`` (optional, default=True): specifies whether the weights should be normalized or not.
@@ -333,47 +332,51 @@ class Trainer:
             raise AssertionError("loss config missing 'type' field")
         loss_type = thelper.utils.import_class(config["type"])
         loss_params = thelper.utils.get_key_def("params", config, {})
-        if isinstance(self.model.task, thelper.tasks.Classification) and "weight_classes" in config:
-            # todo: also support reweighting w/ other compatible tasks? (e.g. semantic segmentation)
-            weight_classes = thelper.utils.str2bool(config["weight_classes"])
-            if weight_classes:
-                if self.train_loader is None or not self.train_loader:
-                    raise AssertionError("cannot get class sizes, no training data available")
-                samples_map = self.model.task.get_class_sample_map(self.train_loader.dataset.samples)
-                weight_param_name = "weight"
-                if "weight_param_name" in config:
-                    weight_param_name = config["weight_param_name"]
-                weight_param_pass_tensor = True
-                if "weight_param_pass_tensor" in config:
-                    weight_param_pass_tensor = thelper.utils.str2bool(config["weight_param_pass_tensor"])
-                if "weight_distribution" not in config:
-                    raise AssertionError("missing 'weight_distribution' field in loss config")
-                weight_distrib = config["weight_distribution"]
-                if isinstance(weight_distrib, dict):
-                    for label, weight in weight_distrib.items():
-                        if label not in samples_map:
-                            raise AssertionError("weight distribution label '%s' not in dataset class list" % label)
-                        if not isinstance(weight, float):
-                            raise AssertionError("expected weight distrib map to provide weights as floats directly")
-                elif isinstance(weight_distrib, str):
-                    weight_max = float("inf")
-                    if "weight_max" in config:
-                        weight_max = float(config["weight_max"])
-                    weight_min = 0
-                    if "weight_min" in config:
-                        weight_min = float(config["weight_min"])
+        if thelper.utils.str2bool(thelper.utils.get_key_def("weight_classes", config, False)) or \
+           thelper.utils.get_key_def("weight_distribution", config, None) is not None:
+            if not thelper.utils.str2bool(thelper.utils.get_key_def("weight_classes", config, True)):
+                raise AssertionError("'weight_classes' now deprecated, set 'weight_distribution' directly to toggle on")
+            if not isinstance(self.model.task, (thelper.tasks.Classification, thelper.tasks.Segmentation)):
+                raise AssertionError("task type does not support class weighting")
+            weight_param_name = "weight"
+            if "weight_param_name" in config:
+                weight_param_name = config["weight_param_name"]
+            if "weight_distribution" not in config:
+                raise AssertionError("missing 'weight_distribution' field in loss config")
+            weight_distrib = config["weight_distribution"]
+            if isinstance(weight_distrib, dict):
+                for label, weight in weight_distrib.items():
+                    if label not in self.model.task.get_class_names():
+                        raise AssertionError("weight distribution label '%s' not in dataset class list" % label)
+                    if not isinstance(weight, float):
+                        raise AssertionError("expected weight distrib map to provide weights as floats directly")
+            elif isinstance(weight_distrib, str):
+                weight_max = float("inf")
+                if "weight_max" in config:
+                    weight_max = float(config["weight_max"])
+                weight_min = 0
+                if "weight_min" in config:
+                    weight_min = float(config["weight_min"])
+                if weight_distrib != "uniform":
+                    if self.train_loader is None or not self.train_loader:
+                        raise AssertionError("cannot get class sizes, no training data available")
+                    label_sizes_map = self.model.task.get_class_sizes(self.train_loader.dataset)
+                    weight_norm = False
+                else:
+                    label_sizes_map = {label: -1 for label in self.model.task.get_class_names()}  # counts don't matter
                     weight_norm = True
-                    if "weight_norm" in config:
-                        weight_norm = thelper.utils.str2bool(config["weight_norm"])
-                    weight_distrib = thelper.data.utils.get_class_weights(samples_map, weight_distrib, invmax=True,
-                                                                          maxw=weight_max, minw=weight_min, norm=weight_norm)
-                else:
-                    raise AssertionError("unexpected weight distribution strategy (should be map or string)")
-                weight_list = [weight_distrib[label] if label in weight_distrib else 1.0 for label in samples_map]
-                if weight_param_pass_tensor:
-                    loss_params[weight_param_name] = self._upload_tensor(torch.FloatTensor(weight_list), dev=self.devices)
-                else:
-                    loss_params[weight_param_name] = weight_list
+                if "weight_norm" in config:
+                    weight_norm = thelper.utils.str2bool(config["weight_norm"])
+                weight_distrib = thelper.data.utils.get_class_weights(label_sizes_map, weight_distrib, invmax=True,
+                                                                      maxw=weight_max, minw=weight_min, norm=weight_norm)
+            else:
+                raise AssertionError("unexpected weight distribution strategy (should be map or string)")
+            weight_list_str = "weight_distribution:"
+            for label, weight in weight_distrib.items():
+                weight_list_str += "\n  \"%s\": %s," % (label, weight)
+            logger.info(weight_list_str)
+            weight_list = [weight_distrib[label] if label in weight_distrib else 1.0 for label in self.model.task.get_class_names()]
+            loss_params[weight_param_name] = self._upload_tensor(torch.FloatTensor(weight_list), dev=self.devices)
         if isinstance(self.model.task, thelper.tasks.Segmentation):
             ignore_index_param_name = thelper.utils.get_key_def("ignore_index_param_name", config, "ignore_index")
             ignore_index_label_name = thelper.utils.get_key_def("ignore_index_label_name", config, "dontcare")
