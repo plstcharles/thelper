@@ -118,7 +118,7 @@ class ImageSegmTrainer(Trainer):
                         iter_pred += aug_pred.detach()
                     if metrics:
                         for metric in metrics.values():
-                            metric.accumulate(aug_pred.cpu(), label_map[aug_idx].cpu(), meta=meta)
+                            metric.accumulate(aug_pred.detach().cpu(), label_map[aug_idx].detach().cpu(), meta=meta)
                 iter_loss /= augs_count
             else:
                 iter_pred = model(self._upload_tensor(input, dev))
@@ -127,7 +127,7 @@ class ImageSegmTrainer(Trainer):
                 iter_loss.backward()
                 if metrics:
                     for metric in metrics.values():
-                        metric.accumulate(iter_pred.cpu(), label_map.cpu(), meta=meta)
+                        metric.accumulate(iter_pred.detach().cpu(), label_map.detach().cpu(), meta=meta)
             epoch_loss += iter_loss.item()
             optimizer.step()
             if iter is not None:

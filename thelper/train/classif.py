@@ -130,7 +130,7 @@ class ImageClassifTrainer(Trainer):
             if metrics:
                 meta = {key: sample[key] if key in sample else None for key in self.meta_keys}
                 for metric in metrics.values():
-                    metric.accumulate(iter_pred.cpu(), label.cpu(), meta=meta)
+                    metric.accumulate(iter_pred.detach().cpu(), label.detach().cpu(), meta=meta)
             if iter is not None:
                 iter += 1
                 monitor_output = ""
