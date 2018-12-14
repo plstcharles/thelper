@@ -718,8 +718,8 @@ def get_class_weights(label_map, stype, invmax, maxw=float('inf'), minw=0.0, nor
     """Returns a map of adjusted class weights based on a given rebalancing strategy.
 
     Args:
-        label_map: map of index lists tied to class labels.
-        stype: weighting strategy ('uniform', `linear`, or 'rootX'); see :class:`thelper.data.samplers.WeightedSubsetRandomSampler`
+        label_map: map of index lists or sample counts tied to class labels.
+        stype: weighting strategy ('uniform', 'linear', or 'rootX'); see :class:`thelper.data.samplers.WeightedSubsetRandomSampler`
             for more information on these.
         invmax: specifies whether to max-invert the weight vector (thus creating cost factors) or not (default=True).
         maxw: maximum allowed weight value (applied after invmax, if required).
@@ -732,6 +732,8 @@ def get_class_weights(label_map, stype, invmax, maxw=float('inf'), minw=0.0, nor
     .. seealso::
         | :class:`thelper.data.samplers.WeightedSubsetRandomSampler`
     """
+    if not isinstance(label_map, dict) or any([not isinstance(val, (list, int)) for val in label_map.values()]):
+        raise AssertionError("unexpected label map type")
     if stype == "uniform":
         label_weights = {label: 1.0 / len(label_map) for label in label_map}
     elif stype == "linear" or "root" in stype:
@@ -739,8 +741,8 @@ def get_class_weights(label_map, stype, invmax, maxw=float('inf'), minw=0.0, nor
             rpow = 1.0
         else:
             rpow = 1.0 / float(stype.split("root", 1)[1])
-        tot_count = sum([len(idxs) for idxs in label_map.values()])
-        label_weights = {label: (len(idxs) / tot_count) ** rpow for label, idxs in label_map.items()}
+        label_sizes = {label: len(v) if isinstance(v, list) else v for label, v in label_map.items()}
+        label_weights = {label: (lsize / sum(label_sizes.values())) ** rpow for label, lsize in label_sizes.items()}
     else:
         raise AssertionError("unknown label weighting strategy")
     if invmax:
