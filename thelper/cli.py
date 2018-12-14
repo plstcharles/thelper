@@ -177,10 +177,8 @@ def visualize_data(config):
                     logger.debug("(indices = %s)" % indices.tolist())
                 else:
                     logger.debug("(indices = %s)" % indices)
-            fig, axes = thelper.utils.draw_minibatch(samples, task, ch_transpose=ch_transpose,
-                                                     flip_bgr=flip_bgr, block=block, redraw=redraw)
-            if not block:
-                redraw = [fig, axes]
+            redraw = thelper.utils.draw_minibatch(samples, task, ch_transpose=ch_transpose,
+                                                  flip_bgr=flip_bgr, block=block, redraw=redraw)
         logger.info("all done")
 
 
