@@ -39,9 +39,8 @@ def create_loaders(config, save_dir=None):
 
     The parameters expected in the 'loaders' configuration field are the following:
 
-    - ``batch_size`` (mandatory): specifies the (mini)batch size to use in data loaders. Note that
-      the framework does not currently test the validity of the provided value, so if you get an
-      'out of memory' error at runtime, try reducing it.
+    - ``<train_/valid_/test_>batch_size`` (mandatory): specifies the (mini)batch size to use in data
+      loaders. If you get an 'out of memory' error at runtime, try reducing it.
     - ``shuffle`` (optional, default=True): specifies whether the data loaders should shuffle
       their samples or not.
     - ``test_seed`` (optional): specifies the RNG seed to use when splitting test data. If no seed
@@ -375,10 +374,16 @@ class _LoaderFactory(object):
         logger.debug("loading data config")
         if not isinstance(config, dict):
             raise AssertionError("input config should be dict")
-        if "batch_size" not in config or not config["batch_size"]:
-            raise AssertionError("data config missing 'batch_size' field")
-        self.batch_size = config["batch_size"]
-        logger.debug("loaders will use batch size = %d" % self.batch_size)
+        default_batch_size = None
+        if "batch_size" in config:
+            if any([v in config for v in ["train_batch_size", "valid_batch_size", "test_batch_size"]]):
+                raise AssertionError("specifying 'batch_size' overrides all other (per-loader) values")
+            default_batch_size = int(thelper.utils.get_key("batch_size", config))
+        self.train_batch_size = thelper.utils.get_key_def("train_batch_size", config, default_batch_size)
+        self.valid_batch_size = thelper.utils.get_key_def("valid_batch_size", config, default_batch_size)
+        self.test_batch_size = thelper.utils.get_key_def("test_batch_size", config, default_batch_size)
+        logger.debug("loaders will use batch sizes:\n  train = %d\n  valid = %d\n  test = %d" %
+                     (self.train_batch_size, self.valid_batch_size, self.test_batch_size))
         self.shuffle = thelper.utils.str2bool(config["shuffle"]) if "shuffle" in config else True
         if self.shuffle:
             logger.debug("dataset samples will be shuffled according to predefined seeds")
@@ -396,7 +401,7 @@ class _LoaderFactory(object):
         self.pin_memory = thelper.utils.str2bool(config["pin_memory"]) if "pin_memory" in config else False
         self.drop_last = thelper.utils.str2bool(config["drop_last"]) if "drop_last" in config else False
         if self.drop_last:
-            logger.debug("loaders will drop last batch if sample count not multiple of %d" % self.batch_size)
+            logger.debug("loaders will drop last batch if sample count not multiple of batch size")
         self.sampler_type = None
         self.train_sampler, self.valid_sampler, self.test_sampler = None, None, None
         if "sampler" in config:
@@ -649,11 +654,13 @@ class _LoaderFactory(object):
             A three-element tuple containing the training, validation, and test data loaders, respectively.
         """
         loaders = []
-        for idxs_map, (augs, augs_append), sampler_apply in zip([train_idxs, valid_idxs, test_idxs],
-                                                                [(self.train_augments, self.train_augments_append),
-                                                                 (self.valid_augments, self.valid_augments_append),
-                                                                 (self.test_augments, self.test_augments_append)],
-                                                                [self.train_sampler, self.valid_sampler, self.test_sampler]):
+        for idxs_map, (augs, augs_append), sampler_apply, batch_size \
+                in zip([train_idxs, valid_idxs, test_idxs],
+                       [(self.train_augments, self.train_augments_append),
+                        (self.valid_augments, self.valid_augments_append),
+                        (self.test_augments, self.test_augments_append)],
+                       [self.train_sampler, self.valid_sampler, self.test_sampler],
+                       [self.train_batch_size, self.valid_batch_size, self.test_batch_size]):
             loader_sample_idx_offset = 0
             loader_sample_classes = []
             loader_sample_idxs = []
@@ -687,8 +694,10 @@ class _LoaderFactory(object):
                         sampler = self.sampler_type(loader_sample_idxs, **self.sampler_params)
                 else:
                     sampler = torch.utils.data.sampler.SubsetRandomSampler(loader_sample_idxs)
+                if batch_size is None or batch_size <= 0:
+                    raise AssertionError("invalid batch size")
                 loaders.append(torch.utils.data.DataLoader(dataset,
-                                                           batch_size=self.batch_size,
+                                                           batch_size=batch_size,
                                                            sampler=sampler,
                                                            num_workers=self.workers,
                                                            pin_memory=self.pin_memory,
