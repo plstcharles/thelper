@@ -41,6 +41,8 @@ def create_loaders(config, save_dir=None):
 
     - ``<train_/valid_/test_>batch_size`` (mandatory): specifies the (mini)batch size to use in data
       loaders. If you get an 'out of memory' error at runtime, try reducing it.
+    - ``<train_/valid_/test_>collate_fn`` (optional): specifies the collate function to use in data
+      loaders. The default one is typically fine, but some datasets might require a custom function.
     - ``shuffle`` (optional, default=True): specifies whether the data loaders should shuffle
       their samples or not.
     - ``test_seed`` (optional): specifies the RNG seed to use when splitting test data. If no seed
@@ -374,16 +376,24 @@ class _LoaderFactory(object):
         logger.debug("loading data config")
         if not isinstance(config, dict):
             raise AssertionError("input config should be dict")
-        default_batch_size = None
+        default_batch_size = 0
         if "batch_size" in config:
             if any([v in config for v in ["train_batch_size", "valid_batch_size", "test_batch_size"]]):
-                raise AssertionError("specifying 'batch_size' overrides all other (per-loader) values")
+                raise AssertionError("specifying 'batch_size' overrides all other (loader-specific) values")
             default_batch_size = int(thelper.utils.get_key("batch_size", config))
         self.train_batch_size = thelper.utils.get_key_def("train_batch_size", config, default_batch_size)
         self.valid_batch_size = thelper.utils.get_key_def("valid_batch_size", config, default_batch_size)
         self.test_batch_size = thelper.utils.get_key_def("test_batch_size", config, default_batch_size)
         logger.debug("loaders will use batch sizes:\n  train = %d\n  valid = %d\n  test = %d" %
                      (self.train_batch_size, self.valid_batch_size, self.test_batch_size))
+        default_collate_fn = torch.utils.data.dataloader.default_collate
+        if "collate_fn" in config:
+            if any([v in config for v in ["train_collate_fn", "valid_collate_fn", "test_collate_fn"]]):
+                raise AssertionError("specifying 'collate_fn' overrides all other (loader-specific) values")
+            default_collate_fn = self._get_collate_fn(config["collate_fn"])
+        self.train_collate_fn = self._get_collate_fn(thelper.utils.get_key_def("train_collate_fn", config, default_collate_fn))
+        self.valid_collate_fn = self._get_collate_fn(thelper.utils.get_key_def("valid_collate_fn", config, default_collate_fn))
+        self.test_collate_fn = self._get_collate_fn(thelper.utils.get_key_def("test_collate_fn", config, default_collate_fn))
         self.shuffle = thelper.utils.str2bool(config["shuffle"]) if "shuffle" in config else True
         if self.shuffle:
             logger.debug("dataset samples will be shuffled according to predefined seeds")
@@ -457,6 +467,23 @@ class _LoaderFactory(object):
                     if name in self.test_split:
                         self.test_split[name] /= usage
         self.skip_verif = thelper.utils.str2bool(config["skip_verif"]) if "skip_verif" in config else True
+
+    @staticmethod
+    def _get_collate_fn(val):
+        if val is torch.utils.data.dataloader.default_collate:
+            return val
+        if isinstance(val, dict):
+            if "type" not in val or "params" not in val:
+                raise AssertionError("unexpected collate function parameter binding dictionary content")
+            if not isinstance(val["type"], str):
+                raise AssertionError("unexpected collate function type")
+            if not isinstance(val["params"], dict):
+                raise AssertionError("unexpected collate function params dict type")
+            return thelper.utils.import_function(val["type"], val["params"])
+        elif isinstance(val, str):
+            return thelper.utils.import_function(val)
+        else:
+            raise AssertionError("unexpected collate val type")
 
     @staticmethod
     def _get_seed(prefixes, config, stype):
@@ -654,18 +681,21 @@ class _LoaderFactory(object):
             A three-element tuple containing the training, validation, and test data loaders, respectively.
         """
         loaders = []
-        for idxs_map, (augs, augs_append), sampler_apply, batch_size \
+        for idxs_map, (augs, augs_append), sampler_apply, batch_size, collate_fn \
                 in zip([train_idxs, valid_idxs, test_idxs],
                        [(self.train_augments, self.train_augments_append),
                         (self.valid_augments, self.valid_augments_append),
                         (self.test_augments, self.test_augments_append)],
                        [self.train_sampler, self.valid_sampler, self.test_sampler],
-                       [self.train_batch_size, self.valid_batch_size, self.test_batch_size]):
+                       [self.train_batch_size, self.valid_batch_size, self.test_batch_size],
+                       [self.train_collate_fn, self.valid_collate_fn, self.test_collate_fn]):
             loader_sample_idx_offset = 0
             loader_sample_classes = []
             loader_sample_idxs = []
             loader_datasets = []
             for dataset_name, sample_idxs in idxs_map.items():
+                if not sample_idxs:
+                    continue
                 if datasets[dataset_name].bypass_deepcopy:
                     dataset = copy.copy(datasets[dataset_name])
                 else:
@@ -700,6 +730,7 @@ class _LoaderFactory(object):
                                                            batch_size=batch_size,
                                                            sampler=sampler,
                                                            num_workers=self.workers,
+                                                           collate_fn=collate_fn,
                                                            pin_memory=self.pin_memory,
                                                            drop_last=self.drop_last,
                                                            worker_init_fn=self._worker_init_fn))
