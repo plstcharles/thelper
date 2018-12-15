@@ -5,6 +5,7 @@ and matplotlib/pyplot drawing calls.
 """
 import copy
 import errno
+import functools
 import glob
 import importlib
 import inspect
@@ -261,8 +262,7 @@ def resolve_import(fullname):
 
 
 def import_class(fullname):
-    """
-    General-purpose runtime class importer.
+    """General-purpose runtime class importer.
 
     Args:
         fullname: the fully qualified class name to be imported.
@@ -274,6 +274,24 @@ def import_class(fullname):
     module_name, class_name = fullname.rsplit('.', 1)
     module = importlib.import_module(module_name)
     return getattr(module, class_name)
+
+
+def import_function(fullname, params=None):
+    """General-purpose runtime function importer, with support for param binding.
+
+    Args:
+        fullname: the fully qualified function name to be imported.
+        params: optional params dictionary to bind to the function call via functools.
+
+    Returns:
+        The imported function, with optionally bound parameters.
+    """
+    func = import_class(fullname)
+    if params is not None:
+        if not isinstance(params, dict):
+            raise AssertionError("unexpected params dict type")
+        return functools.partial(func, **params)
+    return func
 
 
 def get_class_logger(skip=0):
