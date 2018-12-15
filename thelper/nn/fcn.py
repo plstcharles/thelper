@@ -82,7 +82,7 @@ class FCN32s(thelper.nn.Module):
         score = self.classifier(conv)
         out = self.upscaler(score)
         out = out[:, :, 19:(19 + x.size()[2]), 19:(19 + x.size()[3])].contiguous()
-        #out = torch.nn.functional.upsample(score, x.size()[2:], mode="nearest")
+        #out = torch.nn.functional.upsample(score, x.size()[2:], mode="bilinear")
         return out
 
     def set_task(self, task):
