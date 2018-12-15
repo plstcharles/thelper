@@ -411,7 +411,7 @@ class ExternalDataset(Dataset):
             warn_dictionary = True
         elif isinstance(sample, dict):
             out_sample = {}
-            for key, subs in sample.keys():
+            for key, subs in sample.items():
                 if isinstance(subs, (np.ndarray, PIL.Image.Image, torch.Tensor)):
                     if self.transforms:
                         subs = self.transforms(subs)
