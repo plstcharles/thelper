@@ -94,7 +94,7 @@ class Segmentation(Task):
 
     def get_class_names(self):
         """Returns the list of class names to be predicted by the model."""
-        return self.class_map.keys()
+        return list(self.class_map.keys())
 
     def get_nb_classes(self):
         """Returns the number of classes (or labels) to be predicted by the model."""
