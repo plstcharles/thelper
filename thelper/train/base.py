@@ -3,6 +3,7 @@
 This module contains the interface required to train and/or evaluate a model based on different tasks. The trainers
 based on this interface are instantiated in launched sessions based on configuration dictionaries.
 """
+import copy
 import inspect
 import logging
 import math
@@ -338,6 +339,7 @@ class Trainer:
             raise AssertionError("loss config missing 'type' field")
         loss_type = thelper.utils.import_class(config["type"])
         loss_params = thelper.utils.get_key_def("params", config, {})
+        loss_params = copy.deepcopy(loss_params)  # required here, we might add some parameters below
         if thelper.utils.str2bool(thelper.utils.get_key_def("weight_classes", config, False)) or \
            thelper.utils.get_key_def("weight_distribution", config, None) is not None:
             if not thelper.utils.str2bool(thelper.utils.get_key_def("weight_classes", config, True)):
