@@ -88,7 +88,7 @@ class FCN32s(thelper.nn.Module):
     def set_task(self, task):
         if isinstance(task, thelper.tasks.Segmentation):
             num_classes = len(task.get_class_names())
-            if self.classifier is None or self.classifier[-1].out_features != num_classes:
+            if self.classifier is None or list(self.classifier.modules())[-1].out_channels != num_classes:
                 self.classifier = torch.nn.Sequential(
                     torch.nn.Conv2d(512, 4096, kernel_size=7, stride=1, padding=0),
                     torch.nn.ReLU(inplace=True),
