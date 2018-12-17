@@ -317,7 +317,7 @@ class BinaryAccuracy(Metric):
         if gt is None or gt.numel() == 0:
             return  # only accumulating results when groundtruth available
         if pred.dim() != gt.dim() + 1:
-            raise AssertionError("prediction/gt tensors dim mismatch (should be BxCx... and Bx...")
+            raise AssertionError("prediction/gt tensors dim mismatch (should be BxCx... and Bx...)")
         if pred.shape[0] != gt.shape[0]:
             raise AssertionError("prediction/gt tensors batch size mismatch")
         if pred.dim() > 2 and pred.shape[2:] != gt.shape[1:]:
@@ -365,6 +365,244 @@ class BinaryAccuracy(Metric):
     def goal(self):
         """Returns the scalar optimization goal of this metric (maximization)."""
         return Metric.maximize
+
+
+class MeanAbsoluteError(Metric):
+    r"""Mean absolute error metric interface.
+
+    This is a scalar metric used to monitor the mean absolute deviation (or error) for a model's
+    predictions. This regression metric can be described as:
+
+    .. math::
+        e(x, y) = E = \{e_1,\dots,e_N\}^\top, \quad
+        e_n = \left| x_n - y_n \right|,
+
+    where :math:`N` is the batch size. If ``reduction`` is not ``'none'``, then:
+
+    .. math::
+        MAE(x, y) =
+        \begin{cases}
+            \operatorname{mean}(E), & \text{if reduction } = \text{mean.}\\
+            \operatorname{sum}(E),  & \text{if reduction } = \text{sum.}
+        \end{cases}
+
+    `x` and `y` are tensors of arbitrary shapes with a total of `n` elements each.
+
+    Usage example inside a session configuration file::
+
+        # ...
+        # lists all metrics to instantiate as a dictionary
+        "metrics": {
+            # ...
+            # this is the name of the example metric; it is used for lookup/printing only
+            "mae": {
+                # this type is used to instantiate the error metric
+                "type": "thelper.optim.metrics.MeanAbsoluteError",
+                "params": [
+                    "reduction": "mean"
+                ]
+            },
+            # ...
+        }
+        # ...
+
+    Todo: add support for 'dont care' target value?
+
+    Attributes:
+        max_accum: if using a moving average, this is the window size to use (default=None).
+        reduction: string representing the tensor reduction strategy to use.
+        errors: queue of error values stored for window-based averaging.
+        warned_eval_bad: toggles whether the division-by-zero warning has been flagged or not.
+    """
+
+    def __init__(self, reduction="mean", max_accum=None):
+        """Receives the reduction strategy and moving average window size (max_accum).
+
+        Note that by default, even if max_accum is not provided here, it can still be set by the
+        trainer at runtime through the :func:`thelper.optim.metrics.BinaryAccuracy.set_max_accum` function.
+        This is fairly useful as the total size of the training dataset is unlikely to be known when
+        metrics are instantiated.
+        """
+        self.reduction = reduction
+        self.max_accum = max_accum
+        self.errors = deque()
+        self.warned_eval_bad = False
+        if reduction != "mean":
+            raise NotImplementedError  # will only be supported with PyTorch version > 1.0.0
+
+    def accumulate(self, pred, target, meta=None):
+        """Receives the latest predictions and target values from the training session.
+
+        The inputs are expected to still be in ``torch.Tensor`` format, but must be located on the
+        CPU. This function computes and accumulate the error in the queue, popping it if the maximum
+        window length is reached.
+
+        Args:
+            pred: model prediction values forwarded by the trainer.
+            target: target prediction values forwarded by the trainer (can be ``None`` if unavailable).
+            meta: metadata forwarded by the trainer (unused).
+        """
+        if target is None or target.numel() == 0:
+            return  # only accumulating results when groundtruth available
+        if pred.shape != target.shape:
+            raise AssertionError("prediction/gt tensors shape mismatch")
+        self.errors.append(torch.nn.functional.l1_loss(pred, target).numpy())  # add reduction here w/ PyTorch v1.0.0
+        if self.max_accum and len(self.errors) > self.max_accum:
+            self.errors.popleft()
+
+    def eval(self):
+        """Returns the current (average) mean absolute error based on the accumulated values.
+
+        Will issue a warning if no predictions have been accumulated yet.
+        """
+        if len(self.errors) == 0:
+            if not self.warned_eval_bad:
+                self.warned_eval_bad = True
+                logger.warning("mean absolute error eval result invalid (set as 0.0), no results accumulated")
+            return 0.0
+        return np.mean(np.asarray(list(self.errors)), axis=0, dtype=np.float32)
+
+    def reset(self):
+        """Toggles a reset of the metric's internal state, emptying the error queue."""
+        self.errors = deque()
+
+    def needs_reset(self):
+        """If the metric is currently operating in moving average mode, then it does not need to
+        be reset (returns ``False``); else returns ``True``."""
+        return self.max_accum is None
+
+    def set_max_accum(self, max_accum):
+        """Sets the moving average window size.
+
+        This is fairly useful as the total size of the training dataset is unlikely to be known when
+        metrics are instantiated. The current implementation of :class:`thelper.train.trainers.Trainer`
+        will look for this member function and automatically call it with the dataset size when it is
+        available.
+        """
+        self.max_accum = max_accum
+
+    def goal(self):
+        """Returns the scalar optimization goal of this metric (minimization)."""
+        return Metric.minimize
+
+
+class MeanSquaredError(Metric):
+    r"""Mean squared error metric interface.
+
+    This is a scalar metric used to monitor the mean squared deviation (or error) for a model's
+    predictions. This regression metric can be described as:
+
+    .. math::
+        e(x, y) = E = \{e_1,\dots,e_N\}^\top, \quad
+        e_n = \left( x_n - y_n \right)^2,
+
+    where :math:`N` is the batch size. If ``reduction`` is not ``'none'``, then:
+
+    .. math::
+        MSE(x, y) =
+        \begin{cases}
+            \operatorname{mean}(E), & \text{if reduction } = \text{mean.}\\
+            \operatorname{sum}(E),  & \text{if reduction } = \text{sum.}
+        \end{cases}
+
+    `x` and `y` are tensors of arbitrary shapes with a total of `n` elements each.
+
+    Usage example inside a session configuration file::
+
+        # ...
+        # lists all metrics to instantiate as a dictionary
+        "metrics": {
+            # ...
+            # this is the name of the example metric; it is used for lookup/printing only
+            "mae": {
+                # this type is used to instantiate the error metric
+                "type": "thelper.optim.metrics.MeanSquaredError",
+                "params": [
+                    "reduction": "mean"
+                ]
+            },
+            # ...
+        }
+        # ...
+
+    Todo: add support for 'dont care' target value?
+
+    Attributes:
+        max_accum: if using a moving average, this is the window size to use (default=None).
+        reduction: string representing the tensor reduction strategy to use.
+        errors: queue of error values stored for window-based averaging.
+        warned_eval_bad: toggles whether the division-by-zero warning has been flagged or not.
+    """
+
+    def __init__(self, reduction="mean", max_accum=None):
+        """Receives the reduction strategy and moving average window size (max_accum).
+
+        Note that by default, even if max_accum is not provided here, it can still be set by the
+        trainer at runtime through the :func:`thelper.optim.metrics.BinaryAccuracy.set_max_accum` function.
+        This is fairly useful as the total size of the training dataset is unlikely to be known when
+        metrics are instantiated.
+        """
+        self.reduction = reduction
+        self.max_accum = max_accum
+        self.errors = deque()
+        self.warned_eval_bad = False
+        if reduction != "mean":
+            raise NotImplementedError  # will only be supported with PyTorch version > 1.0.0
+
+    def accumulate(self, pred, target, meta=None):
+        """Receives the latest predictions and target values from the training session.
+
+        The inputs are expected to still be in ``torch.Tensor`` format, but must be located on the
+        CPU. This function computes and accumulate the error in the queue, popping it if the maximum
+        window length is reached.
+
+        Args:
+            pred: model prediction values forwarded by the trainer.
+            target: target prediction values forwarded by the trainer (can be ``None`` if unavailable).
+            meta: metadata forwarded by the trainer (unused).
+        """
+        if target is None or target.numel() == 0:
+            return  # only accumulating results when groundtruth available
+        if pred.shape != target.shape:
+            raise AssertionError("prediction/gt tensors shape mismatch")
+        self.errors.append(torch.nn.functional.mse_loss(pred, target).numpy())  # add reduction here w/ PyTorch v1.0.0
+        if self.max_accum and len(self.errors) > self.max_accum:
+            self.errors.popleft()
+
+    def eval(self):
+        """Returns the current (average) mean squared error based on the accumulated values.
+
+        Will issue a warning if no predictions have been accumulated yet.
+        """
+        if len(self.errors) == 0:
+            if not self.warned_eval_bad:
+                self.warned_eval_bad = True
+                logger.warning("mean squared error eval result invalid (set as 0.0), no results accumulated")
+            return 0.0
+        return np.mean(np.asarray(list(self.errors)), axis=0, dtype=np.float32)
+
+    def reset(self):
+        """Toggles a reset of the metric's internal state, emptying the error queue."""
+        self.errors = deque()
+
+    def needs_reset(self):
+        """If the metric is currently operating in moving average mode, then it does not need to
+        be reset (returns ``False``); else returns ``True``."""
+        return self.max_accum is None
+
+    def set_max_accum(self, max_accum):
+        """Sets the moving average window size.
+
+        This is fairly useful as the total size of the training dataset is unlikely to be known when
+        metrics are instantiated. The current implementation of :class:`thelper.train.trainers.Trainer`
+        will look for this member function and automatically call it with the dataset size when it is
+        available.
+        """
+        self.max_accum = max_accum
+
+    def goal(self):
+        """Returns the scalar optimization goal of this metric (minimization)."""
+        return Metric.minimize
 
 
 class ExternalMetric(Metric):
