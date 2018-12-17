@@ -193,12 +193,18 @@ class CategoryAccuracy(Metric):
             gt: groundtruth labels forwarded by the trainer (can be ``None`` if unavailable).
             meta: metadata forwarded by the trainer (unused).
         """
-        if gt is None:
+        if gt is None or gt.numel() == 0:
             return  # only accumulating results when groundtruth available
-        top_k = pred.topk(self.top_k, 1)[1].view(pred.shape[0], self.top_k, -1)
-        true_k = gt.view(gt.shape[0], 1, -1).expand(-1, self.top_k, -1)
-        self.correct.append(top_k.long().eq(true_k.long()).float().sum().item())
-        self.total.append(pred.numel())
+        if pred.dim() != gt.dim() + 1:
+            raise AssertionError("prediction/gt tensors dim mismatch (should be BxCx... and Bx...")
+        if pred.shape[0] != gt.shape[0]:
+            raise AssertionError("prediction/gt tensors batch size mismatch")
+        if pred.dim() > 2 and pred.shape[2:] != gt.shape[1:]:
+            raise AssertionError("prediction/gt tensors array size mismatch")
+        top_k = pred.topk(self.top_k, 1)[1].view(pred.shape[0], self.top_k, -1).numpy()
+        true_k = gt.view(gt.shape[0], 1, -1).expand(-1, self.top_k, -1).numpy()
+        self.correct.append(np.any(np.equal(top_k, true_k), axis=1).sum(dtype=np.int64))
+        self.total.append(gt.numel())
         if self.max_accum and len(self.correct) > self.max_accum:
             self.correct.popleft()
             self.total.popleft()
