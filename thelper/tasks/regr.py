@@ -2,14 +2,9 @@
 
 This module contains a class that defines the objectives of models/trainers for regression tasks.
 """
-import copy
-import json
 import logging
-import os
 
 import numpy as np
-import torch
-import tqdm
 
 from thelper.tasks.utils import Task
 

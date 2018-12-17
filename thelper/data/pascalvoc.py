@@ -11,9 +11,9 @@ import xml.etree.ElementTree
 import cv2 as cv
 import numpy as np
 
-from thelper.data.parsers import Dataset
 import thelper.tasks
 import thelper.utils
+from thelper.data.parsers import Dataset
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +176,8 @@ class PASCALVOC(Dataset):
         if self.preload:
             from tqdm import tqdm
         else:
-            def tqdm(x): return x
+            def tqdm(x):
+                return x
         for sample_name in tqdm(sample_names):
             annotation_file_path = os.path.join(dataset_path, "Annotations", sample_name + ".xml")
             if not os.path.isfile(annotation_file_path):

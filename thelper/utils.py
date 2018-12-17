@@ -9,7 +9,7 @@ import functools
 import glob
 import importlib
 import inspect
-import io  # noqa: F401
+import io
 import itertools
 import json
 import logging
@@ -19,7 +19,7 @@ import platform
 import re
 import sys
 import time
-from typing import Any, AnyStr, Callable, Dict, Tuple, List, Optional, Union  # noqa: F401
+from typing import Any, AnyStr, Callable, Dict, List, Optional, Tuple, Union  # noqa: F401
 
 import cv2 as cv
 import matplotlib.pyplot as plt
@@ -190,7 +190,6 @@ def extract_tar(filepath, root, flags="r:gz"):
         root: where to extract the archive's content.
         flags: extra flags passed to ``tarfile.open``.
     """
-    import io
     import tarfile
 
     class _FileWrapper(io.FileIO):
