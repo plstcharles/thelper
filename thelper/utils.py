@@ -113,10 +113,8 @@ def load_checkpoint(ckpt,               # type: Union[AnyStr, io.FileIO]
     Returns:
         Content of the checkpoint (a dictionary).
     """
-
-    if not map_location and not get_available_cuda_devices():
+    if map_location is None and not get_available_cuda_devices():
         map_location = 'cpu'
-
     ckptdata = torch.load(ckpt, map_location=map_location)
     if not isinstance(ckptdata, dict):
         raise AssertionError("unexpected checkpoint data type")
