@@ -201,7 +201,7 @@ class CategoryAccuracy(Metric):
             raise AssertionError("prediction/gt tensors batch size mismatch")
         if pred.dim() > 2 and pred.shape[2:] != gt.shape[1:]:
             raise AssertionError("prediction/gt tensors array size mismatch")
-        top_k = pred.topk(self.top_k, 1)[1].view(pred.shape[0], self.top_k, -1).numpy()
+        top_k = pred.topk(self.top_k, dim=1)[1].view(pred.shape[0], self.top_k, -1).numpy()
         true_k = gt.view(gt.shape[0], 1, -1).expand(-1, self.top_k, -1).numpy()
         self.correct.append(np.any(np.equal(top_k, true_k), axis=1).sum(dtype=np.int64))
         self.total.append(gt.numel())
@@ -314,13 +314,18 @@ class BinaryAccuracy(Metric):
             gt: groundtruth labels forwarded by the trainer (can be ``None`` if unavailable).
             meta: metadata forwarded by the trainer (unused).
         """
-        if gt is None:
+        if gt is None or gt.numel() == 0:
             return  # only accumulating results when groundtruth available
-        pred = pred.topk(1, 1)[1].view(len(gt))
-        if pred.size() != gt.size():
-            raise AssertionError("pred and gt should have similar size")
-        self.correct.append(pred.eq(gt).float().sum().item())
-        self.total.append(len(pred))
+        if pred.dim() != gt.dim() + 1:
+            raise AssertionError("prediction/gt tensors dim mismatch (should be BxCx... and Bx...")
+        if pred.shape[0] != gt.shape[0]:
+            raise AssertionError("prediction/gt tensors batch size mismatch")
+        if pred.dim() > 2 and pred.shape[2:] != gt.shape[1:]:
+            raise AssertionError("prediction/gt tensors array size mismatch")
+        top = pred.topk(1, dim=1)[1].view(pred.shape[0], 1, -1).numpy()
+        true = gt.view(gt.shape[0], 1, -1).numpy()
+        self.correct.append(np.any(np.equal(top, true), axis=1).sum(dtype=np.int64))
+        self.total.append(gt.numel())
         if self.max_accum and len(self.correct) > self.max_accum:
             self.correct.popleft()
             self.total.popleft()
