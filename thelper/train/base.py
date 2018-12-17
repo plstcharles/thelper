@@ -199,8 +199,6 @@ class Trainer:
         elif "train_device" in trainer_config:  # for backw compat only
             devices_str = trainer_config["train_device"]
         self.devices = self._load_devices(devices_str)
-        if "loss" in trainer_config:  # warning for older configs only
-            self.logger.warning("trainer config has 'loss' field, but it should now be moved inside the 'optimization' field")
         if "metrics" in trainer_config and "base_metrics" in trainer_config:
             raise AssertionError("trainer config should have only one of 'metrics' and 'base_metrics'")
         if ("metrics" in trainer_config and trainer_config["metrics"]) or \
@@ -293,10 +291,9 @@ class Trainer:
             raise AssertionError("config should be provided as a dictionary")
         if self.train_loader is None or not self.train_loader:
             raise AssertionError("optimization only useful if training data is available")
-        if "loss" not in config or not config["loss"]:
-            raise AssertionError("optimization config missing 'loss' field\n"
-                                 "(is it still located in 'trainer'? just move it to 'optimization'!)")
-        loss = self._load_loss(config["loss"])
+        loss = None  # can now be omitted if using custom trainer
+        if "loss" in config:
+            loss = self._load_loss(config["loss"], model)
         if "optimizer" not in config or not config["optimizer"]:
             raise AssertionError("optimization config missing 'optimizer' field")
         optimizer = self._load_optimizer(config["optimizer"], model)
@@ -305,13 +302,49 @@ class Trainer:
             scheduler, scheduler_step_metric = self._load_scheduler(config["scheduler"], optimizer)
         return loss, optimizer, scheduler, scheduler_step_metric
 
-    def _load_loss(self, config):
+    def _load_loss(self, config, model):
         """Instantiates and returns the loss function to use for training.
 
+        The default way to specify the loss function to use is to provide a callable type to instantiate
+        as well as its initialization parameters. For example::
+
+            # ...
+            "loss": {
+                # if we want to use PyTorch's cross entropy loss:
+                #  >>> loss_fn = torch.nn.CrossEntropyLoss(**params)
+                #  >>> ...
+                #  >>> loss = loss_fn(pred, target)
+                "type": "torch.nn.CrossEntropyLoss"
+                "params": {
+                    "weight": [ ... ],
+                    "reduction": "mean",
+                    # ...
+                }
+            },
+            # ...
+
+        The loss function can also be queried from a member function of the model class, as such::
+
+            # ...
+            "loss": {
+                # to query the model for the loss function:
+                #  >>> loss_fn = model.get_loss_fn(**params)
+                #  >>> ...
+                #  >>> loss = loss_fn(pred, target)
+                "model_getter": "get_loss_fn"
+                "params": {
+                    # ...
+                }
+            },
+            # ...
+
+        If the model is supposed to compute its own loss, we suggest creating a specialized trainer class. In that
+        case only, the 'loss' field can be omitted from the session configuration file.
+
         If the task is related to image classification or semantic segmentation, the classes can be weighted based
-        on extra parameters in the ``loss`` configuration. The strategy used to compute the weights is related to the
-        one in :class:`thelper.data.samplers.WeightedSubsetRandomSampler`. The exact parameters that are expected for
-        class reweighting are the following:
+        on extra parameters in the loss configuration. The strategy used to compute the weights is related to the
+        one in :class:`thelper.data.samplers.WeightedSubsetRandomSampler`. The exact parameters that are expected
+        for class reweighting are the following:
 
         - ``weight_distribution`` (mandatory, toggle): the dictionary of weights assigned to each class, or the
           rebalancing strategy to use. If omitted entirely, no class weighting will be performed.
@@ -335,9 +368,19 @@ class Trainer:
         self.logger.debug("loading loss")
         if not isinstance(config, dict):
             raise AssertionError("config should be provided as a dictionary")
-        if "type" not in config or not config["type"]:
-            raise AssertionError("loss config missing 'type' field")
-        loss_type = thelper.utils.import_class(config["type"])
+        if "model_getter" in config and "type" in config:
+            raise AssertionError("loss config cannot have both 'model_attrib_name' and 'type' fields")
+        if "model_getter" in config:
+            model_getter_name = config["model_getter"]
+            if not isinstance(model_getter_name, str):
+                raise AssertionError("unexpected model getter name type")
+            if not hasattr(model, model_getter_name) or not callable(getattr(model, model_getter_name)):
+                raise AssertionError("invalid model getter attribute")
+            loss_type = getattr(model, model_getter_name)
+        elif "type" in config:
+            loss_type = thelper.utils.import_class(config["type"])
+        else:
+            raise AssertionError("loss config missing 'type' or 'model_attrib_name' field")
         loss_params = thelper.utils.get_key_def("params", config, {})
         loss_params = copy.deepcopy(loss_params)  # required here, we might add some parameters below
         if thelper.utils.str2bool(thelper.utils.get_key_def("weight_classes", config, False)) or \

@@ -75,6 +75,8 @@ class ImageSegmTrainer(Trainer):
             metrics: the list of metrics to evaluate after every iteration.
             writer: the writer used to store tbx events/messages/metrics.
         """
+        if not loss:
+            raise AssertionError("missing loss function")
         if not optimizer:
             raise AssertionError("missing optimizer")
         if not loader:
