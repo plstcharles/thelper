@@ -4,7 +4,6 @@ channels:
 dependencies:
   - pytorch=0.4.0
   - numpy
-  - tensorflow
   - cython
   - matplotlib
   - opencv

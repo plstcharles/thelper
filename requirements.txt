@@ -3,10 +3,7 @@ torchvision
 matplotlib
 cython
 opencv-python
-# tensorflow required for tensorboard only
-tensorflow
-# numpy version requirement set by tensorflow
-numpy<=1.14.5
+numpy
 pynput
 scipy
 scikit-learn
