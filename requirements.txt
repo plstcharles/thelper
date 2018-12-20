@@ -8,7 +8,7 @@ pynput
 scipy
 scikit-learn
 augmentor
-tensorboardX==1.2
+tensorboardX
 gitpython
 pip
 six

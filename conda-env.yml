@@ -13,6 +13,6 @@ dependencies:
   - tqdm
   - pip:
     - augmentor
-    - tensorboardX==1.2
+    - tensorboardX
     - torchvision
     - pynput
