@@ -214,3 +214,11 @@ def create_scheduler(config, optimizer):
     if "step_metric" in config:
         scheduler_step_metric = config["step_metric"]
     return scheduler, scheduler_step_metric
+
+
+def get_lr(optimizer):
+    """Returns the optimizer's learning rate, or 0 if not found."""
+    for param_group in optimizer.param_groups:
+        if "lr" in param_group:
+            return param_group["lr"]
+    return 0

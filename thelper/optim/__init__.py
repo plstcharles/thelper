@@ -25,5 +25,6 @@ from thelper.optim.utils import create_loss_fn  # noqa: F401
 from thelper.optim.utils import create_metrics  # noqa: F401
 from thelper.optim.utils import create_optimizer  # noqa: F401
 from thelper.optim.utils import create_scheduler  # noqa: F401
+from thelper.optim.utils import get_lr  # noqa: F401
 
 logger = logging.getLogger("thelper.optim")
