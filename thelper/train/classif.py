@@ -151,14 +151,13 @@ class ImageClassifTrainer(Trainer):
                 )
                 if writer:
                     writer.add_scalar("iter/loss", iter_loss.item(), iter)
-                    writer.add_scalar("iter/lr", self._get_lr(optimizer), iter)
                     for metric_name, metric in metrics.items():
                         if metric.is_scalar():  # only useful assuming that scalar metrics are smoothed...
                             writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
         epoch_loss /= epoch_size
         if writer:
             writer.add_scalar("epoch/loss", epoch_loss, epoch)
-            writer.add_scalar("epoch/lr", self._get_lr(optimizer), epoch)
+            writer.add_scalar("epoch/lr", thelper.optim.get_lr(optimizer), epoch)
         return epoch_loss, iter
 
     def _eval_epoch(self, model, epoch, iter, dev, loader, metrics, writer=None):

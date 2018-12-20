@@ -384,7 +384,7 @@ class Trainer:
                             raise AssertionError("cannot use metric '%s' for scheduler step" % scheduler_step_metric)
                 else:
                     scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
-            self.logger.debug("learning rate at %.8f" % self._get_lr(optimizer))
+            self.logger.debug("learning rate at %.8f" % thelper.optim.get_lr(optimizer))
             model.train()
             if self.use_tbx and not train_writer:
                 train_writer = self.tbx.SummaryWriter(log_dir=self.train_output_path, comment=self.name)
@@ -559,13 +559,6 @@ class Trainer:
             writer: the writer used to store tbx events/messages/metrics.
         """
         raise NotImplementedError
-
-    def _get_lr(self, optimizer):
-        """Returns the optimizer's learning rate, or 0 if not found."""
-        for param_group in optimizer.param_groups:
-            if "lr" in param_group:
-                return param_group["lr"]
-        return 0
 
     def _write_epoch_metrics(self, epoch, metrics, tbx_writer, output_path, prefix):
         """Writes the cumulative evaluation result of all metrics using a specific writer."""
