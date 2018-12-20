@@ -3,6 +3,7 @@
 This module contains the interface required to train and/or evaluate a model based on different tasks. The trainers
 based on this interface are instantiated in launched sessions based on configuration dictionaries.
 """
+import json
 import logging
 import math
 import os
@@ -387,6 +388,7 @@ class Trainer:
             model.train()
             if self.use_tbx and not train_writer:
                 train_writer = self.tbx.SummaryWriter(log_dir=self.train_output_path, comment=self.name)
+                train_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
             for metric in self.train_metrics.values():
                 if hasattr(metric, "set_max_accum") and callable(metric.set_max_accum):
                     metric.set_max_accum(len(self.train_loader))  # used to make scalar metric evals smoother between epochs
@@ -411,6 +413,7 @@ class Trainer:
                 model.eval()
                 if self.use_tbx and not valid_writer:
                     valid_writer = self.tbx.SummaryWriter(log_dir=self.valid_output_path, comment=self.name)
+                    valid_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
                 for metric in self.valid_metrics.values():
                     metric.reset()  # force reset here, we always evaluate from a clean state
                 self._eval_epoch(model, epoch, self.current_iter, self.devices,
@@ -462,6 +465,7 @@ class Trainer:
             model.eval()
             if self.use_tbx and not test_writer:
                 test_writer = self.tbx.SummaryWriter(log_dir=self.test_output_path, comment=self.name)
+                test_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
             for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
             self._eval_epoch(model, best_epoch, best_iter, self.devices,
@@ -495,6 +499,7 @@ class Trainer:
         if self.test_loader:
             if self.use_tbx and not test_writer:
                 test_writer = self.tbx.SummaryWriter(log_dir=self.test_output_path, comment=self.name)
+                test_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
             for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
             self._eval_epoch(model, self.current_epoch, self.current_iter, self.devices,
@@ -505,6 +510,7 @@ class Trainer:
         elif self.valid_loader:
             if self.use_tbx and not valid_writer:
                 valid_writer = self.tbx.SummaryWriter(log_dir=self.valid_output_path, comment=self.name)
+                valid_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
             for metric in self.valid_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
             self._eval_epoch(model, self.current_epoch, self.current_iter, self.devices,
