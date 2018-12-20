@@ -169,13 +169,12 @@ class Trainer:
         output_root_dir = os.path.join(save_dir, "output", self.name)
         if not os.path.exists(output_root_dir):
             os.makedirs(output_root_dir)
-        self.use_tbx = False
-        if "use_tbx" in trainer_config:
-            self.use_tbx = thelper.utils.str2bool(trainer_config["use_tbx"])
-            if self.use_tbx:
-                import tensorboardX
-                self.tbx = tensorboardX
-                self.logger.debug("tensorboard init : tensorboard --logdir %s --port <your_port>" % output_root_dir)
+        self.use_tbx = thelper.utils.str2bool(thelper.utils.get_key_def("use_tbx", trainer_config, False))
+        if self.use_tbx:
+            import tensorboardX
+            self.tbx = tensorboardX
+            self.logger.debug("tensorboard init : tensorboard --logdir %s --port <your_port>" % output_root_dir)
+        self.skip_tbx_histograms = thelper.utils.str2bool(thelper.utils.get_key_def("skip_tbx_histograms", trainer_config, False))
         timestr = time.strftime("%Y%m%d-%H%M%S")
         train_foldername = "train-%s-%s" % (platform.node(), timestr)
         valid_foldername = "valid-%s-%s" % (platform.node(), timestr)
@@ -396,6 +395,15 @@ class Trainer:
             latest_loss, self.current_iter = self._train_epoch(model, epoch, self.current_iter, self.devices, loss, optimizer,
                                                                self.train_loader, self.train_metrics, train_writer)
             self._write_epoch_metrics(epoch, self.train_metrics, train_writer, self.train_output_path, "train")
+            if train_writer and not self.skip_tbx_histograms:
+                for pname, param in model.named_parameters():
+                    if "bn" in pname:
+                        continue  # skip batch norm modules
+                    pname = pname.replace(".", "/")  # for proper grouping
+                    data = param.data.cpu().numpy().flatten()
+                    grad = param.grad.data.cpu().numpy().flatten()
+                    train_writer.add_histogram(pname, data, epoch)
+                    train_writer.add_histogram(pname + '/grad', grad, epoch)
             train_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.train_metrics.items()}
             result = {"train/loss": latest_loss, "train/metrics": train_metric_vals}
             monitor_type_key = "train/metrics"  # if we cannot run validation, will monitor progression on training metrics
