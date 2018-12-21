@@ -172,3 +172,65 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
         This number is the scaled size of the originally provided sample indices list.
         """
         return self.nb_samples
+
+
+class SubsetRandomSampler(torch.utils.data.sampler.Sampler):
+    r"""Samples elements randomly from a given list of indices, without replacement.
+
+    This specialization handles seeding based on the epoch number.
+
+    Arguments:
+        indices (list): a list of indices
+        seeds (dict): dictionary of seeds to use when initializing RNG state.
+        last_epoch (int): epoch number used to reinitialize the RNG to an epoch-specific state.
+    """
+
+    def __init__(self, indices, seeds=None, last_epoch=-1):
+        super().__init__(indices)
+        self.seeds = {}
+        if seeds is not None:
+            if not isinstance(seeds, dict):
+                raise AssertionError("unexpected seed pack type")
+            self.seeds = seeds
+        if not isinstance(last_epoch, int) or last_epoch < -1:
+            raise AssertionError("invalid last_epoch value")
+        self.last_epoch = last_epoch
+        self.indices = indices
+
+    def set_last_epoch(self, last_epoch=-1):
+        """Sets the last epoch number in order to offset the RNG state for sampling."""
+        if not isinstance(last_epoch, int) or last_epoch < -1:
+            raise AssertionError("invalid last_epoch value")
+        self.last_epoch = last_epoch
+
+    def __iter__(self):
+        self.last_epoch += 1
+        rng_state = None
+        if "torch" in self.seeds:
+            rng_state = torch.random.get_rng_state()
+            torch.random.manual_seed(self.seeds["torch"] + self.last_epoch)
+        result = (self.indices[i] for i in torch.randperm(len(self.indices)))
+        if rng_state is not None:
+            torch.random.set_rng_state(rng_state)
+        return result
+
+    def __len__(self):
+        return len(self.indices)
+
+
+class SubsetSequentialSampler(torch.utils.data.sampler.Sampler):
+    r"""Samples element indices sequentially, always in the same order.
+
+    Arguments:
+        indices (list): a list of indices
+    """
+
+    def __init__(self, indices):
+        super().__init__(indices)
+        self.indices = indices
+
+    def __iter__(self):
+        return iter(self.indices)
+
+    def __len__(self):
+        return len(self.indices)
