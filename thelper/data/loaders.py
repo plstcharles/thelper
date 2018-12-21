@@ -445,8 +445,10 @@ class _LoaderFactory(object):
                         sampler = thelper.data.SubsetSequentialSampler(loader_sample_idxs)
                 if batch_size is None or batch_size <= 0:
                     raise AssertionError("invalid batch size")
-                loaders.append(DataLoader(dataset=dataset, batch_size=batch_size, sampler=sampler, num_workers=self.workers,
-                                          collate_fn=collate_fn, pin_memory=self.pin_memory, drop_last=self.drop_last))
+                loaders.append(DataLoader(dataset=dataset, batch_size=batch_size, sampler=sampler,
+                                          num_workers=self.workers, collate_fn=collate_fn,
+                                          pin_memory=self.pin_memory, drop_last=self.drop_last,
+                                          seeds=self.seeds))
             else:
                 loaders.append(None)
         train_loader, valid_loader, test_loader = loaders
