@@ -61,18 +61,19 @@ class ImageSegmTrainer(Trainer):
                 label_map = torch.ByteTensor(label_map)
         return input, label_map
 
-    def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, writer=None):
+    def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
         """Trains the model for a single epoch using the provided objects.
 
         Args:
             model: the model to train that is already uploaded to the target device(s).
-            epoch: the index of the epoch we are training for.
-            iter: the index of the iteration at the start of the current epoch.
+            epoch: the epoch number we are training for (1-based).
+            iter: the iteration count at the start of the current epoch.
             dev: the target device that tensors should be uploaded to.
             loss: the loss function used to evaluate model fidelity.
             optimizer: the optimizer used for back propagation.
             loader: the data loader used to get transformed training samples.
             metrics: the list of metrics to evaluate after every iteration.
+            monitor: name of the metric to update/monitor for improvements.
             writer: the writer used to store tbx events/messages/metrics.
         """
         if not loss:
@@ -132,43 +133,39 @@ class ImageSegmTrainer(Trainer):
                         metric.accumulate(iter_pred.detach().cpu(), label_map.detach().cpu(), meta=meta)
             epoch_loss += iter_loss.item()
             optimizer.step()
-            if iter is not None:
-                iter += 1
-                monitor_output = ""
-                if self.monitor is not None and self.monitor in metrics:
-                    monitor_output = "   {}: {:.2f}".format(self.monitor, metrics[self.monitor].eval())
-                self.logger.info(
-                    "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}{}".format(
-                        epoch,
-                        iter,
-                        sample_idx,
-                        epoch_size,
-                        (sample_idx / epoch_size) * 100.0,
-                        iter_loss.item(),
-                        monitor_output
-                    )
+            iter += 1
+            monitor_output = ""
+            if monitor is not None and monitor in metrics:
+                monitor_output = "   {}: {:.2f}".format(monitor, metrics[monitor].eval())
+            self.logger.info(
+                "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}{}".format(
+                    epoch,
+                    iter,
+                    sample_idx,
+                    epoch_size,
+                    (sample_idx / epoch_size) * 100.0,
+                    iter_loss.item(),
+                    monitor_output
                 )
-                if writer:
-                    writer.add_scalar("iter/loss", iter_loss.item(), iter)
-                    for metric_name, metric in metrics.items():
-                        if metric.is_scalar():  # only useful assuming that scalar metrics are smoothed...
-                            writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
+            )
+            if writer:
+                writer.add_scalar("iter/loss", iter_loss.item(), iter)
+                for metric_name, metric in metrics.items():
+                    if metric.is_scalar():  # only useful assuming that scalar metrics are smoothed...
+                        writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
         epoch_loss /= epoch_size
-        if writer:
-            writer.add_scalar("epoch/loss", epoch_loss, epoch)
-            writer.add_scalar("epoch/lr", thelper.optim.get_lr(optimizer), epoch)
         return epoch_loss, iter
 
-    def _eval_epoch(self, model, epoch, iter, dev, loader, metrics, writer=None):
+    def _eval_epoch(self, model, epoch, dev, loader, metrics, monitor=None, writer=None):
         """Evaluates the model using the provided objects.
 
         Args:
             model: the model to evaluate that is already uploaded to the target device(s).
-            epoch: the index of the epoch we are evaluating for.
-            iter: the index of the iteration at the start of the current epoch.
+            epoch: the epoch number we are evaluating for (1-based).
             dev: the target device that tensors should be uploaded to.
             loader: the data loader used to get transformed valid/test samples.
-            metrics: the list of metrics to evaluate after every iteration.
+            metrics: the dictionary of metrics to update every iteration.
+            monitor: name of the metric to update/monitor for improvements.
             writer: the writer used to store tbx events/messages/metrics.
         """
         if not loader:
@@ -205,8 +202,8 @@ class ImageSegmTrainer(Trainer):
                         meta = None
                     for metric in metrics.values():
                         metric.accumulate(pred.cpu(), label_map.cpu() if label_map is not None else None, meta=meta)
-                if self.monitor is not None:
-                    monitor_output = "{}: {:.2f}".format(self.monitor, metrics[self.monitor].eval())
+                if monitor is not None:
+                    monitor_output = "{}: {:.2f}".format(monitor, metrics[monitor].eval())
                 else:
                     monitor_output = "(not monitoring)"
                 self.logger.info(

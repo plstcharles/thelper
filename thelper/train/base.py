@@ -32,7 +32,7 @@ class Trainer:
 
     The parameters that will be parsed by this interface from a configuration dictionary are the following:
 
-    - ``epochs`` (mandatory if training): number of epochs to train for; one epoch is one iteration over all samples.
+    - ``epochs`` (mandatory if training): number of epochs to train for; one epoch is one iteration over all minibatches.
     - ``optimization`` (mandatory if training): subdictionary containing types and extra parameters required for
       instantiating the loss, optimizer, and scheduler objects. See the code of each related loading function for more
       information on special parameters.
@@ -148,17 +148,19 @@ class Trainer:
         self.train_loader = train_loader
         self.valid_loader = valid_loader
         self.test_loader = test_loader
+        self.epochs = 0
         if train_loader:
             if "epochs" not in trainer_config or not trainer_config["epochs"] or int(trainer_config["epochs"]) <= 0:
                 raise AssertionError("bad trainer config epoch count")
             self.epochs = int(trainer_config["epochs"])
+            if self.epochs <= 0:
+                raise AssertionError("should train for at least one epoch")
             # no need to load optimization stuff if not training (i.e. no train_loader)
             # loading optimization stuff later since model needs to be on correct device
             if "optimization" not in trainer_config or not trainer_config["optimization"]:
                 raise AssertionError("trainer config missing 'optimization' field")
             self.optimization_config = trainer_config["optimization"]
         else:
-            self.epochs = 1
             self.logger.info("no training data provided, will run a single epoch on valid/test data")
         self.save_freq = int(trainer_config["save_freq"]) if "save_freq" in trainer_config else 1
         if self.save_freq < 1:
@@ -229,10 +231,10 @@ class Trainer:
             self.monitor = trainer_config["monitor"]
             if self.monitor not in self.train_metrics and self.monitor not in self.valid_metrics:
                 raise AssertionError("metric with name '%s' should be declared in training and/or validation metrics" % self.monitor)
-            if self.monitor in self.train_metrics:
-                self.monitor_goal = self.train_metrics[self.monitor].goal()
-            elif self.monitor in self.valid_metrics:
+            if self.monitor in self.valid_metrics:
                 self.monitor_goal = self.valid_metrics[self.monitor].goal()
+            elif self.monitor in self.train_metrics:
+                self.monitor_goal = self.train_metrics[self.monitor].goal()
             if self.monitor_goal == thelper.optim.Metric.minimize:
                 self.monitor_best = thelper.optim.Metric.maximize
             elif self.monitor_goal == thelper.optim.Metric.maximize:
@@ -243,7 +245,7 @@ class Trainer:
             self.monitor_best = ckptdata["monitor_best"]
             self.optimizer_state = ckptdata["optimizer"] if "optimizer" in ckptdata else None
             self.scheduler_state = ckptdata["scheduler"] if "scheduler" in ckptdata else None
-            self.current_iter = ckptdata["iter"] if "iter" in ckptdata else 0
+            self.current_iter = ckptdata["iter"]
             self.current_epoch = ckptdata["epoch"]
             self.outputs = ckptdata["outputs"]
         else:
@@ -364,27 +366,26 @@ class Trainer:
             self.scheduler_state = None
         self.logger.debug("loss: %s" % str(loss))
         self.logger.debug("optimizer: %s" % str(optimizer))
-        start_epoch = self.current_epoch + 1
         latest_loss = math.inf
         train_writer, valid_writer, test_writer = None, None, None
-        for epoch in range(start_epoch, self.epochs + 1):
-            self.logger.info("launching training epoch %d for '%s' (dev=%s)" % (epoch, self.name, str(self.devices)))
+        while self.current_epoch < self.epochs:
+            self.logger.info("preparing epoch %d for '%s' (dev=%s)" % (self.current_epoch + 1, self.name, str(self.devices)))
             if scheduler:
-                # epoch idx is 1-based, scheduler expects 0-based
                 if scheduler_step_metric:
                     if scheduler_step_metric == "loss":
                         # todo: use validation loss instead? more stable?
-                        scheduler.step(metrics=latest_loss, epoch=(epoch - 1))
+                        scheduler.step(metrics=latest_loss, epoch=self.current_epoch)
                     else:
                         if self.valid_loader and scheduler_step_metric in self.valid_metrics:
-                            scheduler.step(metrics=self.valid_metrics[scheduler_step_metric].eval(), epoch=(epoch - 1))
+                            scheduler.step(metrics=self.valid_metrics[scheduler_step_metric].eval(), epoch=self.current_epoch)
                         elif self.train_loader and scheduler_step_metric in self.train_metrics:
-                            scheduler.step(metrics=self.train_metrics[scheduler_step_metric].eval(), epoch=(epoch - 1))
+                            scheduler.step(metrics=self.train_metrics[scheduler_step_metric].eval(), epoch=self.current_epoch)
                         else:
                             raise AssertionError("cannot use metric '%s' for scheduler step" % scheduler_step_metric)
                 else:
-                    scheduler.step(epoch=(epoch - 1))  # epoch idx is 1-based, scheduler expects 0-based
+                    scheduler.step(epoch=self.current_epoch)
             self.logger.debug("learning rate at %.8f" % thelper.optim.get_lr(optimizer))
+            self.current_epoch += 1
             model.train()
             if self.use_tbx and not train_writer:
                 train_writer = self.tbx.SummaryWriter(log_dir=self.train_output_path, comment=self.name)
@@ -394,9 +395,11 @@ class Trainer:
                     metric.set_max_accum(len(self.train_loader))  # used to make scalar metric evals smoother between epochs
                 if metric.needs_reset():
                     metric.reset()  # if a metric needs to be reset between two epochs, do it here
-            latest_loss, self.current_iter = self._train_epoch(model, epoch, self.current_iter, self.devices, loss, optimizer,
-                                                               self.train_loader, self.train_metrics, train_writer)
-            self._write_epoch_metrics(epoch, self.train_metrics, train_writer, self.train_output_path, "train")
+            latest_loss, self.current_iter = self._train_epoch(model, self.current_epoch, self.current_iter, self.devices,
+                                                               loss, optimizer, self.train_loader, self.train_metrics,
+                                                               self.monitor, train_writer)
+            self._write_epoch_output(self.current_epoch, self.train_metrics, train_writer, self.train_output_path,
+                                     "train", loss=latest_loss, optimizer=optimizer)
             if train_writer and not self.skip_tbx_histograms:
                 for pname, param in model.named_parameters():
                     if "bn" in pname:
@@ -404,8 +407,8 @@ class Trainer:
                     pname = pname.replace(".", "/")  # for proper grouping
                     data = param.data.cpu().numpy().flatten()
                     grad = param.grad.data.cpu().numpy().flatten()
-                    train_writer.add_histogram(pname, data, epoch)
-                    train_writer.add_histogram(pname + '/grad', grad, epoch)
+                    train_writer.add_histogram(pname, data, self.current_epoch)
+                    train_writer.add_histogram(pname + '/grad', grad, self.current_epoch)
             train_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.train_metrics.items()}
             result = {"train/loss": latest_loss, "train/metrics": train_metric_vals}
             monitor_type_key = "train/metrics"  # if we cannot run validation, will monitor progression on training metrics
@@ -416,9 +419,10 @@ class Trainer:
                     valid_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
                 for metric in self.valid_metrics.values():
                     metric.reset()  # force reset here, we always evaluate from a clean state
-                self._eval_epoch(model, epoch, self.current_iter, self.devices,
-                                 self.valid_loader, self.valid_metrics, valid_writer)
-                self._write_epoch_metrics(epoch, self.valid_metrics, valid_writer, self.valid_output_path, "valid")
+                self._eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
+                                 self.valid_metrics, self.monitor, valid_writer)
+                self._write_epoch_output(self.current_epoch, self.valid_metrics,
+                                         valid_writer, self.valid_output_path, "valid")
                 valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()}
                 result = {**result, "valid/metrics": valid_metric_vals}
                 monitor_type_key = "valid/metrics"  # since validation is available, use that to monitor progression
@@ -434,19 +438,19 @@ class Trainer:
                         self.monitor_best = monitor_val
                         new_best = True
                 if not isinstance(value, dict):
-                    self.logger.debug(" epoch {} result =>  {}: {}".format(epoch, str(key), value))
+                    self.logger.debug(" epoch {} result =>  {}: {}".format(self.current_epoch, str(key), value))
                 else:
                     for subkey, subvalue in value.items():
-                        self.logger.debug(" epoch {} result =>  {}:{}: {}".format(epoch, str(key), str(subkey), subvalue))
+                        self.logger.debug(" epoch {} result =>  {}:{}: {}".format(self.current_epoch, str(key), str(subkey), subvalue))
             if self.monitor is not None:
                 if monitor_val is None:
                     raise AssertionError("training/validation did not produce required monitoring variable '%s'" % self.monitor)
                 best_str = "(new best value)" if new_best else ("(previous best = %s)" % self.monitor_best)
-                self.logger.info("epoch %d, monitored %s = %s  %s" % (epoch, self.monitor, monitor_val, best_str))
-            self.outputs[epoch] = result
-            if new_best or (epoch % self.save_freq) == 0:
-                self.logger.info("saving checkpoint @ epoch %d" % epoch)
-                self._save(epoch, optimizer, scheduler, save_best=new_best)
+                self.logger.info("epoch %d, monitored %s = %s  %s" % (self.current_epoch, self.monitor, monitor_val, best_str))
+            self.outputs[self.current_epoch] = result
+            if new_best or (self.current_epoch % self.save_freq) == 0:
+                self.logger.info("saving checkpoint @ epoch %d" % self.current_epoch)
+                self._save(self.current_epoch, self.current_iter, optimizer, scheduler, save_best=new_best)
         self.logger.info("training for session '%s' done" % self.name)
         if self.test_loader:
             # reload 'best' model checkpoint on cpu (will remap to current device setup)
@@ -460,7 +464,6 @@ class Trainer:
             else:
                 self.model = ckptdata["model"]
             best_epoch = ckptdata["epoch"]
-            best_iter = ckptdata["iter"] if "iter" in ckptdata else None
             model = self._upload_model(self.model, self.devices)
             model.eval()
             if self.use_tbx and not test_writer:
@@ -468,9 +471,10 @@ class Trainer:
                 test_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
             for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
-            self._eval_epoch(model, best_epoch, best_iter, self.devices,
-                             self.test_loader, self.test_metrics, test_writer)
-            self._write_epoch_metrics(best_epoch, self.test_metrics, test_writer, self.test_output_path, "test")
+            self._eval_epoch(model, best_epoch, self.devices, self.test_loader,
+                             self.test_metrics, self.monitor, test_writer)
+            self._write_epoch_output(best_epoch, self.test_metrics,
+                                     test_writer, self.test_output_path, "test")
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
             self.outputs[best_epoch] = {**ckptdata["outputs"], "test/metrics": test_metric_vals}
             for key, value in self.outputs[best_epoch].items():
@@ -502,9 +506,10 @@ class Trainer:
                 test_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
             for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
-            self._eval_epoch(model, self.current_epoch, self.current_iter, self.devices,
-                             self.test_loader, self.test_metrics, test_writer)
-            self._write_epoch_metrics(self.current_epoch, self.test_metrics, test_writer, self.test_output_path, "test")
+            self._eval_epoch(model, self.current_epoch, self.devices, self.test_loader,
+                             self.test_metrics, self.monitor, test_writer)
+            self._write_epoch_output(self.current_epoch, self.test_metrics,
+                                     test_writer, self.test_output_path, "test")
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
             result = {**result, **test_metric_vals}
         elif self.valid_loader:
@@ -513,9 +518,10 @@ class Trainer:
                 valid_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
             for metric in self.valid_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
-            self._eval_epoch(model, self.current_epoch, self.current_iter, self.devices,
-                             self.valid_loader, self.valid_metrics, valid_writer)
-            self._write_epoch_metrics(self.current_epoch, self.valid_metrics, valid_writer, self.valid_output_path, "valid")
+            self._eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
+                             self.valid_metrics, self.monitor, valid_writer)
+            self._write_epoch_output(self.current_epoch, self.valid_metrics,
+                                     valid_writer, self.valid_output_path, "valid")
             valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()}
             result = {**result, **valid_metric_vals}
         for key, value in result.items():
@@ -529,42 +535,46 @@ class Trainer:
         return result
 
     @abstractmethod
-    def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, writer=None):
+    def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
         """Trains the model for a single epoch using the provided objects.
 
         Args:
             model: the model to train that is already uploaded to the target device(s).
-            epoch: the index of the epoch we are training for.
-            iter: the index of the iteration at the start of the current epoch.
+            epoch: the epoch number we are training for (1-based).
+            iter: the iteration count at the start of the current epoch.
             dev: the target device that tensors should be uploaded to.
             loss: the loss function used to evaluate model fidelity.
             optimizer: the optimizer used for back propagation.
             loader: the data loader used to get transformed training samples.
-            metrics: the list of metrics to evaluate after every iteration.
+            metrics: the dictionary of metrics to update every iteration.
+            monitor: name of the metric to update/monitor for improvements.
             writer: the writer used to store tbx events/messages/metrics.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def _eval_epoch(self, model, epoch, iter, dev, loader, metrics, writer=None):
+    def _eval_epoch(self, model, epoch, dev, loader, metrics, monitor=None, writer=None):
         """Evaluates the model using the provided objects.
 
         Args:
             model: the model to evaluate that is already uploaded to the target device(s).
-            epoch: the index of the epoch we are evaluating for.
-            iter: the index of the iteration at the start of the current epoch.
+            epoch: the epoch number we are evaluating for (1-based).
             dev: the target device that tensors should be uploaded to.
             loader: the data loader used to get transformed valid/test samples.
-            metrics: the list of metrics to evaluate after every iteration.
+            metrics: the dictionary of metrics to update every iteration.
+            monitor: name of the metric to update/monitor for improvements.
             writer: the writer used to store tbx events/messages/metrics.
         """
         raise NotImplementedError
 
-    def _write_epoch_metrics(self, epoch, metrics, tbx_writer, output_path, prefix):
+    def _write_epoch_output(self, epoch, metrics, tbx_writer, output_path, prefix, loss=None, optimizer=None):
         """Writes the cumulative evaluation result of all metrics using a specific writer."""
         self.logger.debug("writing epoch metrics to '%s'" % output_path)
         if not os.path.exists(output_path):
             os.makedirs(output_path)
+        if tbx_writer is not None and loss is not None and optimizer is not None:
+            tbx_writer.add_scalar("epoch/loss", loss, epoch)
+            tbx_writer.add_scalar("epoch/lr", thelper.optim.get_lr(optimizer), epoch)
         for metric_name, metric in metrics.items():
             if metric.is_scalar():
                 if tbx_writer is not None:
@@ -591,14 +601,14 @@ class Trainer:
                 with open(raw_filepath, "w") as fd:
                     fd.write(txt)
 
-    def _save(self, epoch, optimizer, scheduler, save_best=False):
+    def _save(self, epoch, iter, optimizer, scheduler, save_best=False):
         """Saves a session checkpoint containing all the information required to resume training."""
         # logically, this should only be called during training (i.e. with a valid optimizer)
         log_stamp = thelper.utils.get_log_stamp()
         curr_state = {
             "name": self.name,
             "epoch": epoch,
-            "iter": self.current_iter,
+            "iter": iter,
             "source": log_stamp,
             "sha1": thelper.utils.get_git_stamp(),
             "version": thelper.__version__,
