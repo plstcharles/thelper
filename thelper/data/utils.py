@@ -189,7 +189,8 @@ def create_loaders(config, save_dir=None):
         logger.warning("using 'data_config' field in configuration dictionary is deprecated; switch it to 'loaders'")
     loaders_config = thelper.utils.get_key(["data_config", "loaders"], config)
     # noinspection PyProtectedMember
-    loader_factory = thelper.data.utils._LoaderFactory(loaders_config)
+    from thelper.data.loaders import _LoaderFactory as LoaderFactory
+    loader_factory = LoaderFactory(loaders_config)
     datasets, task = create_parsers(config, loader_factory.get_base_transforms())
     if not datasets or task is None:
         raise AssertionError("invalid dataset configuration (got empty list)")

@@ -87,14 +87,14 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
         sample_weights: list of weights used for random sampling.
         label_counts: number of samples in each class for the ``uniform`` and ``root`` strategies.
         seeds: dictionary of seeds to use when initializing RNG state.
-        last_epoch: epoch number used to reinitialize the RNG to an epoch-specific state.
+        epoch: epoch number used to reinitialize the RNG to an epoch-specific state.
 
     .. seealso::
         | :func:`thelper.data.utils.create_loaders`
         | :func:`thelper.data.utils.get_class_weights`
     """
 
-    def __init__(self, indices, labels, stype="uniform", scale=1.0, seeds=None, last_epoch=-1):
+    def __init__(self, indices, labels, stype="uniform", scale=1.0, seeds=None, epoch=0):
         """Receives sample indices, labels, rebalancing strategy, and dataset scaling factor.
 
         This function will validate all input arguments, parse and categorize samples according to
@@ -110,7 +110,7 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
             scale: scaling factor used to increase/decrease the final number of sample indices to
                 generate while rebalancing.
             seeds: dictionary of seeds to use when initializing RNG state.
-            last_epoch: epoch number used to reinitialize the RNG to an epoch-specific state.
+            epoch: epoch number used to reinitialize the RNG to an epoch-specific state.
         """
         super().__init__(None)
         if not isinstance(indices, list) or not isinstance(labels, list):
@@ -124,9 +124,9 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
             if not isinstance(seeds, dict):
                 raise AssertionError("unexpected seed pack type")
             self.seeds = seeds
-        if not isinstance(last_epoch, int) or last_epoch < -1:
-            raise AssertionError("invalid last_epoch value")
-        self.last_epoch = last_epoch
+        if not isinstance(epoch, int) or epoch < 0:
+            raise AssertionError("invalid epoch value")
+        self.epoch = epoch
         self.nb_samples = int(round(len(indices) * scale))
         if self.nb_samples > 0:
             self.stype = stype
@@ -153,11 +153,11 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
                 if curr_nb_samples != self.nb_samples:
                     self.label_counts[max_sample_label] += self.nb_samples - curr_nb_samples
 
-    def set_last_epoch(self, last_epoch=-1):
-        """Sets the last epoch number in order to offset the RNG state for sampling."""
-        if not isinstance(last_epoch, int) or last_epoch < -1:
-            raise AssertionError("invalid last_epoch value")
-        self.last_epoch = last_epoch
+    def set_epoch(self, epoch=0):
+        """Sets the current epoch number in order to offset the RNG state for sampling."""
+        if not isinstance(epoch, int) or epoch < 0:
+            raise AssertionError("invalid epoch value")
+        self.epoch = epoch
 
     def __iter__(self):
         """Returns the list of rebalanced sample indices to load.
@@ -169,13 +169,13 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
         This function will reseed the RNGs it uses every time it is called, and revert their state before
         returning its output.
         """
-        self.last_epoch += 1
         if self.nb_samples == 0:
+            self.epoch += 1
             return iter([])
         rng_state = None
         if "torch" in self.seeds:
             rng_state = torch.random.get_rng_state()
-            torch.random.manual_seed(self.seeds["torch"] + self.last_epoch)
+            torch.random.manual_seed(self.seeds["torch"] + self.epoch)
         result = None
         if self.stype == "random":
             result = (self.indices[idx] for idx in torch.multinomial(
@@ -194,6 +194,7 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
             result = (indices[i] for i in torch.randperm(len(indices)))
         if rng_state is not None:
             torch.random.set_rng_state(rng_state)
+        self.epoch += 1
         return result
 
     def __len__(self):
@@ -212,36 +213,36 @@ class SubsetRandomSampler(torch.utils.data.sampler.Sampler):
     Arguments:
         indices (list): a list of indices
         seeds (dict): dictionary of seeds to use when initializing RNG state.
-        last_epoch (int): epoch number used to reinitialize the RNG to an epoch-specific state.
+        epoch (int): epoch number used to reinitialize the RNG to an epoch-specific state.
     """
 
-    def __init__(self, indices, seeds=None, last_epoch=-1):
+    def __init__(self, indices, seeds=None, epoch=0):
         super().__init__(indices)
         self.seeds = {}
         if seeds is not None:
             if not isinstance(seeds, dict):
                 raise AssertionError("unexpected seed pack type")
             self.seeds = seeds
-        if not isinstance(last_epoch, int) or last_epoch < -1:
-            raise AssertionError("invalid last_epoch value")
-        self.last_epoch = last_epoch
+        if not isinstance(epoch, int) or epoch < 0:
+            raise AssertionError("invalid epoch value")
+        self.epoch = epoch
         self.indices = indices
 
-    def set_last_epoch(self, last_epoch=-1):
-        """Sets the last epoch number in order to offset the RNG state for sampling."""
-        if not isinstance(last_epoch, int) or last_epoch < -1:
-            raise AssertionError("invalid last_epoch value")
-        self.last_epoch = last_epoch
+    def set_epoch(self, epoch=0):
+        """Sets the current epoch number in order to offset the RNG state for sampling."""
+        if not isinstance(epoch, int) or epoch < -1:
+            raise AssertionError("invalid epoch value")
+        self.epoch = epoch
 
     def __iter__(self):
-        self.last_epoch += 1
         rng_state = None
         if "torch" in self.seeds:
             rng_state = torch.random.get_rng_state()
-            torch.random.manual_seed(self.seeds["torch"] + self.last_epoch)
+            torch.random.manual_seed(self.seeds["torch"] + self.epoch)
         result = (self.indices[i] for i in torch.randperm(len(self.indices)))
         if rng_state is not None:
             torch.random.set_rng_state(rng_state)
+        self.epoch += 1
         return result
 
     def __len__(self):

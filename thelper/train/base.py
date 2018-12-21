@@ -395,6 +395,8 @@ class Trainer:
                     metric.set_max_accum(len(self.train_loader))  # used to make scalar metric evals smoother between epochs
                 if metric.needs_reset():
                     metric.reset()  # if a metric needs to be reset between two epochs, do it here
+            if hasattr(self.train_loader, "set_epoch") and callable(self.train_loader.set_epoch):
+                self.train_loader.set_epoch(self.current_epoch)
             latest_loss, self.current_iter = self._train_epoch(model, self.current_epoch, self.current_iter, self.devices,
                                                                loss, optimizer, self.train_loader, self.train_metrics,
                                                                self.monitor, train_writer)
@@ -419,6 +421,8 @@ class Trainer:
                     valid_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
                 for metric in self.valid_metrics.values():
                     metric.reset()  # force reset here, we always evaluate from a clean state
+                if hasattr(self.valid_loader, "set_epoch") and callable(self.valid_loader.set_epoch):
+                    self.valid_loader.set_epoch(self.current_epoch)
                 self._eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
                                  self.valid_metrics, self.monitor, valid_writer)
                 self._write_epoch_output(self.current_epoch, self.valid_metrics,
@@ -471,6 +475,8 @@ class Trainer:
                 test_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
             for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
+            if hasattr(self.test_loader, "set_epoch") and callable(self.test_loader.set_epoch):
+                self.test_loader.set_epoch(best_epoch)
             self._eval_epoch(model, best_epoch, self.devices, self.test_loader,
                              self.test_metrics, self.monitor, test_writer)
             self._write_epoch_output(best_epoch, self.test_metrics,
@@ -506,6 +512,8 @@ class Trainer:
                 test_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
             for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
+            if hasattr(self.test_loader, "set_epoch") and callable(self.test_loader.set_epoch):
+                self.test_loader.set_epoch(self.current_epoch)
             self._eval_epoch(model, self.current_epoch, self.devices, self.test_loader,
                              self.test_metrics, self.monitor, test_writer)
             self._write_epoch_output(self.current_epoch, self.test_metrics,
@@ -518,6 +526,8 @@ class Trainer:
                 valid_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
             for metric in self.valid_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
+            if hasattr(self.valid_loader, "set_epoch") and callable(self.valid_loader.set_epoch):
+                self.valid_loader.set_epoch(self.current_epoch)
             self._eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
                              self.valid_metrics, self.monitor, valid_writer)
             self._write_epoch_output(self.current_epoch, self.valid_metrics,

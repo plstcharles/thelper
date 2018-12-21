@@ -28,34 +28,35 @@ class DataLoader(torch.utils.data.DataLoader):
 
     See ``torch.utils.data.DataLoader`` for more information on attributes/methods.
     """
-    def __init__(self, *args, seeds=None, last_epoch=-1, **kwargs):
+    def __init__(self, *args, seeds=None, epoch=0, **kwargs):
         super().__init__(*args, worker_init_fn=self._worker_init_fn, **kwargs)
         self.seeds = {}
         if seeds is not None:
             if not isinstance(seeds, dict):
                 raise AssertionError("unexpected seed pack type")
             self.seeds = seeds
-        if not isinstance(last_epoch, int) or last_epoch < -1:
-            raise AssertionError("invalid last_epoch value")
-        self.last_epoch = last_epoch
+        if not isinstance(epoch, int) or epoch < 0:
+            raise AssertionError("invalid epoch value")
+        self.epoch = epoch
 
     def __iter__(self):
-        """Advances the 'last_epoch' number for the workers initialization function."""
-        self.last_epoch += 1
-        return super().__iter__()
+        """Advances the epoch number for the workers initialization function."""
+        result = super().__iter__()
+        self.epoch += 1
+        return result
 
-    def set_last_epoch(self, last_epoch=-1):
-        """Sets the last epoch number in order to offset RNG states for the workers and the sampler."""
-        if not isinstance(last_epoch, int) or last_epoch < -1:
-            raise AssertionError("invalid last_epoch value")
-        self.last_epoch = last_epoch
+    def set_epoch(self, epoch=0):
+        """Sets the current epoch number in order to offset RNG states for the workers and the sampler."""
+        if not isinstance(epoch, int) or epoch < 0:
+            raise AssertionError("invalid epoch value")
+        self.epoch = epoch
         if self.sampler is not None:
-            if hasattr(self.sampler, "set_last_epoch") and callable(self.sampler.set_last_epoch):
-                self.sampler.set_last_epoch(self.last_epoch)
+            if hasattr(self.sampler, "set_epoch") and callable(self.sampler.set_epoch):
+                self.sampler.set_epoch(self.epoch)
 
     def _worker_init_fn(self, worker_id):
         """Sets up the RNGs state of each worker based on their unique id and the epoch number."""
-        seed_offset = self.num_workers * self.last_epoch
+        seed_offset = self.num_workers * self.epoch
         if "torch" in self.seeds:
             torch.manual_seed(self.seeds["torch"] + seed_offset + worker_id)
             torch.cuda.manual_seed_all(self.seeds["torch"] + seed_offset + worker_id)
