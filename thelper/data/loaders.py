@@ -393,11 +393,12 @@ class _LoaderFactory(object):
             A three-element tuple containing the training, validation, and test data loaders, respectively.
         """
         loaders = []
-        for idxs_map, (augs, augs_append), sampler_apply, batch_size, collate_fn \
+        for idxs_map, (augs, augs_append), shuffle, sampler_apply, batch_size, collate_fn \
                 in zip([train_idxs, valid_idxs, test_idxs],
                        [(self.train_augments, self.train_augments_append),
                         (self.valid_augments, self.valid_augments_append),
                         (self.test_augments, self.test_augments_append)],
+                       [self.shuffle, False, False],
                        [self.train_sampler, self.valid_sampler, self.test_sampler],
                        [self.train_batch_size, self.valid_batch_size, self.test_batch_size],
                        [self.train_collate_fn, self.valid_collate_fn, self.test_collate_fn]):
@@ -438,7 +439,7 @@ class _LoaderFactory(object):
                         sampler_params["seeds"] = self.seeds
                     sampler = self.sampler_type(loader_sample_idxs, **self.sampler_params)
                 else:
-                    if self.shuffle:
+                    if shuffle:
                         sampler = thelper.data.SubsetRandomSampler(loader_sample_idxs, seeds=self.seeds)
                     else:
                         sampler = thelper.data.SubsetSequentialSampler(loader_sample_idxs)
