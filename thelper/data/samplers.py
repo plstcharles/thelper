@@ -80,19 +80,21 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
         # ...
 
     Attributes:
-        nb_samples: total number of samples to rebalance (i.e. scaled size of original dataset)
-        label_groups: map that splits all samples indices into groups based on labels
-        stype: name of the rebalancing strategy to use
-        indices: copy of the original list of sample indices provided in the constructor
+        nb_samples: total number of samples to rebalance (i.e. scaled size of original dataset).
+        label_groups: map that splits all samples indices into groups based on labels.
+        stype: name of the rebalancing strategy to use.
+        indices: copy of the original list of sample indices provided in the constructor.
         sample_weights: list of weights used for random sampling.
-        label_counts: number of samples in each class for the ``uniform`` and ``root`` strategies
+        label_counts: number of samples in each class for the ``uniform`` and ``root`` strategies.
+        seeds: dictionary of seeds to use when initializing RNG state.
+        last_epoch: epoch number used to reinitialize the RNG to an epoch-specific state.
 
     .. seealso::
         | :func:`thelper.data.utils.create_loaders`
         | :func:`thelper.data.utils.get_class_weights`
     """
 
-    def __init__(self, indices, labels, stype="uniform", scale=1.0):
+    def __init__(self, indices, labels, stype="uniform", scale=1.0, seeds=None, last_epoch=-1):
         """Receives sample indices, labels, rebalancing strategy, and dataset scaling factor.
 
         This function will validate all input arguments, parse and categorize samples according to
@@ -107,6 +109,8 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
                 "rootX", where the 'X' is the degree to use in the root computation (float).
             scale: scaling factor used to increase/decrease the final number of sample indices to
                 generate while rebalancing.
+            seeds: dictionary of seeds to use when initializing RNG state.
+            last_epoch: epoch number used to reinitialize the RNG to an epoch-specific state.
         """
         super().__init__(None)
         if not isinstance(indices, list) or not isinstance(labels, list):
@@ -115,6 +119,14 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
             raise AssertionError("mismatched indices/labels list sizes")
         if not isinstance(scale, float) or scale < 0:
             raise AssertionError("invalid scale parameter; should be greater than zero")
+        self.seeds = {}
+        if seeds is not None:
+            if not isinstance(seeds, dict):
+                raise AssertionError("unexpected seed pack type")
+            self.seeds = seeds
+        if not isinstance(last_epoch, int) or last_epoch < -1:
+            raise AssertionError("invalid last_epoch value")
+        self.last_epoch = last_epoch
         self.nb_samples = int(round(len(indices) * scale))
         if self.nb_samples > 0:
             self.stype = stype
@@ -141,18 +153,33 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
                 if curr_nb_samples != self.nb_samples:
                     self.label_counts[max_sample_label] += self.nb_samples - curr_nb_samples
 
+    def set_last_epoch(self, last_epoch=-1):
+        """Sets the last epoch number in order to offset the RNG state for sampling."""
+        if not isinstance(last_epoch, int) or last_epoch < -1:
+            raise AssertionError("invalid last_epoch value")
+        self.last_epoch = last_epoch
+
     def __iter__(self):
         """Returns the list of rebalanced sample indices to load.
 
         Note that the indices are repicked every time this function is called, meaning that samples
         eliminated due to undersampling (or duplicated due to oversampling) might not receive the same
         treatment twice.
+
+        This function will reseed the RNGs it uses every time it is called, and revert their state before
+        returning its output.
         """
+        self.last_epoch += 1
         if self.nb_samples == 0:
             return iter([])
+        rng_state = None
+        if "torch" in self.seeds:
+            rng_state = torch.random.get_rng_state()
+            torch.random.manual_seed(self.seeds["torch"] + self.last_epoch)
+        result = None
         if self.stype == "random":
-            return (self.indices[idx] for idx in torch.multinomial(torch.FloatTensor(self.sample_weights),
-                                                                   self.nb_samples, replacement=True))
+            result = (self.indices[idx] for idx in torch.multinomial(
+                torch.FloatTensor(self.sample_weights),self.nb_samples, replacement=True))
         elif self.stype == "uniform" or "root" in self.stype:
             indices = []
             for label, count in self.label_counts.items():
@@ -164,7 +191,10 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
                     count -= max_samples
             if len(indices) != self.nb_samples:
                 raise AssertionError("messed up something internally...")
-            return (indices[i] for i in torch.randperm(len(indices)))
+            result = (indices[i] for i in torch.randperm(len(indices)))
+        if rng_state is not None:
+            torch.random.set_rng_state(rng_state)
+        return result
 
     def __len__(self):
         """Returns the number of sample indices that will be generated by this interface.
