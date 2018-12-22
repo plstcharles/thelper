@@ -767,16 +767,17 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
                 ax.imshow(images[ax_idx], interpolation='nearest')
             else:
                 ax.imshow(images[ax_idx, ...], interpolation='nearest')
-            if labels_gt is not None:
-                curr_label_gt = labels_map[labels_gt[ax_idx]] if labels_map else labels_gt[ax_idx]
-            else:
-                curr_label_gt = "<unknown>"
-            if labels_pred is not None:
-                curr_label_pred = labels_map[labels_pred[ax_idx]] if labels_map else labels_pred[ax_idx]
-                xlabel = "GT={0}\nPred={1}".format(curr_label_gt, curr_label_pred)
-            else:
-                xlabel = "GT={0}".format(curr_label_gt)
-            ax.set_xlabel(xlabel)
+            if labels_gt is not None or labels_pred is not None:
+                if labels_gt is not None:
+                    curr_label_gt = labels_map[labels_gt[ax_idx]] if labels_map else labels_gt[ax_idx]
+                else:
+                    curr_label_gt = "<unknown>"
+                if labels_pred is not None:
+                    curr_label_pred = labels_map[labels_pred[ax_idx]] if labels_map else labels_pred[ax_idx]
+                    xlabel = "GT={0}\nPred={1}".format(curr_label_gt, curr_label_pred)
+                else:
+                    xlabel = "GT={0}".format(curr_label_gt)
+                ax.set_xlabel(xlabel)
         ax.set_xticks([])
         ax.set_yticks([])
     fig.show()
