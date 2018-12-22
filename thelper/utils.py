@@ -709,9 +709,9 @@ def get_displayable_heatmap(array):
         array = np.squeeze(array)
     if array.ndim != 2:
         raise AssertionError("indexing should return a pre-squeezed array")
-    image_normalized = np.empty_like(image, dtype=np.uint8).copy()  # copy needed here due to ocv 3.3 bug
-    cv.normalize(image, image_normalized, 0, 255, cv.NORM_MINMAX, dtype=cv.CV_8U)
-    return cv.applyColorMap(image_normalized,cv.COLORMAP_JET)
+    array_normalized = np.empty_like(array, dtype=np.uint8).copy()  # copy needed here due to ocv 3.3 bug
+    cv.normalize(array, array_normalized, 0, 255, cv.NORM_MINMAX, dtype=cv.CV_8U)
+    return cv.applyColorMap(array_normalized,cv.COLORMAP_JET)
 
 
 def draw_histogram(data, bins=50, xlabel="", ylabel="Proportion"):
