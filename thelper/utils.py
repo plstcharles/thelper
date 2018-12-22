@@ -748,7 +748,7 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
                   redraw=None,          # type: Optional[Tuple[plt.Figure, plt.Axes]]
                   ):                    # type: (...) -> Union[Tuple[plt.Figure, plt.Axes], None]
     """Draws and returns a figure of classification results using pyplot."""
-    nb_imgs = len(images) if isinstance(images, list) else images.shape[images.ndim - 1]
+    nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
     if nb_imgs < 1:
         return None
     grid_size_x = int(math.ceil(math.sqrt(nb_imgs)))
@@ -789,7 +789,7 @@ def draw_segments(images,                 # type: Union[List[np.ndarray], np.nda
                   ):                      # type: (...) -> Union[Tuple[plt.Figure, plt.Axes], None]
     """Draws and returns a figure of segmentation results using pyplot."""
     # todo: display predictions if available? (currently skipped)
-    nb_imgs = len(images) if isinstance(images, list) else images.shape[images.ndim - 1]
+    nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
     if nb_imgs < 1:
         return None
     grid_size_x = int(math.ceil(math.sqrt(nb_imgs)))
