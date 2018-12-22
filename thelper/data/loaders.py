@@ -94,6 +94,9 @@ class _LoaderFactory(object):
         self.test_batch_size = thelper.utils.get_key_def("test_batch_size", config, default_batch_size)
         logger.debug("loaders will use batch sizes:\n  train = %d\n  valid = %d\n  test = %d" %
                      (self.train_batch_size, self.valid_batch_size, self.test_batch_size))
+        self.train_scale = thelper.utils.get_key_def("train_scale", config, 1.0)
+        self.valid_scale = thelper.utils.get_key_def("valid_scale", config, 1.0)
+        self.test_scale = thelper.utils.get_key_def("test_scale", config, 1.0)
         default_collate_fn = torch.utils.data.dataloader.default_collate
         if "collate_fn" in config:
             if any([v in config for v in ["train_collate_fn", "valid_collate_fn", "test_collate_fn"]]):
@@ -393,12 +396,13 @@ class _LoaderFactory(object):
             A three-element tuple containing the training, validation, and test data loaders, respectively.
         """
         loaders = []
-        for idxs_map, (augs, augs_append), shuffle, sampler_apply, batch_size, collate_fn \
+        for idxs_map, (augs, augs_append), shuffle, scale, sampler_apply, batch_size, collate_fn \
                 in zip([train_idxs, valid_idxs, test_idxs],
                        [(self.train_augments, self.train_augments_append),
                         (self.valid_augments, self.valid_augments_append),
                         (self.test_augments, self.test_augments_append)],
                        [self.shuffle, False, False],
+                       [self.train_scale, self.valid_scale, self.test_scale],
                        [self.train_sampler, self.valid_sampler, self.test_sampler],
                        [self.train_batch_size, self.valid_batch_size, self.test_batch_size],
                        [self.train_collate_fn, self.valid_collate_fn, self.test_collate_fn]):
@@ -437,11 +441,17 @@ class _LoaderFactory(object):
                     sampler_sig = inspect.signature(self.sampler_type)
                     if "seeds" in sampler_sig.parameters:
                         sampler_params["seeds"] = self.seeds
+                    if "scale" in sampler_sig.parameters:
+                        sampler_params["scale"] = scale
+                    elif scale != 1.0:
+                        raise AssertionError("could not apply scale factor to sample with type '%s'" % str(self.sampler_type))
                     sampler = self.sampler_type(loader_sample_idxs, **self.sampler_params)
                 else:
                     if shuffle:
-                        sampler = thelper.data.SubsetRandomSampler(loader_sample_idxs, seeds=self.seeds)
+                        sampler = thelper.data.SubsetRandomSampler(loader_sample_idxs, seeds=self.seeds, scale=scale)
                     else:
+                        if scale != 1.0:
+                            raise AssertionError("sequential sampler currently does not handle scale changes")
                         sampler = thelper.data.SubsetSequentialSampler(loader_sample_idxs)
                 if batch_size is None or batch_size <= 0:
                     raise AssertionError("invalid batch size")
