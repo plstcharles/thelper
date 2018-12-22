@@ -696,7 +696,7 @@ def get_displayable_image(image, grayscale=False):
         image = np.dstack((image, image[:, :, 0]))
     elif image.shape[2] > 3:
         image = image[..., :3]
-    if grayscale:
+    if grayscale and image.shape[2] != 1:
         image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
     image_normalized = np.empty_like(image, dtype=np.uint8).copy()  # copy needed here due to ocv 3.3 bug
     cv.normalize(image, image_normalized, 0, 255, cv.NORM_MINMAX, dtype=cv.CV_8U)
