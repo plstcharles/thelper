@@ -8,11 +8,13 @@ import logging
 import math
 import os
 import platform
+import random
 import time
 from abc import abstractmethod
 from copy import deepcopy
 
 import cv2 as cv
+import numpy as np
 import torch
 import torch.optim
 
@@ -256,6 +258,16 @@ class Trainer:
             self.outputs = {}
 
     @staticmethod
+    def _set_rng_state(seeds, epoch):
+        if "torch" in seeds:
+            torch.manual_seed(seeds["torch"] + epoch)
+            torch.cuda.manual_seed_all(seeds["torch"] + epoch)
+        if "numpy" in seeds:
+            np.random.seed(seeds["numpy"] + epoch)
+        if "random" in seeds:
+            random.seed(seeds["random"] + epoch)
+
+    @staticmethod
     def _upload_model(model, dev):
         """Uploads a model to a specific device, wrapping it in ``torch.nn.DataParallel`` if needed."""
         if isinstance(dev, list):
@@ -386,6 +398,7 @@ class Trainer:
                     scheduler.step(epoch=self.current_epoch)
             self.logger.debug("learning rate at %.8f" % thelper.optim.get_lr(optimizer))
             self.current_epoch += 1
+            self._set_rng_state(self.train_loader.seeds, self.current_epoch)
             model.train()
             if self.use_tbx and not train_writer:
                 train_writer = self.tbx.SummaryWriter(log_dir=self.train_output_path, comment=self.name)
@@ -415,6 +428,7 @@ class Trainer:
             result = {"train/loss": latest_loss, "train/metrics": train_metric_vals}
             monitor_type_key = "train/metrics"  # if we cannot run validation, will monitor progression on training metrics
             if self.valid_loader:
+                self._set_rng_state(self.valid_loader.seeds, self.current_epoch)
                 model.eval()
                 if self.use_tbx and not valid_writer:
                     valid_writer = self.tbx.SummaryWriter(log_dir=self.valid_output_path, comment=self.name)
@@ -469,6 +483,7 @@ class Trainer:
                 self.model = ckptdata["model"]
             best_epoch = ckptdata["epoch"]
             model = self._upload_model(self.model, self.devices)
+            self._set_rng_state(self.test_loader.seeds, best_epoch)
             model.eval()
             if self.use_tbx and not test_writer:
                 test_writer = self.tbx.SummaryWriter(log_dir=self.test_output_path, comment=self.name)
@@ -503,10 +518,11 @@ class Trainer:
             raise AssertionError("missing validation/test data, invalid loaders!")
         self.logger.debug("uploading model to '%s'..." % str(self.devices))
         model = self._upload_model(self.model, self.devices)
-        model.eval()
         result = {}
         valid_writer, test_writer = None, None
         if self.test_loader:
+            self._set_rng_state(self.test_loader.seeds, self.current_epoch)
+            model.eval()
             if self.use_tbx and not test_writer:
                 test_writer = self.tbx.SummaryWriter(log_dir=self.test_output_path, comment=self.name)
                 test_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
@@ -521,6 +537,8 @@ class Trainer:
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
             result = {**result, **test_metric_vals}
         elif self.valid_loader:
+            self._set_rng_state(self.valid_loader.seeds, self.current_epoch)
+            model.eval()
             if self.use_tbx and not valid_writer:
                 valid_writer = self.tbx.SummaryWriter(log_dir=self.valid_output_path, comment=self.name)
                 valid_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
