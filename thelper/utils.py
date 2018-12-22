@@ -917,6 +917,36 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
         else:
             idx_color_map = {idx: get_label_color_mapping(idx) for idx in task.get_class_idxs_map().values()}
         redraw = draw_segments(image_list, masks_gt=masks, masks_pred=preds, labels_color_map=idx_color_map, redraw=redraw)
+    elif isinstance(task, thelper.tasks.Regression):
+        if not isinstance(images, torch.Tensor) or images.dim() != 4:
+            raise AssertionError("expected input images to be in 4-d tensor format (BxCxHxW or BxHxWxC)")
+        images = images.numpy().copy()
+        if ch_transpose:
+            images = np.transpose(images, (0, 2, 3, 1))  # BxCxHxW to BxHxWxC
+        if flip_bgr:
+            images = images[..., ::-1]  # BGR to RGB
+        target_key = task.get_gt_key()
+        if target_key in minibatch and minibatch[target_key] is not None:
+            targets = minibatch[target_key]
+            if not isinstance(targets, torch.Tensor) or targets.shape[0] != images.shape[0]:
+                raise AssertionError("expected targets to be in tensor format (Bx...)")
+            if preds is not None and (not isinstance(preds, torch.Tensor) or targets.shape != preds.shape):
+                raise AssertionError("preds/target tensor size mismatch")
+            targets = targets.numpy().copy()
+            if ((targets.ndim == 4 and targets.shape[1] == 1) or targets.ndim == 3) and targets.shape[-2:] == images.shape[1:3]:
+                image_list = [get_displayable_image(images[batch_idx, ...], grayscale=True) for batch_idx in range(images.shape[0])]
+                tgt_heatmap_list = [get_displayable_heatmap(targets[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+                pred_heatmap_list = None
+                if preds is not None:
+                    pred_heatmap_list = [get_displayable_heatmap(preds[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+                redraw = draw_segments(image_list, masks_gt=tgt_heatmap_list, masks_pred=pred_heatmap_list, redraw=redraw)
+            elif targets.ndim == 1 and targets.shape[0] == images.shape[0]:
+                image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+                redraw = draw_classifs(image_list, labels_gt=targets, labels_pred=preds, redraw=redraw)
+            else:
+                redraw = draw_classifs(images, redraw=redraw)  # draw only images
+        else:
+            redraw = draw_classifs(images, redraw=redraw)  # draw only images
     else:
         raise AssertionError("unhandled drawing mode, missing impl")
     if block:
