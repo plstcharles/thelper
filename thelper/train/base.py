@@ -420,6 +420,10 @@ class Trainer:
                     if "bn" in pname:
                         continue  # skip batch norm modules
                     pname = pname.replace(".", "/")  # for proper grouping
+                    if pname.startswith("module/"):
+                        pname = pname.replace("module/", "", 1)
+                    if pname.startswith("model/"):
+                        pname = pname.replace("model/", "", 1)
                     data = param.data.cpu().numpy().flatten()
                     grad = param.grad.data.cpu().numpy().flatten()
                     train_writer.add_histogram(pname, data, self.current_epoch)
