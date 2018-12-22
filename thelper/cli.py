@@ -40,6 +40,8 @@ def create_session(config, save_dir):
     if "name" not in config or not config["name"]:
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
+    if "bypass_queries" in config and config["bypass_queries"]:
+        thelper.utils.bypass_queries = True
     logger.info("creating new training session '%s'..." % session_name)
     thelper.utils.setup_cudnn(config)
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
@@ -97,6 +99,8 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
     if "name" not in config or not config["name"]:
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
+    if "bypass_queries" in config and config["bypass_queries"]:
+        thelper.utils.bypass_queries = True
     logger.info("loading training session '%s' objects..." % session_name)
     thelper.utils.setup_cudnn(config)
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config, resume=True)
@@ -128,6 +132,8 @@ def visualize_data(config):
             :func:`thelper.data.utils.create_loaders` for more information.
     """
     logger = thelper.utils.get_func_logger()
+    if "bypass_queries" in config and config["bypass_queries"]:
+        logger.warning("cannot bypass queries in visualization mode")
     logger.info("creating visualization session...")
     task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config)
     if not isinstance(task, thelper.tasks.Classification):
@@ -177,6 +183,8 @@ def annotate_data(config, save_dir):
     if "name" not in config or not config["name"]:
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
+    if "bypass_queries" in config and config["bypass_queries"]:
+        logger.warning("cannot bypass queries in annotation mode")
     logger.info("creating annotation session '%s'..." % session_name)
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
     logger.debug("session will be saved at '%s'" % save_dir)

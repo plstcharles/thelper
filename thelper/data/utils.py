@@ -234,8 +234,8 @@ def create_loaders(config, save_dir=None):
                     samples_old = log_content["samples"]
                     samples_new = dataset.samples if hasattr(dataset, "samples") and isinstance(dataset.samples, list) else []
                     if len(samples_old) != len(samples_new):
-                        answer = thelper.utils.query_yes_no(
-                            "Old sample list for dataset '%s' mismatch with current sample list; proceed anyway?")
+                        query_msg = "Old sample list for dataset '%s' mismatch with current sample list; proceed anyway?"
+                        answer = thelper.utils.query_yes_no(query_msg, bypass="n")
                         if not answer:
                             logger.error("sample list mismatch with previous run; user aborted")
                             sys.exit(1)
@@ -246,9 +246,9 @@ def create_loaders(config, save_dir=None):
                                                   [train_idxs[dataset_name], valid_idxs[dataset_name], test_idxs[dataset_name]]):
                             # index values were paired in tuples earlier, 0=idx, 1=label
                             if log_content[set_name] != [idx for idx, _ in idxs]:
-                                answer = thelper.utils.query_yes_no(
-                                    "Old indices list for dataset '%s' mismatch with current indices list ('%s'); proceed anyway?"
-                                    % (dataset_name, set_name))
+                                query_msg = "Old indices list for dataset '%s' mismatch with current indices" \
+                                            "list ('%s'); proceed anyway?" % (dataset_name, set_name)
+                                answer = thelper.utils.query_yes_no(query_msg, bypass="n")
                                 if not answer:
                                     logger.error("indices list mismatch with previous run; user aborted")
                                     sys.exit(1)
@@ -257,9 +257,9 @@ def create_loaders(config, save_dir=None):
                         if not breaking:
                             for idx, (sample_new, sample_old) in enumerate(zip(samples_new, samples_old)):
                                 if str(sample_new) != sample_old:
-                                    answer = thelper.utils.query_yes_no(
-                                        "Old sample #%d for dataset '%s' mismatch with current #%d; proceed anyway?"
-                                        "\n\told: %s\n\tnew: %s" % (idx, dataset_name, idx, str(sample_old), str(sample_new)))
+                                    query_msg = "Old sample #%d for dataset '%s' mismatch with current #%d; proceed anyway?" \
+                                                "\n\told: %s\n\tnew: %s" % (idx, dataset_name, idx, str(sample_old), str(sample_new))
+                                    answer = thelper.utils.query_yes_no(query_msg, bypass="n")
                                     if not answer:
                                         logger.error("sample list mismatch with previous run; user aborted")
                                         sys.exit(1)
@@ -432,8 +432,8 @@ class _LoaderFactory(object):
                 if usage < 0:
                     raise AssertionError("ratio should never be negative...")
                 elif 0 < usage < 1 and not self.skip_split_norm:
-                    normalize_ratios = thelper.utils.query_yes_no(
-                        "dataset split for '%s' has a ratio sum less than 1; do you want to normalize the split?" % name)
+                    query_msg = "dataset split for '%s' has a ratio sum less than 1; do you want to normalize the split?" % name
+                    normalize_ratios = thelper.utils.query_yes_no(query_msg, bypass="n")
                 if (normalize_ratios or usage > 1) and usage > 0:
                     if usage > 1:
                         logger.warning("dataset split for '%s' sums to more than 1; will normalize..." % name)

@@ -28,6 +28,7 @@ import sklearn.metrics
 import torch
 
 logger = logging.getLogger(__name__)
+bypass_queries = False
 
 
 class Struct(object):
@@ -130,7 +131,8 @@ def load_checkpoint(ckpt,               # type: Union[AnyStr, io.FileIO]
                              (thelper.__version__, ckptdata["version"]))
     if versions[0][1] != versions[1][1]:
         answer = query_yes_no("Checkpoint minor version mismatch (%s vs %s); do you want to "
-                              "attempt to load it anyway?" % (thelper.__version__, ckptdata["version"]))
+                              "attempt to load it anyway?" % (thelper.__version__, ckptdata["version"]),
+                              bypass="y")
         if not answer:
             logger.error("checkpoint out-of-date; user aborted")
             sys.exit(1)
@@ -328,18 +330,26 @@ def lreplace(string, old_prefix, new_prefix):
     return re.sub(r'^(?:%s)+' % re.escape(old_prefix), lambda m: new_prefix * (m.end() // len(old_prefix)), string)
 
 
-def query_yes_no(question, default=None):
+def query_yes_no(question, default=None, bypass=None):
     """Asks the user a yes/no question and returns the answer.
 
     Args:
         question: the string that is presented to the user.
         default: the presumed answer if the user just hits ``<Enter>``. It must be 'yes',
             'no', or ``None`` (meaning an answer is required).
+        bypass: the option to select if the ``bypass_queries`` global variable is set to
+            ``True``. Can be ``None``, in which case the function will throw an exception.
 
     Returns:
         ``True`` for 'yes', or ``False`` for 'no' (or their respective variations).
     """
     valid = {"yes": True, "ye": True, "y": True, "no": False, "n": False}
+    if bypass is not None and not isinstance(bypass, str) or bypass not in valid:
+        raise AssertionError("unexpected bypass value")
+    if bypass_queries:
+        if bypass is None:
+            raise AssertionError("cannot bypass interactive query, no default value provided")
+        return valid[bypass]
     if (isinstance(default, bool) and default) or \
        (isinstance(default, str) and default.lower() in ["yes", "ye", "y"]):
         prompt = " [Y/n] "
@@ -365,7 +375,7 @@ def query_yes_no(question, default=None):
             sys.stdout.write("Please respond with 'yes/y' or 'no/n'.\n")
 
 
-def query_string(question, choices=None, default=None, allow_empty=False):
+def query_string(question, choices=None, default=None, allow_empty=False, bypass=None):
     """Asks the user a question and returns the answer (a generic string).
 
     Args:
@@ -375,10 +385,16 @@ def query_string(question, choices=None, default=None, allow_empty=False):
         default: the presumed answer if the user just hits ``<Enter>``. If ``None``,
             then an answer is required to continue.
         allow_empty: defines whether an empty answer should be accepted.
+        bypass: the returned value if the ``bypass_queries`` global variable is set to
+            ``True``. Can be ``None``, in which case the function will throw an exception.
 
     Returns:
         The string entered by the user.
     """
+    if bypass_queries:
+        if bypass is None:
+            raise AssertionError("cannot bypass interactive query, no default value provided")
+        return bypass
     sys.stdout.flush()
     sys.stderr.flush()
     time.sleep(0.01)
@@ -431,7 +447,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
         overwrite = str2bool(config["overwrite"]) if config is not None and "overwrite" in config else False
         time.sleep(0.5)  # to make sure all debug/info prints are done, and we see the question
         while os.path.exists(save_dir) and not overwrite:
-            overwrite = query_yes_no("Training session at '%s' already exists; overwrite?" % save_dir)
+            overwrite = query_yes_no("Training session at '%s' already exists; overwrite?" % save_dir, bypass="y")
             if not overwrite:
                 save_dir = query_string("Please provide a new save directory path:")
         if not os.path.exists(save_dir):
@@ -450,7 +466,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
                 if config_backup != config:
                     query_msg = "Config backup in '%s' differs from config loaded through checkpoint; overwrite?" \
                                 % config_backup_path
-                    answer = query_yes_no(query_msg)
+                    answer = query_yes_no(query_msg, bypass="y")
                     if answer:
                         func_logger.warning("config mismatch with previous run; "
                                             "will overwrite latest backup in save directory")
