@@ -703,7 +703,7 @@ def get_displayable_image(image, grayscale=False):
     return image_normalized
 
 
-def get_displayable_heatmap(array):
+def get_displayable_heatmap(array, convert_rgb=True):
     """Returns a 'displayable' array that has been min-maxed and mapped to color triplets."""
     if array.ndim != 2:
         array = np.squeeze(array)
@@ -711,7 +711,10 @@ def get_displayable_heatmap(array):
         raise AssertionError("indexing should return a pre-squeezed array")
     array_normalized = np.empty_like(array, dtype=np.uint8).copy()  # copy needed here due to ocv 3.3 bug
     cv.normalize(array, array_normalized, 0, 255, cv.NORM_MINMAX, dtype=cv.CV_8U)
-    return cv.applyColorMap(array_normalized,cv.COLORMAP_JET)
+    heatmap = cv.applyColorMap(array_normalized, cv.COLORMAP_JET)
+    if convert_rgb:
+        heatmap = cv.cvtColor(heatmap, cv.COLOR_BGR2RGB)
+    return heatmap
 
 
 def draw_histogram(data, bins=50, xlabel="", ylabel="Proportion"):
@@ -820,6 +823,8 @@ def draw_segments(images,                 # type: Union[List[np.ndarray], np.nda
                 mask_gt = masks_gt[ax_idx] if isinstance(masks_gt, list) else masks_gt[ax_idx, ...]
                 if labels_color_map is not None:
                     mask_gt = apply_color_map(mask_gt, labels_color_map)
+                if image.shape[2] != 3:
+                    image = cv.cvtColor(image, cv.COLOR_GRAY2BGR)
                 image = cv.addWeighted(image, 0.5, mask_gt, 0.5, 0)
             ax.imshow(image, interpolation='nearest')
         ax.set_xticks([])
