@@ -208,15 +208,17 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
 class SubsetRandomSampler(torch.utils.data.sampler.Sampler):
     r"""Samples elements randomly from a given list of indices, without replacement.
 
-    This specialization handles seeding based on the epoch number.
+    This specialization handles seeding based on the epoch number, and scaling (via duplication/decimation)
+    of samples.
 
     Arguments:
         indices (list): a list of indices
         seeds (dict): dictionary of seeds to use when initializing RNG state.
         epoch (int): epoch number used to reinitialize the RNG to an epoch-specific state.
+        scale (float): scaling factor used to increase/decrease the final number of samples.
     """
 
-    def __init__(self, indices, seeds=None, epoch=0):
+    def __init__(self, indices, seeds=None, epoch=0, scale=1.0):
         super().__init__(indices)
         self.seeds = {}
         if seeds is not None:
@@ -227,6 +229,9 @@ class SubsetRandomSampler(torch.utils.data.sampler.Sampler):
             raise AssertionError("invalid epoch value")
         self.epoch = epoch
         self.indices = indices
+        if not isinstance(scale, float) or scale < 0:
+            raise AssertionError("invalid scale parameter; should be greater than zero")
+        self.scale = scale
 
     def set_epoch(self, epoch=0):
         """Sets the current epoch number in order to offset the RNG state for sampling."""
@@ -239,7 +244,15 @@ class SubsetRandomSampler(torch.utils.data.sampler.Sampler):
         if "torch" in self.seeds:
             rng_state = torch.random.get_rng_state()
             torch.random.manual_seed(self.seeds["torch"] + self.epoch)
-        result = (self.indices[i] for i in torch.randperm(len(self.indices)))
+        indices = []
+        max_samples = len(self.indices)
+        req_count = int(round(max_samples * self.scale))
+        while req_count > 0:
+            subidxs = torch.randperm(max_samples)
+            for subidx in range(min(req_count, max_samples)):
+                indices.append(self.indices[subidxs[subidx]])
+            req_count -= max_samples
+        result = (indices[i] for i in torch.randperm(len(indices)))
         if rng_state is not None:
             torch.random.set_rng_state(rng_state)
         self.epoch += 1
