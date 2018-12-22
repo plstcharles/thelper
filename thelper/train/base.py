@@ -171,9 +171,9 @@ class Trainer:
         self.checkpoint_dir = os.path.join(save_dir, "checkpoints")
         if not os.path.exists(self.checkpoint_dir):
             os.mkdir(self.checkpoint_dir)
-        output_root_dir = os.path.join(save_dir, "output", self.name)
-        if not os.path.exists(output_root_dir):
-            os.makedirs(output_root_dir)
+        output_root_dir = thelper.utils.get_key_def("output_dir", trainer_config, os.path.join(save_dir, "output"))
+        output_root_dir = os.path.join(output_root_dir, self.name)
+        os.makedirs(output_root_dir, exist_ok=True)
         self.use_tbx = thelper.utils.str2bool(thelper.utils.get_key_def("use_tbx", trainer_config, False))
         if self.use_tbx:
             import tensorboardX
