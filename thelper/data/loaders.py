@@ -97,6 +97,8 @@ class _LoaderFactory(object):
         self.train_scale = thelper.utils.get_key_def("train_scale", config, 1.0)
         self.valid_scale = thelper.utils.get_key_def("valid_scale", config, 1.0)
         self.test_scale = thelper.utils.get_key_def("test_scale", config, 1.0)
+        logger.debug("samplers will use scaling factors:\n  train = %f\n  valid = %f\n  test = %f" %
+                     (self.train_scale, self.valid_scale, self.test_scale))
         default_collate_fn = torch.utils.data.dataloader.default_collate
         if "collate_fn" in config:
             if any([v in config for v in ["train_collate_fn", "valid_collate_fn", "test_collate_fn"]]):
