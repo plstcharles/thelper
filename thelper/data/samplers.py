@@ -231,7 +231,7 @@ class SubsetRandomSampler(torch.utils.data.sampler.Sampler):
         self.indices = indices
         if not isinstance(scale, float) or scale < 0:
             raise AssertionError("invalid scale parameter; should be greater than zero")
-        self.scale = scale
+        self.num_samples = int(round(len(self.indices) * scale))
 
     def set_epoch(self, epoch=0):
         """Sets the current epoch number in order to offset the RNG state for sampling."""
@@ -246,7 +246,7 @@ class SubsetRandomSampler(torch.utils.data.sampler.Sampler):
             torch.random.manual_seed(self.seeds["torch"] + self.epoch)
         indices = []
         max_samples = len(self.indices)
-        req_count = int(round(max_samples * self.scale))
+        req_count = self.num_samples
         while req_count > 0:
             subidxs = torch.randperm(max_samples)
             for subidx in range(min(req_count, max_samples)):
@@ -259,7 +259,7 @@ class SubsetRandomSampler(torch.utils.data.sampler.Sampler):
         return result
 
     def __len__(self):
-        return len(self.indices)
+        return self.num_samples
 
 
 class SubsetSequentialSampler(torch.utils.data.sampler.Sampler):
