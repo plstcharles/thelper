@@ -464,10 +464,10 @@ class _LoaderFactory(object):
             else:
                 loaders.append(None)
         train_loader, valid_loader, test_loader = loaders
-        train_samples = len(train_loader) if train_loader else 0
-        valid_samples = len(valid_loader) if valid_loader else 0
-        test_samples = len(test_loader) if test_loader else 0
-        logger.info("initialized loaders with batch counts: train=%d, valid=%d, test=%d" % (train_samples, valid_samples, test_samples))
+        logger.info("initialized loaders with batch counts:\n  train=%d\n  valid=%d\n  test=%d" %
+                    (len(train_loader) if train_loader else 0,
+                     len(valid_loader) if valid_loader else 0,
+                     len(test_loader) if test_loader else 0))
         return train_loader, valid_loader, test_loader
 
     def get_base_transforms(self):
