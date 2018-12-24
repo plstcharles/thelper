@@ -397,9 +397,12 @@ def get_git_stamp():
     """Returns a print-friendly SHA signature for the framework's underlying git repository (if found)."""
     try:
         import git
-        repo = git.Repo(search_parent_directories=True)
-        sha = repo.head.object.hexsha
-        return str(sha)
+        try:
+            repo = git.Repo(path=os.path.abspath(__file__), search_parent_directories=True)
+            sha = repo.head.object.hexsha
+            return str(sha)
+        except (AttributeError, git.InvalidGitRepositoryError):
+            return "unknown"
     except (ImportError, AttributeError):
         return "unknown"
 
