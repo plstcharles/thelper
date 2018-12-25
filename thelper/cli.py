@@ -11,12 +11,11 @@ import glob
 import json
 import logging
 import os
+import sys
 
 import torch
 
 import thelper
-
-logging.basicConfig(level=logging.INFO)
 
 
 def create_session(config, save_dir):
@@ -236,6 +235,7 @@ def main(args=None):
     ap.add_argument("--version", default=False, action="store_true", help="prints the version of the library and exits")
     ap.add_argument("-l", "--log", default=None, type=str, help="path to the top-level log file (default: None)")
     ap.add_argument("-v", "--verbose", action="count", default=0, help="set logging terminal verbosity level (additive)")
+    ap.add_argument("--force-stdout", action="store_true", default=False, help="force logging output to stdout instead of stderr")
     subparsers = ap.add_subparsers(title="Operating mode", dest="mode")
     new_ap = subparsers.add_parser("new", help="creates a new session from a config file")
     new_ap.add_argument("cfg_path", type=str, help="path to the session configuration file")
@@ -279,7 +279,8 @@ def main(args=None):
         logger_fh.setLevel(logging.DEBUG)
         logger_fh.setFormatter(logger_format)
         thelper.logger.addHandler(logger_fh)
-    logger_ch = logging.StreamHandler()
+    stream = sys.stdout if args.force_stdout else None
+    logger_ch = logging.StreamHandler(stream=stream)
     logger_ch.setLevel(log_level)
     logger_ch.setFormatter(logger_format)
     thelper.logger.addHandler(logger_ch)
