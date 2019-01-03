@@ -826,7 +826,7 @@ def draw_segments(images,                 # type: Union[List[np.ndarray], np.nda
                 mask_gt = masks_gt[ax_idx] if isinstance(masks_gt, list) else masks_gt[ax_idx, ...]
                 if labels_color_map is not None:
                     mask_gt = apply_color_map(mask_gt, labels_color_map)
-                if image.shape[2] != 3:
+                if image.ndim == 2 or image.shape[2] != 3:
                     image = cv.cvtColor(image, cv.COLOR_GRAY2BGR)
                 image = cv.addWeighted(image, 0.5, mask_gt, 0.5, 0)
             ax.imshow(image, interpolation='nearest')
