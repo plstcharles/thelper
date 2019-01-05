@@ -384,6 +384,9 @@ class Trainer:
         latest_loss = math.inf
         train_writer, valid_writer, test_writer = None, None, None
         while self.current_epoch < self.epochs:
+            if self.use_tbx and not train_writer:
+                train_writer = self.tbx.SummaryWriter(log_dir=self.train_output_path, comment=self.name)
+                train_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
             self.logger.info("preparing epoch %d for '%s' (dev=%s)" % (self.current_epoch + 1, self.name, str(self.devices)))
             if scheduler:
                 if scheduler_step_metric:
@@ -416,9 +419,6 @@ class Trainer:
             self.current_epoch += 1
             self._set_rng_state(self.train_loader.seeds, self.current_epoch)
             model.train()
-            if self.use_tbx and not train_writer:
-                train_writer = self.tbx.SummaryWriter(log_dir=self.train_output_path, comment=self.name)
-                train_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
             for metric in self.train_metrics.values():
                 if hasattr(metric, "set_max_accum") and callable(metric.set_max_accum):
                     metric.set_max_accum(len(self.train_loader))  # used to make scalar metric evals smoother between epochs
