@@ -437,7 +437,7 @@ class Trainer:
                                                                loss, optimizer, self.train_loader, self.train_metrics,
                                                                self.monitor, train_writer)
             self._write_epoch_output(self.current_epoch, self.train_metrics, train_writer, self.train_output_path,
-                                     "train", loss=latest_loss, optimizer=optimizer)
+                                     loss=latest_loss, optimizer=optimizer)
             train_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.train_metrics.items()}
             result = {"train/loss": latest_loss, "train/metrics": train_metric_vals}
             monitor_type_key = "train/metrics"  # if we cannot run validation, will monitor progression on training metrics
@@ -451,8 +451,7 @@ class Trainer:
                     self.valid_loader.set_epoch(self.current_epoch)
                 self._eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
                                  self.valid_metrics, self.monitor, valid_writer)
-                self._write_epoch_output(self.current_epoch, self.valid_metrics,
-                                         valid_writer, self.valid_output_path, "valid")
+                self._write_epoch_output(self.current_epoch, self.valid_metrics, valid_writer, self.valid_output_path)
                 valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()}
                 result = {**result, "valid/metrics": valid_metric_vals}
                 monitor_type_key = "valid/metrics"  # since validation is available, use that to monitor progression
@@ -504,8 +503,7 @@ class Trainer:
                 self.test_loader.set_epoch(best_epoch)
             self._eval_epoch(model, best_epoch, self.devices, self.test_loader,
                              self.test_metrics, self.monitor, test_writer)
-            self._write_epoch_output(best_epoch, self.test_metrics,
-                                     test_writer, self.test_output_path, "test")
+            self._write_epoch_output(best_epoch, self.test_metrics, test_writer, self.test_output_path)
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
             self.outputs[best_epoch] = {**ckptdata["outputs"], "test/metrics": test_metric_vals}
             for key, value in self.outputs[best_epoch].items():
@@ -540,8 +538,7 @@ class Trainer:
                 self.test_loader.set_epoch(self.current_epoch)
             self._eval_epoch(model, self.current_epoch, self.devices, self.test_loader,
                              self.test_metrics, self.monitor, test_writer)
-            self._write_epoch_output(self.current_epoch, self.test_metrics,
-                                     test_writer, self.test_output_path, "test")
+            self._write_epoch_output(self.current_epoch, self.test_metrics, test_writer, self.test_output_path)
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
             result = {**result, **test_metric_vals}
         elif self.valid_loader:
@@ -554,8 +551,7 @@ class Trainer:
                 self.valid_loader.set_epoch(self.current_epoch)
             self._eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
                              self.valid_metrics, self.monitor, valid_writer)
-            self._write_epoch_output(self.current_epoch, self.valid_metrics,
-                                     valid_writer, self.valid_output_path, "valid")
+            self._write_epoch_output(self.current_epoch, self.valid_metrics, valid_writer, self.valid_output_path)
             valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()}
             result = {**result, **valid_metric_vals}
         for key, value in result.items():
@@ -601,7 +597,7 @@ class Trainer:
         """
         raise NotImplementedError
 
-    def _write_epoch_output(self, epoch, metrics, tbx_writer, output_path, prefix, loss=None, optimizer=None):
+    def _write_epoch_output(self, epoch, metrics, tbx_writer, output_path, loss=None, optimizer=None):
         """Writes the cumulative evaluation result of all metrics using a specific writer."""
         self.logger.debug("writing epoch metrics to '%s'" % output_path)
         if not os.path.exists(output_path):
@@ -617,8 +613,8 @@ class Trainer:
                 img = metric.render()
                 if img is not None:
                     if tbx_writer is not None:
-                        tbx_writer.add_image(prefix + "/%s" % metric_name, img, epoch)
-                    raw_filename = "%s-%s-%04d.png" % (prefix, metric_name, epoch)
+                        tbx_writer.add_image(metric_name, img, epoch)
+                    raw_filename = "%s-%04d.png" % (metric_name, epoch)
                     raw_filepath = os.path.join(output_path, raw_filename)
                     cv.imwrite(raw_filepath, img[..., [2, 1, 0]])
             txt = metric.print() if hasattr(metric, "print") and callable(metric.print) else None
@@ -630,7 +626,7 @@ class Trainer:
                     else:
                         txt = str(eval_res)
             if txt:
-                raw_filename = "%s-%s-%04d.txt" % (prefix, metric_name, epoch)
+                raw_filename = "%s-%04d.txt" % (metric_name, epoch)
                 raw_filepath = os.path.join(output_path, raw_filename)
                 with open(raw_filepath, "w") as fd:
                     fd.write(txt)
