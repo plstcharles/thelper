@@ -180,6 +180,9 @@ class Trainer:
             self.tbx = tensorboardX
             self.logger.debug("tensorboard init : tensorboard --logdir %s --port <your_port>" % output_root_dir)
         self.skip_tbx_histograms = thelper.utils.str2bool(thelper.utils.get_key_def("skip_tbx_histograms", trainer_config, False))
+        self.tbx_histogram_freq = thelper.utils.get_key_def("tbx_histogram_freq", trainer_config, 1)
+        if self.tbx_histogram_freq < 1:
+            raise AssertionError("histogram output frequency should be integer great or equal to 1")
         timestr = time.strftime("%Y%m%d-%H%M%S")
         train_foldername = "train-%s-%s" % (platform.node(), timestr)
         valid_foldername = "valid-%s-%s" % (platform.node(), timestr)
@@ -396,6 +399,19 @@ class Trainer:
                             raise AssertionError("cannot use metric '%s' for scheduler step" % scheduler_step_metric)
                 else:
                     scheduler.step(epoch=self.current_epoch)
+            if train_writer and not self.skip_tbx_histograms and (self.current_epoch % self.tbx_histogram_freq) == 0:
+                for pname, param in model.named_parameters():
+                    if "bn" in pname:
+                        continue  # skip batch norm modules
+                    pname = pname.replace(".", "/")  # for proper grouping
+                    if pname.startswith("module/"):
+                        pname = pname.replace("module/", "", 1)
+                    if pname.startswith("model/"):
+                        pname = pname.replace("model/", "", 1)
+                    data = param.data.cpu().numpy().flatten()
+                    grad = param.grad.data.cpu().numpy().flatten()
+                    train_writer.add_histogram(pname, data, self.current_epoch)
+                    train_writer.add_histogram(pname + '/grad', grad, self.current_epoch)
             self.logger.debug("learning rate at %.8f" % thelper.optim.get_lr(optimizer))
             self.current_epoch += 1
             self._set_rng_state(self.train_loader.seeds, self.current_epoch)
@@ -415,19 +431,6 @@ class Trainer:
                                                                self.monitor, train_writer)
             self._write_epoch_output(self.current_epoch, self.train_metrics, train_writer, self.train_output_path,
                                      "train", loss=latest_loss, optimizer=optimizer)
-            if train_writer and not self.skip_tbx_histograms:
-                for pname, param in model.named_parameters():
-                    if "bn" in pname:
-                        continue  # skip batch norm modules
-                    pname = pname.replace(".", "/")  # for proper grouping
-                    if pname.startswith("module/"):
-                        pname = pname.replace("module/", "", 1)
-                    if pname.startswith("model/"):
-                        pname = pname.replace("model/", "", 1)
-                    data = param.data.cpu().numpy().flatten()
-                    grad = param.grad.data.cpu().numpy().flatten()
-                    train_writer.add_histogram(pname, data, self.current_epoch)
-                    train_writer.add_histogram(pname + '/grad', grad, self.current_epoch)
             train_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.train_metrics.items()}
             result = {"train/loss": latest_loss, "train/metrics": train_metric_vals}
             monitor_type_key = "train/metrics"  # if we cannot run validation, will monitor progression on training metrics
