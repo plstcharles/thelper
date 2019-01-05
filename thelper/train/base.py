@@ -419,9 +419,10 @@ class Trainer:
                     if pname.startswith("model/"):
                         pname = pname.replace("model/", "", 1)
                     data = param.data.cpu().numpy().flatten()
-                    grad = param.grad.data.cpu().numpy().flatten()
                     train_writer.add_histogram(pname, data, self.current_epoch)
-                    train_writer.add_histogram(pname + '/grad', grad, self.current_epoch)
+                    if param.grad is not None:
+                        grad = param.grad.data.cpu().numpy().flatten()
+                        train_writer.add_histogram(pname + '/grad', grad, self.current_epoch)
             self.logger.debug("learning rate at %.8f" % thelper.optim.get_lr(optimizer))
             self.current_epoch += 1
             self._set_rng_state(self.train_loader.seeds, self.current_epoch)
