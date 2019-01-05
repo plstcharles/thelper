@@ -260,6 +260,15 @@ class Trainer:
             self.current_epoch = 0
             self.outputs = {}
 
+    def _init_writer(self, writer, path):
+        if self.use_tbx and not writer:
+            writer = self.tbx.SummaryWriter(log_dir=path, comment=self.name)
+            config_str = json.dumps(self.config, indent=4, sort_keys=False)
+            writer.add_text("config", config_str)
+            with open(os.path.join(path, "config.json"), "w") as fd:
+                fd.write(config_str)
+        return writer
+
     @staticmethod
     def _set_rng_state(seeds, epoch):
         if "torch" in seeds:
@@ -384,9 +393,7 @@ class Trainer:
         latest_loss = math.inf
         train_writer, valid_writer, test_writer = None, None, None
         while self.current_epoch < self.epochs:
-            if self.use_tbx and not train_writer:
-                train_writer = self.tbx.SummaryWriter(log_dir=self.train_output_path, comment=self.name)
-                train_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
+            train_writer = self._init_writer(train_writer, self.train_output_path)
             self.logger.info("preparing epoch %d for '%s' (dev=%s)" % (self.current_epoch + 1, self.name, str(self.devices)))
             if scheduler:
                 if scheduler_step_metric:
@@ -437,9 +444,7 @@ class Trainer:
             if self.valid_loader:
                 self._set_rng_state(self.valid_loader.seeds, self.current_epoch)
                 model.eval()
-                if self.use_tbx and not valid_writer:
-                    valid_writer = self.tbx.SummaryWriter(log_dir=self.valid_output_path, comment=self.name)
-                    valid_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
+                valid_writer = self._init_writer(valid_writer, self.valid_output_path)
                 for metric in self.valid_metrics.values():
                     metric.reset()  # force reset here, we always evaluate from a clean state
                 if hasattr(self.valid_loader, "set_epoch") and callable(self.valid_loader.set_epoch):
@@ -492,9 +497,7 @@ class Trainer:
             model = self._upload_model(self.model, self.devices)
             self._set_rng_state(self.test_loader.seeds, best_epoch)
             model.eval()
-            if self.use_tbx and not test_writer:
-                test_writer = self.tbx.SummaryWriter(log_dir=self.test_output_path, comment=self.name)
-                test_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
+            test_writer = self._init_writer(test_writer, self.test_output_path)
             for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
             if hasattr(self.test_loader, "set_epoch") and callable(self.test_loader.set_epoch):
@@ -530,9 +533,7 @@ class Trainer:
         if self.test_loader:
             self._set_rng_state(self.test_loader.seeds, self.current_epoch)
             model.eval()
-            if self.use_tbx and not test_writer:
-                test_writer = self.tbx.SummaryWriter(log_dir=self.test_output_path, comment=self.name)
-                test_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
+            test_writer = self._init_writer(test_writer, self.test_output_path)
             for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
             if hasattr(self.test_loader, "set_epoch") and callable(self.test_loader.set_epoch):
@@ -546,9 +547,7 @@ class Trainer:
         elif self.valid_loader:
             self._set_rng_state(self.valid_loader.seeds, self.current_epoch)
             model.eval()
-            if self.use_tbx and not valid_writer:
-                valid_writer = self.tbx.SummaryWriter(log_dir=self.valid_output_path, comment=self.name)
-                valid_writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False))
+            valid_writer = self._init_writer(valid_writer, self.valid_output_path)
             for metric in self.valid_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
             if hasattr(self.valid_loader, "set_epoch") and callable(self.valid_loader.set_epoch):
