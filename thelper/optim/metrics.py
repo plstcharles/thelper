@@ -145,10 +145,10 @@ class CategoryAccuracy(Metric):
                 # this type is used to instantiate the accuracy metric
                 "type": "thelper.optim.metrics.CategoryAccuracy",
                 # these parameters are passed to the wrapper's constructor
-                "params": [
+                "params": {
                     # the top prediction count to check for a match with the groundtruth
-                    {"name": "top_k", "value": 5}
-                ]
+                    "top_k" 5
+                }
             },
             # ...
         }
@@ -276,7 +276,7 @@ class BinaryAccuracy(Metric):
                 # this type is used to instantiate the accuracy metric
                 "type": "thelper.optim.metrics.BinaryAccuracy",
                 # there are no useful parameters to give to the constructor
-                "params": []
+                "params": {}
             },
             # ...
         }
@@ -398,9 +398,9 @@ class MeanAbsoluteError(Metric):
             "mae": {
                 # this type is used to instantiate the error metric
                 "type": "thelper.optim.metrics.MeanAbsoluteError",
-                "params": [
+                "params": {
                     "reduction": "mean"
-                ]
+                }
             },
             # ...
         }
@@ -517,9 +517,9 @@ class MeanSquaredError(Metric):
             "mae": {
                 # this type is used to instantiate the error metric
                 "type": "thelper.optim.metrics.MeanSquaredError",
-                "params": [
+                "params": {
                     "reduction": "mean"
-                ]
+                }
             },
             # ...
         }
@@ -641,36 +641,36 @@ class ExternalMetric(Metric):
                 # this type is used to instantiate the wrapper
                 "type": "thelper.optim.metrics.ExternalMetric",
                 # these parameters are passed to the wrapper's constructor
-                "params": [
+                "params": {
                     # the external class to import
-                    {"name": "metric_name", "value": "sklearn.metrics.f1_score"},
+                    "metric_name": "sklearn.metrics.f1_score",
                     # the parameters passed to the external class's constructor
-                    {"name": "metric_params", "value": []},
+                    "metric_params": [],
                     # the wrapper metric handling mode
-                    {"name": "metric_type", "value": "classif_best"},
+                    "metric_type": "classif_best",
                     # the target class name (note: dataset-specific)
-                    {"name": "target_name", "value": "reject"},
+                    "target_name": "reject",
                     # the goal type of the external metric
-                    {"name": "goal", "value": "max"}
-                ]
+                    "goal": "max"
+                }
             },
             # this is the name of the second example metric; it is used for lookup/printing only
             "roc_auc_accept": {
                 # this type is used to instantiate the wrapper
                 "type": "thelper.optim.metrics.ExternalMetric",
                 # these parameters are passed to the wrapper's constructor
-                "params": [
+                "params": {
                     # the external class to import
-                    {"name": "metric_name", "value": "sklearn.metrics.roc_auc_score"},
+                    "metric_name": "sklearn.metrics.roc_auc_score",
                     # the parameters passed to the external class's constructor
-                    {"name": "metric_params", "value": []},
+                    "metric_params": [],
                     # the wrapper metric handling mode
-                    {"name": "metric_type", "value": "classif_score"},
+                    "metric_type": "classif_score",
                     # the target class name (note: dataset-specific)
-                    {"name": "target_name", "value": "accept"},
+                    "target_name": "accept",
                     # the goal type of the external metric
-                    {"name": "goal", "value": "max"}
-                ]
+                    "goal": "max"
+                }
             },
             # ...
         }
@@ -700,8 +700,8 @@ class ExternalMetric(Metric):
         """
         if not isinstance(metric_name, str):
             raise AssertionError("metric_name must be fully qualifiied class name to import")
-        if metric_params is not None and not isinstance(metric_params, (list, dict)):
-            raise AssertionError("metric_params must be either dict or list of name-value pairs")
+        if metric_params is not None and not isinstance(metric_params, dict):
+            raise AssertionError("metric_params must be dictionary")
         supported_handling_types = [
             "classif_top1", "classif_best",  # the former is for backwards-compat with the latter
             "classif_scores", "classif_score",  # the former is for backwards-compat with the latter
@@ -723,11 +723,7 @@ class ExternalMetric(Metric):
                 raise AssertionError("unexpected goal type for '%s'" % str(metric_name))
         self.metric_type = metric_type
         self.metric = thelper.utils.import_class(metric_name)
-        self.metric_params = {}
-        if metric_params is not None:
-            if not isinstance(metric_params, dict):
-                raise AssertionError("invalid metric params type (should be dict)")
-            self.metric_params = metric_params
+        self.metric_params = metric_params if metric_params is not None else {}
         if "classif" in metric_type:
             self.target_name = target_name
             self.target_idx = None
@@ -868,7 +864,7 @@ class ClassifReport(Metric):
                 # this type is used to instantiate the classification report metric
                 "type": "thelper.optim.metrics.ClassifReport",
                 # we do not need to provide any parameters to the constructor, defaults are fine
-                "params": []
+                "params": {}
             },
             # ...
         }
@@ -980,7 +976,7 @@ class ConfusionMatrix(Metric):
                 # this type is used to instantiate the confusion matrix report metric
                 "type": "thelper.optim.metrics.ConfusionMatrix",
                 # we do not need to provide any parameters to the constructor, defaults are fine
-                "params": []
+                "params": {}
             },
             # ...
         }
@@ -1109,22 +1105,22 @@ class ROCCurve(Metric):
                 # this type is used to instantiate the ROC metric
                 "type": "thelper.optim.metrics.ROCCurve",
                 # these parameters are passed to the constructor
-                "params": [
+                "params": {
                     # the name of the class to evaluate
-                    {"name": "target_name", "value": "reject"}
-                ]
+                    "target_name": "reject"
+                }
             },
             # this is the name of the second example; it will output the FPR at TPR=0.99
             "roc_reject_0.99tpr": {
                 # this type is used to instantiate the ROC metric
                 "type": "thelper.optim.metrics.ROCCurve",
                 # these parameters are passed to the constructor
-                "params": [
+                "params": {
                     # the name of the class to evaluate
-                    {"name": "target_name", "value": "reject"},
+                    "target_name": "reject",
                     # the target true positive rate (TPR) operating point
-                    {"name": "target_tpr", "value": 0.99}
-                ]
+                    "target_tpr": 0.99
+                }
             },
             # ...
         }
@@ -1415,12 +1411,12 @@ class ClassifLogger(Metric):
             "logger": {
                 # this type is used to instantiate the confusion matrix report metric
                 "type": "thelper.optim.metrics.ClassifLogger",
-                "params": [
+                "params": {
                     # log the three 'best' predictions for each sample
-                    {"name": "top_k", "value": 3},
+                    "top_k": 3,
                     # keep updating a set of 10 samples for visualization via tensorboardX
-                    {"name": "viz_count", "value": 10}
-                ]
+                    "viz_count": 10
+                }
             },
             # ...
         }

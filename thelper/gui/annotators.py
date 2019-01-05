@@ -29,9 +29,7 @@ class Annotator:
             "type": "thelper.gui.ImageSegmentAnnotator",
             # ...
             # provide all extra parameters to the specialized anntator here
-            "params": [
-                {"name": "...", value: ...},
-                {"name": "...", value: ...},
+            "params": {
                 # ...
             }
         },

@@ -56,17 +56,17 @@ class CustomStepLR(torch.optim.lr_scheduler._LRScheduler):
                 # the type used to instantiate the scheduler
                 "type": "thelper.optim.schedulers.CustomStepLR",
                 # the parameters passed to the scheduler's constructor
-                "params": [
+                "params": {
                     # by default, the optimizer is passed automatically;
                     # we only need to specify the extra parameters here
-                    {"name": "milestones", "value": {
+                    "milestones": {
                         "1": 1,  # after epoch 1, scale the LR by 1
                         "10": 0.1, # after epoch 10, scale the LR by 0.1
                         "20": 0.01,  # ... and so on
                         "30": 0.001,
                         "40": 0.0001
-                    }}
-                ]
+                    }
+                }
             }
         },
         # ...

@@ -128,23 +128,23 @@ def create_loaders(config, save_dir=None):
             "dataset_A": {
                 # type of dataset interface to instantiate
                 "type": "...",
-                "params": [
+                "params": {
                     # ...
-                ]
+                }
             },
             "dataset_B": {
                 # type of dataset interface to instantiate
                 "type": "...",
-                "params": [
+                "params": {
                     # ...
-                ],
+                },
                 # if it does not derive from 'thelper.data.parsers.Dataset', a task is needed:
                 "task": {
                     # this type must derive from 'thelper.tasks.Task'
                     "type": "...",
-                    "params": [
+                    "params": {
                         # ...
-                    ]
+                    }
                 }
             },
             # ...

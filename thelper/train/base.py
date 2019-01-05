@@ -66,19 +66,19 @@ class Trainer:
                 },
                 "optimizer": {
                     "type": "torch.optim.SGD",
-                    "params": [
-                        {"name": "lr", "value": 0.1},
-                        {"name": "momentum", "value": 0.9},
-                        {"name": "weight_decay", "value": 1e-06},
-                        {"name": "nesterov", "value": true}
-                    ]
+                    "params": {
+                        "lr": 0.1,
+                        "momentum": 0.9,
+                        "weight_decay": 1e-06,
+                        "nesterov": true
+                    }
                 },
                 "scheduler": {
                     "type": "torch.optim.lr_scheduler.StepLR",
-                    "params": [
-                        {"name": "step_size", "value": 10},
-                        {"name": "step_size", "value": 0.1}
-                    ]
+                    "params": {
+                        "step_size": 10,
+                        "step_size": 0.1
+                    }
                 }
             },
             # in this example, we use two metrics in total

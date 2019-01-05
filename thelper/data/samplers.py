@@ -68,10 +68,10 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
                 # the type of the sampler we want to instantiate
                 "type": "thelper.data.samplers.WeightedSubsetRandomSampler",
                 # the parameters passed to the sampler's constructor
-                "params": [
-                    {"name": "stype", "value": "root3"},
-                    {"name": "scale", "value": 1.2}
-                ],
+                "params": {
+                    "stype": "root3",
+                    "scale": 1.2
+                },
                 # specifies whether the sampler should receive class labels
                 "pass_labels": true
             },
