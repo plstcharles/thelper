@@ -101,7 +101,7 @@ class PASCALVOC(Dataset):
         imagesets_path = os.path.join(dataset_path, "ImageSets")
         if not os.path.isdir(dataset_path):
             raise AssertionError("could not locate image sets folder at '%s'" % imagesets_path)
-        super().__init__(config=config, transforms=transforms, bypass_deepcopy=True)
+        super().__init__(config=config, transforms=transforms)
         self.preload = thelper.utils.str2bool(thelper.utils.get_key_def("preload", config, True))  # @@@ CHANGE TODO
         # should use_difficult be true for training, but false for validation?
         use_difficult = thelper.utils.str2bool(thelper.utils.get_key_def("use_difficult", config, False))

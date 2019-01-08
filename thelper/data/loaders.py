@@ -415,7 +415,8 @@ class _LoaderFactory(object):
             for dataset_name, sample_idxs in idxs_map.items():
                 if not sample_idxs:
                     continue
-                if datasets[dataset_name].bypass_deepcopy:
+                # todo: investigate need to copy at all?
+                if not datasets[dataset_name].deepcopy:
                     dataset = copy.copy(datasets[dataset_name])
                 else:
                     dataset = copy.deepcopy(datasets[dataset_name])
