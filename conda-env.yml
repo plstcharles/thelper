@@ -1,6 +1,7 @@
 name: thelper
 channels:
   - pytorch
+  - albumentations
 dependencies:
   - pytorch=0.4.0
   - numpy
@@ -11,7 +12,10 @@ dependencies:
   - gitpython
   - mock
   - tqdm
+  - shapely
+  - albumentations
   - pip:
+    - imgaug
     - augmentor
     - tensorboardX
     - torchvision
