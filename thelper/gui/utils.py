@@ -2,14 +2,7 @@
 
 This module contains various tools and utilities used to instantiate annotators and GUI elements.
 """
-import abc
-import collections
-import json
 import logging
-import os
-
-import cv2 as cv
-import numpy as np
 
 import thelper.utils
 
