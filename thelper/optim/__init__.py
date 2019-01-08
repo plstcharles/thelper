@@ -17,6 +17,7 @@ from thelper.optim.metrics import ConfusionMatrix  # noqa: F401
 from thelper.optim.metrics import ExternalMetric  # noqa: F401
 from thelper.optim.metrics import Metric  # noqa: F401
 from thelper.optim.metrics import ROCCurve  # noqa: F401
+from thelper.optim.metrics import RawPredictions  # noqa: F401
 from thelper.optim.schedulers import CustomStepLR  # noqa: F401
 from thelper.optim.utils import create_metrics  # noqa: F401
 

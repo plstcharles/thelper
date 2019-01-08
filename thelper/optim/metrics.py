@@ -10,6 +10,7 @@ import copy
 import logging
 from abc import ABC, abstractmethod
 from collections import deque
+from typing import Any, AnyStr, Dict, List, Optional, Callable
 
 import numpy as np
 import sklearn.metrics
@@ -1327,6 +1328,63 @@ class ClassifLogger(Metric):
         self.score = None
         self.true = None
         self.meta = None
+
+    def goal(self):
+        """Returns ``None``, as this class should not be used to directly monitor the training progress."""
+        return None
+
+
+class RawPredictions(Metric):
+    """Raw predictions storage.
+
+    This class provides a simple interface for accumulating and saving the raw predictions of a classifier.
+    Note that since the evaluation result is always ``None``, this metric cannot be used to directly monitor
+    training progression, and thus also returns ``None`` in :func:`thelper.optim.metrics.ClassifLogger.goal`.
+
+    It also optionally offers a callback functionality on each accumulated prediction to execute additional
+    operations (ex: call a function to update external processes from ``thelper`` package).
+
+    Usage examples inside a session configuration file::
+
+        # ...
+        # lists all metrics to instantiate as a dictionary
+        "metrics": {
+            # ...
+            # this is the name of the example metric; it is used for lookup/printing only
+            "predictions": {
+                # this type is used to instantiate the confusion matrix report metric
+                "type": "thelper.optim.metrics.RawPredictions",
+                "params": [
+                    # call 'my_function' located within 'external_module' after each added prediction
+                    {"name": "callback", "value": "external_module.my_function"},
+                ]
+            },
+            # ...
+        }
+        # ...
+
+    Attributes:
+        callback: callable to be executed after each accumulated prediction
+    """
+
+    def __init__(self, callback=None):
+        # type: (Optional[Callable]) -> None
+        super(RawPredictions, self).__init__()
+        self.predictions = list()   # type: List[Dict[AnyStr, Any]]
+        if callback is not None and not callable(callback):
+            raise TypeError("Callback is not callable, got {!s}.".format(type(callback)))
+        self.callback = callback or (lambda *args, **kwargs: None)  # do nothing if None to simplify calls
+
+    def accumulate(self, pred, gt, meta=None):
+        self.predictions.append({"prediction": pred, "label": gt, "meta": meta})
+        self.callback()
+
+    def reset(self):
+        self.__init__(callback=self.callback)
+
+    def eval(self):
+        """Returns ``None``, as this class only preserves raw prediction results."""
+        return None
 
     def goal(self):
         """Returns ``None``, as this class should not be used to directly monitor the training progress."""
