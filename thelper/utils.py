@@ -77,6 +77,14 @@ def get_available_cuda_devices(attempts_per_device=5):
     return [device_id for device_id, available in enumerate(devices_available) if available]
 
 
+def setup_cv2(config):
+    """Parses the provided config for OpenCV flags and sets up its global state accordingly."""
+    # https://github.com/pytorch/pytorch/issues/1355
+    cv.setNumThreads(0)
+    cv.ocl.setUseOpenCL(False)
+    # todo: add more global opencv flags setups here
+
+
 def setup_cudnn(config):
     """Parses the provided config for CUDNN flags and sets up PyTorch accordingly."""
     if "cudnn" in config and isinstance(config["cudnn"], dict):
@@ -98,6 +106,15 @@ def setup_cudnn(config):
             cudnn_deterministic_flag = str2bool(config["cudnn_deterministic"])
             logger.debug("cudnn deterministic mode = %s" % str(cudnn_deterministic_flag))
             torch.backends.cudnn.deterministic = cudnn_deterministic_flag
+
+
+def setup_globals(config):
+    """Parses the provided config for global flags and sets up the global state accordingly."""
+    if "bypass_queries" in config and config["bypass_queries"]:
+        global bypass_queries
+        bypass_queries = True
+    setup_cv2(config)
+    setup_cudnn(config)
 
 
 def load_checkpoint(ckpt,               # type: Union[AnyStr, io.FileIO]

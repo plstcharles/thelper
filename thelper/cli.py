@@ -39,10 +39,8 @@ def create_session(config, save_dir):
     if "name" not in config or not config["name"]:
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
-    if "bypass_queries" in config and config["bypass_queries"]:
-        thelper.utils.bypass_queries = True
     logger.info("creating new training session '%s'..." % session_name)
-    thelper.utils.setup_cudnn(config)
+    thelper.utils.setup_globals(config)
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
     logger.debug("session will be saved at '%s'" % save_dir)
     task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config, save_dir)
@@ -98,10 +96,8 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
     if "name" not in config or not config["name"]:
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
-    if "bypass_queries" in config and config["bypass_queries"]:
-        thelper.utils.bypass_queries = True
     logger.info("loading training session '%s' objects..." % session_name)
-    thelper.utils.setup_cudnn(config)
+    thelper.utils.setup_globals(config)
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config, resume=True)
     logger.debug("session will be saved at '%s'" % save_dir)
     task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config, save_dir)
@@ -142,9 +138,8 @@ def visualize_data(config):
     """
     # todo: move all 'viz' miniconfig stuff to its own section in the config file?
     logger = thelper.utils.get_func_logger()
-    if "bypass_queries" in config and config["bypass_queries"]:
-        logger.warning("cannot bypass queries in visualization mode")
     logger.info("creating visualization session...")
+    thelper.utils.setup_globals(config)
     ignore_loaders = thelper.utils.get_key_def("viz_ignore_loaders", config, default=False)
     if thelper.utils.get_key_def(["data_config", "loaders"], config, default=None) is None or ignore_loaders:
         datasets, task = thelper.data.create_parsers(config)
@@ -201,9 +196,8 @@ def annotate_data(config, save_dir):
     if "name" not in config or not config["name"]:
         raise AssertionError("config missing 'name' field")
     session_name = config["name"]
-    if "bypass_queries" in config and config["bypass_queries"]:
-        logger.warning("cannot bypass queries in annotation mode")
     logger.info("creating annotation session '%s'..." % session_name)
+    thelper.utils.setup_globals(config)
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
     logger.debug("session will be saved at '%s'" % save_dir)
     datasets, _ = thelper.data.create_parsers(config)
