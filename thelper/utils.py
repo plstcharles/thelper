@@ -1185,7 +1185,7 @@ def get_glob_paths(input_glob_pattern, can_be_dir=False):
     """Parse a wildcard-compatible file name pattern for valid file paths."""
     glob_file_paths = glob.glob(input_glob_pattern)
     if not glob_file_paths:
-        raise AssertionError("invalid input glob pattern '%s'" % input_glob_pattern)
+        raise AssertionError("invalid input glob pattern '%s' (no matches found)" % input_glob_pattern)
     for file_path in glob_file_paths:
         if not os.path.isfile(file_path) and not (can_be_dir and os.path.isdir(file_path)):
             raise AssertionError("invalid input file at globed path '%s'" % file_path)
