@@ -154,6 +154,7 @@ class _LoaderFactory(object):
         self.test_augments, self.test_augments_append = self._get_augments(test_augs_targets, "test", config)
         self.base_transforms = None
         if "base_transforms" in config and config["base_transforms"]:
+            logger.debug("loading base transforms...")
             self.base_transforms = thelper.transforms.load_transforms(config["base_transforms"])
             if self.base_transforms:
                 logger.debug("base transforms: %s" % str(self.base_transforms))
@@ -228,6 +229,7 @@ class _LoaderFactory(object):
 
     @staticmethod
     def _get_augments(targets, name, config):
+        logger.debug("loading %s augments..." % name)
         for target in targets:
             if target in config and config[target]:
                 augments, augments_append = thelper.transforms.load_augments(config[target])
