@@ -177,14 +177,17 @@ def create_loaders(config, save_dir=None):
     logstamp = thelper.utils.get_log_stamp()
     repover = thelper.__version__ + ":" + thelper.utils.get_git_stamp()
     session_name = config["name"] if "name" in config else "session"
+    data_logger_dir = None
     if save_dir is not None:
-        data_logger_path = os.path.join(save_dir, "logs", "data.log")
+        data_logger_dir = os.path.join(save_dir, "logs")
+        os.makedirs(data_logger_dir, exist_ok=True)
+        data_logger_path = os.path.join(data_logger_dir, "data.log")
         data_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         data_logger_fh = logging.FileHandler(data_logger_path)
         data_logger_fh.setFormatter(data_logger_format)
         logger.addHandler(data_logger_fh)
         logger.info("created data log for session '%s'" % session_name)
-        config_backup_path = os.path.join(save_dir, "logs", "config." + logstamp + ".json")
+        config_backup_path = os.path.join(data_logger_dir, "config." + logstamp + ".json")
         with open(config_backup_path, "w") as fd:
             json.dump(config, fd, indent=4, sort_keys=False)
     logger.debug("loading data usage config")
@@ -192,6 +195,7 @@ def create_loaders(config, save_dir=None):
     if "data_config" in config:
         logger.warning("using 'data_config' field in configuration dictionary is deprecated; switch to it 'loaders'")
     loaders_config = thelper.utils.get_key(["data_config", "loaders"], config)
+    # noinspection PyProtectedMember
     loader_factory = thelper.data.utils._LoaderFactory(loaders_config)
     logger.debug("parsing datasets configuration")
     if "datasets" not in config or not config["datasets"]:
@@ -214,12 +218,12 @@ def create_loaders(config, save_dir=None):
     logger.debug("splitting datasets and creating loaders...")
     train_idxs, valid_idxs, test_idxs = loader_factory.get_split(datasets, task)
     if save_dir is not None:
-        with open(os.path.join(save_dir, "logs", "task.log"), "a+") as fd:
+        with open(os.path.join(data_logger_dir, "task.log"), "a+") as fd:
             fd.write("session: %s-%s\n" % (session_name, logstamp))
             fd.write("version: %s\n" % repover)
             fd.write(str(task) + "\n")
         for dataset_name, dataset in datasets.items():
-            dataset_log_file = os.path.join(save_dir, "logs", dataset_name + ".log")
+            dataset_log_file = os.path.join(data_logger_dir, dataset_name + ".log")
             if not loader_factory.skip_verif and os.path.isfile(dataset_log_file):
                 logger.info("verifying sample list for dataset '%s'..." % dataset_name)
                 with open(dataset_log_file, "r") as fd:
@@ -232,9 +236,11 @@ def create_loaders(config, save_dir=None):
                     if "samples" not in log_content or not isinstance(log_content["samples"], list):
                         raise AssertionError("unexpected dataset log content (bad 'samples' field)")
                     samples_old = log_content["samples"]
-                    samples_new = dataset.samples if hasattr(dataset, "samples") and isinstance(dataset.samples, list) else []
+                    samples_new = dataset.samples \
+                        if hasattr(dataset, "samples") and isinstance(dataset.samples, list) else []
                     if len(samples_old) != len(samples_new):
-                        query_msg = "Old sample list for dataset '%s' mismatch with current sample list; proceed anyway?"
+                        query_msg = "Old sample list for dataset '%s' mismatch with current sample list; " \
+                                    "proceed anyway?"
                         answer = thelper.utils.query_yes_no(query_msg, bypass="n")
                         if not answer:
                             logger.error("sample list mismatch with previous run; user aborted")
@@ -243,7 +249,9 @@ def create_loaders(config, save_dir=None):
                     else:
                         breaking = False
                         for set_name, idxs in zip(["train_idxs", "valid_idxs", "test_idxs"],
-                                                  [train_idxs[dataset_name], valid_idxs[dataset_name], test_idxs[dataset_name]]):
+                                                  [train_idxs[dataset_name],
+                                                   valid_idxs[dataset_name],
+                                                   test_idxs[dataset_name]]):
                             # index values were paired in tuples earlier, 0=idx, 1=label
                             if log_content[set_name] != [idx for idx, _ in idxs]:
                                 query_msg = "Old indices list for dataset '%s' mismatch with current indices" \
@@ -257,15 +265,16 @@ def create_loaders(config, save_dir=None):
                         if not breaking:
                             for idx, (sample_new, sample_old) in enumerate(zip(samples_new, samples_old)):
                                 if str(sample_new) != sample_old:
-                                    query_msg = "Old sample #%d for dataset '%s' mismatch with current #%d; proceed anyway?" \
-                                                "\n\told: %s\n\tnew: %s" % (idx, dataset_name, idx, str(sample_old), str(sample_new))
+                                    query_msg = "Old sample #%d for dataset '%s' mismatch with current #%d; " \
+                                                "proceed anyway?\n\told: %s\n\tnew: %s" % \
+                                                (idx, dataset_name, idx, str(sample_old), str(sample_new))
                                     answer = thelper.utils.query_yes_no(query_msg, bypass="n")
                                     if not answer:
                                         logger.error("sample list mismatch with previous run; user aborted")
                                         sys.exit(1)
                                     break
         for dataset_name, dataset in datasets.items():
-            dataset_log_file = os.path.join(save_dir, "logs", dataset_name + ".log")
+            dataset_log_file = os.path.join(data_logger_dir, dataset_name + ".log")
             samples = dataset.samples if hasattr(dataset, "samples") and isinstance(dataset.samples, list) else []
             log_content = {
                 "metadata": {
@@ -334,14 +343,19 @@ def create_parsers(config, base_transforms=None):
             # assume that the dataset is derived from thelper.data.parsers.Dataset (it is fully sampling-ready)
             dataset = dataset_type(name=dataset_name, config=dataset_params, transforms=transforms)
             if "task" in dataset_config:
-                logger.warning("'task' field detected in dataset '%s' config; will be ignored (interface should provide it)" % dataset_name)
+                logger.warning("'task' field detected in dataset '%s' config; will be ignored " +
+                               "(interface should provide it)" % dataset_name)
             task = dataset.get_task()
         else:
             if "task" not in dataset_config or not dataset_config["task"]:
-                raise AssertionError("external dataset '%s' must define task interface in its configuration dict" % dataset_name)
+                raise AssertionError(
+                    "external dataset '%s' must define task interface in its configuration dict" % dataset_name
+                )
             task = thelper.tasks.create_task(dataset_config["task"])
             # assume that __getitem__ and __len__ are implemented, but we need to make it sampling-ready
-            dataset = thelper.data.ExternalDataset(dataset_name, dataset_type, task, config=dataset_params, transforms=transforms)
+            dataset = thelper.data.ExternalDataset(
+                dataset_name, dataset_type, task, config=dataset_params, transforms=transforms
+            )
         if task is None:
             raise AssertionError("parsed task interface should not be None anymore (old code doing something strange?)")
         tasks.append(task)
