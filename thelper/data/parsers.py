@@ -109,7 +109,7 @@ class Dataset(torch.utils.data.Dataset):
 
     def __repr__(self):
         """Returns a print-friendly representation of this dataset."""
-        return self._get_derived_name() + ": {\n\tsize: {},\n\tdeepcopy: {},\n\ttransforms: {}\n}".format(
+        return self._get_derived_name() + ": {{\n\tsize: {},\n\tdeepcopy: {},\n\ttransforms: {}\n}}".format(
             str(len(self)), str(self.transforms), str(self.deepcopy)
         )
 

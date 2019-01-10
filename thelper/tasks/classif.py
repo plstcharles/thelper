@@ -48,7 +48,7 @@ class Classification(Task):
         if len(self.class_names) < 1:
             raise AssertionError("should have at least one class!")
         if len(self.class_names) != len(set(self.class_names)):
-            raise AssertionError("list should not contain duplicates")
+            raise AssertionError("class names should not contain duplicates")
 
     def get_class_names(self):
         """Returns the list of class names to be predicted by the model."""

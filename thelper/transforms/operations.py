@@ -50,7 +50,7 @@ class Compose(torchvision.transforms.Compose):
 
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
-        return self.__class__.__name__ + "(\n\t" + ",\n\t".join([str(t) for t in self.transforms]) + ")"
+        return self.__class__.__name__ + ": [\n\t" + ",\n\t".join([str(t) for t in self.transforms]) + "]"
 
 
 class ToNumpy(object):
@@ -164,7 +164,7 @@ class CenterCrop(object):
 
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
-        return self.__class__.__name__ + "(size={0}, bordertype={1}, bordervalue={2})".format(self.size, self.bordertype, self.borderval)
+        return self.__class__.__name__ + ": {{size: {0}, bordertype: {1}, bordervalue: {2}}}".format(self.size, self.bordertype, self.borderval)
 
 
 class RandomResizedCrop(object):
@@ -358,13 +358,13 @@ class RandomResizedCrop(object):
 
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
-        format_str = self.__class__.__name__ + "("
-        format_str += "output_size={}, ".format(self.output_size)
-        format_str += "input_size={}, ".format(self.input_size)
-        format_str += "ratio={}, ".format(self.ratio)
-        format_str += "probability={}, ".format(self.probability)
-        format_str += "random_attempts={}, ".format(self.random_attempts)
-        format_str += "flags={})".format(self.flags)
+        format_str = self.__class__.__name__ + ": {"
+        format_str += "output_size: {}, ".format(self.output_size)
+        format_str += "input_size: {}, ".format(self.input_size)
+        format_str += "ratio: {}, ".format(self.ratio)
+        format_str += "probability: {}, ".format(self.probability)
+        format_str += "random_attempts: {}, ".format(self.random_attempts)
+        format_str += "flags: {}}}".format(self.flags)
         return format_str
 
     def set_seed(self, seed):
@@ -457,7 +457,8 @@ class Resize(object):
 
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
-        return self.__class__.__name__ + "(dsize={0}, fx={1}, fy={2}, interp={3})".format(self.dsize, self.fx, self.fy, self.interp)
+        return self.__class__.__name__ + ": {{dsize: {0}, fx: {1}, fy: {2}, interp: {3}}}".format(self.dsize, self.fx,
+                                                                                                  self.fy, self.interp)
 
 
 class Affine(object):
@@ -549,7 +550,7 @@ class Affine(object):
 
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
-        return self.__class__.__name__ + "(transf={0}, out_size={1})".format(np.array2string(self.transf), self.out_size)
+        return self.__class__.__name__ + ": {{transf: {0}, out_size: {1}}}".format(np.array2string(self.transf), self.out_size)
 
 
 class RandomShift(object):
@@ -636,7 +637,7 @@ class RandomShift(object):
 
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
-        return self.__class__.__name__ + "(min={0}, max={1}, prob={2})".format(self.min, self.max, self.probability)
+        return self.__class__.__name__ + ": {{min: {0}, max: {1}, prob: {2}}}".format(self.min, self.max, self.probability)
 
     def set_seed(self, seed):
         """Sets the internal seed to use for stochastic ops."""
@@ -748,7 +749,7 @@ class Duplicator(object):
 
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
-        return self.__class__.__name__ + "(count={0}, deepcopy={1})".format(self.count, self.deepcopy)
+        return self.__class__.__name__ + ": {{count: {0}, deepcopy: {1}}}".format(self.count, self.deepcopy)
 
 
 class Tile(object):
@@ -916,8 +917,8 @@ class Tile(object):
 
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
-        return self.__class__.__name__ + \
-            "(tile_size={0}, tile_overlap={1}, min_mask_iou={2})".format(self.tile_size, self.tile_overlap, self.min_mask_iou)
+        return self.__class__.__name__ + ": {{tile_size: {0}, tile_overlap: {1}, min_mask_iou: {2}}}".format(
+            self.tile_size, self.tile_overlap, self.min_mask_iou)
 
 
 class NormalizeZeroMeanUnitVar(object):
@@ -976,7 +977,7 @@ class NormalizeZeroMeanUnitVar(object):
 
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
-        return self.__class__.__name__ + "(mean={0}, std={1}, out_type={2})".format(self.mean, self.std, self.out_type)
+        return self.__class__.__name__ + ": {{mean: {0}, std: {1}, out_type: {2}}}".format(self.mean, self.std, self.out_type)
 
 
 class NormalizeMinMax(object):
@@ -1039,4 +1040,4 @@ class NormalizeMinMax(object):
 
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
-        return self.__class__.__name__ + "(min={0}, max={1}, out_type={2})".format(self.min, self.max, self.out_type)
+        return self.__class__.__name__ + ": {{min: {0}, max: {1}, out_type: {2}}}".format(self.min, self.max, self.out_type)

@@ -163,7 +163,7 @@ def create_loaders(config, save_dir=None):
         2) the training data loader; 3) the validation data loader; and 4) the test data loader.
 
     .. seealso::
-        | :func:`thelper.data.create_parsers`
+        | :func:`thelper.data.utils.create_parsers`
         | :func:`thelper.transforms.utils.load_augments`
         | :func:`thelper.transforms.utils.load_transforms`
     """
