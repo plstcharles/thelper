@@ -193,7 +193,7 @@ def create_loaders(config, save_dir=None):
     logger.debug("loading data usage config")
     # todo: 'data_config' field is deprecated, might be removed later
     if "data_config" in config:
-        logger.warning("using 'data_config' field in configuration dictionary is deprecated; switch to it 'loaders'")
+        logger.warning("using 'data_config' field in configuration dictionary is deprecated; switch it to 'loaders'")
     loaders_config = thelper.utils.get_key(["data_config", "loaders"], config)
     # noinspection PyProtectedMember
     loader_factory = thelper.data.utils._LoaderFactory(loaders_config)
