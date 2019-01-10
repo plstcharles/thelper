@@ -716,8 +716,8 @@ def draw_errbars(labels,                # type: List[AnyStr]
                  max_values,            # type: np.ndarray
                  stddev_values,         # type: np.ndarray
                  mean_values,           # type: np.ndarray
-                 xlabel="",             # type: np.ndarray
-                 ylabel="Raw Value"     # type: np.ndarray
+                 xlabel="",             # type: AnyStr
+                 ylabel="Raw Value"     # type: AnyStr
                  ):                     # type: (...) -> plt.Figure
     """Draws and returns an error bar histogram figure using pyplot."""
     if min_values.shape != max_values.shape \
