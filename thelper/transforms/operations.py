@@ -27,7 +27,12 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-class Compose(torchvision.transforms.Compose):
+class NoTransformWrapper(object):
+    """Used to flag some ops that should not be externally wrapped for sample/key handling."""
+    pass
+
+
+class Compose(torchvision.transforms.Compose, NoTransformWrapper):
     """Composes several transforms together (with support for invert ops).
 
     This interface is fully compatible with ``torchvision.transforms.Compose``.
@@ -696,14 +701,21 @@ class Transpose(object):
 
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
-        return self.__class__.__name__ + "(axes={0})".format(self.axes)
+        return self.__class__.__name__ + ": {{axes: {0}}}".format(self.axes)
 
 
-class Duplicator(object):
+class Duplicator(NoTransformWrapper):
     """Duplicates and returns a list of copies of the input sample.
 
     This operation is used in data augmentation pipelines that rely on probabilistic or preset transformations.
     It can produce a fixed number of simple copies or deep copies of the input samples as required.
+
+    .. warning::
+        Since the duplicates will be given directly to the data loader as part of the same minibatch, using too
+        many copies can adversely affect gradient descent for that minibatch. To simply increase the total size
+        of the training set while still allowing a proper shuffling of samples and/or to keep the minibatch size
+        intact, we instead recommend setting the ``train_scale`` configuration value in the data loader. See
+        :func:`thelper.data.utils.create_loaders` for more information.
 
     Attributes:
         count: number of copies to generate.
@@ -723,29 +735,38 @@ class Duplicator(object):
         self.deepcopy = deepcopy
 
     def __call__(self, sample):
-        """Generates and returns a list of duplicates.
+        """Generates and returns duplicates of the sample/object.
+
+        If a dictionary is provided, its values will be expanded into lists that
+        will contain all duplicates. Otherwise, the duplicates will be returned
+        directly as a list.
 
         Args:
-            sample: the sample to duplicate.
+            sample: the sample/object to duplicate.
 
         Returns:
-            A list of duplicated samples.
+            A list of duplicated samples, or a dictionary of duplicate lists.
         """
-        duplicates = []
-        for idx in range(self.count):
-            if self.deepcopy:
-                duplicates.append(copy.deepcopy(sample))
-            else:
-                duplicates.append(copy.copy(sample))
-        return duplicates
+        copyfct = copy.deepcopy if self.deepcopy else copy.copy
+        if isinstance(sample, dict):
+            return {k: [copyfct(v) for _ in range(self.count)] for k, v in sample.items()}
+        else:
+            return [copyfct(sample) for _ in range(self.count)]
 
     def invert(self, sample):
         """Returns the first instance of the list of duplicates."""
-        if not isinstance(sample, list):
-            raise AssertionError("invalid sample type (should be list)")
-        if len(sample) != self.count:
-            raise AssertionError("invalid sample list length")
-        return sample[0]
+        if isinstance(sample, dict):
+            if not all([isinstance(v, list) for v in sample.values()]):
+                raise AssertionError("invalid sample type (should be list)")
+            if any([len(v) != self.count for v in sample.values()]):
+                raise AssertionError("invalid sample list length")
+            return {k: v[0] for k, v in sample.items()}
+        else:
+            if not isinstance(sample, list):
+                raise AssertionError("invalid sample type (should be list)")
+            if len(sample) != self.count:
+                raise AssertionError("invalid sample list length")
+            return sample[0]
 
     def __repr__(self):
         """Provides print-friendly output for class attributes."""

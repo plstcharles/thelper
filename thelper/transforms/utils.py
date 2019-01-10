@@ -21,19 +21,27 @@ def load_transforms(stages):
     each be dictionaries that define an operation, its parameters, and some meta-parameters (detailed below).
 
     The ``operation`` field of each stage will be used to dynamically import a specific type of operation to
-    apply. The ``parameters`` field of each stage will then be used to pass parameters to the constructor of
-    this operation. If an operation is identified as ``"Augmentor.Pipeline"``, it will be specially handled. In
-    this case, a ``operations`` field in its parameters is required, and it must specify the Augmentor pipeline
-    operation names and parameters (as a dictionary). Three additional optional parameter fields can also be set:
+    apply. The ``params`` field of each stage will then be used to pass parameters to the constructor of
+    this operation.
+
+    If an operation is identified as ``"Augmentor.Pipeline"``, it will be specially handled. In this case, an
+    the ``params`` field becomes mandatory in the stage dictionary, and it must specify the Augmentor pipeline
+    operation names and parameters (as a dictionary). Two additional optional config fields can also be set:
     ``input_tensor`` (bool) which specifies whether the previous stage provides a ``torch.Tensor`` to the
-    augmentor pipeline (default=False); ``output_tensor`` (bool) which specifies whether the output of the
-    augmentor pipeline should be converted into a ``torch.Tensor`` (default=False); and ``linked_fate`` (bool)
-    which specifies whether the samples provided in lists should all have the same fate or not (default=True).
+    augmentor pipeline (default=False); and ``output_tensor`` (bool) which specifies whether the output of the
+    augmentor pipeline should be converted into a ``torch.Tensor`` (default=False).
+
+    All operations can also specify which sample components they should be applied to via the ``target_key``
+    field. This field can contain a single key (typically a string), or a list of keys. The operation will
+    be applied at runtime to all values which are found in the samples with one of those keys. If no key is
+    provided for an operation, it will be applied to all array-like components of the sample. Finally, all
+    operations can specify a ``linked_fate`` field (bool) to specify whether the samples provided in lists
+    should all have the same fate or not (default=True).
 
     Usage examples inside a session configuration file::
 
         # ...
-        # the 'loaders' field can contain several transformation pipelines
+        # the 'loaders' field may contain several transformation pipelines
         # (see 'thelper.data.utils.create_loaders' for more information on these pipelines)
         "loaders": {
             # ...
@@ -43,14 +51,19 @@ def load_transforms(stages):
                     "operation": "...",
                     "params": {
                         ...
-                    }
+                    },
+                    "target_key": [ ... ],
+                    "linked_fate": ...
                 },
                 {
                     "operation": "...",
                     "params": {
                         ...
-                    }
-                }
+                    },
+                    "target_key": [ ... ],
+                    "linked_fate": ...
+                },
+                ...
             ],
         # ...
 
@@ -58,9 +71,10 @@ def load_transforms(stages):
         stages: a list defining a series of transformations to apply as a single pipeline.
 
     Returns:
-        A transformation pipeline object compatible with the ``torchvision.transforms`` interfaces.
+        A transformation pipeline object compatible with the ``torchvision.transforms`` interface.
 
     .. seealso::
+        | :class:`thelper.transforms.wrappers.TransformWrapper`
         | :class:`thelper.transforms.wrappers.AugmentorWrapper`
         | :func:`thelper.transforms.utils.load_augments`
         | :func:`thelper.data.utils.create_loaders`
@@ -69,8 +83,8 @@ def load_transforms(stages):
         raise AssertionError("expected stages to be provided as a list")
     if not stages:
         return None, True  # no-op transform, and dont-care append
-    if not isinstance(stages[0], dict):
-        raise AssertionError("expected each stage to be provided as a dictionary")
+    if not all([isinstance(stage, dict) for stage in stages]):
+        raise AssertionError("expected all stages to be provided as dictionaries")
     operations = []
     for stage_idx, stage in enumerate(stages):
         if "operation" not in stage or not stage["operation"]:
@@ -79,26 +93,34 @@ def load_transforms(stages):
         if "params" in stage and not isinstance(stage["params"], dict):
             raise AssertionError("stage #%d parameters are not provided as a dictionary" % stage_idx)
         operation_params = stage["params"] if "params" in stage else {}
+        operation_targets = None
+        if "target_key" in stage:
+            if not isinstance(stage["target_key"], (list, str, int)):
+                raise AssertionError("stage #%d target keys are not provided as a list or string/int" % stage_idx)
+            operation_targets = stage["target_key"] if isinstance(stage["target_key"], list) else [stage["target_key"]]
+        linked_fate = thelper.utils.str2bool(stage["linked_fate"]) if "linked_fate" in stage else True
         if operation_name == "Augmentor.Pipeline":
             import Augmentor
             augp = Augmentor.Pipeline()
-            if "operations" not in operation_params:
-                raise AssertionError("missing mandatory augmentor pipeline config 'operations' field")
-            augp_operations = operation_params["operations"]
-            if not isinstance(augp_operations, dict):
-                raise AssertionError("augmentor pipeline 'operations' field should contain dictionary")
-            for augp_op_name, augp_op_params in augp_operations.items():
+            if not isinstance(operation_params, dict) or not operation_params:
+                raise AssertionError("augmentor pipeline 'params' field should contain dictionary of suboperations")
+            for augp_op_name, augp_op_params in operation_params.items():
                 getattr(augp, augp_op_name)(**augp_op_params)
-            if "input_tensor" in operation_params and thelper.utils.str2bool(operation_params["input_tensor"]):
+            if "input_tensor" in stage and thelper.utils.str2bool(stage["input_tensor"]):
                 operations.append(torchvision.transforms.ToPILImage())
-            linked_fate = thelper.utils.str2bool(operation_params["linked_fate"]) if "linked_fate" in operation_params else True
-            operations.append(thelper.transforms.wrappers.AugmentorWrapper(augp, linked_fate))
-            if "output_tensor" in operation_params and thelper.utils.str2bool(operation_params["output_tensor"]):
+            operations.append(thelper.transforms.wrappers.AugmentorWrapper(augp, operation_targets, linked_fate))
+            if "output_tensor" in stage and thelper.utils.str2bool(stage["output_tensor"]):
                 operations.append(torchvision.transforms.ToTensor())
         else:
             operation_type = thelper.utils.import_class(operation_name)
             operation = operation_type(**operation_params)
-            operations.append(operation)
+            if not isinstance(operation, (thelper.transforms.wrappers.TransformWrapper,
+                                          thelper.transforms.operations.NoTransformWrapper)):
+                operations.append(thelper.transforms.wrappers.TransformWrapper(operation,
+                                                                               target_keys=operation_targets,
+                                                                               linked_fate=linked_fate))
+            else:
+                operations.append(operation)
     if len(operations) > 1:
         return thelper.transforms.Compose(operations)
     elif len(operations) == 1:
@@ -111,8 +133,10 @@ def load_augments(config):
     """Loads a data augmentation pipeline.
 
     An augmentation pipeline is essentially a specialized transformation pipeline that can be appended or
-    prefixed to the base transforms defined for all samples. Most importantly, it can increase the number
-    of samples in a dataset based on the duplication/tiling of input samples from the dataset parser.
+    prefixed to the base transforms defined for all samples. Augmentations are typically used to diversify
+    the samples within the training set in order to help model generalization. They can also be applied to
+    validation and test samples in order to get multiple responses for the same input so that they can
+    be averaged/concatenated into a single output.
 
     Usage examples inside a session configuration file::
 
@@ -131,42 +155,15 @@ def load_augments(config):
                         # that is purely probabilistic (i.e. it does not increase input sample count)
                         "operation": "Augmentor.Pipeline",
                         "params": {
-                            "operations": {
-                                # the augmentor pipeline defines two operations: rotations and flips
-                                "rotate_random_90": {"probability": 0.75},
-                                "flip_random": {"probability": 0.75}
-                            }
+                            # the augmentor pipeline defines two operations: rotations and flips
+                            "rotate_random_90": {"probability": 0.75},
+                            "flip_random": {"probability": 0.75}
                         }
                     }
                 ]
-            ],
-            # the 'eval_augments' operations are applied to validation/test samples only
-            "eval_augments": {
-                # specifies whether to apply the augmentations before or after the base transforms
-                "append": false,
-                "transforms": [
-                    # here, we use a combination of a sample duplicator and a random cropper; this
-                    # increases the number of samples provided by the dataset parser
-                    {
-                        "operation": "thelper.transforms.Duplicator",
-                        "params": {
-                            "count": 10
-                        }
-                    },
-                    {
-                        "operation": "thelper.transforms.ImageTransformWrapper",
-                        "params": {
-                            "operation": "thelper.transforms.RandomResizedCrop",
-                            "params": {
-                                "output_size": [224, 224],
-                                "input_size": [0.1, 1.0],
-                                "ratio": 1.0
-                            },
-                            "linked_fate": false
-                        }
-                    },
-                ]
-            ],
+            },
+            # ...
+        }
         # ...
 
     Args:
