@@ -7,12 +7,15 @@ import copy
 import inspect
 import logging
 import random
+import sys
+import time
 from collections import Counter
 
 import numpy as np
 import torch
 import torch.utils.data
 import torch.utils.data.sampler
+import tqdm
 
 import thelper.tasks
 import thelper.transforms
@@ -343,8 +346,12 @@ class _LoaderFactory(object):
                         logger.warning(("must fully parse the external dataset '%s' for intra-class shuffling;" % dataset_name) +
                                        " this might take a while! (consider making a dataset interface that can return labels only)")
                         label_key = task.get_gt_key()
+                        # to allow glitch-less tqdm printing after latest logger output
+                        sys.stdout.flush()
+                        sys.stderr.flush()
+                        time.sleep(0.01)
                         samples = []
-                        for sample in dataset:
+                        for sample in tqdm.tqdm(dataset):
                             if label_key not in sample:
                                 raise AssertionError("could not find label key ('%s') in sample dict" % label_key)
                             samples.append({label_key: sample[label_key]})
