@@ -601,7 +601,8 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
         overwrite = str2bool(config["overwrite"]) if config is not None and "overwrite" in config else False
         time.sleep(0.5)  # to make sure all debug/info prints are done, and we see the question
         while os.path.exists(save_dir) and not overwrite:
-            overwrite = query_yes_no("Training session at '%s' already exists; overwrite?" % save_dir, bypass="y")
+            abs_save_dir = os.path.abspath(save_dir).replace("\\", "/")
+            overwrite = query_yes_no("Training session at '%s' already exists; overwrite?" % abs_save_dir, bypass="y")
             if not overwrite:
                 save_dir = query_string("Please provide a new save directory path:")
         if not os.path.exists(save_dir):
