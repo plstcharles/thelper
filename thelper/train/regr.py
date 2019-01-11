@@ -106,6 +106,8 @@ class RegressionTrainer(Trainer):
             optimizer.zero_grad()
             if target is None:
                 raise AssertionError("groundtruth required when training a model")
+            if isinstance(input, list):
+                raise AssertionError("missing regr trainer support for augmented minibatches") # todo
             target = self._upload_tensor(target, dev)
             iter_pred = model(self._upload_tensor(input, dev))
             iter_loss = loss(iter_pred, target.float())
@@ -158,8 +160,8 @@ class RegressionTrainer(Trainer):
             self.logger.debug("fetching data loader samples...")
             for idx, sample in enumerate(loader):
                 input, target = self._to_tensor(sample)
-                if target is not None:
-                    target = self._upload_tensor(target, dev)
+                if isinstance(input, list):
+                    raise AssertionError("missing regr trainer support for augmented minibatches")  # todo
                 pred = model(self._upload_tensor(input, dev))
                 if metrics:
                     if self.meta_keys:

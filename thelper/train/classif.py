@@ -102,39 +102,44 @@ class ImageClassifTrainer(Trainer):
             optimizer.zero_grad()
             if label is None:
                 raise AssertionError("groundtruth required when training a model")
-            label = self._upload_tensor(label, dev)
+            meta = {key: sample[key] if key in sample else None for key in self.meta_keys} if metrics else None
             if isinstance(input, list):  # training samples got augmented, we need to backprop in multiple steps
                 if not input:
                     raise AssertionError("cannot train with empty post-augment sample lists")
+                if not isinstance(label, list) or len(label) != len(input):
+                    raise AssertionError("label should also be a list of the same length as input")
                 if not self.warned_no_shuffling_augments:
                     self.logger.warning("using training augmentation without global shuffling, gradient steps might be affected")
+                    # see the docstring of thelper.transforms.operations.Duplicator for more information
                     self.warned_no_shuffling_augments = True
                 iter_loss = None
                 iter_pred = None
                 augs_count = len(input)
                 for input_idx in range(augs_count):
                     aug_pred = model(self._upload_tensor(input[input_idx], dev))
-                    aug_loss = loss(aug_pred, label)
-                    aug_loss.backward()  # test backprop all at once? @@@
+                    aug_loss = loss(aug_pred, self._upload_tensor(label[input_idx], dev))
+                    aug_loss.backward()  # test backprop all at once? might not fit in memory...
                     if iter_pred is None:
                         iter_loss = aug_loss.clone().detach()
                         iter_pred = aug_pred.clone().detach()
                     else:
                         iter_loss += aug_loss.detach()
                         iter_pred += aug_pred.detach()
+                    if metrics:
+                        for metric in metrics.values():
+                            metric.accumulate(aug_pred.detach().cpu(), label[input_idx].detach().cpu(), meta=meta)
                 iter_loss /= augs_count
                 iter_pred /= augs_count
             else:
                 iter_pred = model(self._upload_tensor(input, dev))
-                iter_loss = loss(iter_pred, label)
+                iter_loss = loss(iter_pred, self._upload_tensor(label, dev))
                 iter_loss.backward()
+                if metrics:
+                    for metric in metrics.values():
+                        metric.accumulate(iter_pred.detach().cpu(), label.detach().cpu(), meta=meta)
             epoch_loss += iter_loss.item()
             optimizer.step()
             iter += 1
-            if metrics:
-                meta = {key: sample[key] if key in sample else None for key in self.meta_keys}
-                for metric in metrics.values():
-                    metric.accumulate(iter_pred.detach().cpu(), label.detach().cpu(), meta=meta)
             monitor_output = ""
             if monitor is not None and monitor in metrics:
                 monitor_output = "   {}: {:.2f}".format(monitor, metrics[monitor].eval())
@@ -176,11 +181,15 @@ class ImageClassifTrainer(Trainer):
             self.logger.debug("fetching data loader samples...")
             for idx, sample in enumerate(loader):
                 input, label = self._to_tensor(sample)
-                if label is not None:
-                    label = self._upload_tensor(label, dev)
                 if isinstance(input, list):  # evaluation samples got augmented, we need to get the mean prediction
                     if not input:
                         raise AssertionError("cannot eval with empty post-augment sample lists")
+                    if isinstance(label, list):
+                        if len(label) != len(input):
+                            raise AssertionError("if still using label list, should be same length as input")
+                        if any([l.item() != label[0].item() for l in label]):
+                            raise AssertionError("all labels should be identical! (why do eval-time augment otherwise?)")
+                        label = label[0]  # since all identical, just pick the first one and pretend its the only one
                     preds = None
                     for input_idx in range(len(input)):
                         pred = model(self._upload_tensor(input[input_idx], dev))

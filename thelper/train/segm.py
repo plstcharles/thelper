@@ -92,19 +92,16 @@ class ImageSegmTrainer(Trainer):
             optimizer.zero_grad()
             if label_map is None:
                 raise AssertionError("groundtruth required when training a model")
-            label_map = self._upload_tensor(label_map, dev)
-            meta = None
-            if metrics:
-                meta = {key: sample[key] if key in sample else None for key in self.meta_keys}
+            meta = {key: sample[key] if key in sample else None for key in self.meta_keys} if metrics else None
             if isinstance(input, list):
                 # training samples got augmented, we need to backprop in multiple steps
-                # note: we do NOT assume all samples are registered; each input must have its own label map
                 if not input:
                     raise AssertionError("cannot train with empty post-augment sample lists")
-                if not isinstance(label_map, list) or len(input) != len(label_map):
-                    raise AssertionError("unexpected augmented input image / label map list lengths")
+                if not isinstance(label_map, list) or len(label_map) != len(input):
+                    raise AssertionError("label maps should also be provided via a list of the same length as the input")
                 if not self.warned_no_shuffling_augments:
                     self.logger.warning("using training augmentation without global shuffling, gradient steps might be affected")
+                    # see the docstring of thelper.transforms.operations.Duplicator for more information
                     self.warned_no_shuffling_augments = True
                 iter_loss = None
                 iter_pred = None
@@ -112,7 +109,7 @@ class ImageSegmTrainer(Trainer):
                 for aug_idx in range(augs_count):
                     aug_pred = model(self._upload_tensor(input[aug_idx], dev))
                     aug_loss = loss(aug_pred, label_map[aug_idx].long())
-                    aug_loss.backward()  # test backprop all at once? @@@
+                    aug_loss.backward()  # test backprop all at once? might not fit in memory...
                     if iter_pred is None:
                         iter_loss = aug_loss.clone().detach()
                         iter_pred = aug_pred.clone().detach()
@@ -126,7 +123,7 @@ class ImageSegmTrainer(Trainer):
             else:
                 iter_pred = model(self._upload_tensor(input, dev))
                 # todo: find a more efficient way to compute loss w/ byte vals directly?
-                iter_loss = loss(iter_pred, label_map.long())
+                iter_loss = loss(iter_pred, self._upload_tensor(label_map, dev).long())
                 iter_loss.backward()
                 if metrics:
                     for metric in metrics.values():
@@ -175,16 +172,17 @@ class ImageSegmTrainer(Trainer):
             self.logger.debug("fetching data loader samples...")
             for idx, sample in enumerate(loader):
                 input, label_map = self._to_tensor(sample)
-                if label_map is not None:
-                    label_map = self._upload_tensor(label_map, dev)
                 if isinstance(input, list):
                     # evaluation samples got augmented, we need to get the mean prediction
-                    # note: we assume all samples are registered images with a common label map
-                    # (this differs from the training loop!)
                     if not input:
                         raise AssertionError("cannot eval with empty post-augment sample lists")
                     if isinstance(label_map, list):
-                        raise AssertionError("unexpected augmented input image / label map type")
+                        if len(label_map) != len(input):
+                            raise AssertionError("if still using label_map list, should be same length as input")
+                        # this might be costly for nothing, we could remove the check and assume user is not dumb
+                        if any([not torch.eq(l, label_map[0]) for l in label_map]):
+                            raise AssertionError("all label maps should be identical! (why do eval-time augment otherwise?)")
+                        label_map = label_map[0]  # since all identical, just pick the first one and pretend its the only one
                     preds = None
                     for input_idx in range(len(input)):
                         pred = model(self._upload_tensor(input[input_idx], dev))
