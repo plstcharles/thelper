@@ -104,8 +104,13 @@ class Regression(Task):
         """Returns the maximum target value(s) to be predicted by the model."""
         return self.target_max
 
-    def check_compat(self, other):
-        """Returns whether the current task is compatible with the provided one or not."""
+    def check_compat(self, other, exact=False):
+        """Returns whether the current task is compatible with the provided one or not.
+
+        This is useful for sanity-checking, and to see if the inputs/outputs of two models
+        are compatible. If ``exact = True``, all fields will be checked for exact (perfect)
+        compatibility (in this case, matching meta keys).
+        """
         if isinstance(other, Regression):
             # if both tasks are related to regression: all non-None keys and specs must match
             return (self.get_input_key() == other.get_input_key() and
@@ -120,10 +125,11 @@ class Regression(Task):
                     (self.get_target_min() is None or other.get_target_min() is None or
                      self.get_target_min() == other.get_target_min()) and
                     (self.get_target_max() is None or other.get_target_max() is None or
-                     self.get_target_max() == other.get_target_max()))
+                     self.get_target_max() == other.get_target_max()) and
+                    (not exact or (self.get_meta_keys() == other.get_meta_keys())))
         elif type(other) == Task:
             # if 'other' simply has no gt, compatibility rests on input key only
-            return self.get_input_key() == other.get_input_key() and other.get_gt_key() is None
+            return not exact and self.get_input_key() == other.get_input_key() and other.get_gt_key() is None
         return False
 
     def get_compat(self, other):

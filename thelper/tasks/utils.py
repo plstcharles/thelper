@@ -153,12 +153,13 @@ class Task(object):
         """
         return self.meta_keys
 
-    def check_compat(self, other):
+    def check_compat(self, other, exact=False):
         """Returns whether the current task is compatible with the provided one or not.
 
         This is useful for sanity-checking, and to see if the inputs/outputs of two models
-        are compatible. It should ideally be overridden in derived classes to specialize
-        the compatibility verification.
+        are compatible. It should be overridden in derived classes to specialize the
+        compatibility verification. If ``exact = True``, all fields will be checked for
+        exact (perfect) compatibility.
         """
         if type(other) == Task:
             return (self.get_input_key() == other.get_input_key() and

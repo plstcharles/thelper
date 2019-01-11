@@ -144,17 +144,24 @@ class Segmentation(Task):
         """Returns the color map used to swap label indices for colors when displaying results."""
         return self.color_map
 
-    def check_compat(self, other):
-        """Returns whether the current task is compatible with the provided one or not."""
+    def check_compat(self, other, exact=False):
+        """Returns whether the current task is compatible with the provided one or not.
+
+        This is useful for sanity-checking, and to see if the inputs/outputs of two models
+        are compatible. If ``exact = True``, all fields will be checked for exact (perfect)
+        compatibility (in this case, matching meta keys and class maps).
+        """
         if isinstance(other, Segmentation):
             # if both tasks are related to segmentation: gt keys, class names, and dc must match
             return (self.get_input_key() == other.get_input_key() and
                     self.get_dontcare_val() == other.get_dontcare_val() and
                     (self.get_gt_key() is None or other.get_gt_key() is None or self.get_gt_key() == other.get_gt_key()) and
-                    all([cls in self.get_class_names() for cls in other.get_class_names()]))
+                    all([cls in self.get_class_names() for cls in other.get_class_names()]) and
+                    (not exact or (self.get_class_idxs_map() == other.get_class_idxs_map() and
+                                   self.get_meta_keys() == other.get_meta_keys())))
         elif type(other) == Task:
             # if 'other' simply has no gt, compatibility rests on input key only
-            return self.get_input_key() == other.get_input_key() and other.get_gt_key() is None
+            return not exact and self.get_input_key() == other.get_input_key() and other.get_gt_key() is None
         return False
 
     def get_compat(self, other):
@@ -176,7 +183,7 @@ class Segmentation(Task):
                 raise AssertionError("cannot create compatible task instance between:\n"
                                      "\tself: %s\n\tother: %s" % (str(self), str(other)))
             meta_keys = list(set(self.get_meta_keys() + other.get_meta_keys()))
-            return Segmentation(self.get_class_names(), self.get_input_key(), self.get_gt_key(),
+            return Segmentation(self.get_class_idxs_map(), self.get_input_key(), self.get_gt_key(),
                                 meta_keys=meta_keys, dontcare=self.get_dontcare_val())
         else:
             raise AssertionError("cannot combine task type '%s' with '%s'" % (str(other.__class__), str(self.__class__)))
@@ -184,7 +191,7 @@ class Segmentation(Task):
     def __repr__(self):
         """Creates a print-friendly representation of a segmentation task."""
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + ": " + str({
-            "class_names": self.get_class_names(),
+            "class_names": self.get_class_idxs_map(),
             "input_key": self.get_input_key(),
             "label_map_key": self.get_gt_key(),
             "meta_keys": self.get_meta_keys(),
