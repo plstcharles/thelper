@@ -49,7 +49,8 @@ def create_model(config, task, save_dir=None, ckptdata=None):
 
     Args:
         config: a session dictionary that provides a 'model' field containing a dictionary.
-        task: a task object that will be passed to the model's constructor in order to specialize it.
+        task: a task object that will be passed to the model's constructor in order to specialize it. Can be
+            ``None`` if a checkpoint is provided, and if the previous task is wanted instead of a new one.
         save_dir: if not ``None``, a log file containing model information will be created there.
         ckptdata: raw checkpoint data loaded via ``torch.load()``; the model will be given its previous state.
 
@@ -62,8 +63,6 @@ def create_model(config, task, save_dir=None, ckptdata=None):
         | :class:`thelper.nn.utils.ExternalModule`
         | :class:`thelper.tasks.utils.Task`
     """
-    if not isinstance(task, thelper.tasks.Task):
-        raise AssertionError("bad task type passed to create_model")
     if save_dir is not None:
         modules_logger_path = os.path.join(save_dir, "logs", "modules.log")
         modules_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
@@ -120,6 +119,8 @@ def create_model(config, task, save_dir=None, ckptdata=None):
             if "type" in old_model_config and thelper.utils.import_class(old_model_config["type"]) != model_type:
                 raise AssertionError("old model config 'type' field mismatch with ckptdata type")
     else:
+        if not isinstance(task, thelper.tasks.Task):
+            raise AssertionError("bad task type passed to create_model")
         logger.debug("loading model type/params current config")
         if "type" not in model_config or not model_config["type"]:
             raise AssertionError("model config missing 'type' field")
@@ -142,7 +143,8 @@ def create_model(config, task, save_dir=None, ckptdata=None):
             logger.debug("loading state dictionary from checkpoint into model")
             model.load_state_dict(model_state)
     if new_task is not None:
-        logger.debug("specializing model for task = %s" % str(new_task))
+        logger.debug("previous model task = %s" % str(model.task))
+        logger.debug("refreshing model for new task = %s" % str(new_task))
         model.set_task(new_task)
     if model.config is None:
         model.config = model_params
