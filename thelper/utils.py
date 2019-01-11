@@ -1195,12 +1195,11 @@ def stringify_confmat(confmat, class_list, hide_zeroes=False, hide_diagonal=Fals
 
 
 def fig2array(fig):
-    """Transforms a pyplot figure into a numpy-compatible RGBA array."""
+    """Transforms a pyplot figure into a numpy-compatible RGB array."""
     fig.canvas.draw()
     w, h = fig.canvas.get_width_height()
-    buf = np.fromstring(fig.canvas.tostring_argb(), dtype=np.uint8)
-    buf.shape = (w, h, 4)
-    buf = np.roll(buf, 3, axis=2)
+    buf = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    buf.shape = (w, h, 3)
     return buf
 
 

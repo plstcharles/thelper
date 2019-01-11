@@ -614,7 +614,8 @@ class Trainer:
                 img = metric.render()
                 if img is not None:
                     if tbx_writer is not None:
-                        tbx_writer.add_image(metric_name, img, epoch)
+                        # recent versions of tensorboardX (at least since 2018/12) require CxHxW images
+                        tbx_writer.add_image(metric_name, np.transpose(img, [2, 0, 1]), epoch)
                     raw_filename = "%s-%04d.png" % (metric_name, epoch)
                     raw_filepath = os.path.join(output_path, raw_filename)
                     cv.imwrite(raw_filepath, img[..., [2, 1, 0]])
