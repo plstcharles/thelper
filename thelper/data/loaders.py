@@ -110,7 +110,9 @@ class _LoaderFactory(object):
         self.train_collate_fn = self._get_collate_fn(thelper.utils.get_key_def("train_collate_fn", config, default_collate_fn))
         self.valid_collate_fn = self._get_collate_fn(thelper.utils.get_key_def("valid_collate_fn", config, default_collate_fn))
         self.test_collate_fn = self._get_collate_fn(thelper.utils.get_key_def("test_collate_fn", config, default_collate_fn))
-        self.shuffle = thelper.utils.str2bool(thelper.utils.get_key_def("shuffle", config, True))
+        self.train_shuffle = thelper.utils.str2bool(thelper.utils.get_key_def(["shuffle", "train_shuffle"], config, True))
+        self.valid_shuffle = thelper.utils.str2bool(thelper.utils.get_key_def("valid_shuffle", config, False))
+        self.test_shuffle = thelper.utils.str2bool(thelper.utils.get_key_def("test_shuffle", config, False))
         np.random.seed()  # for seed generation below (if needed); will be reseeded afterwards
         test_seed = self._get_seed(["test_seed", "test_split_seed"], config, (int, str))
         valid_seed = self._get_seed(["valid_seed", "valid_split_seed"], config, (int, str))
@@ -252,7 +254,8 @@ class _LoaderFactory(object):
             valid_idxs[name] = []
             test_idxs[name] = []
         indices = _indices
-        if self.shuffle:
+        shuffle = any([self.train_shuffle, self.valid_shuffle, self.test_shuffle])
+        if shuffle:
             np.random.seed(self.seeds["test"])  # test idxs will be picked first, then valid+train
             for idxs in indices.values():
                 np.random.shuffle(idxs)
@@ -270,13 +273,13 @@ class _LoaderFactory(object):
                     endidx = min(begidx + count, len(indices[name]))
                     idxs_map[name] = indices[name][begidx:endidx]
                     offsets[name] = endidx
-            if loader_idx == 0 and self.shuffle:
+            if loader_idx == 0 and shuffle:
                 np.random.seed(self.seeds["valid"])  # all test idxs are now picked, reshuffle for train/valid
                 for name in self.total_usage.keys():
                     trainvalid_idxs = indices[name][offsets[name]:]
                     np.random.shuffle(trainvalid_idxs)
                     indices[name][offsets[name]:] = trainvalid_idxs
-        if self.shuffle:
+        if shuffle:
             np.random.seed(self.seeds["numpy"])  # back to default random state for future use
         return train_idxs, valid_idxs, test_idxs
 
@@ -413,7 +416,7 @@ class _LoaderFactory(object):
                        [(self.train_augments, self.train_augments_append),
                         (self.valid_augments, self.valid_augments_append),
                         (self.test_augments, self.test_augments_append)],
-                       [self.shuffle, False, False],
+                       [self.train_shuffle, self.valid_shuffle, self.test_shuffle],
                        [self.train_scale, self.valid_scale, self.test_scale],
                        [self.train_sampler, self.valid_sampler, self.test_sampler],
                        [self.train_batch_size, self.valid_batch_size, self.test_batch_size],
