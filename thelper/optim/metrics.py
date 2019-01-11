@@ -1375,8 +1375,52 @@ class RawPredictions(Metric):
             raise TypeError("Callback is not callable, got {!s}.".format(type(callback)))
         self.callback = callback or (lambda *args, **kwargs: None)  # do nothing if None to simplify calls
 
+    @staticmethod
+    def _to_py(element):
+        if isinstance(element, torch.Tensor):
+            return element.tolist()
+        return element
+
     def accumulate(self, pred, gt, meta=None):
-        self.predictions.append({"prediction": pred, "label": gt, "meta": meta})
+        """Receives the latest prediction and groundtruth tensors (each batch) from the session.
+
+        Args:
+            pred: model prediction tensor forwarded by the trainer for a given sample batch.
+            gt: groundtruth tensor forwarded by the trainer (can be ``None`` if unavailable).
+            meta: metadata tensors forwarded by the trainer.
+        """
+
+        # convert batch tensor to per-sample class predictions
+        samples_predictions = [{
+            "predictions": self._to_py(p),
+        } for p in pred]
+
+        # convert ground truths to per-sample labels
+        for i, label in enumerate(self._to_py(gt)):
+            samples_predictions[i]["gt"] = label
+
+        # transfer meta information to corresponding samples according to available details
+        n_samples = len(samples_predictions)
+        if isinstance(meta, dict):
+            for meta_key in meta:
+                if isinstance(meta[meta_key], list):
+                    n_meta = len(meta[meta_key])
+                    # list of tensors where each index in every tensor corresponds to a sample index
+                    if n_meta != n_samples:
+                        meta_info = [self._to_py(t) for t in meta[meta_key]]
+                        for j, s in enumerate(samples_predictions):
+                            s[meta_key] = [meta_info[i][j] for i in range(len(meta_info))]
+                    # list of elements or tensor of samples size
+                    elif n_meta == n_samples:
+                        meta_info = self._to_py(meta[meta_key])
+                        for i, s in enumerate(samples_predictions):
+                            s[meta_key] = meta_info[i]
+                else:
+                    # each sample gets the same info
+                    for s in samples_predictions:
+                        s[meta_key] = meta[meta_key]
+
+        self.predictions.extend(samples_predictions)
         self.callback()
 
     def reset(self):
