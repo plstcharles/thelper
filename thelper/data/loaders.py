@@ -344,7 +344,8 @@ class _LoaderFactory(object):
                         sample_maps[dataset_name] = task.get_class_sample_map(dataset.samples.samples, unset_class_key)
                     else:
                         logger.warning(("must fully parse the external dataset '%s' for intra-class shuffling;" % dataset_name) +
-                                       " this might take a while! (consider making a dataset interface that can return labels only)")
+                                       " this might take a while!\n(consider making a dataset interface that can return labels" +
+                                       " only, it would greatly speed up the analysis of class distributions)")
                         label_key = task.get_gt_key()
                         # to allow glitch-less tqdm printing after latest logger output
                         sys.stdout.flush()
