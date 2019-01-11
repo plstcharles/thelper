@@ -874,6 +874,7 @@ class ImageClassifTrainer(Trainer):
         with torch.no_grad():
             epoch_size = len(loader)
             self.logger.debug("fetching data loader samples...")
+
             for idx, sample in enumerate(loader):
                 input, label = self._to_tensor(sample)
                 if label is not None:
