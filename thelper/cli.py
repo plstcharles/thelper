@@ -267,7 +267,7 @@ def main(args=None):
         return 1
     logging.getLogger().setLevel(logging.NOTSET)
     thelper.logger.propagate = 0
-    logger_format = logging.Formatter("[%(asctime)s - %(name)s - %(process)s:%(thread)s] %(levelname)s : %(message)s")
+    logger_format = logging.Formatter("[%(asctime)s - %(name)s] %(levelname)s : %(message)s")
     if args.log:
         logger_fh = logging.FileHandler(args.log)
         logger_fh.setLevel(logging.DEBUG)
