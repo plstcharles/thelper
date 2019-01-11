@@ -73,6 +73,7 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
         in the checkpoint. This means that we cannot expect a training session resumed from a certain
         checkpoint to result in the same final output as a session created from scratch and that was
         run for its entire length.
+        # todo: reconfirm as of 2019/01, seeding now based on offset from init seed + epoch index
 
     Args:
         ckptdata: raw checkpoint data loaded via ``torch.load()``; it will be parsed by the various
