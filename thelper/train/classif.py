@@ -43,32 +43,41 @@ class ImageClassifTrainer(Trainer):
             raise AssertionError("trainer expects samples to come in dicts for key-based usage")
         if self.input_key not in sample:
             raise AssertionError("could not find input key '%s' in sample dict" % self.input_key)
-        input = sample[self.input_key]
+        input, label_idx = sample[self.input_key], None
         if isinstance(input, list):
-            for idx in range(len(input)):
-                input[idx] = torch.FloatTensor(input[idx])
+            if self.label_key in sample and sample[self.label_key] is not None:
+                label = sample[self.label_key]
+                if not isinstance(label, list) or len(label) != len(input):
+                    raise AssertionError("label should also be a list of the same length as input")
+                label_idx = [None] * len(input)
+                for idx in range(len(input)):
+                    input[idx], label_idx[idx] = self._to_tensor({self.input_key: input[idx], self.label_key: label[idx]})
+            else:
+                for idx in range(len(input)):
+                    input[idx] = torch.FloatTensor(input[idx])
         else:
             input = torch.FloatTensor(input)
-        label_idx = None
-        if self.label_key in sample:
-            label = sample[self.label_key]
-            label_idx = []
-            for class_name in label:
-                if isinstance(class_name, (int, torch.Tensor)):
-                    if isinstance(class_name, torch.Tensor):
-                        if torch.numel(class_name) != 1:
-                            raise AssertionError("unexpected label name type, got vector")
-                        class_name = class_name.item()
-                    # dataset must already be using indices, we will forgive this...
-                    if class_name < 0 or class_name >= len(self.class_names):
-                        raise AssertionError("class name given as out-of-range index (%d) for class list" % class_name)
-                    class_name = self.class_names[class_name]
-                elif not isinstance(class_name, str):
-                    raise AssertionError("expected label to be in str format (task will convert to proper index)")
-                if class_name not in self.class_names:
-                    raise AssertionError("got unexpected label '%s' for a sample (unknown class)" % class_name)
-                label_idx.append(self.class_idxs_map[class_name])
-            label_idx = torch.LongTensor(label_idx)
+            if self.label_key in sample and sample[self.label_key] is not None:
+                label = sample[self.label_key]
+                if isinstance(label, torch.Tensor) and label.numel() == input.shape[0] and label.dtype == torch.int64:
+                    label_idx = label  # shortcut with less checks (dataset is already using tensor'd indices)
+                else:
+                    for class_name in label:
+                        if isinstance(class_name, (int, torch.Tensor)):
+                            if isinstance(class_name, torch.Tensor):
+                                if torch.numel(class_name) != 1:
+                                    raise AssertionError("unexpected scalar label, got vector")
+                                class_name = class_name.item()
+                            # dataset must already be using indices, we will forgive this...
+                            if class_name < 0 or class_name >= len(self.class_names):
+                                raise AssertionError("class name given as out-of-range index (%d) for class list" % class_name)
+                            class_name = self.class_names[class_name]
+                        elif not isinstance(class_name, str):
+                            raise AssertionError("expected label to be in str format (task will convert to proper index)")
+                        if class_name not in self.class_names:
+                            raise AssertionError("got unexpected label '%s' for a sample (unknown class)" % class_name)
+                        label_idx.append(self.class_idxs_map[class_name])
+                    label_idx = torch.LongTensor(label_idx)
         return input, label_idx
 
     def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
@@ -184,12 +193,12 @@ class ImageClassifTrainer(Trainer):
                 if isinstance(input, list):  # evaluation samples got augmented, we need to get the mean prediction
                     if not input:
                         raise AssertionError("cannot eval with empty post-augment sample lists")
-                    if isinstance(label, list):
-                        if len(label) != len(input):
-                            raise AssertionError("if still using label list, should be same length as input")
-                        if any([l.item() != label[0].item() for l in label]):
-                            raise AssertionError("all labels should be identical! (why do eval-time augment otherwise?)")
-                        label = label[0]  # since all identical, just pick the first one and pretend its the only one
+                    if not isinstance(label, list) or len(label) != len(input):
+                        raise AssertionError("label should also be a list of the same length as input")
+                    # this might be costly for nothing, we could remove the check and assume user is not dumb
+                    if any([not torch.eq(l, label[0]).all() for l in label]):
+                        raise AssertionError("all labels should be identical! (why do eval-time augment otherwise?)")
+                    label = label[0]  # since all identical, just pick the first one and pretend its the only one
                     preds = None
                     for input_idx in range(len(input)):
                         pred = model(self._upload_tensor(input[input_idx], dev))

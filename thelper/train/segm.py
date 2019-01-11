@@ -45,19 +45,23 @@ class ImageSegmTrainer(Trainer):
             raise AssertionError("trainer expects samples to come in dicts for key-based usage")
         if self.input_key not in sample:
             raise AssertionError("could not find input key '%s' in sample dict" % self.input_key)
-        input = sample[self.input_key]
+        input, label_map = sample[self.input_key], None
         if isinstance(input, list):
-            for idx in range(len(input)):
-                input[idx] = torch.FloatTensor(input[idx])
+            if self.label_map_key in sample and sample[self.label_map_key] is not None:
+                label_map = sample[self.label_map_key]
+                if not isinstance(label_map, list) or len(label_map) != len(input):
+                    raise AssertionError("label_map should also be a list of the same length as input")
+                for idx in range(len(input)):
+                    input[idx], label_map[idx] = self._to_tensor({self.input_key: input[idx], self.label_map_key: label_map[idx]})
+            else:
+                for idx in range(len(input)):
+                    input[idx] = torch.FloatTensor(input[idx])
         else:
             input = torch.FloatTensor(input)
-        label_map = None
-        if self.label_map_key in sample:
-            label_map = sample[self.label_map_key]
-            if isinstance(label_map, list):
-                for idx in range(len(label_map)):
-                    label_map[idx] = torch.ByteTensor(label_map[idx])
-            else:
+            if self.label_map_key in sample and sample[self.label_map_key] is not None:
+                label_map = sample[self.label_map_key]
+                if isinstance(label_map, list):
+                    raise AssertionError("unexpected label map type")
                 label_map = torch.ByteTensor(label_map)
         return input, label_map
 
@@ -176,13 +180,12 @@ class ImageSegmTrainer(Trainer):
                     # evaluation samples got augmented, we need to get the mean prediction
                     if not input:
                         raise AssertionError("cannot eval with empty post-augment sample lists")
-                    if isinstance(label_map, list):
-                        if len(label_map) != len(input):
-                            raise AssertionError("if still using label_map list, should be same length as input")
-                        # this might be costly for nothing, we could remove the check and assume user is not dumb
-                        if any([not torch.eq(l, label_map[0]) for l in label_map]):
-                            raise AssertionError("all label maps should be identical! (why do eval-time augment otherwise?)")
-                        label_map = label_map[0]  # since all identical, just pick the first one and pretend its the only one
+                    if not isinstance(label_map, list) or len(label_map) != len(input):
+                        raise AssertionError("label maps should also be provided via a list of the same length as the input")
+                    # this might be costly for nothing, we could remove the check and assume user is not dumb
+                    if any([not torch.eq(l, label_map[0]).all() for l in label_map]):
+                        raise AssertionError("all label maps should be identical! (why do eval-time augment otherwise?)")
+                    label_map = label_map[0]  # since all identical, just pick the first one and pretend its the only one
                     preds = None
                     for input_idx in range(len(input)):
                         pred = model(self._upload_tensor(input[input_idx], dev))
