@@ -90,6 +90,8 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
         | :class:`thelper.train.trainers.Trainer`
     """
     logger = thelper.utils.get_func_logger()
+    if ckptdata is None or not ckptdata:
+        raise AssertionError("must provide valid checkpoint data to resume a session!")
     if not config:
         if "config" not in ckptdata or not ckptdata["config"]:
             raise AssertionError("checkpoint data missing 'config' field")
@@ -101,7 +103,21 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
     thelper.utils.setup_globals(config)
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config, resume=True)
     logger.debug("session will be saved at '%s'" % os.path.abspath(save_dir).replace("\\", "/"))
-    task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config, save_dir)
+    new_task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config, save_dir)
+    if "task" not in ckptdata or not ckptdata["task"] or not isinstance(ckptdata["task"], (thelper.tasks.Task, str)):
+        raise AssertionError("invalid checkpoint, cannot reload previous model task")
+    old_task = thelper.tasks.create_task(ckptdata["task"]) if isinstance(ckptdata["task"], str) else ckptdata["task"]
+    if not old_task.check_compat(new_task, exact=True):
+        compat_task = None if not old_task.check_compat(new_task) else old_task.get_compat(new_task)
+        choice = thelper.utils.query_string("Found discrepancy between old task from checkpoint and new task from config; "+
+                                            "which one would you like to resume the session with?\n" +
+                                            f"\told: {str(old_task)}\n\tnew: {str(new_task)}\n" +
+                                            (f"\tcompat: {str(compat_task)}\n\n" if compat_task is not None else "\n") +
+                                            "WARNING: if resuming with new or compat, some weights might be discarded!",
+                                            choices=["old", "new", "compat"])
+        task = None if choice == "old" else new_task if choice == "new" else compat_task
+    else:
+        task = new_task
     model = thelper.nn.create_model(config, task, save_dir=save_dir, ckptdata=ckptdata)
     loaders = (None if eval_only else train_loader, valid_loader, test_loader)
     trainer = thelper.train.create_trainer(session_name, save_dir, config, model, loaders, ckptdata=ckptdata)
