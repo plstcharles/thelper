@@ -65,13 +65,10 @@ class AugmentorWrapper(object):
                 (self.target_keys is not None and k in self.target_keys))]
             keys, vals = map(list, zip(*keyvals))
             lengths = [len(v) if isinstance(v, (list, tuple)) else -1 for v in vals]
-            interlaced = False
-            if len(lengths) > 1 and all(l == lengths[0] for l in lengths) and lengths[0] > 0:
+            if len(lengths) > 1 and all(n == lengths[0] for n in lengths) and lengths[0] > 0:
                 # interlace input lists for internal linked fate (if needed; otherwise, it won't change anything)
                 vals = [[v[idx] if isinstance(v, (list, tuple)) else v[idx, ...] for v in vals] for idx in range(lengths[0])]
-                interlaced = True
-            vals = self(vals, force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
-            if interlaced:
+                vals = self(vals, force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
                 if not isinstance(vals, list) or len(vals) != lengths[0] or any([not isinstance(v, list) for v in vals]):
                     raise AssertionError("messed up something internally")
                 out_vals = [[v] for v in vals[0]]
@@ -79,6 +76,9 @@ class AugmentorWrapper(object):
                     for idx2 in range(len(out_vals)):
                         out_vals[idx2].append(vals[idx1][idx2])
                 vals = out_vals
+            else:
+                for idx in range(len(vals)):
+                    vals[idx] = self(vals[idx], force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
             sample = {k: vals[keys.index(k)] if k in keys else sample[k] for k in sample}
             return sample
         out_cvts = in_cvts is not None
@@ -279,13 +279,10 @@ class TransformWrapper(object):
                 (self.target_keys is not None and k in self.target_keys))]
             keys, vals = map(list, zip(*keyvals))
             lengths = [len(v) if isinstance(v, (list, tuple)) else -1 for v in vals]
-            interlaced = False
-            if len(lengths) > 1 and all(l == lengths[0] for l in lengths) and lengths[0] > 0:
+            if len(lengths) > 1 and all(n == lengths[0] for n in lengths) and lengths[0] > 0:
                 # interlace input lists for internal linked fate (if needed; otherwise, it won't change anything)
                 vals = [[v[idx] if isinstance(v, (list, tuple)) else v[idx, ...] for v in vals] for idx in range(lengths[0])]
-                interlaced = True
-            vals = self(vals, force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
-            if interlaced:
+                vals = self(vals, force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
                 if not isinstance(vals, list) or len(vals) != lengths[0] or any([not isinstance(v, list) for v in vals]):
                     raise AssertionError("messed up something internally")
                 out_vals = [[v] for v in vals[0]]
@@ -293,6 +290,9 @@ class TransformWrapper(object):
                     for idx2 in range(len(out_vals)):
                         out_vals[idx2].append(vals[idx1][idx2])
                 vals = out_vals
+            else:
+                for idx in range(len(vals)):
+                    vals[idx] = self(vals[idx], force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
             sample = {k: vals[keys.index(k)] if k in keys else sample[k] for k in sample}
             return sample
         out_cvts = in_cvts is not None
