@@ -469,6 +469,8 @@ class _LoaderFactory(object):
                         if scale != 1.0:
                             raise AssertionError("sequential sampler currently does not handle scale changes")
                         sampler = thelper.data.SubsetSequentialSampler(loader_sample_idxs)
+                if not hasattr(sampler, "__len__"):
+                    raise AssertionError("sampler should always expose sample count via '__len__'")
                 if batch_size is None or batch_size <= 0:
                     raise AssertionError("invalid batch size")
                 loaders.append(DataLoader(dataset=dataset, batch_size=batch_size, sampler=sampler,
