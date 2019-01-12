@@ -68,6 +68,12 @@ class DataLoader(torch.utils.data.DataLoader):
         if "random" in self.seeds:
             random.seed(self.seeds["random"] + seed_offset + worker_id)
 
+    @property
+    def sample_count(self):
+        if self.sampler is not None:
+            return len(sampler)
+        return len(self.dataset)
+
 
 class _LoaderFactory(object):
     """Factory used for preparing and splitting dataset parsers into usable data loader objects.
