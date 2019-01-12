@@ -47,17 +47,12 @@ class AddCoords(torch.nn.Module):
         xx_channel = xx_channel.repeat(batch_size_tensor, 1, 1, 1)
         yy_channel = yy_channel.repeat(batch_size_tensor, 1, 1, 1)
 
-        def _get(tensor):
-            if tensor.is_cuda:
-                return tensor.cuda()
-            return tensor
-
-        out = torch.cat([_get(in_tensor), _get(xx_channel), _get(yy_channel)], dim=1)
-
+        dev = in_tensor.device
+        out = torch.cat([in_tensor, xx_channel.to(dev), yy_channel.to(dev)], dim=1)
+        torch.Tensor()
         if self.radius_channel:
             radius_calc = torch.sqrt(torch.pow(xx_channel - 0.5, 2) + torch.pow(yy_channel - 0.5, 2))
-            out = torch.cat([out, _get(radius_calc)], dim=1)
-
+            out = torch.cat([out, radius_calc.to(dev)], dim=1)
         return out
 
 
