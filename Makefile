@@ -123,7 +123,9 @@ lint: conda-env
 
 .PHONY: test
 test:
-	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); python $(CUR_DIR)/setup.py test"
+	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
+		test -f $(CONDA_ENV_PATH)/bin/pytest || pip install pytest; \
+		pytest -vvv tests"
 
 .PHONY: test-all
 test-all: install
