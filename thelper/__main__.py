@@ -2,7 +2,14 @@
 Entrypoint module, in case you use `python -m thelper`.
 """
 
-from thelper.cli import main
+import sys
 
-if __name__ == "__main__":
-    main()
+import thelper.cli
+
+
+def init():
+    if __name__ == "__main__":
+        sys.exit(thelper.cli.main())
+
+
+init()
