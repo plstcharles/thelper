@@ -100,6 +100,8 @@ class RegressionTrainer(Trainer):
         epoch_size = len(loader)
         self.logger.debug("fetching data loader samples...")
         for idx, sample in enumerate(loader):
+            if idx < self.external_train_iter:
+                continue  # skip until previous iter count (if set externally; no effect otherwise)
             input, target = self._to_tensor(sample)
             # todo: add support to fraction samples that are too big for a single iteration
             # (e.g. when batching non-image data that would be too inefficient one sample at a time)
@@ -138,6 +140,7 @@ class RegressionTrainer(Trainer):
                 for metric_name, metric in metrics.items():
                     if metric.is_scalar():  # only useful assuming that scalar metrics are smoothed...
                         writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
+            self.external_train_iter += 1
         epoch_loss /= epoch_size
         return epoch_loss, iter
 
@@ -159,6 +162,8 @@ class RegressionTrainer(Trainer):
             epoch_size = len(loader)
             self.logger.debug("fetching data loader samples...")
             for idx, sample in enumerate(loader):
+                if idx < self.external_eval_iter:
+                    continue  # skip until previous iter count (if set externally; no effect otherwise)
                 input, target = self._to_tensor(sample)
                 if isinstance(input, list):
                     raise AssertionError("missing regr trainer support for augmented minibatches")  # todo
@@ -183,3 +188,4 @@ class RegressionTrainer(Trainer):
                         monitor_output
                     )
                 )
+                self.external_eval_iter += 1

@@ -259,6 +259,9 @@ class Trainer:
             self.current_iter = 0
             self.current_epoch = 0
             self.outputs = {}
+        # iter counters below only used for external monitoring (never reset internally)
+        self.external_train_iter = 0
+        self.external_eval_iter = 0
 
     def _init_writer(self, writer, path):
         if self.use_tbx and not writer:

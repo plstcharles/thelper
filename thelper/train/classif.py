@@ -107,6 +107,8 @@ class ImageClassifTrainer(Trainer):
         epoch_size = len(loader)
         self.logger.debug("fetching data loader samples...")
         for idx, sample in enumerate(loader):
+            if idx < self.external_train_iter:
+                continue  # skip until previous iter count (if set externally; no effect otherwise)
             input, label = self._to_tensor(sample)
             optimizer.zero_grad()
             if label is None:
@@ -168,6 +170,7 @@ class ImageClassifTrainer(Trainer):
                 for metric_name, metric in metrics.items():
                     if metric.is_scalar():  # only useful assuming that scalar metrics are smoothed...
                         writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
+            self.external_train_iter += 1
         epoch_loss /= epoch_size
         return epoch_loss, iter
 
@@ -189,6 +192,8 @@ class ImageClassifTrainer(Trainer):
             epoch_size = len(loader)
             self.logger.debug("fetching data loader samples...")
             for idx, sample in enumerate(loader):
+                if idx < self.external_eval_iter:
+                    continue  # skip until previous iter count (if set externally; no effect otherwise)
                 input, label = self._to_tensor(sample)
                 if isinstance(input, list):  # evaluation samples got augmented, we need to get the mean prediction
                     if not input:
@@ -229,3 +234,4 @@ class ImageClassifTrainer(Trainer):
                         monitor_output
                     )
                 )
+                self.external_eval_iter += 1
