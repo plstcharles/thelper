@@ -99,7 +99,7 @@ class RegressionTrainer(Trainer):
         epoch_loss = 0
         epoch_size = len(loader)
         self.logger.debug("fetching data loader samples...")
-        for sample_idx, sample in enumerate(loader):
+        for idx, sample in enumerate(loader):
             input, target = self._to_tensor(sample)
             # todo: add support to fraction samples that are too big for a single iteration
             # (e.g. when batching non-image data that would be too inefficient one sample at a time)
@@ -107,7 +107,7 @@ class RegressionTrainer(Trainer):
             if target is None:
                 raise AssertionError("groundtruth required when training a model")
             if isinstance(input, list):
-                raise AssertionError("missing regr trainer support for augmented minibatches") # todo
+                raise AssertionError("missing regr trainer support for augmented minibatches")  # todo
             target = self._upload_tensor(target, dev)
             iter_pred = model(self._upload_tensor(input, dev))
             iter_loss = loss(iter_pred, target.float())
@@ -126,9 +126,9 @@ class RegressionTrainer(Trainer):
                 "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}{}".format(
                     epoch,
                     iter,
-                    sample_idx,
+                    idx,
                     epoch_size,
-                    (sample_idx / epoch_size) * 100.0,
+                    (idx / epoch_size) * 100.0,
                     iter_loss.item(),
                     monitor_output
                 )

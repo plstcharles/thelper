@@ -106,7 +106,7 @@ class ImageClassifTrainer(Trainer):
         epoch_loss = 0
         epoch_size = len(loader)
         self.logger.debug("fetching data loader samples...")
-        for sample_idx, sample in enumerate(loader):
+        for idx, sample in enumerate(loader):
             input, label = self._to_tensor(sample)
             optimizer.zero_grad()
             if label is None:
@@ -156,9 +156,9 @@ class ImageClassifTrainer(Trainer):
                 "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}{}".format(
                     epoch,
                     iter,
-                    sample_idx,
+                    idx,
                     epoch_size,
-                    (sample_idx / epoch_size) * 100.0,
+                    (idx / epoch_size) * 100.0,
                     iter_loss.item(),
                     monitor_output
                 )
