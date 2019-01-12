@@ -271,6 +271,9 @@ class PASCALVOC(Dataset):
         }
         if self.transforms:
             sample = self.transforms(sample)
+        if isinstance(sample[self.image_key], np.ndarray) and any([s < 0 for s in sample[self.image_key].strides]):
+            # fix unsupported negative strides in PyTorch <= 0.4.0
+            sample[self.image_key] = sample[self.image_key].copy()
         return sample
 
     def get_task(self):
