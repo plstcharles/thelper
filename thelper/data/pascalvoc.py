@@ -262,16 +262,16 @@ class PASCALVOC(Dataset):
         else:
             image = sample[self.image_key]
             gt = sample[self.gt_key]
-        if self.transforms:
-            image = self.transforms(image)
-            # TODO : gt maps are not currently transformed! (need refact w/ dict keys)
-        return {
+        sample = {
             self.sample_name_key: sample[self.sample_name_key],
             self.image_path_key: sample[self.image_path_key],
             self.gt_path_key: sample[self.gt_path_key],
             self.image_key: image,
             self.gt_key: gt,
         }
+        if self.transforms:
+            sample = self.transforms(sample)
+        return sample
 
     def get_task(self):
         """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
