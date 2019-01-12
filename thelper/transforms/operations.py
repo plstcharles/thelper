@@ -169,7 +169,8 @@ class CenterCrop(object):
 
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
-        return self.__class__.__name__ + ": {{size: {0}, bordertype: {1}, bordervalue: {2}}}".format(self.size, self.bordertype, self.borderval)
+        return self.__class__.__name__ + ": {{size: {0}, bordertype: {1}, bordervalue: {2}}}".format(
+            self.size, self.bordertype, self.borderval)
 
 
 class RandomResizedCrop(object):
