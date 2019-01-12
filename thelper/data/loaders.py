@@ -71,7 +71,7 @@ class DataLoader(torch.utils.data.DataLoader):
     @property
     def sample_count(self):
         if self.sampler is not None:
-            return len(sampler)
+            return len(self.sampler)
         return len(self.dataset)
 
 
