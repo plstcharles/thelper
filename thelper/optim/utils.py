@@ -78,6 +78,8 @@ def create_loss_fn(config, model, loader=None):
     """
     # todo: add flag to toggle loss comp in validation? (add to trainer config maybe?)
     logger.debug("loading loss function")
+    if isinstance(model, torch.nn.DataParallel):
+        model = model.module  # to avoid interface getter issues
     if not isinstance(config, dict):
         raise AssertionError("config should be provided as a dictionary")
     if "model_getter" in config and "type" in config:
