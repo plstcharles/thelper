@@ -1409,7 +1409,10 @@ class RawPredictions(Metric):
                     if n_meta != n_samples:
                         meta_info = [self._to_py(t) for t in meta[meta_key]]
                         for j, s in enumerate(samples_predictions):
-                            s[meta_key] = [meta_info[i][j] for i in range(len(meta_info))]
+                            # transfer corresponding sample index info to matching tensor prediction,
+                            # or transfer whole meta info if index correspondence cannot be established
+                            s[meta_key] = [meta_info[i][j] if hasattr(meta_info[i], '__len__') else meta_info[i]
+                                           for i in range(len(meta_info))]
                     # list of elements or tensor of samples size
                     elif n_meta == n_samples:
                         meta_info = self._to_py(meta[meta_key])
