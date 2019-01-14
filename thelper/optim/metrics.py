@@ -10,7 +10,7 @@ import copy
 import logging
 from abc import ABC, abstractmethod
 from collections import deque
-from typing import Any, AnyStr, Dict, List, Optional, Callable
+from typing import Any, AnyStr, Callable, Dict, List, Optional  # noqa: F401
 
 import numpy as np
 import sklearn.metrics

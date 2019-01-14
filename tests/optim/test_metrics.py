@@ -1,6 +1,8 @@
-from thelper.optim.metrics import RawPredictions
-from torch.tensor import Tensor
 import unittest
+
+from torch.tensor import Tensor
+
+from thelper.optim.metrics import RawPredictions
 
 
 class TestMetrics(unittest.TestCase):
