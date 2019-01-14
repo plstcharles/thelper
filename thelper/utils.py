@@ -308,6 +308,20 @@ def import_function(fullname, params=None):
     return func
 
 
+def check_func_signature(func, params):
+    """Checks whether the signature of a function matches the expected parameter list."""
+    if func is None or not callable(func):
+        raise AssertionError("invalid function object")
+    if params is not None:
+        if not isinstance(params, list) or not all([isinstance(p, str) for p in params]):
+            raise AssertionError("unexpected param name list format")
+        import inspect
+        func_sig = inspect.signature(func)
+        for p in params:
+            if p not in func_sig:
+                raise AssertionError("function missing parameter '%s'" % p)
+
+
 def get_class_logger(skip=0):
     """Shorthand to get logger for current class frame."""
     return logging.getLogger(get_caller_name(skip + 1).rsplit(".", 1)[0])
