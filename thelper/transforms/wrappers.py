@@ -275,7 +275,7 @@ class TransformWrapper(object):
                 raise AssertionError("top-level call should never provide in_cvts")
             # capture all array-like objects via __getitem__ test (if no keys are provided)
             keyvals = [(k, v) for k, v in sample.items() if (
-                (self.target_keys is None and hasattr(v, "__getitem__")) or
+                (self.target_keys is None and hasattr(v, "__getitem__") and not isinstance(v, str)) or
                 (self.target_keys is not None and k in self.target_keys))]
             keys, vals = map(list, zip(*keyvals))
             lengths = [len(v) if isinstance(v, (list, tuple)) else -1 for v in vals]
