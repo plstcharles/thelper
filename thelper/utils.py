@@ -891,6 +891,8 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
         images = np.transpose(images, (0, 2, 3, 1))  # BxCxHxW to BxHxWxC
     if flip_bgr:
         images = images[..., ::-1]  # BGR to RGB
+    if preds is not None:
+        preds = preds.cpu()  # avoid latency for preprocessing on gpu
     image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
     if isinstance(task, thelper.tasks.Classification):
         label_key, labels = task.get_gt_key(), None
