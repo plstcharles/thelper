@@ -1,4 +1,5 @@
 """Segmentation trainer/evaluator implementation module."""
+import itertools
 import logging
 
 import torch
@@ -96,7 +97,6 @@ class ImageSegmTrainer(Trainer):
             optimizer.zero_grad()
             if label_map is None:
                 raise AssertionError("groundtruth required when training a model")
-            meta = {key: sample[key] if key in sample else None for key in self.meta_keys} if metrics else None
             if isinstance(input, list):
                 # training samples got augmented, we need to backprop in multiple steps
                 if not input:
@@ -119,28 +119,22 @@ class ImageSegmTrainer(Trainer):
                         iter_pred = aug_pred.clone().detach()
                     else:
                         iter_loss += aug_loss.detach()
-                        iter_pred += aug_pred.detach()
-                    if metrics:
-                        for metric in metrics.values():
-                            metric.accumulate(aug_pred.detach().cpu(), label_map[aug_idx].detach().cpu(), meta=meta)
-                    if self.train_iter_callback is not None:
-                        # caution: will be called multiple times with the same iter idx due to augmentations
-                        self.train_iter_callback(sample=sample, task=self.model.task, pred=iter_pred,
-                                                 iter_idx=iter, max_iters=epoch_size,
-                                                 epoch_idx=epoch, max_epochs=self.epochs)
+                        iter_pred = torch.cat((aug_pred.detach(), iter_pred), dim=0)
                 iter_loss /= augs_count
+                label_map = list(itertools.chain.from_iterable(label_map))
             else:
                 iter_pred = model(self._upload_tensor(input, dev))
                 # todo: find a more efficient way to compute loss w/ byte vals directly?
                 iter_loss = loss(iter_pred, self._upload_tensor(label_map, dev).long())
                 iter_loss.backward()
-                if metrics:
-                    for metric in metrics.values():
-                        metric.accumulate(iter_pred.detach().cpu(), label_map.detach().cpu(), meta=meta)
-                if self.train_iter_callback is not None:
-                    self.train_iter_callback(sample=sample, task=self.model.task, pred=iter_pred,
-                                             iter_idx=iter, max_iters=epoch_size,
-                                             epoch_idx=epoch, max_epochs=self.epochs)
+            if metrics:
+                meta = {key: sample[key] if key in sample else None for key in self.meta_keys} if self.meta_keys else None
+                for metric in metrics.values():
+                    metric.accumulate(iter_pred.detach().cpu(), label_map.detach().cpu(), meta=meta)
+            if self.train_iter_callback is not None:
+                self.train_iter_callback(sample=sample, task=self.model.task, pred=iter_pred,
+                                         iter_idx=iter, max_iters=epoch_size,
+                                         epoch_idx=epoch, max_epochs=self.epochs)
             epoch_loss += iter_loss.item()
             optimizer.step()
             iter += 1
@@ -208,10 +202,7 @@ class ImageSegmTrainer(Trainer):
                 else:
                     pred = model(self._upload_tensor(input, dev))
                 if metrics:
-                    if self.meta_keys:
-                        meta = {key: sample[key] if key in sample else None for key in self.meta_keys}
-                    else:
-                        meta = None
+                    meta = {key: sample[key] if key in sample else None for key in self.meta_keys} if self.meta_keys else None
                     for metric in metrics.values():
                         metric.accumulate(pred.cpu(), label_map.cpu() if label_map is not None else None, meta=meta)
                 if self.eval_iter_callback is not None:

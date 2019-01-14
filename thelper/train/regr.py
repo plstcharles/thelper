@@ -113,7 +113,7 @@ class RegressionTrainer(Trainer):
             iter_loss = loss(iter_pred, target.float())
             iter_loss.backward()
             if metrics:
-                meta = {key: sample[key] if key in sample else None for key in self.meta_keys}
+                meta = {key: sample[key] if key in sample else None for key in self.meta_keys} if self.meta_keys else None
                 for metric in metrics.values():
                     metric.accumulate(iter_pred.detach().cpu(), target.detach().cpu(), meta=meta)
             if self.train_iter_callback is not None:
@@ -171,10 +171,7 @@ class RegressionTrainer(Trainer):
                     raise AssertionError("missing regr trainer support for augmented minibatches")  # todo
                 pred = model(self._upload_tensor(input, dev))
                 if metrics:
-                    if self.meta_keys:
-                        meta = {key: sample[key] if key in sample else None for key in self.meta_keys}
-                    else:
-                        meta = None
+                    meta = {key: sample[key] if key in sample else None for key in self.meta_keys} if self.meta_keys else None
                     for metric in metrics.values():
                         metric.accumulate(pred.cpu(), target.cpu() if target is not None else None, meta=meta)
                 if self.eval_iter_callback is not None:

@@ -264,14 +264,22 @@ class Trainer:
         #   func(sample, pred, iter_idx, max_iters, epoch_idx, max_epochs)
         callback_params = ["sample", "task", "pred", "iter_idx", "max_iters", "epoch_idx", "max_epochs"]
         self.train_iter_callback = thelper.utils.get_key_def("train_iter_callback", trainer_config, None)
-        if self.train_iter_callback is not None:
-            if isinstance(self.train_iter_callback, str):
-                self.train_iter_callback = thelper.utils.import_function(self.train_iter_callback)
-            thelper.utils.check_func_signature(self.train_iter_callback, callback_params)
+        if self.train_iter_callback is not None and isinstance(self.train_iter_callback, str):
+            self.train_iter_callback = thelper.utils.import_function(self.train_iter_callback)
         self.eval_iter_callback = thelper.utils.get_key_def("eval_iter_callback", trainer_config, None)
+        if self.eval_iter_callback is not None and isinstance(self.eval_iter_callback, str):
+            self.eval_iter_callback = thelper.utils.import_function(self.eval_iter_callback)
+        display_predictions = thelper.utils.get_key_def("display_preds", trainer_config, False)
+        if display_predictions:
+            if self.train_iter_callback is not None:
+                raise AssertionError("cannot use 'display_preds' while also using an external callback")
+            self.train_iter_callback = thelper.utils.import_function("thelper.train.utils._draw_minibatch_wrapper")
+            if self.eval_iter_callback is not None:
+                raise AssertionError("cannot use 'display_preds' while also using an external callback")
+            self.eval_iter_callback = thelper.utils.import_function("thelper.train.utils._draw_minibatch_wrapper")
+        if self.train_iter_callback is not None:
+            thelper.utils.check_func_signature(self.train_iter_callback, callback_params)
         if self.eval_iter_callback is not None:
-            if isinstance(self.eval_iter_callback, str):
-                self.eval_iter_callback = thelper.utils.import_function(self.eval_iter_callback)
             thelper.utils.check_func_signature(self.eval_iter_callback, callback_params)
         self.skip_eval_iter = thelper.utils.get_key_def("skip_eval_iter", trainer_config, 0)
 
