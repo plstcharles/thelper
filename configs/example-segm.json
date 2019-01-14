@@ -1,0 +1,96 @@
+{
+    "name": "example-segm",
+    "datasets": {
+        "pascalvoc": {
+            "type": "thelper.data.PASCALVOC",
+            "params": {
+                "root": "data/pascalvoc",
+                "task": "segm",
+                "subset": "trainval",
+                "download": true,
+                "preload": false
+            }
+        }
+    },
+    "loaders": {
+        "batch_size": 6,
+        "workers": 4,
+        "valid_seed": 0,
+        "test_seed": 0,
+        "torch_seed": 0,
+        "numpy_seed": 0,
+        "random_seed": 0,
+        "base_transforms": [
+            {
+                "operation": "thelper.transforms.CenterCrop",
+                "params": {
+                    "size": [512, 512],
+                    "borderval": 255
+                },
+                "target_key": ["image", "label_map"]
+            },
+            {
+                "operation": "thelper.transforms.NormalizeMinMax",
+                "params": {
+                    "min": [127, 127, 127],
+                    "max": [255, 255, 255]
+                },
+                "target_key": "image"
+            },
+            {
+                "operation": "torchvision.transforms.ToTensor",
+                "target_key": "image"
+            }
+        ],
+        "train_split": {
+            "pascalvoc": 0.9
+        },
+        "valid_split": {
+            "pascalvoc": 0.1
+        }
+    },
+    "model": {
+        "type" : "thelper.nn.fcn.FCN32s"
+    },
+    "trainer": {
+        "type": "thelper.train.ImageSegmTrainer",
+        "epochs": 100,
+        "save_freq": 10,
+        "monitor": "accuracy",
+        "optimization": {
+            "loss": {
+                "type": "torch.nn.CrossEntropyLoss",
+                "weight_distribution": {
+                    "background": 0.1
+                }
+            },
+            "optimizer": {
+                "type": "torch.optim.Adam",
+                "params": {
+                    "lr": 1e-4,
+                    "weight_decay": 1e-6
+                }
+            },
+            "scheduler": {
+                "type": "torch.optim.lr_scheduler.ReduceLROnPlateau",
+                "params": {
+                    "mode": "max",
+                    "factor": 0.1,
+                    "patience": 8,
+                    "verbose": true,
+                    "threshold": 0.0001,
+                    "threshold_mode": "rel"
+                },
+                "step_metric": "accuracy"
+            }
+        },
+        "metrics": {
+            "accuracy": {
+                "type": "thelper.optim.CategoryAccuracy",
+                "params": {
+                    "top_k": 1
+                }
+            }
+        }
+    }
+}
