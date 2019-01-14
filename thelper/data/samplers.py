@@ -229,7 +229,7 @@ class SubsetRandomSampler(torch.utils.data.sampler.Sampler):
             raise AssertionError("invalid epoch value")
         self.epoch = epoch
         self.indices = indices
-        if not isinstance(scale, float) or scale < 0:
+        if not isinstance(scale, (float, int)) or scale < 0:
             raise AssertionError("invalid scale parameter; should be greater than zero")
         self.num_samples = int(round(len(self.indices) * scale))
 
