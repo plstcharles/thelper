@@ -318,7 +318,7 @@ def check_func_signature(func, params):
         import inspect
         func_sig = inspect.signature(func)
         for p in params:
-            if p not in func_sig:
+            if p not in func_sig.parameters:
                 raise AssertionError("function missing parameter '%s'" % p)
 
 
