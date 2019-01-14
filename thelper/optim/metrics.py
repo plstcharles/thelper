@@ -10,6 +10,7 @@ import copy
 import logging
 from abc import ABC, abstractmethod
 from collections import deque
+from typing import Any, AnyStr, Callable, Dict, List, Optional  # noqa: F401
 
 import numpy as np
 import sklearn.metrics
@@ -1327,6 +1328,110 @@ class ClassifLogger(Metric):
         self.score = None
         self.true = None
         self.meta = None
+
+    def goal(self):
+        """Returns ``None``, as this class should not be used to directly monitor the training progress."""
+        return None
+
+
+class RawPredictions(Metric):
+    """Raw predictions storage.
+
+    This class provides a simple interface for accumulating and saving the raw predictions of a classifier.
+    Note that since the evaluation result is always ``None``, this metric cannot be used to directly monitor
+    training progression, and thus also returns ``None`` in :func:`thelper.optim.metrics.ClassifLogger.goal`.
+
+    It also optionally offers a callback functionality on each accumulated prediction to execute additional
+    operations (ex: call a function to update external processes from ``thelper`` package).
+
+    Usage examples inside a session configuration file::
+
+        # ...
+        # lists all metrics to instantiate as a dictionary
+        "metrics": {
+            # ...
+            # this is the name of the example metric; it is used for lookup/printing only
+            "predictions": {
+                # this type is used to instantiate the confusion matrix report metric
+                "type": "thelper.optim.metrics.RawPredictions",
+                "params": [
+                    # call 'my_function' located within 'external_module' after each added prediction
+                    {"name": "callback", "value": "external_module.my_function"},
+                ]
+            },
+            # ...
+        }
+        # ...
+
+    Attributes:
+        callback: callable to be executed after each accumulated prediction
+    """
+
+    def __init__(self, callback=None):
+        # type: (Optional[Callable]) -> None
+        super(RawPredictions, self).__init__()
+        self.predictions = list()   # type: List[Dict[AnyStr, Any]]
+        if callback is not None and not callable(callback):
+            raise TypeError("Callback is not callable, got {!s}.".format(type(callback)))
+        self.callback = callback or (lambda *args, **kwargs: None)  # do nothing if None to simplify calls
+
+    @staticmethod
+    def _to_py(element):
+        if isinstance(element, torch.Tensor):
+            return element.tolist()
+        return element
+
+    def accumulate(self, pred, gt, meta=None):
+        """Receives the latest prediction and groundtruth tensors (each batch) from the session.
+
+        Args:
+            pred: model prediction tensor forwarded by the trainer for a given sample batch.
+            gt: groundtruth tensor forwarded by the trainer (can be ``None`` if unavailable).
+            meta: metadata tensors forwarded by the trainer.
+        """
+
+        # convert batch tensor to per-sample class predictions
+        samples_predictions = [{
+            "predictions": self._to_py(p),
+        } for p in pred]
+
+        # convert ground truths to per-sample labels
+        for i, label in enumerate(self._to_py(gt)):
+            samples_predictions[i]["gt"] = label
+
+        # transfer meta information to corresponding samples according to available details
+        n_samples = len(samples_predictions)
+        if isinstance(meta, dict):
+            for meta_key in meta:
+                if isinstance(meta[meta_key], list):
+                    n_meta = len(meta[meta_key])
+                    # list of tensors where each index in every tensor corresponds to a sample index
+                    if n_meta != n_samples:
+                        meta_info = [self._to_py(t) for t in meta[meta_key]]
+                        for j, s in enumerate(samples_predictions):
+                            # transfer corresponding sample index info to matching tensor prediction,
+                            # or transfer whole meta info if index correspondence cannot be established
+                            s[meta_key] = [meta_info[i][j] if hasattr(meta_info[i], '__len__') else meta_info[i]
+                                           for i in range(len(meta_info))]
+                    # list of elements or tensor of samples size
+                    elif n_meta == n_samples:
+                        meta_info = self._to_py(meta[meta_key])
+                        for i, s in enumerate(samples_predictions):
+                            s[meta_key] = meta_info[i]
+                else:
+                    # each sample gets the same info
+                    for s in samples_predictions:
+                        s[meta_key] = meta[meta_key]
+
+        self.predictions.extend(samples_predictions)
+        self.callback()
+
+    def reset(self):
+        self.__init__(callback=self.callback)
+
+    def eval(self):
+        """Returns ``None``, as this class only preserves raw prediction results."""
+        return None
 
     def goal(self):
         """Returns ``None``, as this class should not be used to directly monitor the training progress."""

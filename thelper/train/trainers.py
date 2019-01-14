@@ -202,10 +202,11 @@ class Trainer:
             raise AssertionError("trainer config should have only one of 'metrics' and 'base_metrics'")
         if ("metrics" in trainer_config and trainer_config["metrics"]) or \
            ("base_metrics" in trainer_config and trainer_config["base_metrics"]):
-            self.logger.debug("loading base metrics")
             if "metrics" in trainer_config:
+                self.logger.debug("loading metrics defined in trainer config")
                 metrics = thelper.optim.create_metrics(trainer_config["metrics"])
             else:
+                self.logger.debug("loading base metrics defined in trainer config")
                 metrics = thelper.optim.create_metrics(trainer_config["base_metrics"])
         else:
             metrics = {}
@@ -873,6 +874,7 @@ class ImageClassifTrainer(Trainer):
         with torch.no_grad():
             epoch_size = len(loader)
             self.logger.debug("fetching data loader samples...")
+
             for idx, sample in enumerate(loader):
                 input, label = self._to_tensor(sample)
                 if label is not None:

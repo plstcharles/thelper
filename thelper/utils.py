@@ -142,6 +142,31 @@ def load_checkpoint(ckpt,               # type: Union[AnyStr, io.FileIO]
     return ckptdata
 
 
+def resolve_import(fullname):
+    # type: (AnyStr) -> AnyStr
+    """
+    Class name resolver.
+
+    Takes a string corresponding to a module and class fullname to be imported with ``thelper.utils.import_class``
+    and resolves any back compatibility issues related to renamed or moved classes.
+
+    Args:
+        fullname: the fully qualified class name to be resolved.
+
+    Returns:
+        The resolved class fullname.
+    """
+    cases = [
+        ('thelper.modules', 'thelper.nn'),
+    ]
+    old_name = fullname
+    for old, new in cases:
+        fullname = fullname.replace(old, new)
+    if old_name != fullname:
+        logger.warning("class fullname '{!s}' was resolved to '{!s}'.".format(old_name, fullname))
+    return fullname
+
+
 def import_class(fullname):
     """
     General-purpose runtime class importer.
@@ -152,6 +177,7 @@ def import_class(fullname):
     Returns:
         The imported class.
     """
+    fullname = resolve_import(fullname)
     module_name, class_name = fullname.rsplit('.', 1)
     module = importlib.import_module(module_name)
     return getattr(module, class_name)
@@ -716,8 +742,8 @@ def draw_errbars(labels,                # type: List[AnyStr]
                  max_values,            # type: np.ndarray
                  stddev_values,         # type: np.ndarray
                  mean_values,           # type: np.ndarray
-                 xlabel="",             # type: np.ndarray
-                 ylabel="Raw Value"     # type: np.ndarray
+                 xlabel="",             # type: AnyStr
+                 ylabel="Raw Value"     # type: AnyStr
                  ):                     # type: (...) -> plt.Figure
     """Draws and returns an error bar histogram figure using pyplot."""
     if min_values.shape != max_values.shape \
@@ -834,6 +860,7 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
 def draw_bboxes(image, rects, labels=None, confidences=None, win_size=None, thickness=1, show=True):
     """Draws and returns an image with bounding boxes via OpenCV."""
     if isinstance(image, PIL.Image.Image):
+        # noinspection PyTypeChecker
         image = np.asarray(image)
     if not isinstance(image, np.ndarray):
         raise AssertionError("expected input image to be numpy array")

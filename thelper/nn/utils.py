@@ -98,7 +98,7 @@ def create_model(config, task, save_dir=None, ckptdata=None):
             logger.debug("loading model object directly from session '%s'" % ckptdata["name"])
             model = ckptdata["model"]
             if model.get_name() != ckptdata["model_type"]:
-                raise AssertionError("old model type mistmatch with ckptdata type")
+                raise AssertionError("old model type mismatch with ckptdata type")
         elif isinstance(ckptdata["model"], dict):
             logger.debug("loading model type/params from session '%s'" % ckptdata["name"])
             model_state = ckptdata["model"]
@@ -118,7 +118,7 @@ def create_model(config, task, save_dir=None, ckptdata=None):
                 raise AssertionError("invalid checkpoint, cannot reload previous model config")
             old_model_config = old_config["model"]
             if "type" in old_model_config and thelper.utils.import_class(old_model_config["type"]) != model_type:
-                raise AssertionError("old model config 'type' field mistmatch with ckptdata type")
+                raise AssertionError("old model config 'type' field mismatch with ckptdata type")
     else:
         logger.debug("loading model type/params current config")
         if "type" not in model_config or not model_config["type"]:

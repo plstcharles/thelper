@@ -177,21 +177,25 @@ def create_loaders(config, save_dir=None):
     logstamp = thelper.utils.get_log_stamp()
     repover = thelper.__version__ + ":" + thelper.utils.get_git_stamp()
     session_name = config["name"] if "name" in config else "session"
+    data_logger_dir = None
     if save_dir is not None:
-        data_logger_path = os.path.join(save_dir, "logs", "data.log")
+        data_logger_dir = os.path.join(save_dir, "logs")
+        os.makedirs(data_logger_dir, exist_ok=True)
+        data_logger_path = os.path.join(data_logger_dir, "data.log")
         data_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         data_logger_fh = logging.FileHandler(data_logger_path)
         data_logger_fh.setFormatter(data_logger_format)
         logger.addHandler(data_logger_fh)
         logger.info("created data log for session '%s'" % session_name)
-        config_backup_path = os.path.join(save_dir, "logs", "config." + logstamp + ".json")
+        config_backup_path = os.path.join(data_logger_dir, "config." + logstamp + ".json")
         with open(config_backup_path, "w") as fd:
             json.dump(config, fd, indent=4, sort_keys=False)
     logger.debug("loading data usage config")
     # todo: 'data_config' field is deprecated, might be removed later
     if "data_config" in config:
-        logger.warning("using 'data_config' field in configuration dictionary is deprecated; switch to it 'loaders'")
+        logger.warning("using 'data_config' field in configuration dictionary is deprecated; switch it to 'loaders'")
     loaders_config = thelper.utils.get_key(["data_config", "loaders"], config)
+    # noinspection PyProtectedMember
     loader_factory = thelper.data.utils._LoaderFactory(loaders_config)
     logger.debug("parsing datasets configuration")
     if "datasets" not in config or not config["datasets"]:
@@ -214,12 +218,12 @@ def create_loaders(config, save_dir=None):
     logger.debug("splitting datasets and creating loaders...")
     train_idxs, valid_idxs, test_idxs = loader_factory.get_split(datasets, task)
     if save_dir is not None:
-        with open(os.path.join(save_dir, "logs", "task.log"), "a+") as fd:
+        with open(os.path.join(data_logger_dir, "task.log"), "a+") as fd:
             fd.write("session: %s-%s\n" % (session_name, logstamp))
             fd.write("version: %s\n" % repover)
             fd.write(str(task) + "\n")
         for dataset_name, dataset in datasets.items():
-            dataset_log_file = os.path.join(save_dir, "logs", dataset_name + ".log")
+            dataset_log_file = os.path.join(data_logger_dir, dataset_name + ".log")
             if not loader_factory.skip_verif and os.path.isfile(dataset_log_file):
                 logger.info("verifying sample list for dataset '%s'..." % dataset_name)
                 with open(dataset_log_file, "r") as fd:
@@ -265,7 +269,7 @@ def create_loaders(config, save_dir=None):
                                         sys.exit(1)
                                     break
         for dataset_name, dataset in datasets.items():
-            dataset_log_file = os.path.join(save_dir, "logs", dataset_name + ".log")
+            dataset_log_file = os.path.join(data_logger_dir, dataset_name + ".log")
             samples = dataset.samples if hasattr(dataset, "samples") and isinstance(dataset.samples, list) else []
             log_content = {
                 "metadata": {

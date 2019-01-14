@@ -2,6 +2,13 @@
 Changelog
 =========
 
+0.1.1 (2019/01/14)
+-------------------
+
+* Minor fixups and updates for CCFB02 compatibility
+* Added RawPredictions metric to fetch data from trainers
+
+
 0.1.0 (2018/11/28)
 -------------------
 
