@@ -788,6 +788,7 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
                   redraw=None,          # type: Optional[Union[Tuple[plt.Figure, plt.Axes], Tuple[str, np.ndarray]]]
                   use_cv2=True,         # type: Optional[bool]
                   img_shape=None,       # type: Optional[Union(List, Tuple)]
+                  max_img_size=None,    # type: Optional[Union(List, Tuple)]
                   ):                    # type: (...) -> Union[Tuple[plt.Figure, plt.Axes], None]
     """Draws and returns a figure of classification results using pyplot."""
     nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
@@ -823,7 +824,14 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
             np.copyto(img_grid[offsets[0]:(offsets[0] + img_shape[0]), offsets[1]:(offsets[1] + img_shape[1]), :], image)
         win_name = "classifs" if redraw is None else redraw[0]
         if img_grid is not None:
-            cv.imshow(win_name, img_grid[..., ::-1])
+            display = img_grid[..., ::-1]
+            if display.shape[0] > max_img_size[0] or display.shape[1] > max_img_size[1]:
+                if display.shape[0] / max_img_size[0] > display.shape[1] / max_img_size[1]:
+                    dsize = (max_img_size[0], display.shape[1] / (display.shape[0] / max_img_size[0]))
+                else:
+                    dsize = (display.shape[0] / (display.shape[1] / max_img_size[1]), max_img_size[1])
+                display = cv.resize(display, dsize)
+            cv.imshow(win_name, display)
         return win_name, img_grid
     else:
         fig, axes = redraw if redraw is not None else plt.subplots(grid_size_y, grid_size_x)
@@ -860,12 +868,15 @@ def draw_segments(images,                 # type: Union[List[np.ndarray], np.nda
                   redraw=None,            # type: Optional[Union[Tuple[plt.Figure, plt.Axes], Tuple[str, np.ndarray]]]
                   use_cv2=True,           # type: Optional[bool]
                   img_shape=None,         # type: Optional[Union(List, Tuple)]
+                  max_img_size=None,      # type: Optional[Union(List, Tuple)]
                   ):                      # type: (...) -> Union[Tuple[plt.Figure, plt.Axes], None]
     """Draws and returns a figure of segmentation results using pyplot."""
     # todo: display gt if available? (currently skipped)
     nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
     if nb_imgs < 1:
         return None
+    if max_img_size is None:
+        max_img_size = (800, 1600)
     grid_size_x = int(math.ceil(math.sqrt(nb_imgs)))
     grid_size_y = int(math.ceil(nb_imgs / grid_size_x))
     if grid_size_x * grid_size_y < nb_imgs:
@@ -898,7 +909,14 @@ def draw_segments(images,                 # type: Union[List[np.ndarray], np.nda
             np.copyto(img_grid[offsets[0]:(offsets[0] + img_shape[0]), offsets[1]:(offsets[1] + img_shape[1]), :], image)
         win_name = "segments" if redraw is None else redraw[0]
         if img_grid is not None:
-            cv.imshow(win_name, img_grid[..., ::-1])
+            display = img_grid[..., ::-1]
+            if display.shape[0] > max_img_size[0] or display.shape[1] > max_img_size[1]:
+                if display.shape[0] / max_img_size[0] > display.shape[1] / max_img_size[1]:
+                    dsize = (max_img_size[0], display.shape[1] / (display.shape[0] / max_img_size[0]))
+                else:
+                    dsize = (display.shape[0] / (display.shape[1] / max_img_size[1]), max_img_size[1])
+                display = cv.resize(display, dsize)
+            cv.imshow(win_name, display)
         return win_name, img_grid
     else:
         fig, axes = redraw if redraw is not None else plt.subplots(grid_size_y, grid_size_x)
