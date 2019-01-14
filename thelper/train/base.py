@@ -3,6 +3,7 @@
 This module contains the interface required to train and/or evaluate a model based on different tasks. The trainers
 based on this interface are instantiated in launched sessions based on configuration dictionaries.
 """
+import functools
 import json
 import logging
 import math
@@ -29,10 +30,10 @@ class Trainer:
     This interface defines the general behavior of a training session which includes configuration parsing, tensorboard
     setup, metrics and goal setup, and loss/optimizer setup. It also provides utilities for uploading models and tensors
     on specific devices, and for saving the state of a session. This interface should be specialized for every task by
-    implementing the ``_train_epoch`` and ``_train_epoch`` functions in a derived class. See
+    implementing the ``_train_epoch`` and ``_eval_epoch`` functions in a derived class. See
     :class:`thelper.train.classif.ImageClassifTrainer` for an example.
 
-    The parameters that will be parsed by this interface from a configuration dictionary are the following:
+    The main parameters that will be parsed by this interface from a configuration dictionary are the following:
 
     - ``epochs`` (mandatory if training): number of epochs to train for; one epoch is one iteration over all minibatches.
     - ``optimization`` (mandatory if training): subdictionary containing types and extra parameters required for
@@ -311,7 +312,7 @@ class Trainer:
         else:
             return tensor.to(dev)
 
-    def _load_optimization(self, model):
+    def _load_optimization(self, model, dev):
         """Instantiates and returns all optimization objects required for training the model."""
         config = self.optimization_config  # for abbrev only
         if not isinstance(config, dict):
@@ -320,7 +321,8 @@ class Trainer:
             raise AssertionError("optimization only useful if training data is available")
         loss = None  # can now be omitted if using custom trainer
         if "loss" in config:
-            loss = thelper.optim.create_loss_fn(config["loss"], model, loader=self.train_loader)
+            uploader = functools.partial(self._upload_tensor, dev=dev)
+            loss = thelper.optim.create_loss_fn(config["loss"], model, self.train_loader, uploader)
         if "optimizer" not in config or not config["optimizer"]:
             raise AssertionError("optimization config missing 'optimizer' field")
         optimizer = thelper.optim.create_optimizer(config["optimizer"], model)
@@ -384,7 +386,7 @@ class Trainer:
             raise AssertionError("missing training data, invalid loader!")
         self.logger.debug("uploading model to '%s'..." % str(self.devices))
         model = self._upload_model(self.model, self.devices)
-        loss, optimizer, scheduler, scheduler_step_metric = self._load_optimization(model)
+        loss, optimizer, scheduler, scheduler_step_metric = self._load_optimization(model, self.devices)
         if self.optimizer_state is not None:
             optimizer.load_state_dict(self.optimizer_state)
             self.optimizer_state = None
@@ -524,7 +526,7 @@ class Trainer:
 
         This function will evaluate the model using the test data (or the validation data, if no test data is available),
         and return the results. Note that the code related to the forwarding of samples inside the model itself is implemented
-        in a derived class via :func:`thelper.train.base.Trainer._train_epoch`.
+        in a derived class via :func:`thelper.train.base.Trainer._eval_epoch`.
         """
         if not self.valid_loader and not self.test_loader:
             raise AssertionError("missing validation/test data, invalid loaders!")

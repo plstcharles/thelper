@@ -14,7 +14,7 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-def create_loss_fn(config, model, loader=None):
+def create_loss_fn(config, model, loader=None, uploader=None):
     """Instantiates and returns the loss function to use for training.
 
     The default way to specify the loss function to use is to provide a callable type to instantiate
@@ -80,6 +80,8 @@ def create_loss_fn(config, model, loader=None):
     logger.debug("loading loss function")
     if isinstance(model, torch.nn.DataParallel):
         model = model.module  # to avoid interface getter issues
+    if uploader is None:
+        uploader = lambda x: x
     if not isinstance(config, dict):
         raise AssertionError("config should be provided as a dictionary")
     if "model_getter" in config and "type" in config:
@@ -136,13 +138,12 @@ def create_loss_fn(config, model, loader=None):
                                                                   maxw=weight_max, minw=weight_min, norm=weight_norm)
         else:
             raise AssertionError("unexpected weight distribution strategy (should be map or string)")
-        weight_list_str = "weight_distribution:"
+        weight_list_str = "weight_distribution: {"
         for label, weight in weight_distrib.items():
             weight_list_str += "\n  \"%s\": %s," % (label, weight)
-        logger.info(weight_list_str)
+        logger.info(weight_list_str + "\n}")
         weight_list = [weight_distrib[label] if label in weight_distrib else 1.0 for label in model.task.get_class_names()]
-        #loss_params[weight_param_name] = self._upload_tensor(torch.FloatTensor(weight_list), dev=self.devices) # might actually be needed?
-        loss_params[weight_param_name] = torch.FloatTensor(weight_list)
+        loss_params[weight_param_name] = uploader(torch.FloatTensor(weight_list))
     if isinstance(model.task, thelper.tasks.Segmentation):
         ignore_index_param_name = thelper.utils.get_key_def("ignore_index_param_name", config, "ignore_index")
         ignore_index_label_name = thelper.utils.get_key_def("ignore_index_label_name", config, "dontcare")
