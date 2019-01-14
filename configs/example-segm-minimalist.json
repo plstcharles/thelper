@@ -8,7 +8,8 @@
                 "task": "segm",
                 "subset": "trainval",
                 "download": true,
-                "preload": false
+                "preload": false,
+                "target_labels": ["person"]
             }
         }
     },
@@ -20,10 +21,12 @@
                 "params": {
                     "min": [127, 127, 127],
                     "max": [255, 255, 255]
-                }
+                },
+                "target_key": "image"
             },
             {
-                "operation": "torchvision.transforms.ToTensor"
+                "operation": "torchvision.transforms.ToTensor",
+                "target_key": "image"
             }
         ],
         "train_split": {
@@ -34,21 +37,25 @@
         }
     },
     "model": {
-        "type" : "thelper.nn.fcn.FCN32s",
-        "params": {}
+        "type" : "thelper.nn.fcn.FCN32s"
     },
     "trainer": {
         "type": "thelper.train.ImageSegmTrainer",
-        "epochs": 5,
+        "epochs": 100,
+        "save_freq": 10,
         "monitor": "accuracy",
         "optimization": {
             "loss": {
-                "type": "torch.nn.CrossEntropyLoss"
+                "type": "torch.nn.CrossEntropyLoss",
+                "weight_distribution": {
+                    "background": 0.1
+                }
             },
             "optimizer": {
                 "type": "torch.optim.Adam",
                 "params": {
-                    "lr": 0.001
+                    "lr": 1e-4,
+                    "weight_decay": 1e-6
                 }
             }
         },
