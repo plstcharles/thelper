@@ -92,8 +92,6 @@ class ImageSegmTrainer(Trainer):
         epoch_size = len(loader)
         self.logger.debug("fetching data loader samples...")
         for idx, sample in enumerate(loader):
-            if idx < self.external_train_iter:
-                continue  # skip until previous iter count (if set externally; no effect otherwise)
             input, label_map = self._to_tensor(sample)
             optimizer.zero_grad()
             if label_map is None:
@@ -125,6 +123,10 @@ class ImageSegmTrainer(Trainer):
                     if metrics:
                         for metric in metrics.values():
                             metric.accumulate(aug_pred.detach().cpu(), label_map[aug_idx].detach().cpu(), meta=meta)
+                    if self.train_iter_callback is not None:
+                        # caution: will be called multiple times with the same iter idx due to augmentations
+                        self.train_iter_callback(sample=sample, pred=iter_pred, iter_idx=iter, max_iters=epoch_size,
+                                                 epoch_idx=epoch, max_epochs=self.epochs)
                 iter_loss /= augs_count
             else:
                 iter_pred = model(self._upload_tensor(input, dev))
@@ -134,6 +136,9 @@ class ImageSegmTrainer(Trainer):
                 if metrics:
                     for metric in metrics.values():
                         metric.accumulate(iter_pred.detach().cpu(), label_map.detach().cpu(), meta=meta)
+                if self.train_iter_callback is not None:
+                    self.train_iter_callback(sample=sample, pred=iter_pred, iter_idx=iter, max_iters=epoch_size,
+                                             epoch_idx=epoch, max_epochs=self.epochs)
             epoch_loss += iter_loss.item()
             optimizer.step()
             iter += 1
@@ -156,7 +161,6 @@ class ImageSegmTrainer(Trainer):
                 for metric_name, metric in metrics.items():
                     if metric.is_scalar():  # only useful assuming that scalar metrics are smoothed...
                         writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
-            self.external_train_iter += 1
         epoch_loss /= epoch_size
         return epoch_loss, iter
 
@@ -178,7 +182,7 @@ class ImageSegmTrainer(Trainer):
             epoch_size = len(loader)
             self.logger.debug("fetching data loader samples...")
             for idx, sample in enumerate(loader):
-                if idx < self.external_eval_iter:
+                if idx < self.skip_eval_iter:
                     continue  # skip until previous iter count (if set externally; no effect otherwise)
                 input, label_map = self._to_tensor(sample)
                 if isinstance(input, list):
@@ -208,6 +212,9 @@ class ImageSegmTrainer(Trainer):
                         meta = None
                     for metric in metrics.values():
                         metric.accumulate(pred.cpu(), label_map.cpu() if label_map is not None else None, meta=meta)
+                if self.eval_iter_callback is not None:
+                    self.eval_iter_callback(sample=sample, pred=pred, iter_idx=idx, max_iters=epoch_size,
+                                            epoch_idx=epoch, max_epochs=self.epochs)
                 if monitor is not None:
                     monitor_output = "{}: {:.2f}".format(monitor, metrics[monitor].eval())
                 else:
@@ -221,4 +228,3 @@ class ImageSegmTrainer(Trainer):
                         monitor_output
                     )
                 )
-                self.external_eval_iter += 1

@@ -100,8 +100,6 @@ class RegressionTrainer(Trainer):
         epoch_size = len(loader)
         self.logger.debug("fetching data loader samples...")
         for idx, sample in enumerate(loader):
-            if idx < self.external_train_iter:
-                continue  # skip until previous iter count (if set externally; no effect otherwise)
             input, target = self._to_tensor(sample)
             # todo: add support to fraction samples that are too big for a single iteration
             # (e.g. when batching non-image data that would be too inefficient one sample at a time)
@@ -118,6 +116,9 @@ class RegressionTrainer(Trainer):
                 meta = {key: sample[key] if key in sample else None for key in self.meta_keys}
                 for metric in metrics.values():
                     metric.accumulate(iter_pred.detach().cpu(), target.detach().cpu(), meta=meta)
+            if self.train_iter_callback is not None:
+                self.train_iter_callback(sample=sample, pred=iter_pred, iter_idx=iter, max_iters=epoch_size,
+                                         epoch_idx=epoch, max_epochs=self.epochs)
             epoch_loss += iter_loss.item()
             optimizer.step()
             iter += 1
@@ -140,7 +141,7 @@ class RegressionTrainer(Trainer):
                 for metric_name, metric in metrics.items():
                     if metric.is_scalar():  # only useful assuming that scalar metrics are smoothed...
                         writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
-            self.external_train_iter += 1
+
         epoch_loss /= epoch_size
         return epoch_loss, iter
 
@@ -162,7 +163,7 @@ class RegressionTrainer(Trainer):
             epoch_size = len(loader)
             self.logger.debug("fetching data loader samples...")
             for idx, sample in enumerate(loader):
-                if idx < self.external_eval_iter:
+                if idx < self.skip_eval_iter:
                     continue  # skip until previous iter count (if set externally; no effect otherwise)
                 input, target = self._to_tensor(sample)
                 if isinstance(input, list):
@@ -175,6 +176,9 @@ class RegressionTrainer(Trainer):
                         meta = None
                     for metric in metrics.values():
                         metric.accumulate(pred.cpu(), target.cpu() if target is not None else None, meta=meta)
+                if self.eval_iter_callback is not None:
+                    self.eval_iter_callback(sample=sample, pred=pred, iter_idx=idx, max_iters=epoch_size,
+                                            epoch_idx=epoch, max_epochs=self.epochs)
                 if monitor is not None:
                     monitor_output = "{}: {:.2f}".format(monitor, metrics[monitor].eval())
                 else:
@@ -188,4 +192,3 @@ class RegressionTrainer(Trainer):
                         monitor_output
                     )
                 )
-                self.external_eval_iter += 1

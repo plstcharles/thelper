@@ -260,9 +260,20 @@ class Trainer:
             self.current_iter = 0
             self.current_epoch = 0
             self.outputs = {}
-        # iter counters below only used for external monitoring (never reset internally)
-        self.external_train_iter = 0
-        self.external_eval_iter = 0
+        # callbacks should have the following signature:
+        #   func(sample, pred, iter_idx, max_iters, epoch_idx, max_epochs)
+        callback_params = ["sample", "pred", "iter_idx", "max_iters", "epoch_idx", "max_epochs"]
+        self.train_iter_callback = thelper.utils.get_key_def("train_iter_callback", trainer_config, None)
+        if self.train_iter_callback is not None:
+            if isinstance(self.train_iter_callback, str):
+                self.train_iter_callback = thelper.utils.import_function(self.train_iter_callback)
+            thelper.utils.check_func_signature(self.train_iter_callback, callback_params)
+        self.eval_iter_callback = thelper.utils.get_key_def("eval_iter_callback", trainer_config, None)
+        if self.eval_iter_callback is not None:
+            if isinstance(self.eval_iter_callback, str):
+                self.eval_iter_callback = thelper.utils.import_function(self.eval_iter_callback)
+            thelper.utils.check_func_signature(self.eval_iter_callback, callback_params)
+        self.skip_eval_iter = thelper.utils.get_key_def("skip_eval_iter", trainer_config, 0)
 
     def _init_writer(self, writer, path):
         if self.use_tbx and not writer:
