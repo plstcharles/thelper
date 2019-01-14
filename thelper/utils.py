@@ -910,6 +910,7 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
             if images.shape[0] != len(labels):
                 raise AssertionError("images/labels count mismatch")
         if preds is not None:
+            # @@@@ TODO: UPDATE TO EXPECT RAW PREDICTS (BxC) INSTEAD OF DIRECT CLASS LABELS
             if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and preds.dim() == 1):
                 raise AssertionError("expected classification predictions to be in list or 1-d tensor format")
             if isinstance(preds, list):
@@ -933,19 +934,21 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
                 if all([isinstance(m, list) for m in masks]):
                     masks = list(itertools.chain.from_iterable(masks))  # merge all augmented lists together
                 masks = torch.cat(masks, 0)  # merge all masks into a single tensor
-            masks = masks.numpy().copy()
             if images.shape[0:3] != masks.shape:
                 raise AssertionError("images/masks shape mismatch")
+            masks = masks.numpy().copy()
         if preds is not None:
-            if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and preds.dim() == 3):
-                raise AssertionError("expected segmentation preds to be in list or 3-d tensor format (BxHxW)")
+            if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and preds.dim() == 4):
+                raise AssertionError("expected segmentation preds to be in list or 3-d tensor format (BxCxHxW)")
             if isinstance(preds, list):
                 if all([isinstance(p, list) for p in preds]):
                     preds = list(itertools.chain.from_iterable(preds))  # merge all augmented lists together
                 preds = torch.cat(preds, 0)  # merge all preds into a single tensor
-            preds = preds.numpy().copy()
+            with torch.no_grad():
+                preds = torch.squeeze(preds[:, 1:, ...].topk(1, dim=1)[1], dim=1)
             if images.shape[0:3] != preds.shape:
                 raise AssertionError("images/preds shape mismatch")
+            preds = preds.numpy().copy()
         name_color_map = task.get_color_map()
         if name_color_map is not None:
             idx_color_map = {idx: name_color_map[name] for name, idx in task.get_class_idxs_map().items()}
@@ -970,9 +973,9 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
                 if all([isinstance(p, list) for p in preds]):
                     preds = list(itertools.chain.from_iterable(preds))  # merge all augmented lists together
                 preds = torch.cat(preds, 0)  # merge all preds into a single tensor
-            preds = preds.numpy().copy()
             if targets is not None and preds.shape != targets.shape:
                 raise AssertionError("preds/targets shape mismatch")
+            preds = preds.numpy().copy()
         # todo: display both preds and targets below? (still only using one of the two)
         if targets is not None:
             if ((targets.ndim == 4 and targets.shape[1] == 1) or targets.ndim == 3) and targets.shape[-2:] == images.shape[1:3]:
