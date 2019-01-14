@@ -985,18 +985,18 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True,
             if images.shape[0] != len(labels):
                 raise AssertionError("images/labels count mismatch")
         if preds is not None:
-            # @@@@ TODO: UPDATE TO EXPECT RAW PREDICTS (BxC) INSTEAD OF DIRECT CLASS LABELS
-            if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and preds.dim() == 1):
-                raise AssertionError("expected classification predictions to be in list or 1-d tensor format")
+            if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and preds.dim() == 2):
+                raise AssertionError("expected classification predictions to be in list or 2-d tensor format (BxC)")
             if isinstance(preds, list):
                 if all([isinstance(p, list) for p in preds]):
                     preds = list(itertools.chain.from_iterable(preds))  # merge all augmented lists together
                 if all([isinstance(t, torch.Tensor) for t in preds]):
                     preds = torch.cat(preds, 0)
-            if isinstance(preds, torch.Tensor):
-                preds = preds.tolist()
-            if images.shape[0] != len(preds):
+            with torch.no_grad():
+                preds = torch.squeeze(preds.topk(1, dim=1)[1], dim=1)
+            if images.shape[0] != preds.shape[0]:
                 raise AssertionError("images/predictions count mismatch")
+            preds = preds.tolist()
         class_names_map = {idx: name for name, idx in task.get_class_idxs_map().items()}
         redraw = draw_classifs(image_list, labels_gt=labels, labels_pred=preds, labels_map=class_names_map,
                                redraw=redraw, use_cv2=use_cv2)
