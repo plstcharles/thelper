@@ -125,7 +125,8 @@ class ImageSegmTrainer(Trainer):
                             metric.accumulate(aug_pred.detach().cpu(), label_map[aug_idx].detach().cpu(), meta=meta)
                     if self.train_iter_callback is not None:
                         # caution: will be called multiple times with the same iter idx due to augmentations
-                        self.train_iter_callback(sample=sample, pred=iter_pred, iter_idx=iter, max_iters=epoch_size,
+                        self.train_iter_callback(sample=sample, task=self.model.task, pred=iter_pred,
+                                                 iter_idx=iter, max_iters=epoch_size,
                                                  epoch_idx=epoch, max_epochs=self.epochs)
                 iter_loss /= augs_count
             else:
@@ -137,7 +138,8 @@ class ImageSegmTrainer(Trainer):
                     for metric in metrics.values():
                         metric.accumulate(iter_pred.detach().cpu(), label_map.detach().cpu(), meta=meta)
                 if self.train_iter_callback is not None:
-                    self.train_iter_callback(sample=sample, pred=iter_pred, iter_idx=iter, max_iters=epoch_size,
+                    self.train_iter_callback(sample=sample, task=self.model.task, pred=iter_pred,
+                                             iter_idx=iter, max_iters=epoch_size,
                                              epoch_idx=epoch, max_epochs=self.epochs)
             epoch_loss += iter_loss.item()
             optimizer.step()
@@ -213,7 +215,8 @@ class ImageSegmTrainer(Trainer):
                     for metric in metrics.values():
                         metric.accumulate(pred.cpu(), label_map.cpu() if label_map is not None else None, meta=meta)
                 if self.eval_iter_callback is not None:
-                    self.eval_iter_callback(sample=sample, pred=pred, iter_idx=idx, max_iters=epoch_size,
+                    self.eval_iter_callback(sample=sample, task=self.model.task, pred=pred,
+                                            iter_idx=idx, max_iters=epoch_size,
                                             epoch_idx=epoch, max_epochs=self.epochs)
                 if monitor is not None:
                     monitor_output = "{}: {:.2f}".format(monitor, metrics[monitor].eval())

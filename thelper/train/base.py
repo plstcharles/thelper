@@ -262,7 +262,7 @@ class Trainer:
             self.outputs = {}
         # callbacks should have the following signature:
         #   func(sample, pred, iter_idx, max_iters, epoch_idx, max_epochs)
-        callback_params = ["sample", "pred", "iter_idx", "max_iters", "epoch_idx", "max_epochs"]
+        callback_params = ["sample", "task", "pred", "iter_idx", "max_iters", "epoch_idx", "max_epochs"]
         self.train_iter_callback = thelper.utils.get_key_def("train_iter_callback", trainer_config, None)
         if self.train_iter_callback is not None:
             if isinstance(self.train_iter_callback, str):

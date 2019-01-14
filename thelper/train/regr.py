@@ -117,7 +117,8 @@ class RegressionTrainer(Trainer):
                 for metric in metrics.values():
                     metric.accumulate(iter_pred.detach().cpu(), target.detach().cpu(), meta=meta)
             if self.train_iter_callback is not None:
-                self.train_iter_callback(sample=sample, pred=iter_pred, iter_idx=iter, max_iters=epoch_size,
+                self.train_iter_callback(sample=sample, task=self.model.task, pred=iter_pred,
+                                         iter_idx=iter, max_iters=epoch_size,
                                          epoch_idx=epoch, max_epochs=self.epochs)
             epoch_loss += iter_loss.item()
             optimizer.step()
@@ -177,7 +178,8 @@ class RegressionTrainer(Trainer):
                     for metric in metrics.values():
                         metric.accumulate(pred.cpu(), target.cpu() if target is not None else None, meta=meta)
                 if self.eval_iter_callback is not None:
-                    self.eval_iter_callback(sample=sample, pred=pred, iter_idx=idx, max_iters=epoch_size,
+                    self.eval_iter_callback(sample=sample, task=self.model.task, pred=pred,
+                                            iter_idx=idx, max_iters=epoch_size,
                                             epoch_idx=epoch, max_epochs=self.epochs)
                 if monitor is not None:
                     monitor_output = "{}: {:.2f}".format(monitor, metrics[monitor].eval())
