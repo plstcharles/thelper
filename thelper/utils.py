@@ -794,6 +794,8 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
     nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
     if nb_imgs < 1:
         return None
+    if max_img_size is None:
+        max_img_size = (800, 1600)
     grid_size_x = int(math.ceil(math.sqrt(nb_imgs)))
     grid_size_y = int(math.ceil(nb_imgs / grid_size_x))
     if grid_size_x * grid_size_y < nb_imgs:
@@ -827,9 +829,9 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
             display = img_grid[..., ::-1]
             if display.shape[0] > max_img_size[0] or display.shape[1] > max_img_size[1]:
                 if display.shape[0] / max_img_size[0] > display.shape[1] / max_img_size[1]:
-                    dsize = (max_img_size[0], display.shape[1] / (display.shape[0] / max_img_size[0]))
+                    dsize = (max_img_size[0], int(round(display.shape[1] / (display.shape[0] / max_img_size[0]))))
                 else:
-                    dsize = (display.shape[0] / (display.shape[1] / max_img_size[1]), max_img_size[1])
+                    dsize = (int(round(display.shape[0] / (display.shape[1] / max_img_size[1]))), max_img_size[1])
                 display = cv.resize(display, dsize)
             cv.imshow(win_name, display)
         return win_name, img_grid
@@ -912,9 +914,9 @@ def draw_segments(images,                 # type: Union[List[np.ndarray], np.nda
             display = img_grid[..., ::-1]
             if display.shape[0] > max_img_size[0] or display.shape[1] > max_img_size[1]:
                 if display.shape[0] / max_img_size[0] > display.shape[1] / max_img_size[1]:
-                    dsize = (max_img_size[0], display.shape[1] / (display.shape[0] / max_img_size[0]))
+                    dsize = (max_img_size[0], int(round(display.shape[1] / (display.shape[0] / max_img_size[0]))))
                 else:
-                    dsize = (display.shape[0] / (display.shape[1] / max_img_size[1]), max_img_size[1])
+                    dsize = (int(round(display.shape[0] / (display.shape[1] / max_img_size[1]))), max_img_size[1])
                 display = cv.resize(display, dsize)
             cv.imshow(win_name, display)
         return win_name, img_grid
@@ -1051,7 +1053,6 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True,
             if targets is not None and preds.shape != targets.shape:
                 raise AssertionError("preds/targets shape mismatch")
             preds = preds.numpy().copy()
-        # todo: display both preds and targets below? (still only using one of the two)
         if targets is not None:
             if ((targets.ndim == 4 and targets.shape[1] == 1) or targets.ndim == 3) and targets.shape[-2:] == images.shape[1:3]:
                 image_list = [get_displayable_image(images[batch_idx, ...], grayscale=True) for batch_idx in range(images.shape[0])]
