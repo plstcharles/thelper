@@ -1,5 +1,4 @@
 """Classification trainer/evaluator implementation module."""
-import itertools
 import logging
 
 import torch
@@ -135,7 +134,7 @@ class ImageClassifTrainer(Trainer):
                         iter_loss += aug_loss.detach()
                         iter_pred = torch.cat((aug_pred.detach(), iter_pred), dim=0)
                 iter_loss /= augs_count
-                label = list(itertools.chain.from_iterable(label))
+                label = torch.cat(label, dim=0)
             else:
                 iter_pred = model(self._upload_tensor(input, dev))
                 iter_loss = loss(iter_pred, self._upload_tensor(label, dev))

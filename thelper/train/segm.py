@@ -1,5 +1,4 @@
 """Segmentation trainer/evaluator implementation module."""
-import itertools
 import logging
 
 import torch
@@ -121,7 +120,7 @@ class ImageSegmTrainer(Trainer):
                         iter_loss += aug_loss.detach()
                         iter_pred = torch.cat((aug_pred.detach(), iter_pred), dim=0)
                 iter_loss /= augs_count
-                label_map = list(itertools.chain.from_iterable(label_map))
+                label_map = torch.cat(label_map, dim=0)
             else:
                 iter_pred = model(self._upload_tensor(input, dev))
                 # todo: find a more efficient way to compute loss w/ byte vals directly?
