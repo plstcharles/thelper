@@ -236,11 +236,9 @@ def create_loaders(config, save_dir=None):
                     if "samples" not in log_content or not isinstance(log_content["samples"], list):
                         raise AssertionError("unexpected dataset log content (bad 'samples' field)")
                     samples_old = log_content["samples"]
-                    samples_new = dataset.samples \
-                        if hasattr(dataset, "samples") and isinstance(dataset.samples, list) else []
+                    samples_new = dataset.samples if hasattr(dataset, "samples") and isinstance(dataset.samples, list) else []
                     if len(samples_old) != len(samples_new):
-                        query_msg = "Old sample list for dataset '%s' mismatch with current sample list; " \
-                                    "proceed anyway?"
+                        query_msg = "Old sample list for dataset '%s' mismatch with current sample list; proceed anyway?"
                         answer = thelper.utils.query_yes_no(query_msg, bypass="n")
                         if not answer:
                             logger.error("sample list mismatch with previous run; user aborted")
@@ -249,9 +247,7 @@ def create_loaders(config, save_dir=None):
                     else:
                         breaking = False
                         for set_name, idxs in zip(["train_idxs", "valid_idxs", "test_idxs"],
-                                                  [train_idxs[dataset_name],
-                                                   valid_idxs[dataset_name],
-                                                   test_idxs[dataset_name]]):
+                                                  [train_idxs[dataset_name], valid_idxs[dataset_name], test_idxs[dataset_name]]):
                             # index values were paired in tuples earlier, 0=idx, 1=label
                             if log_content[set_name] != [idx for idx, _ in idxs]:
                                 query_msg = "Old indices list for dataset '%s' mismatch with current indices" \
@@ -265,9 +261,8 @@ def create_loaders(config, save_dir=None):
                         if not breaking:
                             for idx, (sample_new, sample_old) in enumerate(zip(samples_new, samples_old)):
                                 if str(sample_new) != sample_old:
-                                    query_msg = "Old sample #%d for dataset '%s' mismatch with current #%d; " \
-                                                "proceed anyway?\n\told: %s\n\tnew: %s" % \
-                                                (idx, dataset_name, idx, str(sample_old), str(sample_new))
+                                    query_msg = "Old sample #%d for dataset '%s' mismatch with current #%d; proceed anyway?" \
+                                                "\n\told: %s\n\tnew: %s" % (idx, dataset_name, idx, str(sample_old), str(sample_new))
                                     answer = thelper.utils.query_yes_no(query_msg, bypass="n")
                                     if not answer:
                                         logger.error("sample list mismatch with previous run; user aborted")
@@ -343,19 +338,14 @@ def create_parsers(config, base_transforms=None):
             # assume that the dataset is derived from thelper.data.parsers.Dataset (it is fully sampling-ready)
             dataset = dataset_type(name=dataset_name, config=dataset_params, transforms=transforms)
             if "task" in dataset_config:
-                logger.warning("'task' field detected in dataset '%s' config; will be ignored " +
-                               "(interface should provide it)" % dataset_name)
+                logger.warning("'task' field detected in dataset '%s' config; will be ignored (interface should provide it)" % dataset_name)
             task = dataset.get_task()
         else:
             if "task" not in dataset_config or not dataset_config["task"]:
-                raise AssertionError(
-                    "external dataset '%s' must define task interface in its configuration dict" % dataset_name
-                )
+                raise AssertionError("external dataset '%s' must define task interface in its configuration dict" % dataset_name)
             task = thelper.tasks.create_task(dataset_config["task"])
             # assume that __getitem__ and __len__ are implemented, but we need to make it sampling-ready
-            dataset = thelper.data.ExternalDataset(
-                dataset_name, dataset_type, task, config=dataset_params, transforms=transforms
-            )
+            dataset = thelper.data.ExternalDataset(dataset_name, dataset_type, task, config=dataset_params, transforms=transforms)
         if task is None:
             raise AssertionError("parsed task interface should not be None anymore (old code doing something strange?)")
         tasks.append(task)

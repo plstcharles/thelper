@@ -11,7 +11,6 @@ import io  # noqa: F401
 import itertools
 import json
 import logging
-import warnings
 import math
 import os
 import platform
@@ -164,7 +163,7 @@ def resolve_import(fullname):
     for old, new in cases:
         fullname = fullname.replace(old, new)
     if old_name != fullname:
-        warnings.warn("Class fullname '{!s}' was resolved to '{!s}'.".format(old_name, fullname))
+        logger.warning("class fullname '{!s}' was resolved to '{!s}'.".format(old_name, fullname))
     return fullname
 
 
