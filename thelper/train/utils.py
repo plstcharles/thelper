@@ -40,3 +40,8 @@ def create_trainer(session_name, save_dir, config, model, loaders, ckptdata=None
         raise AssertionError("trainer config missing 'type' field")
     trainer_type = thelper.utils.import_class(trainer_config["type"])
     return trainer_type(session_name, save_dir, model, loaders, config, ckptdata=ckptdata)
+
+
+def _draw_minibatch_wrapper(sample, task, pred, iter_idx, max_iters, epoch_idx, max_epochs):
+    """Wrapper to :func:`thelper.utils.draw_minibatch` used as a callback entrypoint for trainers."""
+    thelper.utils.draw_minibatch(sample, task, preds=pred, ch_transpose=True, flip_bgr=False, block=False)
