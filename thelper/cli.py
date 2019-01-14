@@ -158,6 +158,7 @@ def visualize_data(config):
     logger.info("creating visualization session...")
     thelper.utils.setup_globals(config)
     ignore_loaders = thelper.utils.get_key_def("viz_ignore_loaders", config, default=False)
+    use_cv2 = thelper.utils.get_key_def("use_cv2", config, default=True)
     if thelper.utils.get_key_def(["data_config", "loaders"], config, default=None) is None or ignore_loaders:
         datasets, task = thelper.data.create_parsers(config)
         loader_map = {dataset_name: torch.utils.data.DataLoader(dataset,) for dataset_name, dataset in datasets.items()}
@@ -188,8 +189,8 @@ def visualize_data(config):
                     logger.debug("(indices = %s)" % indices.tolist())
                 else:
                     logger.debug("(indices = %s)" % indices)
-            redraw = thelper.utils.draw_minibatch(samples, task, ch_transpose=ch_transpose,
-                                                  flip_bgr=flip_bgr, block=block, redraw=redraw)
+            redraw = thelper.utils.draw_minibatch(samples, task, ch_transpose=ch_transpose, flip_bgr=flip_bgr,
+                                                  block=block, redraw=redraw, use_cv2=use_cv2)
         logger.info("all done")
 
 

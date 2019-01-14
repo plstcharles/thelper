@@ -785,7 +785,9 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
                   labels_gt=None,       # type: Optional[List[AnyStr]]
                   labels_pred=None,     # type: Optional[List[AnyStr]]
                   labels_map=None,      # type: Optional[Dict[AnyStr, AnyStr]]
-                  redraw=None,          # type: Optional[Tuple[plt.Figure, plt.Axes]]
+                  redraw=None,          # type: Optional[Union[Tuple[plt.Figure, plt.Axes], Tuple[str, np.ndarray]]]
+                  use_cv2=True,         # type: Optional[bool]
+                  img_shape=None,       # type: Optional[Union(List, Tuple)]
                   ):                    # type: (...) -> Union[Tuple[plt.Figure, plt.Axes], None]
     """Draws and returns a figure of classification results using pyplot."""
     nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
@@ -795,41 +797,72 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
     grid_size_y = int(math.ceil(nb_imgs / grid_size_x))
     if grid_size_x * grid_size_y < nb_imgs:
         raise AssertionError("bad gridding for subplots")
-    fig, axes = redraw if redraw is not None else plt.subplots(grid_size_y, grid_size_x)
-    plt.tight_layout()
-    if nb_imgs == 1:
-        axes = np.array(axes)
-    for ax_idx, ax in enumerate(axes.reshape(-1)):
-        if ax_idx < nb_imgs:
-            if isinstance(images, list):
-                ax.imshow(images[ax_idx], interpolation='nearest')
-            else:
-                ax.imshow(images[ax_idx, ...], interpolation='nearest')
+    if use_cv2:
+        img_grid_shape, img_grid = None, (None if redraw is None else redraw[1])
+        for img_idx in range(nb_imgs):
+            image = images[img_idx] if isinstance(images, list) else images[img_idx, ...]
+            if img_shape is None:
+                img_shape = image.shape
+            if img_grid_shape is None:
+                img_grid_shape = (img_shape[0] * grid_size_y, img_shape[1] * grid_size_x, img_shape[2])
+            if img_grid is None or img_grid.shape != img_grid_shape:
+                img_grid = np.zeros(img_grid_shape, dtype=np.uint8)
             if labels_gt is not None or labels_pred is not None:
                 if labels_gt is not None:
-                    curr_label_gt = labels_map[labels_gt[ax_idx]] if labels_map else labels_gt[ax_idx]
+                    curr_label_gt = labels_map[labels_gt[img_idx]] if labels_map else labels_gt[img_idx]
                 else:
                     curr_label_gt = "<unknown>"
                 if labels_pred is not None:
-                    curr_label_pred = labels_map[labels_pred[ax_idx]] if labels_map else labels_pred[ax_idx]
+                    curr_label_pred = labels_map[labels_pred[img_idx]] if labels_map else labels_pred[img_idx]
                     xlabel = "GT={0}\nPred={1}".format(curr_label_gt, curr_label_pred)
                 else:
                     xlabel = "GT={0}".format(curr_label_gt)
-                ax.set_xlabel(xlabel)
-        ax.set_xticks([])
-        ax.set_yticks([])
-    fig.show()
-    return fig, axes
+                image = image.copy()
+                image = cv.putText(image, xlabel, (10, 40), cv.FONT_HERSHEY_SIMPLEX, 0.40, (255, 255, 255), 1, cv.LINE_AA)
+            offsets = (img_idx // grid_size_x) * img_shape[0], (img_idx % grid_size_x) * img_shape[1]
+            np.copyto(img_grid[offsets[0]:(offsets[0] + img_shape[0]), offsets[1]:(offsets[1] + img_shape[1]), :], image)
+        win_name = "classifs" if redraw is None else redraw[0]
+        if img_grid is not None:
+            cv.imshow(win_name, img_grid[..., ::-1])
+        return win_name, img_grid
+    else:
+        fig, axes = redraw if redraw is not None else plt.subplots(grid_size_y, grid_size_x)
+        plt.tight_layout()
+        if nb_imgs == 1:
+            axes = np.array(axes)
+        for ax_idx, ax in enumerate(axes.reshape(-1)):
+            if ax_idx < nb_imgs:
+                if isinstance(images, list):
+                    ax.imshow(images[ax_idx], interpolation='nearest')
+                else:
+                    ax.imshow(images[ax_idx, ...], interpolation='nearest')
+                if labels_gt is not None or labels_pred is not None:
+                    if labels_gt is not None:
+                        curr_label_gt = labels_map[labels_gt[ax_idx]] if labels_map else labels_gt[ax_idx]
+                    else:
+                        curr_label_gt = "<unknown>"
+                    if labels_pred is not None:
+                        curr_label_pred = labels_map[labels_pred[ax_idx]] if labels_map else labels_pred[ax_idx]
+                        xlabel = "GT={0}\nPred={1}".format(curr_label_gt, curr_label_pred)
+                    else:
+                        xlabel = "GT={0}".format(curr_label_gt)
+                    ax.set_xlabel(xlabel)
+            ax.set_xticks([])
+            ax.set_yticks([])
+        fig.show()
+        return fig, axes
 
 
 def draw_segments(images,                 # type: Union[List[np.ndarray], np.ndarray]
                   masks_gt,               # type: Optional[List[np.ndarray]]
                   masks_pred=None,        # type: Optional[List[np.ndarray]]
                   labels_color_map=None,  # type: Optional[Union[np.ndarray], Dict]
-                  redraw=None,            # type: Optional[Tuple[plt.Figure, plt.Axes]]
+                  redraw=None,            # type: Optional[Union[Tuple[plt.Figure, plt.Axes], Tuple[str, np.ndarray]]]
+                  use_cv2=True,           # type: Optional[bool]
+                  img_shape=None,         # type: Optional[Union(List, Tuple)]
                   ):                      # type: (...) -> Union[Tuple[plt.Figure, plt.Axes], None]
     """Draws and returns a figure of segmentation results using pyplot."""
-    # todo: display predictions if available? (currently skipped)
+    # todo: display gt if available? (currently skipped)
     nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
     if nb_imgs < 1:
         return None
@@ -837,11 +870,6 @@ def draw_segments(images,                 # type: Union[List[np.ndarray], np.nda
     grid_size_y = int(math.ceil(nb_imgs / grid_size_x))
     if grid_size_x * grid_size_y < nb_imgs:
         raise AssertionError("bad gridding for subplots")
-    if redraw is not None:
-        fig, axes = redraw
-    else:
-        fig, axes = plt.subplots(grid_size_y, grid_size_x)
-        plt.tight_layout()
     if labels_color_map is not None and isinstance(labels_color_map, dict):
         if len(labels_color_map) > 256:
             raise AssertionError("too many indices for uint8 map")
@@ -849,27 +877,54 @@ def draw_segments(images,                 # type: Union[List[np.ndarray], np.nda
         for idx, val in labels_color_map.items():
             labels_color_map_new[idx, ...] = val
         labels_color_map = labels_color_map_new
-    if nb_imgs == 1:
-        axes = np.array(axes)
-    for ax_idx, ax in enumerate(axes.reshape(-1)):
-        if ax_idx < nb_imgs:
-            image = images[ax_idx] if isinstance(images, list) else images[ax_idx, ...]
-            if masks_gt is not None:
-                mask_gt = masks_gt[ax_idx] if isinstance(masks_gt, list) else masks_gt[ax_idx, ...]
+    if use_cv2:
+        img_grid_shape, img_grid = None, (None if redraw is None else redraw[1])
+        for img_idx in range(nb_imgs):
+            image = images[img_idx] if isinstance(images, list) else images[img_idx, ...]
+            if img_shape is None:
+                img_shape = image.shape
+            if img_grid_shape is None:
+                img_grid_shape = (img_shape[0] * grid_size_y, img_shape[1] * grid_size_x, img_shape[2])
+            if img_grid is None or img_grid.shape != img_grid_shape:
+                img_grid = np.zeros(img_grid_shape, dtype=np.uint8)
+            if masks_pred is not None:
+                mask = masks_pred[img_idx] if isinstance(masks_pred, list) else masks_pred[img_idx, ...]
                 if labels_color_map is not None:
-                    mask_gt = apply_color_map(mask_gt, labels_color_map)
+                    mask = apply_color_map(mask, labels_color_map)
                 if image.ndim == 2 or image.shape[2] != 3:
                     image = cv.cvtColor(image, cv.COLOR_GRAY2BGR)
-                image = cv.addWeighted(image, 0.5, mask_gt, 0.5, 0)
-            ax.imshow(image, interpolation='nearest')
-        ax.set_xticks([])
-        ax.set_yticks([])
-    fig.show()
-    return fig, axes
+                image = cv.addWeighted(image, 0.5, mask, 0.5, 0)
+            offsets = (img_idx // grid_size_x) * img_shape[0], (img_idx % grid_size_x) * img_shape[1]
+            np.copyto(img_grid[offsets[0]:(offsets[0] + img_shape[0]), offsets[1]:(offsets[1] + img_shape[1]), :], image)
+        win_name = "segments" if redraw is None else redraw[0]
+        if img_grid is not None:
+            cv.imshow(win_name, img_grid[..., ::-1])
+        return win_name, img_grid
+    else:
+        fig, axes = redraw if redraw is not None else plt.subplots(grid_size_y, grid_size_x)
+        plt.tight_layout()
+        if nb_imgs == 1:
+            axes = np.array(axes)
+        for ax_idx, ax in enumerate(axes.reshape(-1)):
+            if ax_idx < nb_imgs:
+                image = images[ax_idx] if isinstance(images, list) else images[ax_idx, ...]
+                if masks_pred is not None:
+                    mask = masks_pred[ax_idx] if isinstance(masks_pred, list) else masks_pred[ax_idx, ...]
+                    if labels_color_map is not None:
+                        mask = apply_color_map(mask, labels_color_map)
+                    if image.ndim == 2 or image.shape[2] != 3:
+                        image = cv.cvtColor(image, cv.COLOR_GRAY2BGR)
+                    image = cv.addWeighted(image, 0.5, mask, 0.5, 0)
+                ax.imshow(image, interpolation='nearest')
+            ax.set_xticks([])
+            ax.set_yticks([])
+        fig.show()
+        return fig, axes
 
 
-def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, flip_bgr=False, redraw=None):
-    """Draws and returns a figure of a minibatch using pyplot."""
+def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True,
+                   flip_bgr=False, redraw=None, use_cv2=True):
+    """Draws and returns a figure of a minibatch using pyplot or OpenCV."""
     if not isinstance(minibatch, dict):
         raise AssertionError("expected dict-based sample")
     import thelper.tasks
@@ -923,7 +978,8 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
             if images.shape[0] != len(preds):
                 raise AssertionError("images/predictions count mismatch")
         class_names_map = {idx: name for name, idx in task.get_class_idxs_map().items()}
-        redraw = draw_classifs(image_list, labels_gt=labels, labels_pred=preds, labels_map=class_names_map, redraw=redraw)
+        redraw = draw_classifs(image_list, labels_gt=labels, labels_pred=preds, labels_map=class_names_map,
+                               redraw=redraw, use_cv2=use_cv2)
     elif isinstance(task, thelper.tasks.Segmentation):
         mask_key, masks = task.get_gt_key(), None
         if mask_key in minibatch and minibatch[mask_key] is not None:
@@ -954,7 +1010,8 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
             idx_color_map = {idx: name_color_map[name] for name, idx in task.get_class_idxs_map().items()}
         else:
             idx_color_map = {idx: get_label_color_mapping(idx) for idx in task.get_class_idxs_map().values()}
-        redraw = draw_segments(image_list, masks_gt=masks, masks_pred=preds, labels_color_map=idx_color_map, redraw=redraw)
+        redraw = draw_segments(image_list, masks_gt=masks, masks_pred=preds, labels_color_map=idx_color_map,
+                               redraw=redraw, use_cv2=use_cv2)
     elif isinstance(task, thelper.tasks.Regression):
         target_key, targets = task.get_gt_key(), None
         if target_key in minibatch and minibatch[target_key] is not None:
@@ -984,21 +1041,26 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
                 pred_heatmap_list = None
                 if preds is not None:
                     pred_heatmap_list = [get_displayable_heatmap(preds[batch_idx, ...]) for batch_idx in range(images.shape[0])]
-                redraw = draw_segments(image_list, masks_gt=tgt_heatmap_list, masks_pred=pred_heatmap_list, redraw=redraw)
+                redraw = draw_segments(image_list, masks_gt=tgt_heatmap_list, masks_pred=pred_heatmap_list,
+                                       redraw=redraw, use_cv2=use_cv2)
             elif targets.ndim == 1 and targets.shape[0] == images.shape[0]:
                 image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
-                redraw = draw_classifs(image_list, labels_gt=targets, labels_pred=preds, redraw=redraw)
+                redraw = draw_classifs(image_list, labels_gt=targets, labels_pred=preds, redraw=redraw, use_cv2=use_cv2)
             else:
-                redraw = draw_classifs(images, redraw=redraw)  # draw only images
+                redraw = draw_classifs(images, redraw=redraw, use_cv2=use_cv2)  # draw only images
         else:
-            redraw = draw_classifs(images, redraw=redraw)  # draw only images
+            redraw = draw_classifs(images, redraw=redraw, use_cv2=use_cv2)  # draw only images
     else:
         raise AssertionError("unhandled drawing mode, missing impl")
-    if block:
-        plt.show(block=block)
-        return None
-    plt.pause(0.5)
-    return redraw
+    if use_cv2:
+        cv.waitKey(0 if block else 1)
+        return redraw
+    else:
+        if block:
+            plt.show(block=block)
+            return None
+        plt.pause(0.5)
+        return redraw
 
 
 def draw_errbars(labels,                # type: List[AnyStr]
