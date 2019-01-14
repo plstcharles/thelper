@@ -945,7 +945,7 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
                     preds = list(itertools.chain.from_iterable(preds))  # merge all augmented lists together
                 preds = torch.cat(preds, 0)  # merge all preds into a single tensor
             with torch.no_grad():
-                preds = torch.squeeze(preds[:, 1:, ...].topk(1, dim=1)[1], dim=1)
+                preds = torch.squeeze(preds.topk(1, dim=1)[1], dim=1)
             if images.shape[0:3] != preds.shape:
                 raise AssertionError("images/preds shape mismatch")
             preds = preds.numpy().copy()
