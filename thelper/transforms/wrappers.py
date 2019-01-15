@@ -61,24 +61,23 @@ class AugmentorWrapper(object):
                 raise AssertionError("top-level call should never provide in_cvts")
             # capture all array-like objects via __getitem__ test (if no keys are provided)
             keyvals = [(k, v) for k, v in sample.items() if (
-                (self.target_keys is None and hasattr(v, "__getitem__")) or
+                (self.target_keys is None and hasattr(v, "__getitem__") and not isinstance(v, str)) or
                 (self.target_keys is not None and k in self.target_keys))]
             keys, vals = map(list, zip(*keyvals))
             lengths = [len(v) if isinstance(v, (list, tuple)) else -1 for v in vals]
-            if len(lengths) > 1 and all(n == lengths[0] for n in lengths) and lengths[0] > 0:
+            if len(lengths) > 0 and all(n == lengths[0] for n in lengths) and lengths[0] > 0:
                 # interlace input lists for internal linked fate (if needed; otherwise, it won't change anything)
                 vals = [[v[idx] if isinstance(v, (list, tuple)) else v[idx, ...] for v in vals] for idx in range(lengths[0])]
                 vals = self(vals, force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
-                if not isinstance(vals, list) or len(vals) != lengths[0] or any([not isinstance(v, list) for v in vals]):
+                if not isinstance(vals, list) or len(vals) != lengths[0]:
                     raise AssertionError("messed up something internally")
-                out_vals = [[v] for v in vals[0]]
+                out_vals = [[v] for v in vals[0]] if isinstance(vals[0], list) else [[vals[0]]]
                 for idx1 in range(1, lengths[0]):
                     for idx2 in range(len(out_vals)):
-                        out_vals[idx2].append(vals[idx1][idx2])
+                        out_vals[idx2].append(vals[idx1][idx2] if isinstance(vals[idx1], list) else vals[idx1])
                 vals = out_vals
             else:
-                for idx in range(len(vals)):
-                    vals[idx] = self(vals[idx], force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
+                vals = self(vals, force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
             sample = {k: vals[keys.index(k)] if k in keys else sample[k] for k in sample}
             return sample
         out_cvts = in_cvts is not None
@@ -279,20 +278,19 @@ class TransformWrapper(object):
                 (self.target_keys is not None and k in self.target_keys))]
             keys, vals = map(list, zip(*keyvals))
             lengths = [len(v) if isinstance(v, (list, tuple)) else -1 for v in vals]
-            if len(lengths) > 1 and all(n == lengths[0] for n in lengths) and lengths[0] > 0:
+            if len(lengths) > 0 and all(n == lengths[0] for n in lengths) and lengths[0] > 0:
                 # interlace input lists for internal linked fate (if needed; otherwise, it won't change anything)
                 vals = [[v[idx] if isinstance(v, (list, tuple)) else v[idx, ...] for v in vals] for idx in range(lengths[0])]
                 vals = self(vals, force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
-                if not isinstance(vals, list) or len(vals) != lengths[0] or any([not isinstance(v, list) for v in vals]):
+                if not isinstance(vals, list) or len(vals) != lengths[0]:
                     raise AssertionError("messed up something internally")
-                out_vals = [[v] for v in vals[0]]
+                out_vals = [[v] for v in vals[0]] if isinstance(vals[0], list) else [[vals[0]]]
                 for idx1 in range(1, lengths[0]):
                     for idx2 in range(len(out_vals)):
-                        out_vals[idx2].append(vals[idx1][idx2])
+                        out_vals[idx2].append(vals[idx1][idx2] if isinstance(vals[idx1], list) else vals[idx1])
                 vals = out_vals
             else:
-                for idx in range(len(vals)):
-                    vals[idx] = self(vals[idx], force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
+                vals = self(vals, force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
             sample = {k: vals[keys.index(k)] if k in keys else sample[k] for k in sample}
             return sample
         out_cvts = in_cvts is not None
