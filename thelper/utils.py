@@ -213,7 +213,7 @@ def extract_tar(filepath, root, flags="r:gz"):
         def __init__(self, path, *args, **kwargs):
             self.start_time = time.time()
             self._size = os.path.getsize(path)
-            super().__init__(path, *args, **kwargs)
+            super(_FileWrapper, self).__init__(path, *args, **kwargs)
 
         def read(self, *args, **kwargs):
             duration = time.time() - self.start_time
@@ -266,6 +266,8 @@ def resolve_import(fullname):
     """
     cases = [
         ('thelper.modules', 'thelper.nn'),
+        ('thelper.transforms.ImageTransformWrapper', 'thelper.transforms.TransformWrapper'),
+        ('thelper.transforms.wrappers.ImageTransformWrapper', 'thelper.transforms.wrappers.TransformWrapper'),
     ]
     old_name = fullname
     for old, new in cases:
@@ -787,8 +789,8 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
                   labels_map=None,      # type: Optional[Dict[AnyStr, AnyStr]]
                   redraw=None,          # type: Optional[Union[Tuple[plt.Figure, plt.Axes], Tuple[str, np.ndarray]]]
                   use_cv2=True,         # type: Optional[bool]
-                  img_shape=None,       # type: Optional[Union(List, Tuple)]
-                  max_img_size=None,    # type: Optional[Union(List, Tuple)]
+                  img_shape=None,       # type: Optional[Union[List, Tuple]]
+                  max_img_size=None,    # type: Optional[Union[List, Tuple]]
                   ):                    # type: (...) -> Union[Tuple[plt.Figure, plt.Axes], None]
     """Draws and returns a figure of classification results using pyplot."""
     nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
@@ -821,9 +823,12 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
                 else:
                     xlabel = "GT={0}".format(curr_label_gt)
                 image = image.copy()
-                image = cv.putText(image, xlabel, (10, 40), cv.FONT_HERSHEY_SIMPLEX, 0.40, (255, 255, 255), 1, cv.LINE_AA)
+                color = (255, 255, 255)
+                bottom_left = (10, 40)
+                image = cv.putText(image, xlabel, bottom_left, cv.FONT_HERSHEY_SIMPLEX, 0.40, color, 1, cv.LINE_AA)
             offsets = (img_idx // grid_size_x) * img_shape[0], (img_idx % grid_size_x) * img_shape[1]
-            np.copyto(img_grid[offsets[0]:(offsets[0] + img_shape[0]), offsets[1]:(offsets[1] + img_shape[1]), :], image)
+            np.copyto(img_grid[offsets[0]:(offsets[0] + img_shape[0]),
+                      offsets[1]:(offsets[1] + img_shape[1]), :], image)
         win_name = "classifs" if redraw is None else redraw[0]
         if img_grid is not None:
             display = img_grid[..., ::-1]
@@ -864,13 +869,13 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
 
 
 def draw_segments(images,                 # type: Union[List[np.ndarray], np.ndarray]
-                  masks_gt,               # type: Optional[List[np.ndarray]]
-                  masks_pred=None,        # type: Optional[List[np.ndarray]]
-                  labels_color_map=None,  # type: Optional[Union[np.ndarray], Dict]
+                  masks_gt,               # type: Optional[Union[List[np.ndarray], np.ndarray]]
+                  masks_pred=None,        # type: Optional[Union[List[np.ndarray], np.ndarray]]
+                  labels_color_map=None,  # type: Optional[Union[np.ndarray, Dict]]
                   redraw=None,            # type: Optional[Union[Tuple[plt.Figure, plt.Axes], Tuple[str, np.ndarray]]]
                   use_cv2=True,           # type: Optional[bool]
-                  img_shape=None,         # type: Optional[Union(List, Tuple)]
-                  max_img_size=None,      # type: Optional[Union(List, Tuple)]
+                  img_shape=None,         # type: Optional[Union[List, Tuple]]
+                  max_img_size=None,      # type: Optional[Union[List, Tuple]]
                   ):                      # type: (...) -> Union[Tuple[plt.Figure, plt.Axes], None]
     """Draws and returns a figure of segmentation results using pyplot."""
     # todo: display gt if available? (currently skipped)
@@ -882,7 +887,7 @@ def draw_segments(images,                 # type: Union[List[np.ndarray], np.nda
     grid_size_x = int(math.ceil(math.sqrt(nb_imgs)))
     grid_size_y = int(math.ceil(nb_imgs / grid_size_x))
     if grid_size_x * grid_size_y < nb_imgs:
-        raise AssertionError("bad gridding for subplots")
+        raise AssertionError("bad griding for subplots")
     if labels_color_map is not None and isinstance(labels_color_map, dict):
         if len(labels_color_map) > 256:
             raise AssertionError("too many indices for uint8 map")
@@ -905,7 +910,7 @@ def draw_segments(images,                 # type: Union[List[np.ndarray], np.nda
                 mask = masks_pred[img_idx] if isinstance(masks_pred, list) else masks_pred[img_idx, ...]
             elif masks_gt is not None:
                 mask = masks_gt[img_idx] if isinstance(masks_gt, list) else masks_gt[img_idx, ...]
-            if mask is not None:
+            if isinstance(mask, np.ndarray):
                 if labels_color_map is not None:
                     mask = apply_color_map(mask, labels_color_map)
                 if image.ndim == 2 or image.shape[2] != 3:
@@ -914,7 +919,8 @@ def draw_segments(images,                 # type: Union[List[np.ndarray], np.nda
             offsets = (img_idx // grid_size_x) * img_shape[0], (img_idx % grid_size_x) * img_shape[1]
             if image.ndim < 3 or image.shape[2] == 1:
                 image = cv.cvtColor(image, cv.COLOR_GRAY2BGR)
-            np.copyto(img_grid[offsets[0]:(offsets[0] + img_shape[0]), offsets[1]:(offsets[1] + img_shape[1]), :], image)
+            np.copyto(img_grid[offsets[0]:(offsets[0] + img_shape[0]),
+                      offsets[1]:(offsets[1] + img_shape[1]), :], image)
         win_name = "segments" if redraw is None else redraw[0]
         if img_grid is not None:
             display = img_grid[..., ::-1]
