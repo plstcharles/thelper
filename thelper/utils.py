@@ -832,7 +832,7 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
                     dsize = (max_img_size[0], int(round(display.shape[1] / (display.shape[0] / max_img_size[0]))))
                 else:
                     dsize = (int(round(display.shape[0] / (display.shape[1] / max_img_size[1]))), max_img_size[1])
-                display = cv.resize(display, dsize)
+                display = cv.resize(display, (dsize[1], dsize[0]))
             cv.imshow(win_name, display)
         return win_name, img_grid
     else:
@@ -917,7 +917,7 @@ def draw_segments(images,                 # type: Union[List[np.ndarray], np.nda
                     dsize = (max_img_size[0], int(round(display.shape[1] / (display.shape[0] / max_img_size[0]))))
                 else:
                     dsize = (int(round(display.shape[0] / (display.shape[1] / max_img_size[1]))), max_img_size[1])
-                display = cv.resize(display, dsize)
+                display = cv.resize(display, (dsize[1], dsize[0]))
             cv.imshow(win_name, display)
         return win_name, img_grid
     else:
