@@ -81,7 +81,8 @@ def create_loss_fn(config, model, loader=None, uploader=None):
     if isinstance(model, torch.nn.DataParallel):
         model = model.module  # to avoid interface getter issues
     if uploader is None:
-        uploader = lambda x: x
+        def uploader(x):
+            return x
     if not isinstance(config, dict):
         raise AssertionError("config should be provided as a dictionary")
     if "model_getter" in config and "type" in config:
