@@ -2,6 +2,22 @@
 Changelog
 =========
 
+0.2.0 (2019/01/15)
+-------------------
+
+* Added regression/segmentation tasks and trainers
+* Added interface for pascalvoc dataset
+* Refactored data loaders/parsers and cleaned up data package
+* Added lots of new utilities in base trainer implementation
+* Added new unit tests for transformations
+* Refactored transformations to use wrappers for augments/lists
+* Added new samplers with dataset scaling support
+* Added baseline implementation for FCN32s
+* Added mae/mse metrics implementations
+* Added trainer support for loss computation via external members
+* Added utils to download/verify/extract files
+
+
 0.1.1 (2019/01/14)
 -------------------
 
