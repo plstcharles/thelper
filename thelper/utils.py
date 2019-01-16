@@ -213,7 +213,7 @@ def extract_tar(filepath, root, flags="r:gz"):
         def __init__(self, path, *args, **kwargs):
             self.start_time = time.time()
             self._size = os.path.getsize(path)
-            super(_FileWrapper, self).__init__(path, *args, **kwargs)
+            super().__init__(path, *args, **kwargs)
 
         def read(self, *args, **kwargs):
             duration = time.time() - self.start_time

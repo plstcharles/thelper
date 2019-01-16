@@ -141,7 +141,7 @@ class SqueezeExcitationLayer(torch.nn.Module):
 
 class _DenseLayer(nn.Sequential):
     def __init__(self, num_input_features, growth_rate, bn_size, drop_rate):
-        super(_DenseLayer, self).__init__()
+        super().__init__()
         self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
         self.add_module('relu1', nn.ReLU(inplace=True)),
         self.add_module('conv1', nn.Conv2d(num_input_features, bn_size *
@@ -154,7 +154,7 @@ class _DenseLayer(nn.Sequential):
         self.drop_rate = drop_rate
 
     def forward(self, x):
-        new_features = super(_DenseLayer, self).forward(x)
+        new_features = super().forward(x)
         if self.drop_rate > 0:
             new_features = F.dropout(new_features, p=self.drop_rate, training=self.training)
         return torch.cat([x, new_features], 1)
@@ -162,7 +162,7 @@ class _DenseLayer(nn.Sequential):
 
 class _DenseBlock(nn.Sequential):
     def __init__(self, num_layers, num_input_features, bn_size, growth_rate, drop_rate):
-        super(_DenseBlock, self).__init__()
+        super().__init__()
         for i in range(num_layers):
             layer = _DenseLayer(num_input_features + i * growth_rate, growth_rate, bn_size, drop_rate)
             self.add_module('denselayer%d' % (i + 1), layer)
@@ -170,7 +170,7 @@ class _DenseBlock(nn.Sequential):
 
 class _DenseSeLayer(nn.Sequential):
     def __init__(self, num_input_features, growth_rate, bn_size, drop_rate):
-        super(_DenseSeLayer, self).__init__()
+        super().__init__()
         self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
         self.add_module('relu1', nn.ReLU(inplace=True)),
         self.add_module('conv1', nn.Conv2d(num_input_features, bn_size *
@@ -183,7 +183,7 @@ class _DenseSeLayer(nn.Sequential):
         self.drop_rate = drop_rate
 
     def forward(self, x):
-        new_features = super(_DenseLayer, self).forward(x)
+        new_features = super().forward(x)
         if self.drop_rate > 0:
             new_features = F.dropout(new_features, p=self.drop_rate, training=self.training)
         return torch.cat([x, new_features], 1)
@@ -191,7 +191,7 @@ class _DenseSeLayer(nn.Sequential):
 
 class _DenseSeBlock(nn.Sequential):
     def __init__(self, num_layers, num_input_features, bn_size, growth_rate, drop_rate):
-        super(_DenseSeBlock, self).__init__()
+        super().__init__()
         for i in range(num_layers):
             layer = _DenseSeLayer(num_input_features + i * growth_rate, growth_rate, bn_size, drop_rate)
             self.add_module('denselayer%d' % (i + 1), layer)
@@ -199,7 +199,7 @@ class _DenseSeBlock(nn.Sequential):
 
 class _Transition(nn.Sequential):
     def __init__(self, num_input_features, num_output_features):
-        super(_Transition, self).__init__()
+        super().__init__()
         self.add_module('norm', nn.BatchNorm2d(num_input_features))
         self.add_module('relu', nn.ReLU(inplace=True))
         self.add_module('conv', nn.Conv2d(num_input_features, num_output_features,
@@ -222,7 +222,7 @@ class DenseNet(nn.Module):
 
     def __init__(self, growth_rate=32, block_config=(6, 12, 24, 16),
                  num_init_features=64, bn_size=4, drop_rate=0, num_classes=1000):
-        super(DenseNet, self).__init__()
+        super().__init__()
         # First convolution
         self.features = nn.Sequential(OrderedDict([
             ('conv0', nn.Conv2d(3, num_init_features, kernel_size=7, stride=2, padding=3, bias=False)),

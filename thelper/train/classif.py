@@ -23,7 +23,7 @@ class ImageClassifTrainer(Trainer):
 
     def __init__(self, session_name, save_dir, model, loaders, config, ckptdata=None):
         """Receives session parameters, parses image/label keys from task object, and sets up metrics."""
-        super(ImageClassifTrainer, self).__init__(session_name, save_dir, model, loaders, config, ckptdata=ckptdata)
+        super().__init__(session_name, save_dir, model, loaders, config, ckptdata=ckptdata)
         if not isinstance(self.model.task, thelper.tasks.Classification):
             raise AssertionError("expected task to be classification")
         self.input_key = self.model.task.get_input_key()
