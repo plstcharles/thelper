@@ -43,25 +43,28 @@ class ImageClassifTrainer(Trainer):
             raise AssertionError("trainer expects samples to come in dicts for key-based usage")
         if self.input_key not in sample:
             raise AssertionError("could not find input key '%s' in sample dict" % self.input_key)
-        input, label_idx = sample[self.input_key], None
-        if isinstance(input, list):
+        input_val, label_idx = sample[self.input_key], None
+        if isinstance(input_val, list):
             if self.label_key in sample and sample[self.label_key] is not None:
                 label = sample[self.label_key]
-                if not isinstance(label, list) or len(label) != len(input):
+                if not isinstance(label, list) or len(label) != len(input_val):
                     raise AssertionError("label should also be a list of the same length as input")
-                label_idx = [None] * len(input)
-                for idx in range(len(input)):
-                    input[idx], label_idx[idx] = self._to_tensor({self.input_key: input[idx], self.label_key: label[idx]})
+                label_idx = [None] * len(input_val)
+                for idx in range(len(input_val)):
+                    input_val[idx], label_idx[idx] = self._to_tensor({self.input_key: input_val[idx],
+                                                                      self.label_key: label[idx]})
             else:
-                for idx in range(len(input)):
-                    input[idx] = torch.FloatTensor(input[idx])
+                for idx in range(len(input_val)):
+                    input_val[idx] = torch.FloatTensor(input_val[idx])
         else:
-            input = torch.FloatTensor(input)
+            input_val = torch.FloatTensor(input_val)
             if self.label_key in sample and sample[self.label_key] is not None:
                 label = sample[self.label_key]
-                if isinstance(label, torch.Tensor) and label.numel() == input.shape[0] and label.dtype == torch.int64:
+                if isinstance(label, torch.Tensor) and label.numel() == input_val.shape[0] \
+                        and label.dtype == torch.int64:
                     label_idx = label  # shortcut with less checks (dataset is already using tensor'd indices)
                 else:
+                    label_idx = label_idx or list()
                     for class_name in label:
                         if isinstance(class_name, (int, torch.Tensor)):
                             if isinstance(class_name, torch.Tensor):
@@ -70,15 +73,17 @@ class ImageClassifTrainer(Trainer):
                                 class_name = class_name.item()
                             # dataset must already be using indices, we will forgive this...
                             if class_name < 0 or class_name >= len(self.class_names):
-                                raise AssertionError("class name given as out-of-range index (%d) for class list" % class_name)
+                                raise AssertionError("class name given as out-of-range index (%d) "
+                                                     "for class list" % class_name)
                             class_name = self.class_names[class_name]
                         elif not isinstance(class_name, str):
-                            raise AssertionError("expected label to be in str format (task will convert to proper index)")
+                            raise AssertionError("expected label to be in str format "
+                                                 "(task will convert to proper index)")
                         if class_name not in self.class_names:
                             raise AssertionError("got unexpected label '%s' for a sample (unknown class)" % class_name)
                         label_idx.append(self.class_idxs_map[class_name])
                     label_idx = torch.LongTensor(label_idx)
-        return input, label_idx
+        return input_val, label_idx
 
     def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
         """Trains the model for a single epoch using the provided objects.
@@ -107,24 +112,25 @@ class ImageClassifTrainer(Trainer):
         epoch_size = len(loader)
         self.logger.debug("fetching data loader samples...")
         for idx, sample in enumerate(loader):
-            input, label = self._to_tensor(sample)
+            input_val, label = self._to_tensor(sample)
             optimizer.zero_grad()
             if label is None:
                 raise AssertionError("groundtruth required when training a model")
-            if isinstance(input, list):  # training samples got augmented, we need to backprop in multiple steps
-                if not input:
+            if isinstance(input_val, list):  # training samples got augmented, we need to backprop in multiple steps
+                if not input_val:
                     raise AssertionError("cannot train with empty post-augment sample lists")
-                if not isinstance(label, list) or len(label) != len(input):
+                if not isinstance(label, list) or len(label) != len(input_val):
                     raise AssertionError("label should also be a list of the same length as input")
                 if not self.warned_no_shuffling_augments:
-                    self.logger.warning("using training augmentation without global shuffling, gradient steps might be affected")
+                    self.logger.warning("using training augmentation without global shuffling, "
+                                        "gradient steps might be affected")
                     # see the docstring of thelper.transforms.operations.Duplicator for more information
                     self.warned_no_shuffling_augments = True
                 iter_loss = None
                 iter_pred = None
-                augs_count = len(input)
+                augs_count = len(input_val)
                 for input_idx in range(augs_count):
-                    aug_pred = model(self._upload_tensor(input[input_idx], dev))
+                    aug_pred = model(self._upload_tensor(input_val[input_idx], dev))
                     aug_loss = loss(aug_pred, self._upload_tensor(label[input_idx], dev))
                     aug_loss.backward()  # test backprop all at once? might not fit in memory...
                     if iter_pred is None:
@@ -136,11 +142,12 @@ class ImageClassifTrainer(Trainer):
                 iter_loss /= augs_count
                 label = torch.cat(label, dim=0)
             else:
-                iter_pred = model(self._upload_tensor(input, dev))
+                iter_pred = model(self._upload_tensor(input_val, dev))
                 iter_loss = loss(iter_pred, self._upload_tensor(label, dev))
                 iter_loss.backward()
             if metrics:
-                meta = {key: sample[key] if key in sample else None for key in self.meta_keys} if self.meta_keys else None
+                meta = {key: sample[key] if key in sample else None
+                        for key in self.meta_keys} if self.meta_keys else None
                 for metric in metrics.values():
                     metric.accumulate(iter_pred.detach().cpu(), label.detach().cpu(), meta=meta)
             if self.train_iter_callback is not None:
@@ -192,28 +199,29 @@ class ImageClassifTrainer(Trainer):
             for idx, sample in enumerate(loader):
                 if idx < self.skip_eval_iter:
                     continue  # skip until previous iter count (if set externally; no effect otherwise)
-                input, label = self._to_tensor(sample)
-                if isinstance(input, list):  # evaluation samples got augmented, we need to get the mean prediction
-                    if not input:
+                input_val, label = self._to_tensor(sample)
+                if isinstance(input_val, list):  # evaluation samples got augmented, we need to get the mean prediction
+                    if not input_val:
                         raise AssertionError("cannot eval with empty post-augment sample lists")
-                    if not isinstance(label, list) or len(label) != len(input):
+                    if not isinstance(label, list) or len(label) != len(input_val):
                         raise AssertionError("label should also be a list of the same length as input")
                     # this might be costly for nothing, we could remove the check and assume user is not dumb
                     if any([not torch.eq(l, label[0]).all() for l in label]):
                         raise AssertionError("all labels should be identical! (why do eval-time augment otherwise?)")
                     label = label[0]  # since all identical, just pick the first one and pretend its the only one
                     preds = None
-                    for input_idx in range(len(input)):
-                        pred = model(self._upload_tensor(input[input_idx], dev))
+                    for input_idx in range(len(input_val)):
+                        pred = model(self._upload_tensor(input_val[input_idx], dev))
                         if preds is None:
                             preds = torch.unsqueeze(pred.clone(), 0)
                         else:
                             preds = torch.cat((preds, torch.unsqueeze(pred, 0)), 0)
                     pred = torch.mean(preds, dim=0)
                 else:
-                    pred = model(self._upload_tensor(input, dev))
+                    pred = model(self._upload_tensor(input_val, dev))
                 if metrics:
-                    meta = {key: sample[key] if key in sample else None for key in self.meta_keys} if self.meta_keys else None
+                    meta = {key: sample[key] if key in sample else None
+                            for key in self.meta_keys} if self.meta_keys else None
                     for metric in metrics.values():
                         metric.accumulate(pred.cpu(), label.cpu() if label is not None else None, meta=meta)
                 if self.eval_iter_callback is not None:

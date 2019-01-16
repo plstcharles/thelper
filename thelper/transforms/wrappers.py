@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class AugmentorWrapper(object):
-    """Augmentor pipeline wrapper that allows pickling and multithreading.
+    """Augmentor pipeline wrapper that allows pickling and multi-threading.
 
     See https://github.com/mdbloice/Augmentor for more information. This wrapper was last updated to work
     with version 0.2.2 --- more recent versions introduced yet unfixed (as of 2018/08) issues on some platforms.
@@ -60,14 +60,15 @@ class AugmentorWrapper(object):
             if in_cvts is not None:
                 raise AssertionError("top-level call should never provide in_cvts")
             # capture all array-like objects via __getitem__ test (if no keys are provided)
-            keyvals = [(k, v) for k, v in sample.items() if (
+            key_vals = [(k, v) for k, v in sample.items() if (
                 (self.target_keys is None and hasattr(v, "__getitem__") and not isinstance(v, str)) or
                 (self.target_keys is not None and k in self.target_keys))]
-            keys, vals = map(list, zip(*keyvals))
+            keys, vals = map(list, zip(*key_vals))
             lengths = [len(v) if isinstance(v, (list, tuple)) else -1 for v in vals]
             if len(lengths) > 0 and all(n == lengths[0] for n in lengths) and lengths[0] > 0:
                 # interlace input lists for internal linked fate (if needed; otherwise, it won't change anything)
-                vals = [[v[idx] if isinstance(v, (list, tuple)) else v[idx, ...] for v in vals] for idx in range(lengths[0])]
+                vals = [[v[idx] if isinstance(v, (list, tuple)) else
+                         v[idx, ...] for v in vals] for idx in range(lengths[0])]
                 vals = self(vals, force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
                 if not isinstance(vals, list) or len(vals) != lengths[0]:
                     raise AssertionError("messed up something internally")
@@ -91,6 +92,7 @@ class AugmentorWrapper(object):
         skip_unpack = in_cvts is not None and isinstance(in_cvts, bool) and in_cvts
         if self.linked_fate or force_linked_fate:  # process all content with the same operations below
             if not skip_unpack:
+                # noinspection PyProtectedMember
                 sample, cvts = TransformWrapper._unpack(sample, convert_pil=True)
                 if not isinstance(sample, (list, tuple)):
                     sample = [sample]
@@ -103,7 +105,8 @@ class AugmentorWrapper(object):
             prev_state = np.random.get_state()
             for idx, _ in enumerate(sample):
                 if not isinstance(sample[idx], PIL.Image.Image):
-                    sample[idx], cvts[idx] = self(sample[idx], force_linked_fate=True, op_seed=op_seed, in_cvts=cvts[idx])
+                    sample[idx], cvts[idx] = self(sample[idx], force_linked_fate=True,
+                                                  op_seed=op_seed, in_cvts=cvts[idx])
                 else:
                     np.random.set_state(prev_state)
                     random.seed(np.random.randint(np.iinfo(np.int32).max))
@@ -114,15 +117,18 @@ class AugmentorWrapper(object):
         else:  # each element of the top array will be processed independently below (current seeds are kept)
             cvts = [False] * len(sample)
             for idx, _ in enumerate(sample):
+                # noinspection PyProtectedMember
                 sample[idx], cvts[idx] = TransformWrapper._unpack(sample[idx], convert_pil=True)
                 if not isinstance(sample[idx], PIL.Image.Image):
-                    sample[idx], cvts[idx] = self(sample[idx], force_linked_fate=True, op_seed=op_seed, in_cvts=cvts[idx])
+                    sample[idx], cvts[idx] = self(sample[idx], force_linked_fate=True,
+                                                  op_seed=op_seed, in_cvts=cvts[idx])
                 else:
                     random.seed(np.random.randint(np.iinfo(np.int32).max))
                     for operation in self.pipeline.operations:
                         r = round(np.random.uniform(0, 1), 1)
                         if r <= operation.probability:
                             sample[idx] = operation.perform_operation([sample[idx]])[0]
+        # noinspection PyProtectedMember
         sample, cvts = TransformWrapper._pack(sample, cvts, convert_pil=True)
         if len(sample) != len(cvts):
             raise AssertionError("messed up packing/unpacking logic")
@@ -133,16 +139,18 @@ class AugmentorWrapper(object):
 
     def __repr__(self):
         """Create a print-friendly representation of inner augmentation stages."""
-        return self.__class__.__name__ + (": {{target_keys={}, linked_fate={}, ".format(self.target_keys, self.linked_fate) +
+        return self.__class__.__name__ + (": {{target_keys={}, linked_fate={}, "
+                                          .format(self.target_keys, self.linked_fate) +
                                           ", ".join([str(t) for t in self.pipeline.operations]) + "}")
 
+    # noinspection PyMethodMayBeStatic
     def set_seed(self, seed):
         """Sets the internal seed to use for stochastic ops."""
         np.random.seed(seed)
 
 
 class TransformWrapper(object):
-    """Tranform wrapper that allows operations on samples, lists, tuples, and single elements.
+    """Transform wrapper that allows operations on samples, lists, tuples, and single elements.
 
     Can be used to wrap the operations in ``thelper.transforms`` or in ``torchvision.transforms``
     that only accept array-like objects as input. Will optionally force-convert content to PIL images.
@@ -222,7 +230,8 @@ class TransformWrapper(object):
         if convert_pil:
             if isinstance(sample, torch.Tensor):
                 sample = sample.numpy()
-            if isinstance(sample, np.ndarray) and sample.ndim > 2 and sample.shape[-1] > 1 and (sample.dtype != np.uint8):
+            if isinstance(sample, np.ndarray) and sample.ndim > 2 and \
+                    sample.shape[-1] > 1 and (sample.dtype != np.uint8):
                 # PIL images cannot handle multi-channel non-byte arrays; we handle these manually
                 flat_samples = []
                 for c in range(sample.shape[-1]):
@@ -273,14 +282,15 @@ class TransformWrapper(object):
             if in_cvts is not None:
                 raise AssertionError("top-level call should never provide in_cvts")
             # capture all array-like objects via __getitem__ test (if no keys are provided)
-            keyvals = [(k, v) for k, v in sample.items() if (
+            key_vals = [(k, v) for k, v in sample.items() if (
                 (self.target_keys is None and hasattr(v, "__getitem__") and not isinstance(v, str)) or
                 (self.target_keys is not None and k in self.target_keys))]
-            keys, vals = map(list, zip(*keyvals))
+            keys, vals = map(list, zip(*key_vals))
             lengths = [len(v) if isinstance(v, (list, tuple)) else -1 for v in vals]
             if len(lengths) > 0 and all(n == lengths[0] for n in lengths) and lengths[0] > 0:
                 # interlace input lists for internal linked fate (if needed; otherwise, it won't change anything)
-                vals = [[v[idx] if isinstance(v, (list, tuple)) else v[idx, ...] for v in vals] for idx in range(lengths[0])]
+                vals = [[v[idx] if isinstance(v, (list, tuple)) else
+                         v[idx, ...] for v in vals] for idx in range(lengths[0])]
                 vals = self(vals, force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
                 if not isinstance(vals, list) or len(vals) != lengths[0]:
                     raise AssertionError("messed up something internally")
@@ -315,7 +325,8 @@ class TransformWrapper(object):
                     op_seed = np.random.randint(np.iinfo(np.int32).max)
                 for idx, _ in enumerate(sample):
                     if isinstance(sample[idx], (list, tuple)):
-                        sample[idx], cvts[idx] = self(sample[idx], force_linked_fate=True, op_seed=op_seed, in_cvts=cvts[idx])
+                        sample[idx], cvts[idx] = self(sample[idx], force_linked_fate=True,
+                                                      op_seed=op_seed, in_cvts=cvts[idx])
                     else:
                         if hasattr(self.operation, "set_seed") and callable(self.operation.set_seed):
                             self.operation.set_seed(op_seed)
@@ -328,8 +339,9 @@ class TransformWrapper(object):
                 sample[idx], cvts[idx] = self._unpack(sample[idx], convert_pil=self.convert_pil)
                 if self.probability >= 1 or round(np.random.uniform(0, 1), 1) <= self.probability:
                     if isinstance(sample[idx], (list, tuple)):
-                        # we will now force fate linkage for all subelements of this array
-                        sample[idx], cvts[idx] = self(sample[idx], force_linked_fate=True, op_seed=op_seed, in_cvts=cvts[idx])
+                        # we will now force fate linkage for all sub-elements of this array
+                        sample[idx], cvts[idx] = self(sample[idx], force_linked_fate=True,
+                                                      op_seed=op_seed, in_cvts=cvts[idx])
                     else:
                         sample[idx] = self.operation(sample[idx], **self.params)
         sample, cvts = TransformWrapper._pack(sample, cvts, convert_pil=self.convert_pil)
@@ -345,6 +357,7 @@ class TransformWrapper(object):
         return self.__class__.__name__ + ": {{target_keys={}, linked_fate={}, probability={}. operation={}".format(
             self.target_keys, self.linked_fate, self.probability, str(self.operation))
 
+    # noinspection PyMethodMayBeStatic
     def set_seed(self, seed):
         """Sets the internal seed to use for stochastic ops."""
         np.random.seed(seed)

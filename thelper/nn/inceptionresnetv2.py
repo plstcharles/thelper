@@ -10,7 +10,7 @@ import thelper.nn.coordconv
 class BasicConv2d(torch.nn.Module):
 
     def __init__(self, in_planes, out_planes, kernel_size, stride, padding=0):
-        super(BasicConv2d, self).__init__()
+        super().__init__()
         self.conv = torch.nn.Conv2d(in_planes, out_planes,
                                     kernel_size=kernel_size, stride=stride,
                                     padding=padding, bias=False)  # verify bias false
@@ -30,7 +30,7 @@ class BasicConv2d(torch.nn.Module):
 class Mixed_5b(torch.nn.Module):
 
     def __init__(self):
-        super(Mixed_5b, self).__init__()
+        super().__init__()
         self.branch0 = BasicConv2d(192, 96, kernel_size=1, stride=1)
         self.branch1 = torch.nn.Sequential(
             BasicConv2d(192, 48, kernel_size=1, stride=1),
@@ -58,7 +58,7 @@ class Mixed_5b(torch.nn.Module):
 class Block35(torch.nn.Module):
 
     def __init__(self, scale=1.0):
-        super(Block35, self).__init__()
+        super().__init__()
         self.scale = scale
         self.branch0 = BasicConv2d(320, 32, kernel_size=1, stride=1)
         self.branch1 = torch.nn.Sequential(
@@ -87,7 +87,7 @@ class Block35(torch.nn.Module):
 class Mixed_6a(torch.nn.Module):
 
     def __init__(self):
-        super(Mixed_6a, self).__init__()
+        super().__init__()
         self.branch0 = BasicConv2d(320, 384, kernel_size=3, stride=2)
         self.branch1 = torch.nn.Sequential(
             BasicConv2d(320, 256, kernel_size=1, stride=1),
@@ -107,7 +107,7 @@ class Mixed_6a(torch.nn.Module):
 class Block17(torch.nn.Module):
 
     def __init__(self, scale=1.0):
-        super(Block17, self).__init__()
+        super().__init__()
         self.scale = scale
         self.branch0 = BasicConv2d(1088, 192, kernel_size=1, stride=1)
         self.branch1 = torch.nn.Sequential(
@@ -131,7 +131,7 @@ class Block17(torch.nn.Module):
 class Mixed_7a(torch.nn.Module):
 
     def __init__(self):
-        super(Mixed_7a, self).__init__()
+        super().__init__()
         self.branch0 = torch.nn.Sequential(
             BasicConv2d(1088, 256, kernel_size=1, stride=1),
             BasicConv2d(256, 384, kernel_size=3, stride=2)

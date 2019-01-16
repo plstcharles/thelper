@@ -24,7 +24,6 @@ from typing import Any, AnyStr, Callable, Dict, List, Optional, Tuple, Union  # 
 import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
-# noinspection PyPackageRequirements
 import PIL.Image
 import sklearn.metrics
 import torch
@@ -77,6 +76,7 @@ def get_available_cuda_devices(attempts_per_device=5):
     return [device_id for device_id, available in enumerate(devices_available) if available]
 
 
+# noinspection PyUnusedLocal
 def setup_cv2(config):
     """Parses the provided config for OpenCV flags and sets up its global state accordingly."""
     # https://github.com/pytorch/pytorch/issues/1355
@@ -266,6 +266,8 @@ def resolve_import(fullname):
     """
     cases = [
         ('thelper.modules', 'thelper.nn'),
+        ('thelper.transforms.ImageTransformWrapper', 'thelper.transforms.TransformWrapper'),
+        ('thelper.transforms.wrappers.ImageTransformWrapper', 'thelper.transforms.wrappers.TransformWrapper'),
     ]
     old_name = fullname
     for old, new in cases:
@@ -787,8 +789,8 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
                   labels_map=None,      # type: Optional[Dict[AnyStr, AnyStr]]
                   redraw=None,          # type: Optional[Union[Tuple[plt.Figure, plt.Axes], Tuple[str, np.ndarray]]]
                   use_cv2=True,         # type: Optional[bool]
-                  img_shape=None,       # type: Optional[Union(List, Tuple)]
-                  max_img_size=None,    # type: Optional[Union(List, Tuple)]
+                  img_shape=None,       # type: Optional[Union[List, Tuple]]
+                  max_img_size=None,    # type: Optional[Union[List, Tuple]]
                   ):                    # type: (...) -> Union[Tuple[plt.Figure, plt.Axes], None]
     """Draws and returns a figure of classification results using pyplot."""
     nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
@@ -821,9 +823,12 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
                 else:
                     xlabel = "GT={0}".format(curr_label_gt)
                 image = image.copy()
-                image = cv.putText(image, xlabel, (10, 40), cv.FONT_HERSHEY_SIMPLEX, 0.40, (255, 255, 255), 1, cv.LINE_AA)
+                color = (255, 255, 255)
+                bottom_left = (10, 40)
+                image = cv.putText(image, xlabel, bottom_left, cv.FONT_HERSHEY_SIMPLEX, 0.40, color, 1, cv.LINE_AA)
             offsets = (img_idx // grid_size_x) * img_shape[0], (img_idx % grid_size_x) * img_shape[1]
-            np.copyto(img_grid[offsets[0]:(offsets[0] + img_shape[0]), offsets[1]:(offsets[1] + img_shape[1]), :], image)
+            np.copyto(img_grid[offsets[0]:(offsets[0] + img_shape[0]),
+                      offsets[1]:(offsets[1] + img_shape[1]), :], image)
         win_name = "classifs" if redraw is None else redraw[0]
         if img_grid is not None:
             display = img_grid[..., ::-1]
@@ -864,13 +869,13 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
 
 
 def draw_segments(images,                 # type: Union[List[np.ndarray], np.ndarray]
-                  masks_gt,               # type: Optional[List[np.ndarray]]
-                  masks_pred=None,        # type: Optional[List[np.ndarray]]
-                  labels_color_map=None,  # type: Optional[Union[np.ndarray], Dict]
+                  masks_gt,               # type: Optional[Union[List[np.ndarray], np.ndarray]]
+                  masks_pred=None,        # type: Optional[Union[List[np.ndarray], np.ndarray]]
+                  labels_color_map=None,  # type: Optional[Union[np.ndarray, Dict]]
                   redraw=None,            # type: Optional[Union[Tuple[plt.Figure, plt.Axes], Tuple[str, np.ndarray]]]
                   use_cv2=True,           # type: Optional[bool]
-                  img_shape=None,         # type: Optional[Union(List, Tuple)]
-                  max_img_size=None,      # type: Optional[Union(List, Tuple)]
+                  img_shape=None,         # type: Optional[Union[List, Tuple]]
+                  max_img_size=None,      # type: Optional[Union[List, Tuple]]
                   ):                      # type: (...) -> Union[Tuple[plt.Figure, plt.Axes], None]
     """Draws and returns a figure of segmentation results using pyplot."""
     # todo: display gt if available? (currently skipped)
@@ -905,7 +910,7 @@ def draw_segments(images,                 # type: Union[List[np.ndarray], np.nda
                 mask = masks_pred[img_idx] if isinstance(masks_pred, list) else masks_pred[img_idx, ...]
             elif masks_gt is not None:
                 mask = masks_gt[img_idx] if isinstance(masks_gt, list) else masks_gt[img_idx, ...]
-            if mask is not None:
+            if isinstance(mask, np.ndarray):
                 if labels_color_map is not None:
                     mask = apply_color_map(mask, labels_color_map)
                 if image.ndim == 2 or image.shape[2] != 3:
@@ -914,7 +919,8 @@ def draw_segments(images,                 # type: Union[List[np.ndarray], np.nda
             offsets = (img_idx // grid_size_x) * img_shape[0], (img_idx % grid_size_x) * img_shape[1]
             if image.ndim < 3 or image.shape[2] == 1:
                 image = cv.cvtColor(image, cv.COLOR_GRAY2BGR)
-            np.copyto(img_grid[offsets[0]:(offsets[0] + img_shape[0]), offsets[1]:(offsets[1] + img_shape[1]), :], image)
+            np.copyto(img_grid[offsets[0]:(offsets[0] + img_shape[0]),
+                      offsets[1]:(offsets[1] + img_shape[1]), :], image)
         win_name = "segments" if redraw is None else redraw[0]
         if img_grid is not None:
             display = img_grid[..., ::-1]
@@ -1042,7 +1048,8 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True,
         target_key, targets = task.get_gt_key(), None
         if target_key in minibatch and minibatch[target_key] is not None:
             targets = minibatch[target_key]
-            if not isinstance(targets, list) and not (isinstance(targets, torch.Tensor) and targets.shape[0] == images.shape[0]):
+            if not isinstance(targets, list) and not (isinstance(targets, torch.Tensor) and
+                                                      targets.shape[0] == images.shape[0]):
                 raise AssertionError("expected targets to be in list or tensor format (Bx...)")
             if isinstance(targets, list):
                 if all([isinstance(t, list) for t in targets]):
@@ -1060,12 +1067,16 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True,
                 raise AssertionError("preds/targets shape mismatch")
             preds = preds.numpy().copy()
         if targets is not None:
-            if ((targets.ndim == 4 and targets.shape[1] == 1) or targets.ndim == 3) and targets.shape[-2:] == images.shape[1:3]:
-                image_list = [get_displayable_image(images[batch_idx, ...], grayscale=True) for batch_idx in range(images.shape[0])]
-                tgt_heatmap_list = [get_displayable_heatmap(targets[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+            if ((targets.ndim == 4 and targets.shape[1] == 1) or targets.ndim == 3) \
+                    and targets.shape[-2:] == images.shape[1:3]:
+                image_list = [get_displayable_image(images[batch_idx, ...], grayscale=True)
+                              for batch_idx in range(images.shape[0])]
+                tgt_heatmap_list = [get_displayable_heatmap(targets[batch_idx, ...])
+                                    for batch_idx in range(images.shape[0])]
                 pred_heatmap_list = None
                 if preds is not None:
-                    pred_heatmap_list = [get_displayable_heatmap(preds[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+                    pred_heatmap_list = [get_displayable_heatmap(preds[batch_idx, ...])
+                                         for batch_idx in range(images.shape[0])]
                 redraw = draw_segments(image_list, masks_gt=tgt_heatmap_list, masks_pred=pred_heatmap_list,
                                        redraw=redraw, use_cv2=use_cv2)
             elif targets.ndim == 1 and targets.shape[0] == images.shape[0]:
@@ -1088,6 +1099,7 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True,
         return redraw
 
 
+# noinspection PyUnusedLocal
 def draw_errbars(labels,                # type: List[AnyStr]
                  min_values,            # type: np.ndarray
                  max_values,            # type: np.ndarray

@@ -1616,7 +1616,7 @@ class RawPredictions(Metric):
 
     def __init__(self, callback=None):
         # type: (Optional[Callable]) -> None
-        super(RawPredictions, self).__init__()
+        super().__init__()
         self.predictions = list()   # type: List[Dict[AnyStr, Any]]
         if callback is not None and not callable(callback):
             raise TypeError("Callback is not callable, got {!s}.".format(type(callback)))

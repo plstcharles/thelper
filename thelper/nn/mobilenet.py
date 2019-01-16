@@ -25,7 +25,7 @@ def conv_1x1_bn(inp, oup):
 class InvertedResidual(nn.Module):
 
     def __init__(self, inp, oup, stride, expand_ratio):
-        super(InvertedResidual, self).__init__()
+        super().__init__()
         self.stride = stride
         if stride not in [1, 2]:
             raise AssertionError("stride should be 1 or 2")

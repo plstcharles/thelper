@@ -4,6 +4,7 @@ matplotlib
 cython
 opencv-python
 numpy
+Pillow
 pynput
 scipy
 scikit-learn
