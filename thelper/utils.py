@@ -801,7 +801,7 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
     grid_size_x = int(math.ceil(math.sqrt(nb_imgs)))
     grid_size_y = int(math.ceil(nb_imgs / grid_size_x))
     if grid_size_x * grid_size_y < nb_imgs:
-        raise AssertionError("bad griding for subplots")
+        raise AssertionError("bad gridding for subplots")
     if use_cv2:
         img_grid_shape, img_grid = None, (None if redraw is None else redraw[1])
         for img_idx in range(nb_imgs):
@@ -887,7 +887,7 @@ def draw_segments(images,                 # type: Union[List[np.ndarray], np.nda
     grid_size_x = int(math.ceil(math.sqrt(nb_imgs)))
     grid_size_y = int(math.ceil(nb_imgs / grid_size_x))
     if grid_size_x * grid_size_y < nb_imgs:
-        raise AssertionError("bad griding for subplots")
+        raise AssertionError("bad gridding for subplots")
     if labels_color_map is not None and isinstance(labels_color_map, dict):
         if len(labels_color_map) > 256:
             raise AssertionError("too many indices for uint8 map")
