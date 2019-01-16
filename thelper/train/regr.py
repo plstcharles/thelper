@@ -47,16 +47,16 @@ class RegressionTrainer(Trainer):
             raise AssertionError("trainer expects samples to come in dicts for key-based usage")
         if self.input_key not in sample:
             raise AssertionError("could not find input key '%s' in sample dict" % self.input_key)
-        input = sample[self.input_key]
-        if isinstance(input, np.ndarray):
-            input = torch.from_numpy(input)
-        if not isinstance(input, torch.Tensor):
+        input_val = sample[self.input_key]
+        if isinstance(input_val, np.ndarray):
+            input_val = torch.from_numpy(input_val)
+        if not isinstance(input_val, torch.Tensor):
             raise AssertionError("unexpected input type; should be torch.Tensor")
         if self.input_shape is not None:
-            if input.dim() != len(self.input_shape) + 1:
+            if input_val.dim() != len(self.input_shape) + 1:
                 raise AssertionError("expected input as Nx[shape] where N = batch size")
-            if self.input_shape != input.shape[1:]:
-                raise AssertionError("invalid input shape; got '%s', expected '%s'" % (input.shape[1:], self.input_shape))
+            if self.input_shape != input_val.shape[1:]:
+                raise AssertionError("invalid input shape; got '%s', expected '%s'" % (input_val.shape[1:], self.input_shape))
         target = None
         if self.target_key in sample:
             target = sample[self.target_key]
@@ -71,7 +71,7 @@ class RegressionTrainer(Trainer):
                     raise AssertionError("expected target as Nx[shape] where N = batch size")
                 if self.target_shape != target.shape[1:]:
                     raise AssertionError("invalid target shape; got '%s', expected '%s'" % (target.shape[1:], self.target_shape))
-        return input, target
+        return input_val, target
 
     def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
         """Trains the model for a single epoch using the provided objects.
@@ -100,16 +100,16 @@ class RegressionTrainer(Trainer):
         epoch_size = len(loader)
         self.logger.debug("fetching data loader samples...")
         for idx, sample in enumerate(loader):
-            input, target = self._to_tensor(sample)
+            input_val, target = self._to_tensor(sample)
             # todo: add support to fraction samples that are too big for a single iteration
             # (e.g. when batching non-image data that would be too inefficient one sample at a time)
             optimizer.zero_grad()
             if target is None:
                 raise AssertionError("groundtruth required when training a model")
-            if isinstance(input, list):
+            if isinstance(input_val, list):
                 raise AssertionError("missing regr trainer support for augmented minibatches")  # todo
             target = self._upload_tensor(target, dev)
-            iter_pred = model(self._upload_tensor(input, dev))
+            iter_pred = model(self._upload_tensor(input_val, dev))
             iter_loss = loss(iter_pred, target.float())
             iter_loss.backward()
             if metrics:
@@ -166,10 +166,10 @@ class RegressionTrainer(Trainer):
             for idx, sample in enumerate(loader):
                 if idx < self.skip_eval_iter:
                     continue  # skip until previous iter count (if set externally; no effect otherwise)
-                input, target = self._to_tensor(sample)
-                if isinstance(input, list):
+                input_val, target = self._to_tensor(sample)
+                if isinstance(input_val, list):
                     raise AssertionError("missing regr trainer support for augmented minibatches")  # todo
-                pred = model(self._upload_tensor(input, dev))
+                pred = model(self._upload_tensor(input_val, dev))
                 if metrics:
                     meta = {key: sample[key] if key in sample else None for key in self.meta_keys} if self.meta_keys else None
                     for metric in metrics.values():

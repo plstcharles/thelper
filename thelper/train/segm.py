@@ -45,25 +45,25 @@ class ImageSegmTrainer(Trainer):
             raise AssertionError("trainer expects samples to come in dicts for key-based usage")
         if self.input_key not in sample:
             raise AssertionError("could not find input key '%s' in sample dict" % self.input_key)
-        input, label_map = sample[self.input_key], None
-        if isinstance(input, list):
+        input_val, label_map = sample[self.input_key], None
+        if isinstance(input_val, list):
             if self.label_map_key in sample and sample[self.label_map_key] is not None:
                 label_map = sample[self.label_map_key]
-                if not isinstance(label_map, list) or len(label_map) != len(input):
+                if not isinstance(label_map, list) or len(label_map) != len(input_val):
                     raise AssertionError("label_map should also be a list of the same length as input")
-                for idx in range(len(input)):
-                    input[idx], label_map[idx] = self._to_tensor({self.input_key: input[idx], self.label_map_key: label_map[idx]})
+                for idx in range(len(input_val)):
+                    input_val[idx], label_map[idx] = self._to_tensor({self.input_key: input_val[idx], self.label_map_key: label_map[idx]})
             else:
-                for idx in range(len(input)):
-                    input[idx] = torch.FloatTensor(input[idx])
+                for idx in range(len(input_val)):
+                    input_val[idx] = torch.FloatTensor(input_val[idx])
         else:
-            input = torch.FloatTensor(input)
+            input_val = torch.FloatTensor(input_val)
             if self.label_map_key in sample and sample[self.label_map_key] is not None:
                 label_map = sample[self.label_map_key]
                 if isinstance(label_map, list):
                     raise AssertionError("unexpected label map type")
                 label_map = torch.ByteTensor(label_map)
-        return input, label_map
+        return input_val, label_map
 
     def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
         """Trains the model for a single epoch using the provided objects.
@@ -92,25 +92,25 @@ class ImageSegmTrainer(Trainer):
         epoch_size = len(loader)
         self.logger.debug("fetching data loader samples...")
         for idx, sample in enumerate(loader):
-            input, label_map = self._to_tensor(sample)
+            input_val, label_map = self._to_tensor(sample)
             optimizer.zero_grad()
             if label_map is None:
                 raise AssertionError("groundtruth required when training a model")
-            if isinstance(input, list):
+            if isinstance(input_val, list):
                 # training samples got augmented, we need to backprop in multiple steps
-                if not input:
+                if not input_val:
                     raise AssertionError("cannot train with empty post-augment sample lists")
-                if not isinstance(label_map, list) or len(label_map) != len(input):
-                    raise AssertionError("label maps should also be provided via a list of the same length as the input")
+                if not isinstance(label_map, list) or len(label_map) != len(input_val):
+                    raise AssertionError("label maps should also be provided via a list of the same length as the input_val")
                 if not self.warned_no_shuffling_augments:
                     self.logger.warning("using training augmentation without global shuffling, gradient steps might be affected")
                     # see the docstring of thelper.transforms.operations.Duplicator for more information
                     self.warned_no_shuffling_augments = True
                 iter_loss = None
                 iter_pred = None
-                augs_count = len(input)
+                augs_count = len(input_val)
                 for aug_idx in range(augs_count):
-                    aug_pred = model(self._upload_tensor(input[aug_idx], dev))
+                    aug_pred = model(self._upload_tensor(input_val[aug_idx], dev))
                     aug_loss = loss(aug_pred, label_map[aug_idx].long())
                     aug_loss.backward()  # test backprop all at once? might not fit in memory...
                     if iter_pred is None:
@@ -122,7 +122,7 @@ class ImageSegmTrainer(Trainer):
                 iter_loss /= augs_count
                 label_map = torch.cat(label_map, dim=0)
             else:
-                iter_pred = model(self._upload_tensor(input, dev))
+                iter_pred = model(self._upload_tensor(input_val, dev))
                 # todo: find a more efficient way to compute loss w/ byte vals directly?
                 iter_loss = loss(iter_pred, self._upload_tensor(label_map, dev).long())
                 iter_loss.backward()
@@ -179,27 +179,27 @@ class ImageSegmTrainer(Trainer):
             for idx, sample in enumerate(loader):
                 if idx < self.skip_eval_iter:
                     continue  # skip until previous iter count (if set externally; no effect otherwise)
-                input, label_map = self._to_tensor(sample)
-                if isinstance(input, list):
+                input_val, label_map = self._to_tensor(sample)
+                if isinstance(input_val, list):
                     # evaluation samples got augmented, we need to get the mean prediction
-                    if not input:
+                    if not input_val:
                         raise AssertionError("cannot eval with empty post-augment sample lists")
-                    if not isinstance(label_map, list) or len(label_map) != len(input):
-                        raise AssertionError("label maps should also be provided via a list of the same length as the input")
+                    if not isinstance(label_map, list) or len(label_map) != len(input_val):
+                        raise AssertionError("label maps should also be provided via a list of the same length as the input_val")
                     # this might be costly for nothing, we could remove the check and assume user is not dumb
                     if any([not torch.eq(l, label_map[0]).all() for l in label_map]):
                         raise AssertionError("all label maps should be identical! (why do eval-time augment otherwise?)")
                     label_map = label_map[0]  # since all identical, just pick the first one and pretend its the only one
                     preds = None
-                    for input_idx in range(len(input)):
-                        pred = model(self._upload_tensor(input[input_idx], dev))
+                    for input_idx in range(len(input_val)):
+                        pred = model(self._upload_tensor(input_val[input_idx], dev))
                         if preds is None:
                             preds = torch.unsqueeze(pred.clone(), 0)
                         else:
                             preds = torch.cat((preds, torch.unsqueeze(pred, 0)), 0)
                     pred = torch.mean(preds, dim=0)
                 else:
-                    pred = model(self._upload_tensor(input, dev))
+                    pred = model(self._upload_tensor(input_val, dev))
                 if metrics:
                     meta = {key: sample[key] if key in sample else None for key in self.meta_keys} if self.meta_keys else None
                     for metric in metrics.values():
