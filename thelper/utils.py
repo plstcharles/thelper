@@ -24,7 +24,6 @@ from typing import Any, AnyStr, Callable, Dict, List, Optional, Tuple, Union  # 
 import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
-# noinspection PyPackageRequirements
 import PIL.Image
 import sklearn.metrics
 import torch
@@ -77,6 +76,7 @@ def get_available_cuda_devices(attempts_per_device=5):
     return [device_id for device_id, available in enumerate(devices_available) if available]
 
 
+# noinspection PyUnusedLocal
 def setup_cv2(config):
     """Parses the provided config for OpenCV flags and sets up its global state accordingly."""
     # https://github.com/pytorch/pytorch/issues/1355
@@ -801,7 +801,7 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
     grid_size_x = int(math.ceil(math.sqrt(nb_imgs)))
     grid_size_y = int(math.ceil(nb_imgs / grid_size_x))
     if grid_size_x * grid_size_y < nb_imgs:
-        raise AssertionError("bad gridding for subplots")
+        raise AssertionError("bad griding for subplots")
     if use_cv2:
         img_grid_shape, img_grid = None, (None if redraw is None else redraw[1])
         for img_idx in range(nb_imgs):
@@ -1048,7 +1048,8 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True,
         target_key, targets = task.get_gt_key(), None
         if target_key in minibatch and minibatch[target_key] is not None:
             targets = minibatch[target_key]
-            if not isinstance(targets, list) and not (isinstance(targets, torch.Tensor) and targets.shape[0] == images.shape[0]):
+            if not isinstance(targets, list) and not (isinstance(targets, torch.Tensor)
+                                                      and targets.shape[0] == images.shape[0]):
                 raise AssertionError("expected targets to be in list or tensor format (Bx...)")
             if isinstance(targets, list):
                 if all([isinstance(t, list) for t in targets]):
@@ -1066,12 +1067,16 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True,
                 raise AssertionError("preds/targets shape mismatch")
             preds = preds.numpy().copy()
         if targets is not None:
-            if ((targets.ndim == 4 and targets.shape[1] == 1) or targets.ndim == 3) and targets.shape[-2:] == images.shape[1:3]:
-                image_list = [get_displayable_image(images[batch_idx, ...], grayscale=True) for batch_idx in range(images.shape[0])]
-                tgt_heatmap_list = [get_displayable_heatmap(targets[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+            if ((targets.ndim == 4 and targets.shape[1] == 1) or targets.ndim == 3) \
+                    and targets.shape[-2:] == images.shape[1:3]:
+                image_list = [get_displayable_image(images[batch_idx, ...], grayscale=True)
+                              for batch_idx in range(images.shape[0])]
+                tgt_heatmap_list = [get_displayable_heatmap(targets[batch_idx, ...])
+                                    for batch_idx in range(images.shape[0])]
                 pred_heatmap_list = None
                 if preds is not None:
-                    pred_heatmap_list = [get_displayable_heatmap(preds[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+                    pred_heatmap_list = [get_displayable_heatmap(preds[batch_idx, ...])
+                                         for batch_idx in range(images.shape[0])]
                 redraw = draw_segments(image_list, masks_gt=tgt_heatmap_list, masks_pred=pred_heatmap_list,
                                        redraw=redraw, use_cv2=use_cv2)
             elif targets.ndim == 1 and targets.shape[0] == images.shape[0]:
@@ -1094,6 +1099,7 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True,
         return redraw
 
 
+# noinspection PyUnusedLocal
 def draw_errbars(labels,                # type: List[AnyStr]
                  min_values,            # type: np.ndarray
                  max_values,            # type: np.ndarray
