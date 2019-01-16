@@ -1048,8 +1048,8 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True,
         target_key, targets = task.get_gt_key(), None
         if target_key in minibatch and minibatch[target_key] is not None:
             targets = minibatch[target_key]
-            if not isinstance(targets, list) and not (isinstance(targets, torch.Tensor)
-                                                      and targets.shape[0] == images.shape[0]):
+            if not isinstance(targets, list) and not (isinstance(targets, torch.Tensor) and
+                                                      targets.shape[0] == images.shape[0]):
                 raise AssertionError("expected targets to be in list or tensor format (Bx...)")
             if isinstance(targets, list):
                 if all([isinstance(t, list) for t in targets]):
