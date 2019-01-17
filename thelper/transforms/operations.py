@@ -185,7 +185,7 @@ class RandomResizedCrop(object):
             two-element tuple or list (``[width, height]``). If integer values are used, the size is
             assumed to be absolute. If floating point values are used (i.e. in [0,1]), the output
             size is assumed to be relative to the original image size, and will be determined at
-            execution time for each sample.
+            execution time for each sample. If set to ``None``, the crop will not be resized.
         input_size: range of the input region sizes, provided as a pair of elements
             (``[min_edge_size, max_edge_size]``) or as a pair of tuples or lists
             (``[[min_width, min_height], [max_width, max_height]]``). If the pair-of-pairs format is
@@ -212,7 +212,7 @@ class RandomResizedCrop(object):
                 two-element tuple or list (``[width, height]``). If integer values are used, the size is
                 assumed to be absolute. If floating point values are used (i.e. in [0,1]), the output
                 size is assumed to be relative to the original image size, and will be determined at
-                execution time for each sample.
+                execution time for each sample. If set to ``None``, the crop will not be resized.
             input_size: range of the input region sizes, provided as a pair of elements
                 (``[min_edge_size, max_edge_size]``) or as a pair of tuples or lists
                 (``[[min_width, min_height], [max_width, max_height]]``). If the pair-of-pairs format is
@@ -237,11 +237,14 @@ class RandomResizedCrop(object):
             self.output_size = output_size
         elif isinstance(output_size, (int, float)):
             self.output_size = (output_size, output_size)
+        elif output_size is None:
+            self.output_size = None
         else:
             raise AssertionError("unexpected output size type (need tuple/list/int/float)")
-        for s in self.output_size:
-            if not ((isinstance(s, float) and 0 < s <= 1) or (isinstance(s, int) and s > 0)):
-                raise AssertionError("invalid output size value (%s)" % str(s))
+        if self.output_size is not None:
+            for s in self.output_size:
+                if not ((isinstance(s, float) and 0 < s <= 1) or (isinstance(s, int) and s > 0)):
+                    raise AssertionError("invalid output size value (%s)" % str(s))
         if not isinstance(input_size, (tuple, list)) or len(input_size) != 2:
             raise AssertionError("expected input size to be provided as a pair of elements or a pair of tuples/lists")
         if all([isinstance(s, int) for s in input_size]) or all([isinstance(s, float) for s in input_size]):
@@ -349,7 +352,9 @@ class RandomResizedCrop(object):
                 logger.warning("random resized crop failing to find proper ROI matches after max attempt count")
                 self.warned_no_crop_found_with_mask = True
         crop = thelper.utils.safe_crop(image, (target_col, target_row), (target_col + target_width, target_row + target_height))
-        if isinstance(self.output_size[0], float):
+        if self.output_size is None:
+            return crop
+        elif isinstance(self.output_size[0], float):
             output_width = int(round(self.output_size[0] * image.shape[1]))
             output_height = int(round(self.output_size[1] * image.shape[0]))
             return cv.resize(crop, (output_width, output_height), interpolation=self.flags)
