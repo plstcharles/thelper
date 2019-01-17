@@ -113,7 +113,8 @@ class AugmentorWrapper(object):
                     for operation in self.pipeline.operations:
                         r = round(np.random.uniform(0, 1), 1)
                         if r <= operation.probability:
-                            sample[idx] = operation.perform_operation([sample[idx]])[0]
+                            if sample[idx] is not None:
+                                sample[idx] = operation.perform_operation([sample[idx]])[0]
         else:  # each element of the top array will be processed independently below (current seeds are kept)
             cvts = [False] * len(sample)
             for idx, _ in enumerate(sample):
@@ -127,7 +128,8 @@ class AugmentorWrapper(object):
                     for operation in self.pipeline.operations:
                         r = round(np.random.uniform(0, 1), 1)
                         if r <= operation.probability:
-                            sample[idx] = operation.perform_operation([sample[idx]])[0]
+                            if sample[idx] is not None:
+                                sample[idx] = operation.perform_operation([sample[idx]])[0]
         # noinspection PyProtectedMember
         sample, cvts = TransformWrapper._pack(sample, cvts, convert_pil=True)
         if len(sample) != len(cvts):
@@ -332,7 +334,8 @@ class TransformWrapper(object):
                             self.operation.set_seed(op_seed)
                         # watch out: if operation is stochastic and we cannot seed above, then there is no
                         # guarantee that the content will truly have a 'linked fate' (this might cause issues!)
-                        sample[idx] = self.operation(sample[idx], **self.params)
+                        if sample[idx] is not None:
+                            sample[idx] = self.operation(sample[idx], **self.params)
         else:  # each element of the top array will be processed independently below (current seeds are kept)
             cvts = [False] * len(sample)
             for idx, _ in enumerate(sample):
@@ -343,7 +346,8 @@ class TransformWrapper(object):
                         sample[idx], cvts[idx] = self(sample[idx], force_linked_fate=True,
                                                       op_seed=op_seed, in_cvts=cvts[idx])
                     else:
-                        sample[idx] = self.operation(sample[idx], **self.params)
+                        if sample[idx] is not None:
+                            sample[idx] = self.operation(sample[idx], **self.params)
         sample, cvts = TransformWrapper._pack(sample, cvts, convert_pil=self.convert_pil)
         if len(sample) != len(cvts):
             raise AssertionError("messed up packing/unpacking logic")
