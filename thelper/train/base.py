@@ -19,8 +19,8 @@ import numpy as np
 import torch
 import torch.optim
 
-import thelper.utils
 import thelper.types
+import thelper.utils
 
 logger = logging.getLogger(__name__)
 

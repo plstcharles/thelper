@@ -27,6 +27,7 @@ import numpy as np
 import PIL.Image
 import sklearn.metrics
 import torch
+
 import thelper.types  # noqa: F401
 
 logger = logging.getLogger(__name__)
@@ -318,8 +319,8 @@ def check_func_signature(func,      # type: Callable
     Checks whether the signature of a function matches the expected parameter list.
 
     .. seealso::
-        | :class:`thelper.types.IterCallbackType
-        | :class:`thelper.types.IterCallbackParams
+        | :class:`thelper.types.IterCallbackType`
+        | :class:`thelper.types.IterCallbackParams`
     """
     if func is None or not callable(func):
         raise AssertionError("invalid function object")

@@ -2,11 +2,12 @@
 Typing definitions for thelper.
 """
 
-from typing import Any, AnyStr, Callable, Dict, List, Optional, Tuple, Union, TYPE_CHECKING  # noqa: F401
-from torch import Tensor
-import numpy as np
-import matplotlib.pyplot as plt
 import io
+from typing import TYPE_CHECKING, Any, AnyStr, Callable, Dict, List, Optional, Tuple, Union  # noqa: F401
+
+import matplotlib.pyplot as plt
+import numpy as np
+from torch import Tensor
 
 if TYPE_CHECKING:
     from thelper.tasks.utils import Task

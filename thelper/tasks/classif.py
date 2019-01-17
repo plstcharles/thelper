@@ -5,7 +5,6 @@ This module contains a class that defines the objectives of models/trainers for 
 import json
 import logging
 import os
-
 from typing import Optional  # noqa: F401
 
 from thelper.tasks.utils import Task

@@ -4,10 +4,9 @@ This module contains utilities and tools used to instantiate training sessions.
 """
 
 import logging
+from typing import AnyStr, List, Optional  # noqa: F401
 
 import thelper.utils
-
-from typing import AnyStr, List, Optional  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
