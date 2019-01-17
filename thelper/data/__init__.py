@@ -8,6 +8,7 @@ for dataset parsers.
 
 import logging
 
+import thelper.data.loaders  # noqa: F401
 import thelper.data.parsers  # noqa: F401
 import thelper.data.pascalvoc  # noqa: F401
 import thelper.data.samplers  # noqa: F401
