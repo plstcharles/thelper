@@ -27,14 +27,14 @@ import numpy as np
 import PIL.Image
 import sklearn.metrics
 import torch
-import thelper.types
+import thelper.types  # noqa: F401
 
 logger = logging.getLogger(__name__)
 bypass_queries = False
 
 
 class Struct(object):
-    """Generic runtime-defined C-like data structure (maps constructor elems to fields)."""
+    """Generic runtime-defined C-like data structure (maps constructor elements to fields)."""
 
     def __init__(self, **kwargs):
         for key, val in kwargs.items():

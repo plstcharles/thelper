@@ -6,6 +6,8 @@ import json
 import logging
 import os
 
+from typing import Optional  # noqa: F401
+
 from thelper.tasks.utils import Task
 
 logger = logging.getLogger(__name__)
@@ -116,6 +118,7 @@ class Classification(Task):
         return sample_idxs
 
     def check_compat(self, other, exact=False):
+        # type: (Classification, Optional[bool]) -> bool
         """Returns whether the current task is compatible with the provided one or not.
 
         This is useful for sanity-checking, and to see if the inputs/outputs of two models
@@ -125,9 +128,8 @@ class Classification(Task):
         if isinstance(other, Classification):
             # if both tasks are related to classification, gt keys and class names must match
             return (self.get_input_key() == other.get_input_key() and
-                    (self.get_gt_key() is None
-                     or other.get_gt_key() is None
-                     or self.get_gt_key() == other.get_gt_key()) and
+                    (self.get_gt_key() is None or other.get_gt_key() is None or
+                     self.get_gt_key() == other.get_gt_key()) and
                     all([cls in self.get_class_names() for cls in other.get_class_names()]) and
                     (not exact or (self.get_class_names() == other.get_class_names() and
                                    self.get_meta_keys() == other.get_meta_keys())))

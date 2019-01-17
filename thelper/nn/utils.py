@@ -154,7 +154,7 @@ def create_model(config, task, save_dir=None, ckptdata=None):
 
 
 class Module(torch.nn.Module):
-    """Model inteface used to hold a task object.
+    """Model interface used to hold a task object.
 
     This interface is built on top of ``torch.nn.Module`` and should remain fully compatible with it.
 
