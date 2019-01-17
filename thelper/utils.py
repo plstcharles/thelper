@@ -1083,9 +1083,9 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True,
                 image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
                 redraw = draw_classifs(image_list, labels_gt=targets, labels_pred=preds, redraw=redraw, use_cv2=use_cv2)
             else:
-                redraw = draw_classifs(images, redraw=redraw, use_cv2=use_cv2)  # draw only images
+                redraw = draw_classifs(image_list, redraw=redraw, use_cv2=use_cv2)  # draw only images
         else:
-            redraw = draw_classifs(images, redraw=redraw, use_cv2=use_cv2)  # draw only images
+            redraw = draw_classifs(image_list, redraw=redraw, use_cv2=use_cv2)  # draw only images
     else:
         raise AssertionError("unhandled drawing mode, missing impl")
     if use_cv2:
