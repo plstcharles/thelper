@@ -283,6 +283,7 @@ class ExternalClassifModule(ExternalModule):
         if type(task) != thelper.tasks.Classification:
             raise AssertionError("task passed to ExternalClassifModule should be 'thelper.tasks.Classification'")
         self.nb_classes = self.task.get_nb_classes()
+        import torchvision
         if hasattr(self.model, "fc") and isinstance(self.model.fc, torch.nn.Linear):
             if self.model.fc.out_features != self.nb_classes:
                 logger.info("reconnecting fc layer for outputting %d classes..." % self.nb_classes)
@@ -293,5 +294,13 @@ class ExternalClassifModule(ExternalModule):
                 logger.info("reconnecting classifier layer for outputting %d classes..." % self.nb_classes)
                 nb_features = self.model.classifier.in_features
                 self.model.classifier = torch.nn.Linear(nb_features, self.nb_classes)
+        elif isinstance(self.model, torchvision.models.squeezenet.SqueezeNet):
+            self.model.classifier = torch.nn.Sequential(
+                torch.nn.Dropout(p=0.5),
+                torch.nn.Conv2d(512, self.nb_classes, kernel_size=1),
+                torch.nn.ReLU(inplace=True),
+                torch.nn.AvgPool2d(13, stride=1)
+            )
+            self.model.num_classes = self.nb_classes
         else:
             raise AssertionError("could not reconnect fully connected layer for new classes")
