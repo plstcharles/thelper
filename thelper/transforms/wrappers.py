@@ -141,7 +141,7 @@ class AugmentorWrapper(object):
 
     def __repr__(self):
         """Create a print-friendly representation of inner augmentation stages."""
-        return self.__class__.__name__ + (": {{target_keys={}, linked_fate={}, "
+        return self.__class__.__name__ + (": {{target_keys: {}, linked_fate: {}, "
                                           .format(self.target_keys, self.linked_fate) +
                                           ", ".join([str(t) for t in self.pipeline.operations]) + "}")
 
@@ -358,7 +358,7 @@ class TransformWrapper(object):
 
     def __repr__(self):
         """Create a print-friendly representation of inner augmentation stages."""
-        return self.__class__.__name__ + ": {{target_keys={}, linked_fate={}, probability={}. operation={}".format(
+        return self.__class__.__name__ + ": {{target_keys: {}, linked_fate: {}, probability: {}. operation: {}".format(
             self.target_keys, self.linked_fate, self.probability, str(self.operation))
 
     # noinspection PyMethodMayBeStatic
