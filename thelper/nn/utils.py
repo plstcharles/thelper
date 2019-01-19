@@ -295,12 +295,13 @@ class ExternalClassifModule(ExternalModule):
                 nb_features = self.model.classifier.in_features
                 self.model.classifier = torch.nn.Linear(nb_features, self.nb_classes)
         elif isinstance(self.model, torchvision.models.squeezenet.SqueezeNet):
-            self.model.classifier = torch.nn.Sequential(
-                torch.nn.Dropout(p=0.5),
-                torch.nn.Conv2d(512, self.nb_classes, kernel_size=1),
-                torch.nn.ReLU(inplace=True),
-                torch.nn.AvgPool2d(13, stride=1)
-            )
-            self.model.num_classes = self.nb_classes
+            if self.model.num_classes != self.nb_classes:
+                self.model.classifier = torch.nn.Sequential(
+                    torch.nn.Dropout(p=0.5),
+                    torch.nn.Conv2d(512, self.nb_classes, kernel_size=1),
+                    torch.nn.ReLU(inplace=True),
+                    torch.nn.AvgPool2d(13, stride=1)
+                )
+                self.model.num_classes = self.nb_classes
         else:
             raise AssertionError("could not reconnect fully connected layer for new classes")
