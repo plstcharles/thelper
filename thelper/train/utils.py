@@ -4,13 +4,20 @@ This module contains utilities and tools used to instantiate training sessions.
 """
 
 import logging
+from typing import AnyStr, List, Optional  # noqa: F401
 
 import thelper.utils
 
 logger = logging.getLogger(__name__)
 
 
-def create_trainer(session_name, save_dir, config, model, loaders, ckptdata=None):
+def create_trainer(session_name,    # type: AnyStr
+                   save_dir,        # type: AnyStr
+                   config,          # type: thelper.types.ConfigDict
+                   model,           # type: thelper.nn.Module
+                   loaders,         # type: List[thelper.data.loaders.DataLoader]
+                   ckptdata=None    # type: Optional[thelper.types.CheckpointContentType]
+                   ):               # type: (...) -> thelper.train.Trainer
     """Instantiates the trainer object based on the type contained in the config dictionary.
 
     The trainer type is expected to be in the configuration dictionary's `trainer` field, under the `type` key. For more
@@ -42,6 +49,15 @@ def create_trainer(session_name, save_dir, config, model, loaders, ckptdata=None
     return trainer_type(session_name, save_dir, model, loaders, config, ckptdata=ckptdata)
 
 
-def _draw_minibatch_wrapper(sample, task, pred, iter_idx, max_iters, epoch_idx, max_epochs):
+# noinspection PyUnusedLocal
+def _draw_minibatch_wrapper(sample,         # type: thelper.types.SampleType
+                            task,           # type: thelper.tasks.utils.Task
+                            pred,           # type: thelper.types.PredictionType
+                            iter_idx,       # type: int
+                            max_iters,      # type: int
+                            epoch_idx,      # type: int
+                            max_epochs,     # type: int
+                            ):              # type: (...) -> None
+
     """Wrapper to :func:`thelper.utils.draw_minibatch` used as a callback entrypoint for trainers."""
     thelper.utils.draw_minibatch(sample, task, preds=pred, ch_transpose=True, flip_bgr=False, block=False)

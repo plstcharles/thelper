@@ -5,6 +5,7 @@ This module contains a class that defines the objectives of models/trainers for 
 import json
 import logging
 import os
+from typing import Optional  # noqa: F401
 
 from thelper.tasks.utils import Task
 
@@ -38,7 +39,7 @@ class Classification(Task):
         contains such a list. The list must contain at least two items. All other arguments are
         used as-is to index dictionaries, and must therefore be key-compatible types.
         """
-        super().__init__(input_key, label_key, meta_keys)
+        super(Classification, self).__init__(input_key, label_key, meta_keys)
         self.class_names = class_names
         if isinstance(class_names, str) and os.path.exists(class_names):
             with open(class_names, "r") as fd:
@@ -71,7 +72,7 @@ class Classification(Task):
         """Splits a list of samples based on their labels into a map of sample lists.
 
         This function is useful if we need to split a dataset based on its label categories in
-        order to sort it, augment it, or rebalance it. The samples do not need to be fully loaded
+        order to sort it, augment it, or re-balance it. The samples do not need to be fully loaded
         for this to work, as only their label (gt) value will be queried. If a sample is missing
         its label, it will be ignored and left out of the generated dictionary unless a value is
         given for ``unset_key``.
@@ -116,6 +117,7 @@ class Classification(Task):
         return sample_idxs
 
     def check_compat(self, other, exact=False):
+        # type: (Classification, Optional[bool]) -> bool
         """Returns whether the current task is compatible with the provided one or not.
 
         This is useful for sanity-checking, and to see if the inputs/outputs of two models
@@ -125,7 +127,8 @@ class Classification(Task):
         if isinstance(other, Classification):
             # if both tasks are related to classification, gt keys and class names must match
             return (self.get_input_key() == other.get_input_key() and
-                    (self.get_gt_key() is None or other.get_gt_key() is None or self.get_gt_key() == other.get_gt_key()) and
+                    (self.get_gt_key() is None or other.get_gt_key() is None or
+                     self.get_gt_key() == other.get_gt_key()) and
                     all([cls in self.get_class_names() for cls in other.get_class_names()]) and
                     (not exact or (self.get_class_names() == other.get_class_names() and
                                    self.get_meta_keys() == other.get_meta_keys())))
@@ -139,11 +142,14 @@ class Classification(Task):
         if isinstance(other, Classification):
             if self.get_input_key() != other.get_input_key():
                 raise AssertionError("input key mismatch, cannot create compatible task")
-            if self.get_gt_key() is not None and other.get_gt_key() is not None and self.get_gt_key() != other.get_gt_key():
+            if self.get_gt_key() is not None \
+                    and other.get_gt_key() is not None \
+                    and self.get_gt_key() != other.get_gt_key():
                 raise AssertionError("gt key mismatch, cannot create compatible task")
             meta_keys = list(set(self.get_meta_keys() + other.get_meta_keys()))
             # cannot use set for class names, order needs to stay intact!
-            class_names = self.get_class_names() + [name for name in other.get_class_names() if name not in self.get_class_names()]
+            other_names = [name for name in other.get_class_names() if name not in self.get_class_names()]
+            class_names = self.get_class_names() + other_names
             return Classification(class_names, self.get_input_key(), self.get_gt_key(), meta_keys=meta_keys)
         elif type(other) == Task:
             if not self.check_compat(other):
@@ -152,7 +158,8 @@ class Classification(Task):
             meta_keys = list(set(self.get_meta_keys() + other.get_meta_keys()))
             return Classification(self.get_class_names(), self.get_input_key(), self.get_gt_key(), meta_keys=meta_keys)
         else:
-            raise AssertionError("cannot combine task type '%s' with '%s'" % (str(other.__class__), str(self.__class__)))
+            raise AssertionError("cannot combine task type '%s' with '%s'"
+                                 % (str(other.__class__), str(self.__class__)))
 
     def __repr__(self):
         """Creates a print-friendly representation of a classification task."""

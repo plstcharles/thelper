@@ -19,7 +19,7 @@ import platform
 import re
 import sys
 import time
-from typing import Any, AnyStr, Callable, Dict, List, Optional, Tuple, Union  # noqa: F401
+from typing import AnyStr, Callable, List, Optional  # noqa: F401
 
 import cv2 as cv
 import matplotlib.pyplot as plt
@@ -28,12 +28,14 @@ import PIL.Image
 import sklearn.metrics
 import torch
 
+import thelper.types  # noqa: F401
+
 logger = logging.getLogger(__name__)
 bypass_queries = False
 
 
 class Struct(object):
-    """Generic runtime-defined C-like data structure (maps constructor elems to fields)."""
+    """Generic runtime-defined C-like data structure (maps constructor elements to fields)."""
 
     def __init__(self, **kwargs):
         for key, val in kwargs.items():
@@ -117,9 +119,9 @@ def setup_globals(config):
     setup_cudnn(config)
 
 
-def load_checkpoint(ckpt,               # type: Union[AnyStr, io.FileIO]
-                    map_location=None,  # type: Optional[Union[Callable, AnyStr, Dict[AnyStr, AnyStr]]]
-                    ):                  # type: (...) -> Dict[AnyStr, Any]
+def load_checkpoint(ckpt,               # type: thelper.types.CheckpointLoadingType
+                    map_location=None,  # type: Optional[thelper.types.MapLocationType]
+                    ):                  # type: (...) -> thelper.types.CheckpointContentType
     """Loads a session checkpoint via PyTorch, check its compatibility, and returns its data.
 
     Args:
@@ -310,8 +312,16 @@ def import_function(fullname, params=None):
     return func
 
 
-def check_func_signature(func, params):
-    """Checks whether the signature of a function matches the expected parameter list."""
+def check_func_signature(func,      # type: Callable
+                         params     # type: List[AnyStr]
+                         ):         # type: (...) -> None
+    """
+    Checks whether the signature of a function matches the expected parameter list.
+
+    .. seealso::
+        | :class:`thelper.types.IterCallbackType`
+        | :class:`thelper.types.IterCallbackParams`
+    """
     if func is None or not callable(func):
         raise AssertionError("invalid function object")
     if params is not None:
@@ -725,7 +735,9 @@ def get_bgr_from_hsl(hue, sat, light):
             int(np.clip(round(h2rgb(p, q, h + 1 / 3) * 255), 0, 255)))
 
 
-def get_displayable_image(image, grayscale=False):
+def get_displayable_image(image,                # type: thelper.types.ArrayType
+                          grayscale=False,      # type: Optional[bool]
+                          ):                    # type: (...) -> thelper.types.ArrayType
     """Returns a 'displayable' image that has been normalized and padded to three channels."""
     if image.ndim != 3:
         raise AssertionError("indexing should return a pre-squeezed array")
@@ -740,7 +752,9 @@ def get_displayable_image(image, grayscale=False):
     return image_normalized
 
 
-def get_displayable_heatmap(array, convert_rgb=True):
+def get_displayable_heatmap(array,              # type: thelper.types.ArrayType
+                            convert_rgb=True,   # type: Optional[bool]
+                            ):                  # type: (...) -> thelper.types.ArrayType
     """Returns a 'displayable' array that has been min-maxed and mapped to color triplets."""
     if array.ndim != 2:
         array = np.squeeze(array)
@@ -754,7 +768,11 @@ def get_displayable_heatmap(array, convert_rgb=True):
     return heatmap
 
 
-def draw_histogram(data, bins=50, xlabel="", ylabel="Proportion"):
+def draw_histogram(data,                # type: thelper.types.ArrayType
+                   bins=50,             # type: Optional[int]
+                   xlabel="",           # type: Optional[thelper.types.LabelType]
+                   ylabel="Proportion"  # type: Optional[thelper.types.LabelType]
+                   ):                   # type: (...) -> thelper.types.DrawingType
     """Draws and returns a histogram figure using pyplot."""
     fig, ax = plt.subplots()
     ax.hist(data, density=True, bins=bins)
@@ -767,7 +785,11 @@ def draw_histogram(data, bins=50, xlabel="", ylabel="Proportion"):
     return fig
 
 
-def draw_popbars(labels, counts, xlabel="", ylabel="Pop. Count"):
+def draw_popbars(labels,                # type: thelper.types.LabelList
+                 counts,                # type: int
+                 xlabel="",             # type: Optional[thelper.types.LabelType]
+                 ylabel="Pop. Count",   # type: Optional[thelper.types.LabelType]
+                 ):                     # type: (...) -> thelper.types.DrawingType
     """Draws and returns a bar histogram figure using pyplot."""
     fig, ax = plt.subplots()
     xrange = range(len(labels))
@@ -783,15 +805,15 @@ def draw_popbars(labels, counts, xlabel="", ylabel="Pop. Count"):
     return fig
 
 
-def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarray]
-                  labels_gt=None,       # type: Optional[List[AnyStr]]
-                  labels_pred=None,     # type: Optional[List[AnyStr]]
-                  labels_map=None,      # type: Optional[Dict[AnyStr, AnyStr]]
-                  redraw=None,          # type: Optional[Union[Tuple[plt.Figure, plt.Axes], Tuple[str, np.ndarray]]]
+def draw_classifs(images,               # type: thelper.types.OneOrManyArrayType
+                  labels_gt=None,       # type: Optional[thelper.types.LabelList]
+                  labels_pred=None,     # type: Optional[thelper.types.LabelList]
+                  labels_map=None,      # type: Optional[thelper.types.LabelDict]
+                  redraw=None,          # type: Optional[thelper.types.DrawingType]
                   use_cv2=True,         # type: Optional[bool]
-                  img_shape=None,       # type: Optional[Union[List, Tuple]]
-                  max_img_size=None,    # type: Optional[Union[List, Tuple]]
-                  ):                    # type: (...) -> Union[Tuple[plt.Figure, plt.Axes], None]
+                  img_shape=None,       # type: Optional[thelper.types.ArrayShapeType]
+                  max_img_size=None,    # type: Optional[thelper.types.ArrayShapeType]
+                  ):                    # type: (...) -> thelper.types.DrawingType
     """Draws and returns a figure of classification results using pyplot."""
     nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
     if nb_imgs < 1:
@@ -868,15 +890,15 @@ def draw_classifs(images,               # type: Union[List[np.ndarray], np.ndarr
         return fig, axes
 
 
-def draw_segments(images,                 # type: Union[List[np.ndarray], np.ndarray]
-                  masks_gt,               # type: Optional[Union[List[np.ndarray], np.ndarray]]
-                  masks_pred=None,        # type: Optional[Union[List[np.ndarray], np.ndarray]]
-                  labels_color_map=None,  # type: Optional[Union[np.ndarray, Dict]]
-                  redraw=None,            # type: Optional[Union[Tuple[plt.Figure, plt.Axes], Tuple[str, np.ndarray]]]
+def draw_segments(images,                 # type: thelper.types.OneOrManyArrayType
+                  masks_gt,               # type: Optional[thelper.types.OneOrManyArrayType]
+                  masks_pred=None,        # type: Optional[thelper.types.OneOrManyArrayType]
+                  labels_color_map=None,  # type: Optional[thelper.types.LabelColorMapType]
+                  redraw=None,            # type: Optional[thelper.types.DrawingType]
                   use_cv2=True,           # type: Optional[bool]
-                  img_shape=None,         # type: Optional[Union[List, Tuple]]
-                  max_img_size=None,      # type: Optional[Union[List, Tuple]]
-                  ):                      # type: (...) -> Union[Tuple[plt.Figure, plt.Axes], None]
+                  img_shape=None,         # type: Optional[thelper.types.ArrayShapeType]
+                  max_img_size=None,      # type: Optional[thelper.types.ArrayShapeType]
+                  ):                      # type: (...) -> thelper.types.DrawingType
     """Draws and returns a figure of segmentation results using pyplot."""
     # todo: display gt if available? (currently skipped)
     nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
@@ -1100,14 +1122,14 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True,
 
 
 # noinspection PyUnusedLocal
-def draw_errbars(labels,                # type: List[AnyStr]
-                 min_values,            # type: np.ndarray
-                 max_values,            # type: np.ndarray
-                 stddev_values,         # type: np.ndarray
-                 mean_values,           # type: np.ndarray
-                 xlabel="",             # type: AnyStr
-                 ylabel="Raw Value"     # type: AnyStr
-                 ):                     # type: (...) -> plt.Figure
+def draw_errbars(labels,                # type: thelper.types.LabelList
+                 min_values,            # type: thelper.types.ArrayType
+                 max_values,            # type: thelper.types.ArrayType
+                 stddev_values,         # type: thelper.types.ArrayType
+                 mean_values,           # type: thelper.types.ArrayType
+                 xlabel="",             # type: thelper.types.LabelType
+                 ylabel="Raw Value"     # type: thelper.types.LabelType
+                 ):                     # type: (...) -> thelper.types.DrawingType
     """Draws and returns an error bar histogram figure using pyplot."""
     if min_values.shape != max_values.shape \
             or min_values.shape != stddev_values.shape \

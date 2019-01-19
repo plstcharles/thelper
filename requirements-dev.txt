@@ -2,3 +2,4 @@ pytest
 pytest-travis-fold
 pytest-cov
 mock
+flake8

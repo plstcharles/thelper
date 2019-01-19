@@ -12,6 +12,7 @@ import thelper.optim  # noqa: F401
 import thelper.tasks  # noqa: F401
 import thelper.train  # noqa: F401
 import thelper.transforms  # noqa: F401
+import thelper.types  # noqa: F401
 import thelper.utils  # noqa: F401
 
 logger = logging.getLogger("thelper")

@@ -119,10 +119,10 @@ clean-test:
 lint: conda-env
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 		test -f $(CONDA_ENV_PATH)/bin/flake8 || pip install flake8; \
-		flake8 thelper tests"
+		flake8 thelper tests || true"
 
 .PHONY: test
-test:
+test: install
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 		test -f $(CONDA_ENV_PATH)/bin/pytest || pip install pytest; \
 		pytest -vvv tests"
@@ -139,7 +139,7 @@ run: install
 		python $(CUR_DIR)/thelper/cli.py $(ARGS)"
 
 .PHONY: coverage
-coverage:
+coverage: install
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); coverage run --source thelper setup.py test"
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); coverage report -m"
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); coverage html -d coverage"
@@ -154,13 +154,18 @@ docs: install-docs
 
 .PHONY: install-docs
 install-docs: conda-env
-	@-bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); pip install -r $(CUR_DIR)/docs/requirements.txt"
+	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); pip install -r $(CUR_DIR)/docs/requirements.txt"
 
 .PHONY: install
 install: conda-env
-	@-bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); pip install -e $(CUR_DIR) --no-deps"
+	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); pip install -q -e $(CUR_DIR) --no-deps"
 	@echo "Framework successfully installed. To activate the conda environment, use:"
 	@echo "    source $(CONDA_HOME)/bin/activate $(CONDA_ENV)"
+
+.PHONY: install-dev
+install-dev: conda-env
+	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); pip install -r $(CUR_DIR)/requirements-dev.txt"
+	@echo "Successfully installed dev requirements."
 
 .PHONY: conda-base
 conda-base:

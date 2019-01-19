@@ -19,6 +19,7 @@ import numpy as np
 import torch
 import torch.optim
 
+import thelper.types
 import thelper.utils
 
 logger = logging.getLogger(__name__)
@@ -35,8 +36,8 @@ class Trainer:
 
     The main parameters that will be parsed by this interface from a configuration dictionary are the following:
 
-    - ``epochs`` (mandatory if training): number of epochs to train for; one epoch is one iteration over all minibatches.
-    - ``optimization`` (mandatory if training): subdictionary containing types and extra parameters required for
+    - ``epochs`` (mandatory if training): number of epochs to train for; one epoch is one iteration over all mini-batches.
+    - ``optimization`` (mandatory if training): sub-dictionary containing types and extra parameters required for
       instantiating the loss, optimizer, and scheduler objects. See the code of each related loading function for more
       information on special parameters.
     - ``save_freq`` (optional, default=1): checkpoint save frequency (will save every epoch multiple of given number).
@@ -180,7 +181,8 @@ class Trainer:
             import tensorboardX
             self.tbx = tensorboardX
             self.logger.debug("tensorboard init : tensorboard --logdir %s --port <your_port>" % output_root_dir)
-        self.skip_tbx_histograms = thelper.utils.str2bool(thelper.utils.get_key_def("skip_tbx_histograms", trainer_config, False))
+        self.skip_tbx_histograms = thelper.utils.str2bool(thelper.utils.get_key_def("skip_tbx_histograms",
+                                                                                    trainer_config, False))
         self.tbx_histogram_freq = thelper.utils.get_key_def("tbx_histogram_freq", trainer_config, 1)
         if self.tbx_histogram_freq < 1:
             raise AssertionError("histogram output frequency should be integer great or equal to 1")
@@ -236,7 +238,8 @@ class Trainer:
         if "monitor" in trainer_config and trainer_config["monitor"]:
             self.monitor = trainer_config["monitor"]
             if self.monitor not in self.train_metrics and self.monitor not in self.valid_metrics:
-                raise AssertionError("metric with name '%s' should be declared in training and/or validation metrics" % self.monitor)
+                raise AssertionError("metric with name '%s' should be declared in training and/or validation metrics"
+                                     % self.monitor)
             if self.monitor in self.valid_metrics:
                 self.monitor_goal = self.valid_metrics[self.monitor].goal()
             elif self.monitor in self.train_metrics:
@@ -260,15 +263,18 @@ class Trainer:
             self.current_iter = 0
             self.current_epoch = 0
             self.outputs = {}
-        # callbacks should have the following signature:
-        #   func(sample, pred, iter_idx, max_iters, epoch_idx, max_epochs)
-        callback_params = ["sample", "task", "pred", "iter_idx", "max_iters", "epoch_idx", "max_epochs"]
-        self.train_iter_callback = thelper.utils.get_key_def("train_iter_callback", trainer_config, None)
+
+        # callbacks (see ``thelper.types.IterCallbackType`` and ``thelper.types.IterCallbackParams`` definitions)
+        self.train_iter_callback = thelper.utils.get_key_def(
+            "train_iter_callback", trainer_config, None)    # type: thelper.types.IterCallbackType
         if self.train_iter_callback is not None and isinstance(self.train_iter_callback, str):
-            self.train_iter_callback = thelper.utils.import_function(self.train_iter_callback)
-        self.eval_iter_callback = thelper.utils.get_key_def("eval_iter_callback", trainer_config, None)
+            self.train_iter_callback = thelper.utils.import_function(
+                self.train_iter_callback)                   # type: thelper.types.IterCallbackType
+        self.eval_iter_callback = thelper.utils.get_key_def(
+            "eval_iter_callback", trainer_config, None)     # type: thelper.types.IterCallbackType
         if self.eval_iter_callback is not None and isinstance(self.eval_iter_callback, str):
-            self.eval_iter_callback = thelper.utils.import_function(self.eval_iter_callback)
+            self.eval_iter_callback = thelper.utils.import_function(
+                self.eval_iter_callback)                    # type: thelper.types.IterCallbackType
         display_predictions = thelper.utils.get_key_def("display_preds", trainer_config, False)
         if display_predictions:
             if self.train_iter_callback is not None:
@@ -278,9 +284,9 @@ class Trainer:
                 raise AssertionError("cannot use 'display_preds' while also using an external callback")
             self.eval_iter_callback = thelper.utils.import_function("thelper.train.utils._draw_minibatch_wrapper")
         if self.train_iter_callback is not None:
-            thelper.utils.check_func_signature(self.train_iter_callback, callback_params)
+            thelper.utils.check_func_signature(self.train_iter_callback, thelper.types.IterCallbackParams)
         if self.eval_iter_callback is not None:
-            thelper.utils.check_func_signature(self.eval_iter_callback, callback_params)
+            thelper.utils.check_func_signature(self.eval_iter_callback, thelper.types.IterCallbackParams)
         self.skip_eval_iter = thelper.utils.get_key_def("skip_eval_iter", trainer_config, 0)
 
     def _init_writer(self, writer, path):
@@ -384,7 +390,8 @@ class Trainer:
                     raise AssertionError("expecting cuda device format to be 'cuda:X' (where X is device index)")
                 cuda_dev_idx = int(dev_str.rsplit(":", 1)[-1])
                 if cuda_dev_idx not in available_cuda_devices:
-                    raise AssertionError("cuda device '%s' out of range (detected devices = %s)" % (dev_str, str(available_cuda_devices)))
+                    raise AssertionError("cuda device '%s' out of range (detected devices = %s)"
+                                         % (dev_str, str(available_cuda_devices)))
                 if devices is None:
                     devices = [cuda_dev_idx]
                 else:
@@ -398,7 +405,7 @@ class Trainer:
 
         This function will train the model until the required number of epochs is reached, and then evaluate it
         on the test data. The setup of loggers, tensorboard writers is done here, so is model improvement tracking
-        via monitored metrics. However, the code related to loss computation and backpropagation is implemented in
+        via monitored metrics. However, the code related to loss computation and back propagation is implemented in
         a derived class via :func:`thelper.train.base.Trainer._train_epoch`.
         """
         if not self.train_loader:
@@ -418,7 +425,8 @@ class Trainer:
         train_writer, valid_writer, test_writer = None, None, None
         while self.current_epoch < self.epochs:
             train_writer = self._init_writer(train_writer, self.train_output_path)
-            self.logger.info("preparing epoch %d for '%s' (dev=%s)" % (self.current_epoch + 1, self.name, str(self.devices)))
+            self.logger.info("preparing epoch %d for '%s' (dev=%s)"
+                             % (self.current_epoch + 1, self.name, str(self.devices)))
             if scheduler:
                 if scheduler_step_metric:
                     if scheduler_step_metric == "loss":
@@ -426,9 +434,11 @@ class Trainer:
                         scheduler.step(metrics=latest_loss, epoch=self.current_epoch)
                     else:
                         if self.valid_loader and scheduler_step_metric in self.valid_metrics:
-                            scheduler.step(metrics=self.valid_metrics[scheduler_step_metric].eval(), epoch=self.current_epoch)
+                            scheduler.step(metrics=self.valid_metrics[scheduler_step_metric].eval(),
+                                           epoch=self.current_epoch)
                         elif self.train_loader and scheduler_step_metric in self.train_metrics:
-                            scheduler.step(metrics=self.train_metrics[scheduler_step_metric].eval(), epoch=self.current_epoch)
+                            scheduler.step(metrics=self.train_metrics[scheduler_step_metric].eval(),
+                                           epoch=self.current_epoch)
                         else:
                             raise AssertionError("cannot use metric '%s' for scheduler step" % scheduler_step_metric)
                 else:
