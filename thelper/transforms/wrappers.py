@@ -16,6 +16,127 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
+class AlbumentationsWrapper(object):
+    """Albumentations pipeline wrapper that allows dictionary unpacking.
+
+    See https://github.com/albu/albumentations for more information.
+
+    Attributes:
+        pipeline: the augmentor pipeline instance to apply to images.
+        image_key: the key to fetch images from (when dictionaries are passed in).
+        bboxes_key: the key to fetch bounding boxes from (when dictionaries are passed in).
+        mask_key: the key to fetch masks from (when dictionaries are passed in).
+        keypoints_key: the key to fetch keypoints from (when dictionaries are passed in).
+        cvt_kpts_to_bboxes: specifies whether keypoints should be converted to bboxes for compatbility.
+        linked_fate: specifies whether input list samples should all have the same fate or not.
+
+    .. seealso::
+        | :func:`thelper.transforms.utils.load_transforms`
+    """
+
+    def __init__(self, transforms, to_tensor=None, bbox_params=None, add_targets=None, image_key="image",
+                 bboxes_key="bboxes", mask_key="mask", keypoints_key="keypoints", probability=1.0,
+                 cvt_kpts_to_bboxes=False, linked_fate=False):
+        """Receives and stores an augmentor pipeline for later use.
+
+        The pipeline itself is instantiated in :func:`thelper.transforms.utils.load_transforms`.
+        """
+        if bbox_params is None or not bbox_params:
+            bbox_params = {"format": "coco"}  # i.e. opencv format (X,Y,W,H)
+        if add_targets is None:
+            add_targets = {}
+        if isinstance(image_key, (list, tuple)):
+            if len(image_key) > 1:
+                raise AssertionError("current implementation cannot handle more than one input image key per packet")
+            image_key = image_key[0]
+        self.image_key = image_key
+        if isinstance(bboxes_key, (list, tuple)) or isinstance(keypoints_key, (list, tuple)) or isinstance(mask_key, (list, tuple)):
+            raise AssertionError("bboxes/keypoints/masks keys should never be passed as lists")
+        self.bboxes_key = bboxes_key
+        self.mask_key = mask_key
+        self.keypoints_key = keypoints_key
+        self.cvt_kpts_to_bboxes = cvt_kpts_to_bboxes
+        if cvt_kpts_to_bboxes and "format" not in bbox_params or bbox_params["format"] != "coco":
+            raise AssertionError("if converting kpts to bboxes, must use coco format")
+        self.linked_fate = linked_fate
+        import albumentations
+        self.pipeline = albumentations.Compose(transforms, to_tensor=to_tensor, bbox_params=bbox_params,
+                                               additional_targets=add_targets, p=probability)
+
+    def __call__(self, sample, force_linked_fate=False, op_seed=None):
+        """Transforms a (dict) sample, a single image, or a list of images using the augmentor pipeline.
+
+        Args:
+            sample: the sample or image(s) to transform (can also contain embedded lists/tuples of images).
+            force_linked_fate: override flag for recursive use allowing forced linking of arrays.
+            op_seed: seed to set before calling the wrapped operation.
+
+        Returns:
+            The transformed image(s), with the same list/tuple formatting as the input.
+        """
+        # todo: add list unwrapping/interlacing support like in other wrappers?
+        params = {}
+        if isinstance(sample, dict):
+            if self.image_key not in sample:
+                raise AssertionError("image is missing from sample (key=%s) but it is mandatory" % self.image_key)
+            image = sample[self.image_key]
+            if isinstance(image, (list, tuple)):
+                raise NotImplementedError
+                # impl should use linked_fate and force_linked_fate
+            params["image"] = sample[self.image_key]
+            if self.keypoints_key in sample and sample[self.keypoints_key] is not None:
+                keypoints = sample[self.keypoints_key]
+                if self.cvt_kpts_to_bboxes:
+                    if self.bboxes_key in sample:
+                        raise AssertionError("trying to override bboxes w/ keypoints while bboxes already exist")
+                    # fake x,y,w,h,c format (w/ labels)
+                    msize = params["image"].shape
+                    params["bboxes"] = [[min(max(kp[0], 0), msize[1] - 1),
+                                         min(max(kp[1], 0), msize[0] - 1), 1, 1, 0] for kp in keypoints]
+                else:
+                    params["keypoints"] = keypoints
+            if self.bboxes_key in sample and sample[self.bboxes_key] is not None:
+                params["bboxes"] = sample[self.bboxes_key]
+            if self.mask_key in sample and sample[self.mask_key] is not None:
+                params["mask"] = sample[self.mask_key]
+            output = self.pipeline(**params)
+            sample[self.image_key] = output["image"]
+            if "keypoints" in output:
+                sample[self.keypoints_key] = output["keypoints"]
+            if "bboxes" in output:
+                if self.cvt_kpts_to_bboxes:
+                    sample[self.keypoints_key] = [[kp[0], kp[1]] for kp in output["bboxes"]]
+                else:
+                    sample[self.bboxes_key] = output["bboxes"]
+            if "mask" in output:
+                sample[self.mask_key] = output["mask"]
+            return sample
+        elif isinstance(sample, (list, tuple)):
+            raise NotImplementedError
+            # impl should use linked_fate and force_linked_fate
+        else:
+            if sample is None:
+                return None
+            elif not isinstance(sample, np.ndarray):
+                raise AssertionError("unexpected input image type")
+            params["image"] = sample
+        output = self.pipeline(**params)
+        return output["image"]
+
+    def __repr__(self):
+        """Create a print-friendly representation of inner augmentation stages."""
+        return self.__class__.__name__ + (": {{image_key: {}, bboxes_key: {}, mask_key: {}, keypoints_key: {}, "
+                                          .format(self.image_key, self.bboxes_key, self.mask_key, self.keypoints_key) +
+                                          "cvt_kpts_to_bboxes: {}, linked_fate: {}, pipeline: {}"
+                                          .format(self.cvt_kpts_to_bboxes, self.linked_fate, self.pipeline) + "}")
+
+    # noinspection PyMethodMayBeStatic
+    def set_seed(self, seed):
+        """Sets the internal seed to use for stochastic ops."""
+        random.random(seed)
+        np.random.seed(seed)
+
+
 class AugmentorWrapper(object):
     """Augmentor pipeline wrapper that allows pickling and multi-threading.
 

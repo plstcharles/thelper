@@ -24,12 +24,17 @@ def load_transforms(stages):
     apply. The ``params`` field of each stage will then be used to pass parameters to the constructor of
     this operation.
 
-    If an operation is identified as ``"Augmentor.Pipeline"``, it will be specially handled. In this case, an
-    the ``params`` field becomes mandatory in the stage dictionary, and it must specify the Augmentor pipeline
-    operation names and parameters (as a dictionary). Two additional optional config fields can also be set:
-    ``input_tensor`` (bool) which specifies whether the previous stage provides a ``torch.Tensor`` to the
-    augmentor pipeline (default=False); and ``output_tensor`` (bool) which specifies whether the output of the
-    augmentor pipeline should be converted into a ``torch.Tensor`` (default=False).
+    If an operation is identified as ``"Augmentor.Pipeline"`` or ``"albumentations.Compose"``, it will be
+    specially handled. In both case, the ``params`` field becomes mandatory in the stage dictionary, and it
+    must specify the Augmentor or albumentations pipeline operation names and parameters (as a dictionary).
+    Two additional optional config fields can then be set for Augmentor pipelines: ``input_tensor`` (bool)
+    which specifies whether the previous stage provides a ``torch.Tensor`` to the pipeline (default=False);
+    and ``output_tensor`` (bool) which specifies whether the output of the pipeline should be converted into
+    a tensor (default=False). For albumentations pipelines, two additional fields are also available, namely
+    ``bbox_params`` (dict) and ``keypoint_params`` (dict). For more information on these, refer to the
+    documentation of ``albumentations.core.composition.Compose``. Finally, when unpacking dictionaries for
+    albumentations pipelines, the keys associated to bounding boxes/masks/keypoints that must be forwarded
+    to the composer can be specified via the ``bboxes_key``, ``mask_key``, and ``keypoints_key`` fields.
 
     All operations can also specify which sample components they should be applied to via the ``target_key``
     field. This field can contain a single key (typically a string), or a list of keys. The operation will
@@ -74,8 +79,9 @@ def load_transforms(stages):
         A transformation pipeline object compatible with the ``torchvision.transforms`` interface.
 
     .. seealso::
-        | :class:`thelper.transforms.wrappers.TransformWrapper`
+        | :class:`thelper.transforms.wrappers.AlbumentationsWrapper`
         | :class:`thelper.transforms.wrappers.AugmentorWrapper`
+        | :class:`thelper.transforms.wrappers.TransformWrapper`
         | :func:`thelper.transforms.utils.load_augments`
         | :func:`thelper.data.utils.create_loaders`
     """
@@ -101,16 +107,37 @@ def load_transforms(stages):
         linked_fate = thelper.utils.str2bool(stage["linked_fate"]) if "linked_fate" in stage else True
         if operation_name == "Augmentor.Pipeline":
             import Augmentor
-            augp = Augmentor.Pipeline()
+            pipeline = Augmentor.Pipeline()
             if not isinstance(operation_params, dict) or not operation_params:
                 raise AssertionError("augmentor pipeline 'params' field should contain dictionary of suboperations")
-            for augp_op_name, augp_op_params in operation_params.items():
-                getattr(augp, augp_op_name)(**augp_op_params)
+            for pipeline_op_name, pipeline_op_params in operation_params.items():
+                getattr(pipeline, pipeline_op_name)(**pipeline_op_params)
             if "input_tensor" in stage and thelper.utils.str2bool(stage["input_tensor"]):
                 operations.append(torchvision.transforms.ToPILImage())
-            operations.append(thelper.transforms.wrappers.AugmentorWrapper(augp, operation_targets, linked_fate))
+            operations.append(thelper.transforms.wrappers.AugmentorWrapper(pipeline, operation_targets, linked_fate))
             if "output_tensor" in stage and thelper.utils.str2bool(stage["output_tensor"]):
                 operations.append(torchvision.transforms.ToTensor())
+        if operation_name == "albumentations.Compose":
+            if not isinstance(operation_params, dict) or not operation_params:
+                raise AssertionError("albumentations pipeline 'params' field should contain dictionary of suboperations")
+            suboperations = []
+            for op_name, op_params in operation_params.items():
+                if not op_name.startswith("albumentations."):
+                    op_name = "albumentations." + op_name
+                op_type = thelper.utils.import_class(op_name)
+                suboperations.append(op_type(**op_params))
+            probability = thelper.utils.get_key_def("probability", stage, 1.0)
+            to_tensor = thelper.utils.get_key_def("to_tensor", stage, None)
+            bbox_params = thelper.utils.get_key_def("bbox_params", stage, {})
+            add_targets = thelper.utils.get_key_def("add_targets", stage, {})
+            bboxes_key = thelper.utils.get_key_def("bboxes_key", stage, "bbox")
+            mask_key = thelper.utils.get_key_def("mask_key", stage, "mask")
+            keypoints_key = thelper.utils.get_key_def("keypoints_key", stage, "keypoints")
+            cvt_kpts_to_bboxes = thelper.utils.str2bool(thelper.utils.get_key_def("cvt_kpts_to_bboxes", stage, False))
+            operations.append(thelper.transforms.wrappers.AlbumentationsWrapper(
+                transforms=suboperations, to_tensor=to_tensor, bbox_params=bbox_params, add_targets=add_targets,
+                image_key=operation_targets, bboxes_key=bboxes_key, mask_key=mask_key, keypoints_key=keypoints_key,
+                probability=probability, cvt_kpts_to_bboxes=cvt_kpts_to_bboxes, linked_fate=linked_fate))
         else:
             operation_type = thelper.utils.import_class(operation_name)
             operation = operation_type(**operation_params)
