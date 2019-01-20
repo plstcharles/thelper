@@ -10,7 +10,6 @@ scipy
 scikit-learn
 shapely
 augmentor
-imgaug
 albumentations
 tensorboardX
 gitpython
