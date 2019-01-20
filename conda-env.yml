@@ -15,7 +15,6 @@ dependencies:
   - shapely
   - albumentations
   - pip:
-    - imgaug
     - augmentor
     - tensorboardX
     - torchvision
