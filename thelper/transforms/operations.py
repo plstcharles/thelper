@@ -20,6 +20,7 @@ import cv2 as cv
 import numpy as np
 import PIL.Image
 import torch
+import torchvision.transforms.functional
 import torchvision.utils
 
 import thelper.utils
@@ -992,9 +993,18 @@ class NormalizeZeroMeanUnitVar(object):
         """
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
-        elif not isinstance(sample, np.ndarray):
-            raise AssertionError("sample type should be np.ndarray")
-        return ((sample - self.mean) / self.std).astype(self.out_type)
+        if isinstance(sample, np.ndarray):
+            return ((sample - self.mean) / self.std).astype(self.out_type)
+        elif isinstance(sample, torch.Tensor):
+            out = torchvision.transforms.functional.normalize(sample,
+                                                              torch.from_numpy(self.mean),
+                                                              torch.from_numpy(self.std))
+            if self.out_type == np.float32:
+                return out.float()
+            else:
+                raise AssertionError("missing impl for non-float torch normalize output")
+        else:
+            raise AssertionError("sample type should be np.ndarray or torch.Tensor")
 
     def invert(self, sample):
         """Inverts the normalization."""
