@@ -200,12 +200,12 @@ class RandomResizedCrop(object):
             applied, the returned image will be the original.
         random_attempts: the number of random sampling attempts to try before reverting to center
             or most-probably-valid crop generation.
-        min_mask_iou: minimum mask intersection over union (IoU) required for accepting a tile (in [0,1]).
+        min_roi_iou: minimum roi intersection over union (IoU) required for accepting a tile (in [0,1]).
         flags: interpolation flag forwarded to ``cv2.resize``.
     """
 
     def __init__(self, output_size, input_size=(0.08, 1.0), ratio=(0.75, 1.33), probability=1.0,
-                 random_attempts=10, min_mask_iou=1.0, flags=cv.INTER_LINEAR):
+                 random_attempts=10, min_roi_iou=1.0, flags=cv.INTER_LINEAR):
         """Validates and initializes center crop parameters.
 
         Args:
@@ -227,7 +227,7 @@ class RandomResizedCrop(object):
                 applied, the returned image will be the original.
             random_attempts: the number of random sampling attempts to try before reverting to center
                 or most-probably-valid crop generation.
-            min_mask_iou: minimum mask intersection over union (IoU) required for producing a tile.
+            min_roi_iou: minimum roi intersection over union (IoU) required for producing a tile.
             flags: interpolation flag forwarded to ``cv2.resize``.
         """
         if isinstance(output_size, (tuple, list)):
@@ -283,28 +283,32 @@ class RandomResizedCrop(object):
         if random_attempts <= 0:
             raise AssertionError("invalid random_attempts value (should be > 0)")
         self.random_attempts = random_attempts
-        if not isinstance(min_mask_iou, float) or min_mask_iou < 0 or min_mask_iou > 1:
-            raise AssertionError("invalid minimum mask IoU score (should be float in [0,1])")
-        self.min_mask_iou = min_mask_iou
+        if not isinstance(min_roi_iou, float) or min_roi_iou < 0 or min_roi_iou > 1:
+            raise AssertionError("invalid minimum roi IoU score (should be float in [0,1])")
+        self.min_roi_iou = min_roi_iou
         self.flags = thelper.utils.import_class(flags) if isinstance(flags, str) else flags
-        self.warned_no_crop_found_with_mask = False
+        self.warned_no_crop_found_with_roi = False
 
-    def __call__(self, image, mask=None):
+    def __call__(self, image, roi=None, mask=None, bboxes=None):
         """Extracts and returns a random (resized) crop from the provided image.
 
         Args:
-            image: the image to generate the crop from. If given as a 2-element list, it is assumed to contain
-                both the image and the mask (passed through a composer).
-            mask: the mask to check tile intersections with (may be ``None``).
+            image: the image to generate the crop from. If given as a 2-element list, it is assumed to
+                contain both the image and the roi (passed through a composer).
+            roi: the roi to check tile intersections with (may be ``None``).
+            mask: a mask to crop simultaneously with the input image (may be ``None``).
+            bboxes: a list or array of bounding boxes (in xywh format) to crop with the input image
+                (may be ``None``).
 
         Returns:
-            The randomly selected and resized crop.
+            The randomly selected and resized crop. If mask and/or bboxes is given, the output will be
+            a dictionary containing the results under the ``image``, ``mask``, and ``bboxes`` keys.
         """
         if isinstance(image, list) and len(image) == 2:
-            if mask is not None:
-                raise AssertionError("mask provided twice")
-            # we assume that the mask was given as the 2nd element of the list
-            image, mask = image[0], image[1]
+            if roi is not None:
+                raise AssertionError("roi provided twice")
+            # we assume that the roi was given as the 2nd element of the list
+            image, roi = image[0], image[1]
         if isinstance(image, PIL.Image.Image):
             image = np.asarray(image)
         elif not isinstance(image, np.ndarray):
@@ -339,19 +343,19 @@ class RandomResizedCrop(object):
             if target_width <= image_width and target_height <= image_height:
                 target_col = np.random.randint(min(0, image_width - target_width), max(0, image_width - target_width) + 1)
                 target_row = np.random.randint(min(0, image_height - target_height), max(0, image_height - target_height) + 1)
-                if mask is None:
+                if roi is None:
                     break
-                roi = thelper.utils.safe_crop(mask, (target_col, target_row), (target_col + target_width, target_row + target_height))
-                if np.count_nonzero(roi) >= target_width * target_height * self.min_mask_iou:
+                roi = thelper.utils.safe_crop(roi, (target_col, target_row), (target_col + target_width, target_row + target_height))
+                if np.count_nonzero(roi) >= target_width * target_height * self.min_roi_iou:
                     break
         if target_row is None or target_col is None:
             # fallback, use centered crop
             target_width = target_height = min(image.shape[0], image.shape[1])
             target_col = (image.shape[1] - target_width) // 2
             target_row = (image.shape[0] - target_height) // 2
-            if mask is not None and not self.warned_no_crop_found_with_mask:
+            if roi is not None and not self.warned_no_crop_found_with_roi:
                 logger.warning("random resized crop failing to find proper ROI matches after max attempt count")
-                self.warned_no_crop_found_with_mask = True
+                self.warned_no_crop_found_with_roi = True
         crop = thelper.utils.safe_crop(image, (target_col, target_row), (target_col + target_width, target_row + target_height))
         if self.output_size is None:
             return crop
