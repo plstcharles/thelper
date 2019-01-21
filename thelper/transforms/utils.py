@@ -117,7 +117,7 @@ def load_transforms(stages):
             operations.append(thelper.transforms.wrappers.AugmentorWrapper(pipeline, operation_targets, linked_fate))
             if "output_tensor" in stage and thelper.utils.str2bool(stage["output_tensor"]):
                 operations.append(torchvision.transforms.ToTensor())
-        if operation_name == "albumentations.Compose":
+        elif operation_name == "albumentations.Compose":
             if not isinstance(operation_params, dict) or not operation_params:
                 raise AssertionError("albumentations pipeline 'params' field should contain dictionary of suboperations")
             suboperations = []
