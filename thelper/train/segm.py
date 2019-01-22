@@ -70,7 +70,7 @@ class ImageSegmTrainer(Trainer):
 
         Args:
             model: the model to train that is already uploaded to the target device(s).
-            epoch: the epoch number we are training for (1-based).
+            epoch: the epoch index we are training for (0-based).
             iter: the iteration count at the start of the current epoch.
             dev: the target device that tensors should be uploaded to.
             loss: the loss function used to evaluate model fidelity.
@@ -136,17 +136,16 @@ class ImageSegmTrainer(Trainer):
                                          epoch_idx=epoch, max_epochs=self.epochs)
             epoch_loss += iter_loss.item()
             optimizer.step()
-            iter += 1
             monitor_output = ""
             if monitor is not None and monitor in metrics:
                 monitor_output = "   {}: {:.2f}".format(monitor, metrics[monitor].eval())
             self.logger.info(
-                "train epoch: {}   iter: {}   batch: {}/{} ({:.0f}%)   loss: {:.6f}{}".format(
+                "train epoch#{}  (iter#{})   batch: {}/{} ({:.0f}%)   loss: {:.6f}{}".format(
                     epoch,
                     iter,
-                    idx,
+                    idx + 1,
                     epoch_size,
-                    (idx / epoch_size) * 100.0,
+                    ((idx + 1) / epoch_size) * 100.0,
                     iter_loss.item(),
                     monitor_output
                 )
@@ -156,6 +155,7 @@ class ImageSegmTrainer(Trainer):
                 for metric_name, metric in metrics.items():
                     if metric.is_scalar():  # only useful assuming that scalar metrics are smoothed...
                         writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
+            iter += 1
         epoch_loss /= epoch_size
         return epoch_loss, iter
 
@@ -164,7 +164,7 @@ class ImageSegmTrainer(Trainer):
 
         Args:
             model: the model to evaluate that is already uploaded to the target device(s).
-            epoch: the epoch number we are evaluating for (1-based).
+            epoch: the epoch number we are evaluating for (0-based).
             dev: the target device that tensors should be uploaded to.
             loader: the data loader used to get transformed valid/test samples.
             metrics: the dictionary of metrics to update every iteration.
@@ -213,11 +213,11 @@ class ImageSegmTrainer(Trainer):
                 else:
                     monitor_output = "(not monitoring)"
                 self.logger.info(
-                    "eval epoch: {}   batch: {}/{} ({:.0f}%)   {}".format(
+                    "eval epoch#{}   batch: {}/{} ({:.0f}%)   {}".format(
                         epoch,
-                        idx,
+                        idx + 1,
                         epoch_size,
-                        (idx / epoch_size) * 100.0,
+                        ((idx + 1) / epoch_size) * 100.0,
                         monitor_output
                     )
                 )

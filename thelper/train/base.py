@@ -152,7 +152,7 @@ class Trainer:
         self.train_loader = train_loader
         self.valid_loader = valid_loader
         self.test_loader = test_loader
-        self.epochs = 0
+        self.epochs = 1
         if train_loader:
             if "epochs" not in trainer_config or not trainer_config["epochs"] or int(trainer_config["epochs"]) <= 0:
                 raise AssertionError("bad trainer config epoch count")
@@ -181,8 +181,7 @@ class Trainer:
             import tensorboardX
             self.tbx = tensorboardX
             self.logger.debug("tensorboard init : tensorboard --logdir %s --port <your_port>" % output_root_dir)
-        self.skip_tbx_histograms = thelper.utils.str2bool(thelper.utils.get_key_def("skip_tbx_histograms",
-                                                                                    trainer_config, False))
+        self.skip_tbx_histograms = thelper.utils.str2bool(thelper.utils.get_key_def("skip_tbx_histograms", trainer_config, False))
         self.tbx_histogram_freq = thelper.utils.get_key_def("tbx_histogram_freq", trainer_config, 1)
         if self.tbx_histogram_freq < 1:
             raise AssertionError("histogram output frequency should be integer great or equal to 1")
@@ -263,7 +262,6 @@ class Trainer:
             self.current_iter = 0
             self.current_epoch = 0
             self.outputs = {}
-
         # callbacks (see ``thelper.types.IterCallbackType`` and ``thelper.types.IterCallbackParams`` definitions)
         self.train_iter_callback = thelper.utils.get_key_def(
             "train_iter_callback", trainer_config, None)    # type: thelper.types.IterCallbackType
@@ -425,8 +423,7 @@ class Trainer:
         train_writer, valid_writer, test_writer = None, None, None
         while self.current_epoch < self.epochs:
             train_writer = self._init_writer(train_writer, self.train_output_path)
-            self.logger.info("preparing epoch %d for '%s' (dev=%s)"
-                             % (self.current_epoch + 1, self.name, str(self.devices)))
+            self.logger.info("at epoch#%d for '%s' (dev=%s)" % (self.current_epoch, self.name, str(self.devices)))
             if scheduler:
                 if scheduler_step_metric:
                     if scheduler_step_metric == "loss":
@@ -434,11 +431,9 @@ class Trainer:
                         scheduler.step(metrics=latest_loss, epoch=self.current_epoch)
                     else:
                         if self.valid_loader and scheduler_step_metric in self.valid_metrics:
-                            scheduler.step(metrics=self.valid_metrics[scheduler_step_metric].eval(),
-                                           epoch=self.current_epoch)
+                            scheduler.step(metrics=self.valid_metrics[scheduler_step_metric].eval(), epoch=self.current_epoch)
                         elif self.train_loader and scheduler_step_metric in self.train_metrics:
-                            scheduler.step(metrics=self.train_metrics[scheduler_step_metric].eval(),
-                                           epoch=self.current_epoch)
+                            scheduler.step(metrics=self.train_metrics[scheduler_step_metric].eval(), epoch=self.current_epoch)
                         else:
                             raise AssertionError("cannot use metric '%s' for scheduler step" % scheduler_step_metric)
                 else:
@@ -458,7 +453,6 @@ class Trainer:
                         grad = param.grad.data.cpu().numpy().flatten()
                         train_writer.add_histogram(pname + '/grad', grad, self.current_epoch)
             self.logger.debug("learning rate at %.8f" % thelper.optim.get_lr(optimizer))
-            self.current_epoch += 1
             self._set_rng_state(self.train_loader.seeds, self.current_epoch)
             model.train()
             for metric in self.train_metrics.values():
@@ -502,10 +496,10 @@ class Trainer:
                         self.monitor_best = monitor_val
                         new_best = True
                 if not isinstance(value, dict):
-                    self.logger.debug(" epoch {} result =>  {}: {}".format(self.current_epoch, str(key), value))
+                    self.logger.debug(" epoch#{} result =>  {}: {}".format(self.current_epoch, str(key), value))
                 else:
                     for subkey, subvalue in value.items():
-                        self.logger.debug(" epoch {} result =>  {}:{}: {}".format(self.current_epoch, str(key), str(subkey), subvalue))
+                        self.logger.debug(" epoch#{} result =>  {}:{}: {}".format(self.current_epoch, str(key), str(subkey), subvalue))
             if self.monitor is not None:
                 if monitor_val is None:
                     raise AssertionError("training/validation did not produce required monitoring variable '%s'" % self.monitor)
@@ -513,8 +507,9 @@ class Trainer:
                 self.logger.info("epoch %d, monitored %s = %s  %s" % (self.current_epoch, self.monitor, monitor_val, best_str))
             self.outputs[self.current_epoch] = result
             if new_best or (self.current_epoch % self.save_freq) == 0:
-                self.logger.info("saving checkpoint @ epoch %d" % self.current_epoch)
+                self.logger.info("saving checkpoint @ epoch#%d" % self.current_epoch)
                 self._save(self.current_epoch, self.current_iter, optimizer, scheduler, save_best=new_best)
+            self.current_epoch += 1
         self.logger.info("training for session '%s' done" % self.name)
         if self.test_loader:
             # reload 'best' model checkpoint on cpu (will remap to current device setup)
@@ -605,7 +600,7 @@ class Trainer:
 
         Args:
             model: the model to train that is already uploaded to the target device(s).
-            epoch: the epoch number we are training for (1-based).
+            epoch: the epoch index we are training for (0-based).
             iter: the iteration count at the start of the current epoch.
             dev: the target device that tensors should be uploaded to.
             loss: the loss function used to evaluate model fidelity.
@@ -623,7 +618,7 @@ class Trainer:
 
         Args:
             model: the model to evaluate that is already uploaded to the target device(s).
-            epoch: the epoch number we are evaluating for (1-based).
+            epoch: the epoch index we are training for (0-based).
             dev: the target device that tensors should be uploaded to.
             loader: the data loader used to get transformed valid/test samples.
             metrics: the dictionary of metrics to update every iteration.
