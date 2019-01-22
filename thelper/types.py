@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     SampleType = Dict[Union[AnyStr, int], Tensor]
     PredictionType = Tensor
     IterCallbackType = Optional[Callable[[SampleType, Task, PredictionType, int, int, int, int], None]]
-    IterCallbackParams = ["sample", "task", "pred", "iter_idx", "max_iters", "epoch_idx", "max_epochs"]
 
     ConfigIndex = AnyStr
     ConfigValue = Union[AnyStr, bool, float, int]
@@ -36,3 +35,5 @@ if TYPE_CHECKING:
     CheckpointLoadingType = Union[AnyStr, io.FileIO]
     CheckpointContentType = Dict[AnyStr, Any]
     MapLocationType = Union[Callable, AnyStr, Dict[AnyStr, AnyStr]]
+
+IterCallbackParams = ["sample", "task", "pred", "iter_idx", "max_iters", "epoch_idx", "max_epochs"]
