@@ -58,6 +58,22 @@ class Compose(torchvision.transforms.Compose, NoTransformWrapper):
         """Provides print-friendly output for class attributes."""
         return self.__class__.__name__ + ": [\n\t" + ",\n\t".join([str(t) for t in self.transforms]) + "]"
 
+    def set_seed(self, seed):
+        """Sets the internal seed to use for stochastic ops."""
+        if self.transforms is not None:
+            for t in self.transforms:
+                if hasattr(t, "set_seed") and callable(t.set_seed):
+                    t.set_seed(seed)
+
+    def set_epoch(self, epoch=0):
+        """Sets the current epoch number in order to change the behavior of some suboperations."""
+        if not isinstance(epoch, int) or epoch < 0:
+            raise AssertionError("invalid epoch value")
+        if self.transforms is not None:
+            for t in self.transforms:
+                if hasattr(t, "set_epoch") and callable(t.set_epoch):
+                    t.set_epoch(epoch)
+
 
 class ToNumpy(object):
     """Converts and returns an image in numpy format from a ``torch.Tensor`` or ``PIL.Image`` format.

@@ -133,8 +133,21 @@ class AlbumentationsWrapper(object):
     # noinspection PyMethodMayBeStatic
     def set_seed(self, seed):
         """Sets the internal seed to use for stochastic ops."""
-        random.random(seed)
-        np.random.seed(seed)
+        if self.pipeline.transforms is not None:
+            random.random(seed)
+            np.random.seed(seed)
+            for t in self.pipeline.transforms:
+                if hasattr(t, "set_seed") and callable(t.set_seed):
+                    t.set_seed(seed)
+
+    def set_epoch(self, epoch=0):
+        """Sets the current epoch number in order to change the behavior of some suboperations."""
+        if not isinstance(epoch, int) or epoch < 0:
+            raise AssertionError("invalid epoch value")
+        if self.pipeline.transforms is not None:
+            for t in self.pipeline.transforms:
+                if hasattr(t, "set_epoch") and callable(t.set_epoch):
+                    t.set_epoch(epoch)
 
 
 class AugmentorWrapper(object):
@@ -270,6 +283,15 @@ class AugmentorWrapper(object):
     def set_seed(self, seed):
         """Sets the internal seed to use for stochastic ops."""
         np.random.seed(seed)
+
+    def set_epoch(self, epoch=0):
+        """Sets the current epoch number in order to change the behavior of some suboperations."""
+        if not isinstance(epoch, int) or epoch < 0:
+            raise AssertionError("invalid epoch value")
+        if self.pipeline.operations is not None:
+            for op in self.pipeline.operations:
+                if hasattr(op, "set_epoch") and callable(op.set_epoch):
+                    op.set_epoch(epoch)
 
 
 class TransformWrapper(object):
@@ -486,3 +508,11 @@ class TransformWrapper(object):
     def set_seed(self, seed):
         """Sets the internal seed to use for stochastic ops."""
         np.random.seed(seed)
+
+    def set_epoch(self, epoch=0):
+        """Sets the current epoch number in order to change the behavior of some suboperations."""
+        if not isinstance(epoch, int) or epoch < 0:
+            raise AssertionError("invalid epoch value")
+        if self.operation is not None:
+            if hasattr(self.operation, "set_epoch") and callable(self.operation.set_epoch):
+                self.operation.set_epoch(epoch)
