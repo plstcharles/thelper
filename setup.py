@@ -56,7 +56,7 @@ setuptools.setup(
     name="thelper",
     version="0.2.0",
     license="Apache Software License 2.0",
-    description="Provides training help & tools for PyTorch-based machine learning projects.",
+    description="Training framework & tools for PyTorch-based machine learning projects.",
     long_description="%s\n%s" % (
         re.compile("^.. start-badges.*^.. end-badges", re.M | re.S).sub("", read("README.rst")),
         re.sub(":[a-z]+:`~?(.*?)`", r"``\1``", read("CHANGELOG.rst"))
