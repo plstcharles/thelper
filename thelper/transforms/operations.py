@@ -11,6 +11,7 @@ constructor and exposed in the operation's ``__repr__`` function so that
 external parsers can discover exactly how to reproduce their behavior.
 """
 
+import bisect
 import copy
 import itertools
 import logging
@@ -41,6 +42,10 @@ class Compose(torchvision.transforms.Compose, NoTransformWrapper):
 
     def __init__(self, transforms):
         """Forwards the list of transformations to the base class."""
+        if not isinstance(transforms, list) or not transforms:
+            raise AssertionError("expected transforms to be provided as a non-empty list")
+        if all([isinstance(stage, dict) for stage in transforms]):
+            transforms, _ = thelper.transforms.load_transforms(transforms)
         super().__init__(transforms)
 
     def invert(self, sample):
@@ -73,6 +78,166 @@ class Compose(torchvision.transforms.Compose, NoTransformWrapper):
             for t in self.transforms:
                 if hasattr(t, "set_epoch") and callable(t.set_epoch):
                     t.set_epoch(epoch)
+
+
+class CustomStepCompose(torchvision.transforms.Compose, NoTransformWrapper):
+    """Composes several transforms together based on an epoch schedule.
+
+    This interface is fully compatible with ``torchvision.transforms.Compose``. It can be useful if
+    some operations should change their behavior over the course of a training session. Note that
+    all epoch indices are assumed to be 0-based.
+
+    Usage example in Python::
+
+        # We will scale the resolution of input patches based on an arbitrary schedule
+        # dsize = (16, 16)   if epoch < 2         (16x16 patches before epoch 2)
+        # dsize = (32, 32)   if 2 <= epoch < 4    (32x32 patches before epoch 4)
+        # dsize = (64, 64)   if 4 <= epoch < 8    (64x64 patches before epoch 8)
+        # dsize = (112, 112) if 8 <= epoch < 12   (112x112 patches before epoch 12)
+        # dsize = (160, 160) if 12 <= epoch < 15  (160x160 patches before epoch 15)
+        # dsize = (196, 196) if 15 <= epoch < 18  (196x196 patches before epoch 18)
+        # dsize = (224, 224) if epoch >= 18       (224x224 patches past epoch 18)
+        transforms = CustomStepCompose(milestones={
+            0: thelper.transforms.Resize(dsize=(16, 16)),
+            2: thelper.transforms.Resize(dsize=(32, 32)),
+            4: thelper.transforms.Resize(dsize=(64, 64)),
+            8: thelper.transforms.Resize(dsize=(112, 112)),
+            12: thelper.transforms.Resize(dsize=(160, 160)),
+            15: thelper.transforms.Resize(dsize=(196, 196)),
+            18: thelper.transforms.Resize(dsize=(224, 224)),
+        })
+        for epoch in range(100):
+            transforms.set_epoch(epoch)
+            for sample in loader:
+                sample = transforms(sample)
+                train(...)
+
+    Attributes:
+        stages: list of epochs where a new scaling factor is to be applied.
+        transforms: list of transformation to apply at each stage.
+        milestones: original milestones map provided in the constructor.
+        epoch: index of the current epoch.
+
+    .. seealso::
+        | :class:`thelper.transforms.operations.Compose`
+    """
+
+    def __init__(self, milestones, last_epoch=-1):
+        """Receives the milestone stages (or stage lists), and the initialization state.
+
+        If the milestones do not include the first epoch (idx = 0), then no transform will be applied
+        until the next specified epoch index. When last_epoch is -1, the training is assumed to start
+        from scratch.
+
+        Args:
+            milestones: Map of epoch indices tied to transformation stages. Keys must be increasing.
+            last_epoch: The index of last epoch. Default: -1.
+        """
+        if not isinstance(milestones, dict):
+            raise AssertionError("milestones should be provided as a dictionary")
+        self.transforms, self.stages = [], []
+        if len(milestones) > 0:
+            if isinstance(list(milestones.keys())[0], str):  # fixup for json-based config loaders
+                self.stages = [int(key) for key in milestones.keys()]
+            elif isinstance(list(milestones.keys())[0], int):
+                self.stages = list(milestones.keys())
+            else:
+                raise AssertionError("milestone stages should be epoch indices (integers)")
+            if self.stages != sorted(self.stages):
+                raise AssertionError("milestone stages should be increasing integers")
+        for transforms in milestones.values():
+            if isinstance(transforms, list):
+                if all([isinstance(t, dict) for t in transforms]):
+                    transforms = thelper.transforms.load_transforms(transforms)
+                else:
+                    if not all([hasattr(t, "__call__") for t in transforms]):
+                        raise AssertionError("stage transformations should be callable")
+            else:
+                if not hasattr(transforms, "__call__"):
+                    raise AssertionError("stage transformations should be callable")
+            self.transforms.append(transforms)
+        if 0 not in self.stages:
+            print("prestages = %s" % str(self.stages))
+            self.stages.insert(0, int(0))
+            print("poststages = %s" % str(self.stages))
+            print("pretransforms = %s" % str(self.transforms))
+            self.transforms.insert(0, [])
+            print("posttransforms = %s" % str(self.transforms))
+        self.milestones = milestones
+        super().__init__(self.transforms)
+        self.epoch = last_epoch + 1
+
+    def _get_stage_idx(self, epoch):
+        if epoch in self.stages:
+            return self.stages.index(epoch)
+        return max(bisect.bisect_right(self.stages, epoch) - 1, 0)
+
+    def invert(self, sample):
+        """Tries to invert the transformations applied to a sample.
+
+        Will throw if one of the transformations cannot be inverted.
+        """
+        transforms = self.transforms[self._get_stage_idx(self.epoch)]
+        if isinstance(transforms, list):
+            for t in reversed(transforms):
+                if not hasattr(t, "invert"):
+                    raise AssertionError("missing invert op for transform = %s" % repr(t))
+                sample = t.invert(sample)
+        else:
+            if not hasattr(transforms, "invert"):
+                raise AssertionError("missing invert op for transform = %s" % repr(transforms))
+            sample = transforms.invert(sample)
+        return sample
+
+    def __call__(self, img):
+        """Applies the current stage of transformation operations to a sample."""
+        print("self.stages = %s" % str(self.stages))
+        print("self.epoch = %d" % self.epoch)
+        print("len(self.stages) - 1 = %d" % (len(self.stages) - 1))
+        print("stage_idx = %d" % self._get_stage_idx(self.epoch))
+        transforms = self.transforms[self._get_stage_idx(self.epoch)]
+        if isinstance(transforms, list):
+            for t in transforms:
+                img = t(img)
+        else:
+            img = transforms(img)
+        return img
+
+    def __repr__(self):
+        """Provides print-friendly output for class attributes."""
+        return self.__class__.__name__ + \
+            ": {\n\t" + ",\n\t".join(["%s: %s" % (str(k), str(v)) for k, v in self.milestones.items()]) + "}"
+
+    def set_seed(self, seed):
+        """Sets the internal seed to use for stochastic ops."""
+        transforms = self.transforms[self._get_stage_idx(self.epoch)]
+        if isinstance(transforms, list):
+            for t in transforms:
+                if hasattr(t, "set_seed") and callable(t.set_seed):
+                    t.set_seed(seed)
+        else:
+            if hasattr(transforms, "set_seed") and callable(transforms.set_seed):
+                transforms.set_seed(seed)
+
+    def set_epoch(self, epoch=0):
+        """Sets the current epoch number in order to change the behavior of some suboperations."""
+        if not isinstance(epoch, int) or epoch < 0:
+            raise AssertionError("invalid epoch value")
+        transforms = self.transforms[self._get_stage_idx(self.epoch)]
+        if isinstance(transforms, list):
+            for t in transforms:
+                if hasattr(t, "set_epoch") and callable(t.set_epoch):
+                    t.set_epoch(epoch)
+        else:
+            if hasattr(transforms, "set_epoch") and callable(transforms.set_epoch):
+                transforms.set_epoch(epoch)
+        self.epoch = epoch
+
+    def step(self, epoch=None):  # used for interface compatibility with LRSchedulers only
+        """Advances the epoch tracker in order to change the behavior of some suboperations."""
+        if epoch is None:
+            epoch = self.epoch + 1
+        self.epoch = epoch
 
 
 class ToNumpy(object):
