@@ -643,8 +643,7 @@ class Trainer:
                 img = metric.render()
                 if img is not None:
                     if tbx_writer is not None:
-                        # version 1.5 of tensorboardx has been verified, it needs HxWxC images
-                        tbx_writer.add_image(metric_name, img, epoch)
+                        tbx_writer.add_image(metric_name, img, epoch, dataformats="HWC")
                     raw_filename = "%s-%04d.png" % (metric_name, epoch)
                     raw_filepath = os.path.join(output_path, raw_filename)
                     cv.imwrite(raw_filepath, img[..., [2, 1, 0]])
