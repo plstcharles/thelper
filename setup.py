@@ -84,7 +84,7 @@ setuptools.setup(
     ],
     keywords=["pytorch", "trainer", "loader"],
     install_requires=install_requires if not on_rtd else [],  # bypass deps install on rtd
-    python_requires="~=3.5",
+    python_requires="~=3.6",
     extras_require={
         "rst": ["docutils>=0.11"],
     },
