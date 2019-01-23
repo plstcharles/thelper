@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 def create_trainer(session_name,    # type: AnyStr
                    save_dir,        # type: AnyStr
-                   config,          # type: thelper.types.ConfigDict
+                   config,          # type: thelper.typedefs.ConfigDict
                    model,           # type: thelper.nn.Module
                    loaders,         # type: List[thelper.data.loaders.DataLoader]
-                   ckptdata=None    # type: Optional[thelper.types.CheckpointContentType]
+                   ckptdata=None    # type: Optional[thelper.typedefs.CheckpointContentType]
                    ):               # type: (...) -> thelper.train.Trainer
     """Instantiates the trainer object based on the type contained in the config dictionary.
 
@@ -50,9 +50,9 @@ def create_trainer(session_name,    # type: AnyStr
 
 
 # noinspection PyUnusedLocal
-def _draw_minibatch_wrapper(sample,         # type: thelper.types.SampleType
+def _draw_minibatch_wrapper(sample,         # type: thelper.typedefs.SampleType
                             task,           # type: thelper.tasks.utils.Task
-                            pred,           # type: thelper.types.PredictionType
+                            pred,           # type: thelper.typedefs.PredictionType
                             iter_idx,       # type: int
                             max_iters,      # type: int
                             epoch_idx,      # type: int

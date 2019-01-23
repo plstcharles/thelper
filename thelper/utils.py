@@ -28,7 +28,7 @@ import PIL.Image
 import sklearn.metrics
 import torch
 
-import thelper.types  # noqa: F401
+import thelper.typedefs  # noqa: F401
 
 logger = logging.getLogger(__name__)
 bypass_queries = False
@@ -119,9 +119,9 @@ def setup_globals(config):
     setup_cudnn(config)
 
 
-def load_checkpoint(ckpt,               # type: thelper.types.CheckpointLoadingType
-                    map_location=None,  # type: Optional[thelper.types.MapLocationType]
-                    ):                  # type: (...) -> thelper.types.CheckpointContentType
+def load_checkpoint(ckpt,               # type: thelper.typedefs.CheckpointLoadingType
+                    map_location=None,  # type: Optional[thelper.typedefs.MapLocationType]
+                    ):                  # type: (...) -> thelper.typedefs.CheckpointContentType
     """Loads a session checkpoint via PyTorch, check its compatibility, and returns its data.
 
     Args:
@@ -319,8 +319,8 @@ def check_func_signature(func,      # type: Callable
     Checks whether the signature of a function matches the expected parameter list.
 
     .. seealso::
-        | :class:`thelper.types.IterCallbackType`
-        | :class:`thelper.types.IterCallbackParams`
+        | :class:`thelper.typedefs.IterCallbackType`
+        | :class:`thelper.typedefs.IterCallbackParams`
     """
     if func is None or not callable(func):
         raise AssertionError("invalid function object")
@@ -735,9 +735,9 @@ def get_bgr_from_hsl(hue, sat, light):
             int(np.clip(round(h2rgb(p, q, h + 1 / 3) * 255), 0, 255)))
 
 
-def get_displayable_image(image,                # type: thelper.types.ArrayType
+def get_displayable_image(image,                # type: thelper.typedefs.ArrayType
                           grayscale=False,      # type: Optional[bool]
-                          ):                    # type: (...) -> thelper.types.ArrayType
+                          ):                    # type: (...) -> thelper.typedefs.ArrayType
     """Returns a 'displayable' image that has been normalized and padded to three channels."""
     if image.ndim != 3:
         raise AssertionError("indexing should return a pre-squeezed array")
@@ -752,9 +752,9 @@ def get_displayable_image(image,                # type: thelper.types.ArrayType
     return image_normalized
 
 
-def get_displayable_heatmap(array,              # type: thelper.types.ArrayType
+def get_displayable_heatmap(array,              # type: thelper.typedefs.ArrayType
                             convert_rgb=True,   # type: Optional[bool]
-                            ):                  # type: (...) -> thelper.types.ArrayType
+                            ):                  # type: (...) -> thelper.typedefs.ArrayType
     """Returns a 'displayable' array that has been min-maxed and mapped to color triplets."""
     if array.ndim != 2:
         array = np.squeeze(array)
@@ -768,11 +768,11 @@ def get_displayable_heatmap(array,              # type: thelper.types.ArrayType
     return heatmap
 
 
-def draw_histogram(data,                # type: thelper.types.ArrayType
+def draw_histogram(data,                # type: thelper.typedefs.ArrayType
                    bins=50,             # type: Optional[int]
-                   xlabel="",           # type: Optional[thelper.types.LabelType]
-                   ylabel="Proportion"  # type: Optional[thelper.types.LabelType]
-                   ):                   # type: (...) -> thelper.types.DrawingType
+                   xlabel="",           # type: Optional[thelper.typedefs.LabelType]
+                   ylabel="Proportion"  # type: Optional[thelper.typedefs.LabelType]
+                   ):                   # type: (...) -> thelper.typedefs.DrawingType
     """Draws and returns a histogram figure using pyplot."""
     fig, ax = plt.subplots()
     ax.hist(data, density=True, bins=bins)
@@ -785,11 +785,11 @@ def draw_histogram(data,                # type: thelper.types.ArrayType
     return fig
 
 
-def draw_popbars(labels,                # type: thelper.types.LabelList
+def draw_popbars(labels,                # type: thelper.typedefs.LabelList
                  counts,                # type: int
-                 xlabel="",             # type: Optional[thelper.types.LabelType]
-                 ylabel="Pop. Count",   # type: Optional[thelper.types.LabelType]
-                 ):                     # type: (...) -> thelper.types.DrawingType
+                 xlabel="",             # type: Optional[thelper.typedefs.LabelType]
+                 ylabel="Pop. Count",   # type: Optional[thelper.typedefs.LabelType]
+                 ):                     # type: (...) -> thelper.typedefs.DrawingType
     """Draws and returns a bar histogram figure using pyplot."""
     fig, ax = plt.subplots()
     xrange = range(len(labels))
@@ -805,15 +805,15 @@ def draw_popbars(labels,                # type: thelper.types.LabelList
     return fig
 
 
-def draw_classifs(images,               # type: thelper.types.OneOrManyArrayType
-                  labels_gt=None,       # type: Optional[thelper.types.LabelList]
-                  labels_pred=None,     # type: Optional[thelper.types.LabelList]
-                  labels_map=None,      # type: Optional[thelper.types.LabelDict]
-                  redraw=None,          # type: Optional[thelper.types.DrawingType]
+def draw_classifs(images,               # type: thelper.typedefs.OneOrManyArrayType
+                  labels_gt=None,       # type: Optional[thelper.typedefs.LabelList]
+                  labels_pred=None,     # type: Optional[thelper.typedefs.LabelList]
+                  labels_map=None,      # type: Optional[thelper.typedefs.LabelDict]
+                  redraw=None,          # type: Optional[thelper.typedefs.DrawingType]
                   use_cv2=True,         # type: Optional[bool]
-                  img_shape=None,       # type: Optional[thelper.types.ArrayShapeType]
-                  max_img_size=None,    # type: Optional[thelper.types.ArrayShapeType]
-                  ):                    # type: (...) -> thelper.types.DrawingType
+                  img_shape=None,       # type: Optional[thelper.typedefs.ArrayShapeType]
+                  max_img_size=None,    # type: Optional[thelper.typedefs.ArrayShapeType]
+                  ):                    # type: (...) -> thelper.typedefs.DrawingType
     """Draws and returns a figure of classification results using pyplot."""
     nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
     if nb_imgs < 1:
@@ -890,15 +890,15 @@ def draw_classifs(images,               # type: thelper.types.OneOrManyArrayType
         return fig, axes
 
 
-def draw_segments(images,                 # type: thelper.types.OneOrManyArrayType
-                  masks_gt,               # type: Optional[thelper.types.OneOrManyArrayType]
-                  masks_pred=None,        # type: Optional[thelper.types.OneOrManyArrayType]
-                  labels_color_map=None,  # type: Optional[thelper.types.LabelColorMapType]
-                  redraw=None,            # type: Optional[thelper.types.DrawingType]
+def draw_segments(images,                 # type: thelper.typedefs.OneOrManyArrayType
+                  masks_gt,               # type: Optional[thelper.typedefs.OneOrManyArrayType]
+                  masks_pred=None,        # type: Optional[thelper.typedefs.OneOrManyArrayType]
+                  labels_color_map=None,  # type: Optional[thelper.typedefs.LabelColorMapType]
+                  redraw=None,            # type: Optional[thelper.typedefs.DrawingType]
                   use_cv2=True,           # type: Optional[bool]
-                  img_shape=None,         # type: Optional[thelper.types.ArrayShapeType]
-                  max_img_size=None,      # type: Optional[thelper.types.ArrayShapeType]
-                  ):                      # type: (...) -> thelper.types.DrawingType
+                  img_shape=None,         # type: Optional[thelper.typedefs.ArrayShapeType]
+                  max_img_size=None,      # type: Optional[thelper.typedefs.ArrayShapeType]
+                  ):                      # type: (...) -> thelper.typedefs.DrawingType
     """Draws and returns a figure of segmentation results using pyplot."""
     # todo: display gt if available? (currently skipped)
     nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
@@ -1122,14 +1122,14 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True,
 
 
 # noinspection PyUnusedLocal
-def draw_errbars(labels,                # type: thelper.types.LabelList
-                 min_values,            # type: thelper.types.ArrayType
-                 max_values,            # type: thelper.types.ArrayType
-                 stddev_values,         # type: thelper.types.ArrayType
-                 mean_values,           # type: thelper.types.ArrayType
-                 xlabel="",             # type: thelper.types.LabelType
-                 ylabel="Raw Value"     # type: thelper.types.LabelType
-                 ):                     # type: (...) -> thelper.types.DrawingType
+def draw_errbars(labels,                # type: thelper.typedefs.LabelList
+                 min_values,            # type: thelper.typedefs.ArrayType
+                 max_values,            # type: thelper.typedefs.ArrayType
+                 stddev_values,         # type: thelper.typedefs.ArrayType
+                 mean_values,           # type: thelper.typedefs.ArrayType
+                 xlabel="",             # type: thelper.typedefs.LabelType
+                 ylabel="Raw Value"     # type: thelper.typedefs.LabelType
+                 ):                     # type: (...) -> thelper.typedefs.DrawingType
     """Draws and returns an error bar histogram figure using pyplot."""
     if min_values.shape != max_values.shape \
             or min_values.shape != stddev_values.shape \
