@@ -8,6 +8,7 @@ include .bumpversion.cfg
 include .coveragerc
 include .cookiecutterrc
 include .editorconfig
+include readthedocs.yml
 
 include AUTHORS.rst
 include CHANGELOG.rst
