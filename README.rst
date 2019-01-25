@@ -7,10 +7,12 @@ Overview
 .. list-table::
     :stub-columns: 1
 
-    * - tests
+    * - dependencies
+      - | |pyver| |requires|
+    * - status
       - | |travis| |readthedocs|
-    * - package
-      - | |pyver| |commits-since|
+    * - releases
+      - | |version| |commits-since|
 
 .. |pyver| image:: https://img.shields.io/badge/python-3.6+-blue.svg
     :alt: Requires Python 3.6+
@@ -28,15 +30,15 @@ Overview
     :alt: Documentation Build Status
     :target: https://thelper.readthedocs.io/en/latest/?badge=latest
 
+.. |version| image:: https://img.shields.io/pypi/v/thelper.svg
+    :alt: PyPI Package latest release
+    :target: https://pypi.python.org/pypi/thelper
+
+.. |requires| image:: https://requires.io/github/plstcharles/thelper/requirements.svg?branch=master
+    :alt: Requirements Status
+    :target: https://requires.io/github/plstcharles/thelper/requirements/?branch=master
+
 .. not ready for live version (WiP)
-
-   .. |requires| image:: https://requires.io/github/plstcharles/thelper/requirements.svg?branch=master
-       :alt: Requirements Status
-       :target: https://requires.io/github/plstcharles/thelper/requirements/?branch=master
-
-   .. |version| image:: https://img.shields.io/pypi/v/thelper.svg
-       :alt: PyPI Package latest release
-       :target: https://pypi.python.org/pypi/thelper
 
    .. |wheel| image:: https://img.shields.io/pypi/wheel/thelper.svg
        :alt: PyPI Wheel
