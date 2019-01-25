@@ -142,7 +142,8 @@ def load_transforms(stages):
             operation_type = thelper.utils.import_class(operation_name)
             operation = operation_type(**operation_params)
             if not isinstance(operation, (thelper.transforms.wrappers.TransformWrapper,
-                                          thelper.transforms.operations.NoTransformWrapper)):
+                                          thelper.transforms.operations.NoTransformWrapper,
+                                          torchvision.transforms.Compose)):
                 operations.append(thelper.transforms.wrappers.TransformWrapper(operation,
                                                                                target_keys=operation_targets,
                                                                                linked_fate=linked_fate))

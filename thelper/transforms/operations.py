@@ -34,7 +34,7 @@ class NoTransformWrapper(object):
     pass
 
 
-class Compose(torchvision.transforms.Compose, NoTransformWrapper):
+class Compose(torchvision.transforms.Compose):
     """Composes several transforms together (with support for invert ops).
 
     This interface is fully compatible with ``torchvision.transforms.Compose``.
@@ -80,7 +80,7 @@ class Compose(torchvision.transforms.Compose, NoTransformWrapper):
                     t.set_epoch(epoch)
 
 
-class CustomStepCompose(torchvision.transforms.Compose, NoTransformWrapper):
+class CustomStepCompose(torchvision.transforms.Compose):
     """Composes several transforms together based on an epoch schedule.
 
     This interface is fully compatible with ``torchvision.transforms.Compose``. It can be useful if
