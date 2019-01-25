@@ -2,6 +2,15 @@
 Changelog
 =========
 
+0.2.1 (2019/01/24)
+-------------------
+
+* Added typedef module & cleaned up parameter inspections
+* Cleaned up all drawing utils & added callback support to trainers
+* Added support for albumentation pipelines via wrapper
+* Updated all trainers/schedulers to rely on 0-based indexing
+* Updated travis/rtd configs for auto-deploy & 3.6 support
+
 0.2.0 (2019/01/15)
 -------------------
 
