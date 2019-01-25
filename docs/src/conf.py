@@ -204,6 +204,7 @@ on_rtd = os.environ.get('READTHEDOCS') == 'True'
 
 if on_rtd:
     autodoc_mock_imports = [
+        'albumentations',
         'argparse',
         'augmentor',
         'cv2',
@@ -215,6 +216,7 @@ if on_rtd:
         'pip',
         'pynput',
         'pynput.keyboard',
+        'shapely',
         'sklearn',
         'sklearn.metrics',
         'tensorboardX',
@@ -229,6 +231,7 @@ if on_rtd:
         'torchvision',
         'torchvision.transforms',
         'torchvision.utils',
+        'tqdm',
     ]
 
 
