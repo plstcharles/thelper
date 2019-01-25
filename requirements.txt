@@ -3,7 +3,7 @@ torchvision
 matplotlib
 cython
 opencv-python
-numpy
+numpy<1.16.0,>=1.11.1
 Pillow
 pynput
 scipy
