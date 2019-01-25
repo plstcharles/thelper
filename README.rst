@@ -20,7 +20,7 @@ Overview
     :alt: Travis-CI Build Status
     :target: https://travis-ci.org/plstcharles/thelper
 
-.. |commits-since| image:: https://img.shields.io/github/commits-since/plstcharles/thelper/latest.svg
+.. |commits-since| image:: https://img.shields.io/github/commits-since/plstcharles/thelper/v0.2.1.svg
     :alt: Commits since latest release
     :target: https://github.com/plstcharles/thelper/compare/v0.2.1...master
 
