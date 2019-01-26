@@ -119,10 +119,16 @@ def setup_globals(config):
     setup_cudnn(config)
 
 
-def load_checkpoint(ckpt,               # type: thelper.typedefs.CheckpointLoadingType
-                    map_location=None,  # type: Optional[thelper.typedefs.MapLocationType]
-                    ):                  # type: (...) -> thelper.typedefs.CheckpointContentType
+def load_checkpoint(ckpt,                      # type: thelper.typedefs.CheckpointLoadingType
+                    map_location=None,         # type: Optional[thelper.typedefs.MapLocationType]
+                    always_load_latest=False,  # type: Optional[bool]
+                    ):                         # type: (...) -> thelper.typedefs.CheckpointContentType
     """Loads a session checkpoint via PyTorch, check its compatibility, and returns its data.
+
+    If the ``ckpt`` parameter is a path to a valid directory, then that directly will be searched for
+    a checkpoint. If multiple checkpoints are found, the latest will be returned (based on the epoch
+    index in its name). iF ``always_load_latest`` is set to False and if a checkpoint named
+    ``ckpt.best.pth`` is found, it will be returned instead.
 
     Args:
         ckpt: a file-like object or a path to the checkpoint file.
@@ -134,11 +140,40 @@ def load_checkpoint(ckpt,               # type: thelper.typedefs.CheckpointLoadi
     """
     if map_location is None and not get_available_cuda_devices():
         map_location = 'cpu'
+    if isinstance(ckpt, str) and os.path.isdir(ckpt):
+        logger.debug("will search directory '%s' for a checkpoint to load..." % ckpt)
+        search_ckpt_dir = os.path.join(ckpt, "checkpoints")
+        if os.path.isdir(search_ckpt_dir):
+            search_dir = search_ckpt_dir
+        else:
+            search_dir = ckpt
+        ckpt_paths = glob.glob(os.path.join(search_dir, "ckpt.*.pth"))
+        if not ckpt_paths:
+            raise AssertionError("could not find any valid checkpoint files in directory '%s'" % search_dir)
+        latest_checkpoint_epoch = -1
+        for ckpt_path in ckpt_paths:
+            # note: the 2nd field in the name should be the epoch index, or 'best' if final checkpoint
+            tag = os.path.basename(ckpt_path).split(".")[1]
+            if tag == "best" and (not always_load_latest or latest_checkpoint_epoch == -1):
+                # if eval-only, always pick the best checkpoint; otherwise, only pick if nothing else exists
+                ckpt = ckpt_path
+                if not always_load_latest:
+                    break
+            elif tag != "best" and int(tag) > latest_checkpoint_epoch:  # otherwise, pick latest
+                # note: if several sessions are merged, this will pick the latest checkpoint of the first...
+                ckpt = ckpt_path
+                latest_checkpoint_epoch = int(tag)
+        if not os.path.isfile(ckpt):
+            raise AssertionError("could not find valid checkpoint at '%s'" % ckpt)
+    if isinstance(ckpt, str):
+        logger.debug("parsing checkpoint at '%s'" % ckpt)
+    else:
+        logger.debug("parsing checkpoint provided via file object")
     ckptdata = torch.load(ckpt, map_location=map_location)
     if not isinstance(ckptdata, dict):
         raise AssertionError("unexpected checkpoint data type")
     if "version" not in ckptdata:
-        raise AssertionError("checkpoint at '%s' missing internal version tag" % ckpt)
+        raise AssertionError("checkpoint missing internal version tag")
     if not isinstance(ckptdata["version"], str) or len(ckptdata["version"].split(".")) != 3:
         raise AssertionError("unexpected checkpoint version formatting")
     # by default, checkpoints should be from the same minor version, we warn otherwise

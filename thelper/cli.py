@@ -307,33 +307,8 @@ def main(args=None):
                     raise AssertionError("cannot specify device in config for cluster sessions, it is determined at runtime")
         return create_session(config, args.save_dir)
     elif args.mode == "resume":
-        if os.path.isdir(args.ckpt_path):
-            thelper.logger.debug("will search directory '%s' for a checkpoint to load..." % args.ckpt_path)
-            search_ckpt_dir = os.path.join(args.ckpt_path, "checkpoints")
-            if os.path.isdir(search_ckpt_dir):
-                search_dir = search_ckpt_dir
-            else:
-                search_dir = args.ckpt_path
-            ckpt_paths = glob.glob(os.path.join(search_dir, "ckpt.*.pth"))
-            if not ckpt_paths:
-                raise AssertionError("could not find any valid checkpoint files in directory '%s'" % search_dir)
-            latest_checkpoint_epoch = 0
-            for ckpt_path in ckpt_paths:
-                # note: the 2nd field in the name should be the epoch index, or 'best' if final checkpoint
-                tag = os.path.basename(ckpt_path).split(".")[1]
-                if tag == "best" and (args.eval_only or latest_checkpoint_epoch == 0):
-                    # if eval-only, always pick the best checkpoint; otherwise, only pick if nothing else exists
-                    args.ckpt_path = ckpt_path
-                    if args.eval_only:
-                        break
-                elif tag != "best" and int(tag) > latest_checkpoint_epoch:  # otherwise, pick latest
-                    # note: if several sessions are merged, this will pick the latest checkpoint of the first...
-                    args.ckpt_path = ckpt_path
-                    latest_checkpoint_epoch = int(tag)
-        if not os.path.isfile(args.ckpt_path):
-            raise AssertionError("could not find valid checkpoint at '%s'" % args.ckpt_path)
-        thelper.logger.debug("parsing checkpoint at '%s'" % args.ckpt_path)
-        ckptdata = thelper.utils.load_checkpoint(args.ckpt_path, map_location=args.map_location)
+        ckptdata = thelper.utils.load_checkpoint(args.ckpt_path, map_location=args.map_location,
+                                                 always_load_latest=(not args.eval_only))
         override_config = None
         if args.override_cfg:
             thelper.logger.debug("parsing override config at '%s'" % args.override_cfg)
