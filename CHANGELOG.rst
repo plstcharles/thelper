@@ -2,6 +2,15 @@
 Changelog
 =========
 
+0.2.2 (2019/01/29)
+-------------------
+
+* Fixed travis-ci matrix configuration
+* Added travis-ci deployment step for pypi
+* Fixed readthedocs documentation building
+* Updated readme shields & front page look
+* Cleaned up cli module entrypoint
+
 0.2.1 (2019/01/24)
 -------------------
 
@@ -26,13 +35,11 @@ Changelog
 * Added trainer support for loss computation via external members
 * Added utils to download/verify/extract files
 
-
 0.1.1 (2019/01/14)
 -------------------
 
 * Minor fixups and updates for CCFB02 compatibility
 * Added RawPredictions metric to fetch data from trainers
-
 
 0.1.0 (2018/11/28)
 -------------------
@@ -48,14 +55,12 @@ Changelog
 * Refactored task interfaces to allow merging.
 * Simplified model fine-tuning via checkpoints.
 
-
 0.0.2 (2018/10/18)
 -------------------
 
 * Completed first documentation pass.
 * Fixed travis/rtfd builds.
 * Fixed device mapping/loading issues.
-
 
 0.0.1 (2018/10/03)
 -------------------
