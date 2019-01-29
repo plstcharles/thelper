@@ -1,3 +1,4 @@
+pyopenssl
 pytest
 pytest-travis-fold
 pytest-cov
