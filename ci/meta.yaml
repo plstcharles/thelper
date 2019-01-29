@@ -20,42 +20,38 @@ build:
 requirements:
   host:
     - albumentations
-    - augmentor
     - cython
     - gitpython
     - matplotlib
     - numpy <1.16.0,>=1.11.1
-    - opencv-python
+    - opencv
     - pillow
     - pip
-    - pynput
     - python
     - scikit-learn
     - scipy
     - shapely
     - six
     - tensorboardx
-    - torch
+    - pytorch
     - torchvision
     - tqdm
   run:
     - albumentations
-    - augmentor
     - cython
     - gitpython
     - matplotlib
     - numpy <1.16.0,>=1.11.1
-    - opencv-python
+    - opencv
     - pillow
     - pip
-    - pynput
     - python
     - scikit-learn
     - scipy
     - shapely
     - six
     - tensorboardx
-    - torch
+    - pytorch
     - torchvision
     - tqdm
 
