@@ -43,6 +43,8 @@ jobs:
           fi
         - bash miniconda.sh -b -p $HOME/miniconda
         - export PATH="$HOME/miniconda/bin:$PATH"
+        - export CONDA_BUILD_PATH="$HOME/miniconda/conda-bld/$TRAVIS_OS_NAME-64"
+        - export CONDA_BUILD_SUFFIX="-py37_0"
         - hash -r
         - conda config --set always_yes yes --set changeps1 no
         - conda config --add channels pytorch

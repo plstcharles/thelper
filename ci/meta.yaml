@@ -12,8 +12,6 @@ build:
   number: 0
   entry_points:
     - thelper = thelper.cli:main
-  script_env:
-    - CONDA_BUILD_PATH
   script: "{{ PYTHON }} -m pip install . --no-deps --ignore-installed -vv "
 
 requirements:
