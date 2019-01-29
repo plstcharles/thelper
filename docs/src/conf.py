@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.abspath('../'))
 project = 'thelper'
 copyright = '2018, Pierre-Luc St-Charles'
 author = 'Pierre-Luc St-Charles'
-version = release = '0.2.3'
+version = release = '0.2.4'
 
 
 # -- General configuration ---------------------------------------------------
