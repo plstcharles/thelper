@@ -54,4 +54,4 @@ jobs:
         on:
           tags: true
       after_deploy:
-        - test $TRAVIS_BRANCH = "master" && conda install conda-build && conda install anaconda-client && bash ci/conda_upload.sh
+        - conda install conda-build && conda install anaconda-client && bash ci/conda_upload.sh
