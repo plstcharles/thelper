@@ -33,7 +33,8 @@ notifications:
 jobs:
   include:
     - stage: deploy
-      install:
+      script: echo "Deploying..."
+      before_deploy:
         - echo "Installing deployment tools..."
         - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
             wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh;
@@ -44,8 +45,11 @@ jobs:
         - export PATH="$HOME/miniconda/bin:$PATH"
         - hash -r
         - conda config --set always_yes yes --set changeps1 no
+        - conda config --add channels pytorch
+        - conda config --add channels albumentations
+        - conda config --add channels conda-forge
         - conda update -q conda
-      script: echo "Deploying..."
+        - conda info -a
       deploy:
         provider: pypi
         user: "${PYPI_USERNAME}"
