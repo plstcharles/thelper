@@ -2,8 +2,8 @@
 Changelog
 =========
 
-0.2.2, 0.2.3 (2019/01/29)
--------------------------
+0.2.2 - 0.2.4 (2019/01/29)
+--------------------------
 
 * Fixed travis-ci matrix configuration
 * Added travis-ci deployment step for pypi
