@@ -2,14 +2,16 @@
 Changelog
 =========
 
-0.2.2 (2019/01/29)
--------------------
+0.2.2, 0.2.3 (2019/01/29)
+-------------------------
 
 * Fixed travis-ci matrix configuration
 * Added travis-ci deployment step for pypi
 * Fixed readthedocs documentation building
 * Updated readme shields & front page look
 * Cleaned up cli module entrypoint
+* Fixed openssl dependency issues for travis tox check jobs
+* Updated travis post-deploy to try to fix conda packaging (wip)
 
 0.2.1 (2019/01/24)
 -------------------
