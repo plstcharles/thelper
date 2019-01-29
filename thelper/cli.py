@@ -7,7 +7,6 @@ are its configuration (dict), the dataset root directory (string), and the save 
 """
 
 import argparse
-import glob
 import json
 import logging
 import os
