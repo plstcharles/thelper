@@ -3,7 +3,8 @@ channels:
   - pytorch
   - albumentations
 dependencies:
-  - pytorch=0.4.0
+  - pytorch
+  - torchvision
   - numpy
   - cython
   - matplotlib
@@ -17,5 +18,4 @@ dependencies:
   - pip:
     - augmentor
     - tensorboardX
-    - torchvision
     - pynput
