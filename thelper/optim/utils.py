@@ -98,7 +98,7 @@ def create_loss_fn(config, model, loader=None, uploader=None):
         loss_type = thelper.utils.import_class(config["type"])
     else:
         raise AssertionError("loss config missing 'type' or 'model_attrib_name' field")
-    loss_params = thelper.utils.get_key_def("params", config, {})
+    loss_params = thelper.utils.get_key_def(["params", "parameters"], config, {})
     loss_params = copy.deepcopy(loss_params)  # required here, we might add some parameters below
     if thelper.utils.str2bool(thelper.utils.get_key_def("weight_classes", config, False)) or \
        thelper.utils.get_key_def("weight_distribution", config, None) is not None:
@@ -172,7 +172,7 @@ def create_metrics(config):
         if "type" not in metric_config or not metric_config["type"]:
             raise AssertionError("metric config missing 'type' field")
         metric_type = thelper.utils.import_class(metric_config["type"])
-        metric_params = thelper.utils.get_key_def("params", metric_config, {})
+        metric_params = thelper.utils.get_key_def(["params", "parameters"], metric_config, {})
         metric = metric_type(**metric_params)
         if not isinstance(metric, thelper.optim.metrics.Metric):
             raise AssertionError("invalid metric type, must derive from 'thelper.optim.metrics.Metric'")
@@ -196,7 +196,7 @@ def create_optimizer(config, model):
     if "type" not in config or not config["type"]:
         raise AssertionError("optimizer config missing 'type' field")
     optimizer_type = thelper.utils.import_class(config["type"])
-    optimizer_params = thelper.utils.get_key_def("params", config, {})
+    optimizer_params = thelper.utils.get_key_def(["params", "parameters"], config, {})
     optimizer = optimizer_type(filter(lambda p: p.requires_grad, model.parameters()), **optimizer_params)
     return optimizer
 
@@ -212,7 +212,7 @@ def create_scheduler(config, optimizer):
     if "type" not in config or not config["type"]:
         raise AssertionError("scheduler config missing 'type' field")
     scheduler_type = thelper.utils.import_class(config["type"])
-    scheduler_params = thelper.utils.get_key_def("params", config, {})
+    scheduler_params = thelper.utils.get_key_def(["params", "parameters"], config, {})
     scheduler = scheduler_type(optimizer, **scheduler_params)
     scheduler_step_metric = None
     if "step_metric" in config:

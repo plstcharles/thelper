@@ -96,9 +96,9 @@ def load_transforms(stages):
         if "operation" not in stage or not stage["operation"]:
             raise AssertionError("stage #%d is missing its operation field" % stage_idx)
         operation_name = stage["operation"]
-        if "params" in stage and not isinstance(stage["params"], dict):
+        operation_params = thelper.utils.get_key_def(["params", "parameters"], stage, {})
+        if not isinstance(operation_params, dict):
             raise AssertionError("stage #%d parameters are not provided as a dictionary" % stage_idx)
-        operation_params = stage["params"] if "params" in stage else {}
         operation_targets = None
         if "target_key" in stage:
             if not isinstance(stage["target_key"], (list, str, int)):

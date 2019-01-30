@@ -325,7 +325,7 @@ def create_parsers(config, base_transforms=None):
         if "type" not in dataset_config:
             raise AssertionError("missing field 'type' for instantiation of dataset '%s'" % dataset_name)
         dataset_type = thelper.utils.import_class(dataset_config["type"])
-        dataset_params = thelper.utils.get_key_def("params", dataset_config, {})
+        dataset_params = thelper.utils.get_key_def(["params", "parameters"], dataset_config, {})
         transforms = None
         if "transforms" in dataset_config and dataset_config["transforms"]:
             logger.debug("loading custom transforms for dataset '%s'..." % dataset_name)

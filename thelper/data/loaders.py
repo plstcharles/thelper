@@ -155,7 +155,7 @@ class _LoaderFactory(object):
                 if "type" not in sampler_config or not sampler_config["type"]:
                     raise AssertionError("missing 'type' field for sampler config")
                 self.sampler_type = thelper.utils.import_class(sampler_config["type"])
-                self.sampler_params = thelper.utils.get_key_def("params", sampler_config, {})
+                self.sampler_params = thelper.utils.get_key_def(["params", "parameters"], sampler_config, {})
                 logger.debug("will use sampler with type '%s' and config : %s" % (str(self.sampler_type), str(self.sampler_params)))
                 self.sampler_pass_labels = thelper.utils.str2bool(thelper.utils.get_key_def("pass_labels", sampler_config, False))
                 self.sampler_pass_labels_param_name = thelper.utils.get_key_def("pass_labels_param_name", sampler_config, "labels")

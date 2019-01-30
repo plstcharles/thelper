@@ -32,9 +32,9 @@ def create_task(config):
         if "type" not in config or not isinstance(config["type"], str):
             raise AssertionError("invalid field 'type' in task config")
         task_type = thelper.utils.import_class(config["type"])
-        if "params" not in config or not isinstance(config["params"], dict):
+        task_params = thelper.utils.get_key(["params", "parameters"], config)
+        if not isinstance(task_params, dict):
             raise AssertionError("invalid field 'params' in task config")
-        task_params = config["params"]
         task = task_type(**task_params)
         if not isinstance(task, thelper.tasks.Task):
             raise AssertionError("the task must be derived from 'thelper.tasks.Task'")
