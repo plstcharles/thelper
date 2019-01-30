@@ -871,11 +871,17 @@ def draw_classifs(images,               # type: thelper.typedefs.OneOrManyArrayT
                 img_grid = np.zeros(img_grid_shape, dtype=np.uint8)
             if labels_gt is not None or labels_pred is not None:
                 if labels_gt is not None:
-                    curr_label_gt = labels_map[labels_gt[img_idx]] if labels_map else labels_gt[img_idx]
+                    if labels_map and labels_gt[img_idx] in labels_map:
+                        curr_label_gt = labels_map[labels_gt[img_idx]]
+                    else:
+                        curr_label_gt = labels_gt[img_idx]
                 else:
                     curr_label_gt = "<unknown>"
                 if labels_pred is not None:
-                    curr_label_pred = labels_map[labels_pred[img_idx]] if labels_map else labels_pred[img_idx]
+                    if labels_map and labels_pred[img_idx] in labels_map:
+                        curr_label_pred = labels_map[labels_pred[img_idx]]
+                    else:
+                        curr_label_pred = labels_pred[img_idx]
                     xlabel = "GT={0}\nPred={1}".format(curr_label_gt, curr_label_pred)
                 else:
                     xlabel = "GT={0}".format(curr_label_gt)
@@ -910,11 +916,17 @@ def draw_classifs(images,               # type: thelper.typedefs.OneOrManyArrayT
                     ax.imshow(images[ax_idx, ...], interpolation='nearest')
                 if labels_gt is not None or labels_pred is not None:
                     if labels_gt is not None:
-                        curr_label_gt = labels_map[labels_gt[ax_idx]] if labels_map else labels_gt[ax_idx]
+                        if labels_map and labels_gt[ax_idx] in labels_map:
+                            curr_label_gt = labels_map[labels_gt[ax_idx]]
+                        else:
+                            curr_label_gt = labels_gt[ax_idx]
                     else:
                         curr_label_gt = "<unknown>"
                     if labels_pred is not None:
-                        curr_label_pred = labels_map[labels_pred[ax_idx]] if labels_map else labels_pred[ax_idx]
+                        if labels_map and labels_pred[ax_idx] in labels_map:
+                            curr_label_pred = labels_map[labels_pred[ax_idx]]
+                        else:
+                            curr_label_pred = labels_pred[ax_idx]
                         xlabel = "GT={0}\nPred={1}".format(curr_label_gt, curr_label_pred)
                     else:
                         xlabel = "GT={0}".format(curr_label_gt)
