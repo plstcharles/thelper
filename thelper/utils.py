@@ -266,9 +266,7 @@ def migrate_checkpoint(ckptdata,  # type: thelper.typedefs.CheckpointContentType
             else:
                 ckptdata["model_params"] = {}
         # TODO: create 'scheduler' field to restore previous state? (not so important for early versions)
-        ckpt_ver = [0, 2, 0]  # set ver for next update step
-    if ckpt_ver[0] <= 0 and ckpt_ver[1] <= 2 and ckpt_ver[2] < 5:
-        ckpt_ver = [0, 2, 5]  # set ver for next update step
+        # ckpt_ver = [0, 2, 0]  # set ver for next update step
     # if ckpt_ver[0] <= x and ckpt_ver[1] <= y and ckpt_ver[2] <= z:
     #     ... add more compatibility fixes here
     ckptdata["config"] = new_config
@@ -330,7 +328,7 @@ def migrate_config(config,        # type: thelper.typedefs.ConfigDict
         if "model" in config and isinstance(config["model"], dict) and "name" in config["model"]:
             del config["model"]["name"]
         # must update import targets wrt class name refactorings
-        def import_refactoring(cfg):
+        def import_refactoring(cfg):  # noqa: E306
             if isinstance(cfg, dict):
                 for key, val in cfg.items():
                     cfg[key] = import_refactoring(val)
@@ -366,7 +364,7 @@ def migrate_config(config,        # type: thelper.typedefs.ConfigDict
         cfg_ver = [0, 1, 0]  # set ver for next update step
     if cfg_ver[0] <= 0 and cfg_ver[1] <= 1:
         # remove 'force_convert' flags from all transform pipelines + build augment pipeline wrappers
-        def remove_force_convert(cfg):
+        def remove_force_convert(cfg):  # noqa: E306
             if isinstance(cfg, list):
                 for idx, stage in enumerate(cfg):
                     cfg[idx] = remove_force_convert(stage)
@@ -401,7 +399,8 @@ def migrate_config(config,        # type: thelper.typedefs.ConfigDict
         cfg_ver = [0, 2, 0]  # set ver for next update step
     if cfg_ver[0] <= 0 and cfg_ver[1] <= 2 and cfg_ver[2] < 5:
         # TODO: add scheduler 0-based step fix here? (unlikely to cause serious issues)
-        cfg_ver = [0, 2, 5]  # set ver for next update step
+        # cfg_ver = [0, 2, 5]  # set ver for next update step
+        pass
     # if cfg_ver[0] <= x and cfg_ver[1] <= y and cfg_ver[2] <= z:
     #     ... add more compatibility fixes here
     return config
