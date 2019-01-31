@@ -2,6 +2,13 @@
 Changelog
 =========
 
+0.2.6 (2019/01/31)
+--------------------------
+
+* Added framework checkpoint/configuration migration utilities
+* Fixed minor config parsing backward compatibility issues
+* Fixed minor bugs related to query & drawing utilities
+
 0.2.2 - 0.2.5 (2019/01/29)
 --------------------------
 
