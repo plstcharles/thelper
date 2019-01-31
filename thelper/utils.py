@@ -122,6 +122,7 @@ def setup_globals(config):
 def load_checkpoint(ckpt,                      # type: thelper.typedefs.CheckpointLoadingType
                     map_location=None,         # type: Optional[thelper.typedefs.MapLocationType]
                     always_load_latest=False,  # type: Optional[bool]
+                    check_version=True,        # type: Optional[bool]
                     ):                         # type: (...) -> thelper.typedefs.CheckpointContentType
     """Loads a session checkpoint via PyTorch, check its compatibility, and returns its data.
 
@@ -131,9 +132,13 @@ def load_checkpoint(ckpt,                      # type: thelper.typedefs.Checkpoi
     ``ckpt.best.pth`` is found, it will be returned instead.
 
     Args:
-        ckpt: a file-like object or a path to the checkpoint file.
+        ckpt: a file-like object or a path to the checkpoint file or session directory.
         map_location: a function, string or a dict specifying how to remap storage
             locations. See ``torch.load`` for more information.
+        always_load_latest: toggles whether to always try to load the latest checkpoint
+            if a session directory is provided (instead of loading the 'best' checkpoint).
+        check_version: toggles whether the checkpoint's version should be checked for
+            compatibility issues, and query the user for how to proceed.
 
     Returns:
         Content of the checkpoint (a dictionary).
@@ -172,27 +177,34 @@ def load_checkpoint(ckpt,                      # type: thelper.typedefs.Checkpoi
     ckptdata = torch.load(ckpt, map_location=map_location)
     if not isinstance(ckptdata, dict):
         raise AssertionError("unexpected checkpoint data type")
-    if "version" not in ckptdata:
-        raise AssertionError("checkpoint missing internal version tag")
-    if not isinstance(ckptdata["version"], str) or len(ckptdata["version"].split(".")) != 3:
-        raise AssertionError("unexpected checkpoint version formatting")
-    # by default, checkpoints should be from the same minor version, we warn otherwise
-    import thelper
-    versions = [thelper.__version__.split("."), ckptdata["version"].split(".")]
-
-    if versions[0][0] != versions[1][0]:
-        raise AssertionError("incompatible checkpoint, major version mismatch (%s vs %s)" %
-                             (thelper.__version__, ckptdata["version"]))
-    if versions[0][1] != versions[1][1]:
-        answer = query_yes_no("Checkpoint minor version mismatch (%s vs %s); do you want to "
-                              "attempt to load it anyway?" % (thelper.__version__, ckptdata["version"]),
-                              bypass="y")
-        if not answer:
-            logger.error("checkpoint out-of-date; user aborted")
-            sys.exit(1)
-    if versions[0] != versions[1]:
-        logger.warning("checkpoint version mismatch with current framework version (%s vs %s)" %
-                       (thelper.__version__, ckptdata["version"]))
+    if check_version:
+        good_version = False
+        from thelper import __version__ as curr_ver
+        if "version" not in ckptdata:
+            logger.warning("checkpoint missing internal version tag")
+            ckpt_ver_str = "0.0.0"
+        else:
+            ckpt_ver_str = ckptdata["version"]
+            if not isinstance(ckpt_ver_str, str) or len(ckpt_ver_str.split(".")) != 3:
+                raise AssertionError("unexpected checkpoint version formatting")
+            # by default, checkpoints should be from the same minor version, we warn otherwise
+            versions = [curr_ver.split("."), ckpt_ver_str.split(".")]
+            if versions[0][0] != versions[1][0]:
+                logger.error("incompatible checkpoint, major version mismatch (%s vs %s)" % (curr_ver, ckpt_ver_str))
+            elif versions[0][1] != versions[1][1]:
+                logger.warning("outdated checkpoint, minor version mismatch (%s vs %s)" % (curr_ver, ckpt_ver_str))
+            else:
+                good_version = True
+        if not good_version:
+            answer = query_string("Checkpoint version unsupported (framework=%s, checkpoint=%s); how do you want to proceed?" %
+                                  (curr_ver, ckpt_ver_str), choices=["continue", "migrate", "abort"], default="migrate", bypass="migrate")
+            if answer == "abort":
+                logger.error("checkpoint out-of-date; user aborted")
+                sys.exit(1)
+            elif answer == "continue":
+                logger.warning("will attempt to load checkpoint anyway (might crash later due to incompatibilities)")
+            elif answer == "migrate":
+                ckptdata = migrate_checkpoint(ckptdata)
     return ckptdata
 
 
