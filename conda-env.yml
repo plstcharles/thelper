@@ -16,7 +16,7 @@ dependencies:
   - shapely
   - albumentations
   - pip:
-    - imgaug
+    - imgaug==0.2.5
     - augmentor
     - tensorboardX
     - pynput
