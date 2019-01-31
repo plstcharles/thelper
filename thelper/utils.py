@@ -769,7 +769,7 @@ def query_yes_no(question, default=None, bypass=None):
         ``True`` for 'yes', or ``False`` for 'no' (or their respective variations).
     """
     valid = {"yes": True, "ye": True, "y": True, "no": False, "n": False}
-    if bypass is not None and not isinstance(bypass, str) or bypass not in valid:
+    if bypass is not None and (not isinstance(bypass, str) or bypass not in valid):
         raise AssertionError("unexpected bypass value")
     if bypass_queries:
         if bypass is None:
