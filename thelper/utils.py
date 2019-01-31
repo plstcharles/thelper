@@ -196,6 +196,205 @@ def load_checkpoint(ckpt,                      # type: thelper.typedefs.Checkpoi
     return ckptdata
 
 
+def migrate_checkpoint(ckptdata,  # type: thelper.typedefs.CheckpointContentType
+                       ):         # type: (...) -> thelper.typedefs.CheckpointContentType
+    """Migrates the content of an incompatible or outdated checkpoint to the current version of the framework.
+
+    This function might not be able to fix all backward compatibility issues (e.g. it cannot fix class interfaces
+    that were changed). Perfect reproductibility of tests cannot be guaranteed either if this migration tool is used.
+
+    Args:
+        ckptdata: checkpoint data in dictionary form obtained via ``thelper.utils.load_checkpoint``. Note that
+            the data contained in this dictionary will be modified in-place.
+
+    Returns:
+        An updated checkpoint dictionary that should be compatible with the current version of the framework.
+    """
+    if not isinstance(ckptdata, dict):
+        raise AssertionError("unexpected ckptdata type")
+    from thelper import __version__ as curr_ver
+    curr_ver = [int(num) for num in curr_ver.split(".")]
+    ckpt_ver_str = ckptdata["version"] if "version" in ckptdata else "0.0.0"
+    ckpt_ver = [int(num) for num in ckpt_ver_str.split(".")]
+    if (ckpt_ver[0] > curr_ver[0] or (ckpt_ver[0] == curr_ver[0] and ckpt_ver[1] > curr_ver[1]) or
+       (ckpt_ver[0:2] == curr_ver[0:2] and ckpt_ver[2] > curr_ver[2])):
+        raise AssertionError("cannot migrate checkpoints from future versions!")
+    if "config" not in ckptdata:
+        raise AssertionError("checkpoint migration requires config")
+    old_config = ckptdata["config"]
+    new_config = migrate_config(copy.deepcopy(old_config), ckpt_ver_str)
+    if ckpt_ver == [0, 0, 0]:
+        logger.warning("trying to migrate checkpoint data from v0.0.0; all bets are off")
+    else:
+        logger.info("trying to migrate checkpoint data from v%s" % ckpt_ver_str)
+    if ckpt_ver[0] <= 0 and ckpt_ver[1] <= 1:
+        # combine 'host' and 'time' fields into 'source'
+        if "host" in ckptdata and "time" in ckptdata:
+            ckptdata["source"] = ckptdata["host"] + ckptdata["time"]
+            del ckptdata["host"]
+            del ckptdata["time"]
+        # update classif task interface
+        if "task" in ckptdata and isinstance(ckptdata["task"], thelper.tasks.classif.Classification):
+            ckptdata["task"] = str(thelper.tasks.classif.Classification(class_names=ckptdata["task"].class_names,
+                                                                        input_key=ckptdata["task"].input_key,
+                                                                        label_key=ckptdata["task"].label_key,
+                                                                        meta_keys=ckptdata["task"].meta_keys))
+        # move 'state_dict' field to 'model'
+        if "state_dict" in ckptdata:
+            ckptdata["model"] = ckptdata["state_dict"]
+            del ckptdata["state_dict"]
+        # create 'model_type' and 'model_params' fields
+        if "model" in new_config:
+            if "type" in new_config["model"]:
+                ckptdata["model_type"] = new_config["model"]["type"]
+            else:
+                ckptdata["model_type"] = None
+            if "params" in new_config["model"]:
+                ckptdata["model_params"] = copy.deepcopy(new_config["model"]["params"])
+            else:
+                ckptdata["model_params"] = {}
+        # TODO: create 'scheduler' field to restore previous state? (not so important for early versions)
+        ckpt_ver = [0, 2, 0]  # set ver for next update step
+    if ckpt_ver[0] <= 0 and ckpt_ver[1] <= 2 and ckpt_ver[2] < 5:
+        ckpt_ver = [0, 2, 5]  # set ver for next update step
+    # if ckpt_ver[0] <= x and ckpt_ver[1] <= y and ckpt_ver[2] <= z:
+    #     ... add more compatibility fixes here
+    ckptdata["config"] = new_config
+    return ckptdata
+
+
+def migrate_config(config,        # type: thelper.typedefs.ConfigDict
+                   cfg_ver_str,   # type: str
+                   ):             # type: (...) -> thelper.typedefs.ConfigDict
+    """Migrates the content of an incompatible or outdated configuration to the current version of the framework.
+
+    This function might not be able to fix all backward compatibility issues (e.g. it cannot fix class interfaces
+    that were changed). Perfect reproductibility of tests cannot be guaranteed either if this migration tool is used.
+
+    Args:
+        config: session configuration dictionary obtained e.g. by parsing a JSON file. Note that the data contained
+            in this dictionary will be modified in-place.
+        cfg_ver_str: string representing the version for which the configuration was created (e.g. "0.2.0").
+
+    Returns:
+        An updated configuration dictionary that should be compatible with the current version of the framework.
+    """
+    if not isinstance(config, dict):
+        raise AssertionError("unexpected config type")
+    if not isinstance(cfg_ver_str, str) or len(cfg_ver_str.split(".")) != 3:
+        raise AssertionError("unexpected checkpoint version formatting")
+    from thelper import __version__ as curr_ver
+    curr_ver = [int(num) for num in curr_ver.split(".")]
+    cfg_ver = [int(num) for num in cfg_ver_str.split(".")]
+    if (cfg_ver[0] > curr_ver[0] or (cfg_ver[0] == curr_ver[0] and cfg_ver[1] > curr_ver[1]) or
+       (cfg_ver[0:2] == curr_ver[0:2] and cfg_ver[2] > curr_ver[2])):
+        raise AssertionError("cannot migrate configs from future versions!")
+    if cfg_ver == [0, 0, 0]:
+        logger.warning("trying to migrate config from v0.0.0; all bets are off")
+    else:
+        logger.info("trying to migrate config from v%s" % cfg_ver_str)
+    if cfg_ver[0] <= 0 and cfg_ver[1] < 1:
+        # must search for name-value parameter lists and convert them to dictionaries
+        def name_value_replacer(cfg):
+            if isinstance(cfg, dict):
+                for key, val in cfg.items():
+                    if (key == "params" or key == "parameters") and isinstance(val, list) and \
+                       all([isinstance(p, dict) and list(p.keys()) == ["name", "value"] for p in val]):
+                        cfg["params"] = {param["name"]: name_value_replacer(param["value"]) for param in val}
+                        if key == "parameters":
+                            del cfg["parameters"]
+                    elif isinstance(val, (dict, list)):
+                        cfg[key] = name_value_replacer(val)
+            elif isinstance(cfg, list):
+                for idx, val in enumerate(cfg):
+                    cfg[idx] = name_value_replacer(val)
+            return cfg
+        config = name_value_replacer(config)
+        # must replace "data_config" section by "loaders"
+        if "data_config" in config:
+            config["loaders"] = config["data_config"]
+            del config["data_config"]
+        # remove deprecated name attribute for models
+        if "model" in config and isinstance(config["model"], dict) and "name" in config["model"]:
+            del config["model"]["name"]
+        # must update import targets wrt class name refactorings
+        def import_refactoring(cfg):
+            if isinstance(cfg, dict):
+                for key, val in cfg.items():
+                    cfg[key] = import_refactoring(val)
+            elif isinstance(cfg, list):
+                for idx, val in enumerate(cfg):
+                    cfg[idx] = import_refactoring(val)
+            elif isinstance(cfg, str) and cfg.startswith("thelper."):
+                cfg = thelper.utils.resolve_import(cfg)
+            return cfg
+        config = import_refactoring(config)
+        if "trainer" in config and isinstance(config["trainer"], dict):
+            trainer_cfg = config["trainer"]
+            # move 'loss' section to 'optimization' section
+            if "loss" in trainer_cfg:
+                if "optimization" not in trainer_cfg or not isinstance(trainer_cfg["optimization"], dict):
+                    trainer_cfg["optimization"] = {}
+                trainer_cfg["optimization"]["loss"] = trainer_cfg["loss"]
+                del trainer_cfg["loss"]
+            # replace all devices with cuda:all
+            if "train_device" in trainer_cfg:
+                del trainer_cfg["train_device"]
+            if "valid_device" in trainer_cfg:
+                del trainer_cfg["valid_device"]
+            if "test_device" in trainer_cfg:
+                del trainer_cfg["test_device"]
+            if "device" not in trainer_cfg:
+                trainer_cfg["device"] = "cuda:all"
+            # remove params from trainer config
+            if "params" in trainer_cfg:
+                if not isinstance(trainer_cfg["params"], (dict, list)) or trainer_cfg["params"]:
+                    logger.warning("removing non-empty parameter section from trainer config")
+                del trainer_cfg["params"]
+        cfg_ver = [0, 1, 0]  # set ver for next update step
+    if cfg_ver[0] <= 0 and cfg_ver[1] <= 1:
+        # remove 'force_convert' flags from all transform pipelines + build augment pipeline wrappers
+        def remove_force_convert(cfg):
+            if isinstance(cfg, list):
+                for idx, stage in enumerate(cfg):
+                    cfg[idx] = remove_force_convert(stage)
+            elif isinstance(cfg, dict):
+                if "parameters" in cfg:
+                    cfg["params"] = cfg["parameters"]
+                    del cfg["parameters"]
+                if "operation" in cfg and cfg["operation"] == "thelper.transforms.TransformWrapper":
+                    if "params" in cfg and "force_convert" in cfg["params"]:
+                        del cfg["params"]["force_convert"]
+                for key, stage in cfg.items():
+                    cfg[key] = remove_force_convert(stage)
+            return cfg
+        for pipeline in ["base_transforms", "train_augments", "valid_augments", "test_augments"]:
+            if "loaders" in config and isinstance(config["loaders"], dict) and pipeline in config["loaders"]:
+                if pipeline.endswith("_augments"):
+                    stages = config["loaders"][pipeline]
+                    for stage in stages:
+                        if "append" in stage:
+                            if stage["append"]:
+                                logger.warning("overriding augmentation stage ordering")
+                            del stage["append"]
+                        if "operation" in stage and stage["operation"] == "Augmentor.Pipeline":
+                            if "params" in stage:
+                                stage["params"] = stage["params"]["operations"]
+                            elif "parameters" in stage:
+                                stage["params"] = stage["parameters"]["operations"]
+                                del stage["parameters"]
+                    config["loaders"][pipeline] = {"append": False, "transforms": remove_force_convert(stages)}
+                else:
+                    config["loaders"][pipeline] = remove_force_convert(config["loaders"][pipeline])
+        cfg_ver = [0, 2, 0]  # set ver for next update step
+    if cfg_ver[0] <= 0 and cfg_ver[1] <= 2 and cfg_ver[2] < 5:
+        # TODO: add scheduler 0-based step fix here? (unlikely to cause serious issues)
+        cfg_ver = [0, 2, 5]  # set ver for next update step
+    # if cfg_ver[0] <= x and cfg_ver[1] <= y and cfg_ver[2] <= z:
+    #     ... add more compatibility fixes here
+    return config
+
+
 def download_file(url, root, filename, md5=None):
     """Downloads a file from a given URL to a local destination.
 
