@@ -49,7 +49,6 @@ class AddCoords(torch.nn.Module):
 
         dev = in_tensor.device
         out = torch.cat([in_tensor, xx_channel.to(dev), yy_channel.to(dev)], dim=1)
-        torch.Tensor()
         if self.radius_channel:
             radius_calc = torch.sqrt(torch.pow(xx_channel - 0.5, 2) + torch.pow(yy_channel - 0.5, 2))
             out = torch.cat([out, radius_calc.to(dev)], dim=1)
