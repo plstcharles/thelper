@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     IterCallbackType = Optional[Callable[[SampleType, Task, PredictionType, int, int, int, int], None]]
 
     ConfigIndex = AnyStr
-    ConfigValue = Union[AnyStr, bool, float, int]
+    ConfigValue = Union[AnyStr, bool, float, int, List[Any], Dict[Any, Any]]
     ConfigDict = Dict[ConfigIndex, ConfigValue]
 
     CheckpointLoadingType = Union[AnyStr, io.FileIO]
