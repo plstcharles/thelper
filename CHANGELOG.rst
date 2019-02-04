@@ -2,6 +2,11 @@
 Changelog
 =========
 
+0.2.7 (2019/02/04)
+--------------------------
+
+* Updated conda build recipe for python variants w/ auto upload
+
 0.2.6 (2019/01/31)
 --------------------------
 
