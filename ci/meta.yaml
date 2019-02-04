@@ -24,7 +24,7 @@ requirements:
     - opencv
     - pillow
     - pip
-    - python
+    - python {{ python }}
     - scikit-learn
     - scipy
     - shapely
