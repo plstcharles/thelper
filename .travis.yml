@@ -43,9 +43,9 @@ jobs:
         - conda config --set anaconda_upload yes
         - conda config --set always_yes yes
         - conda config --set changeps1 no
-        - conda config --add channels pytorch
-        - conda config --add channels albumentations
-        - conda config --add channels conda-forge
+        - conda config --append channels pytorch
+        - conda config --append channels albumentations
+        - conda config --append channels conda-forge
         - conda update -q conda
         - conda install conda-build conda-verify anaconda-client
         - conda info -a
