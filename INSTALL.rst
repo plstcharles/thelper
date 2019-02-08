@@ -1,6 +1,28 @@
+.. _install-guide:
+
 ============
 Installation
 ============
+
+Anaconda
+========
+
+Starting with v0.2.5, the latest stable version of the framework can be installed directly (with its
+dependencies) via `Anaconda <https://docs.anaconda.com/anaconda/install/>`_. In a conda environment,
+simply enter::
+
+  $ conda install -c plstcharles thelper
+
+This should install the latest stable version of the framework on Windows and Linux, for Python
+3.6 or 3.7. You can check the release notes `on GitHub`__.
+
+.. __: https://github.com/plstcharles/thelper/blob/master/CHANGELOG.rst
+
+
+Installing from source
+======================
+
+If you wish to modify the framework's source code, follow the installation instructions below.
 
 Linux
 -----
@@ -30,12 +52,14 @@ Or, assuming conda is not already in your path::
 Other systems
 -------------
 
-If you cannot use the Makefile, you will have to install the dependencies yourself. These dependencies are listed in
-the `requirements file <https://github.com/plstcharles/thelper/blob/master/requirements.txt>`_, and can also be installed
-using the conda environment configuration file provided `here <https://github.com/plstcharles/thelper/blob/master/conda-env.yml>`_.
-For the latter case, call the following from your terminal::
+If you cannot use the Makefile, you will have to install the dependencies yourself. These dependencies are
+listed in the `requirements file <https://github.com/plstcharles/thelper/blob/master/requirements.txt>`_,
+and can also be installed using the conda environment configuration file provided `here`__. For the latter
+case, call the following from your terminal::
 
   $ conda env create --file <THELPER_ROOT>/conda-env.yml -n thelper
+
+.. __: https://github.com/plstcharles/thelper/blob/master/conda-env.yml
 
 Then, simply activate your environment and install the thelper package within it::
 
@@ -50,7 +74,7 @@ directly through pip::
 
 
 Testing the installation
-------------------------
+========================
 
 You should now be able to print the thelper package version number to see if the package is properly installed and
 that all dependencies can be loaded at runtime::
