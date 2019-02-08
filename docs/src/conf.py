@@ -42,7 +42,10 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.todo',
     'sphinx.ext.viewcode',
+    'sphinx.ext.autosectionlabel',
 ]
+
+autosectionlabel_prefix_document = True
 
 if os.getenv("SPELLCHECK"):
     extensions += "sphinxcontrib.spelling",
@@ -242,9 +245,9 @@ def skip(app, what, name, obj, skip, options):
 
 def run_apidoc(_):
     if on_rtd:
-        argv = ["-o", ".", "../../thelper"]
+        argv = ["-M", "-o", ".", "../../thelper"]
     else:
-        argv = ["-f", "-o", "./src/", "../thelper"]
+        argv = ["-M", "-f", "-o", "./src/", "../thelper"]
     try:
         # Sphinx 1.7+
         from sphinx.ext import apidoc
