@@ -2,17 +2,19 @@
 Contents
 ========
 
+
 .. toctree::
    :maxdepth: 2
 
    readme
    installation
-   documentation
    usage
+   documentation
    thelper
    contributing
    authors
    changelog
+
 
 Indices and tables
 ==================

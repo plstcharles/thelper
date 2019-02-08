@@ -86,3 +86,5 @@ that all dependencies can be loaded at runtime::
     >>> import thelper
     >>> print(thelper.__version__)
     x.y.z
+
+You can now refer to the :ref:`user guide<user-guide>` to start using the framework.
