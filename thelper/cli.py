@@ -1,9 +1,10 @@
 """
 Command-line module, for use with a ``__main__`` entrypoint.
 
-This module contains the primary functions used to create or resume a training visualization, or
-annotation session. The three basic arguments that need to be provided by the user to create a session
-are its configuration (dict), the dataset root directory (string), and the save root directory (string).
+This module contains the primary functions used to create or resume a training session, to start a
+visualization session, or to start an annotation session. The basic argument that needs to be provided
+by the user to create any kind of session is a configuration dictionary. For sessions that produce
+outputs, the path to a directory where to save the data is also needed.
 """
 
 import argparse
@@ -68,11 +69,8 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
         should be addressed in a future update.
 
     .. warning::
-        A resumed session will not restore the state of the RNGs used originally as those are not saved
-        in the checkpoint. This means that we cannot expect a training session resumed from a certain
-        checkpoint to result in the same final output as a session created from scratch and that was
-        run for its entire length.
-        # todo: reconfirm as of 2019/01, seeding now based on offset from init seed + epoch index
+        A resumed session will not be compatible with its original RNG states if the number of workers
+        used is changed. To get 100% reproducible results, make sure you run with the same worker count.
 
     Args:
         ckptdata: raw checkpoint data loaded via ``torch.load()``; it will be parsed by the various
@@ -206,6 +204,10 @@ def annotate_data(config, save_dir):
         save_dir: the path to the root directory where the session directory should be saved. Note that
             this is not the path to the session directory itself, but its parent, which may also contain
             other session directories.
+
+    .. seealso::
+        | :func:`thelper.gui.annotators.Annotator`
+        | :func:`thelper.gui.annotators.ImageSegmentAnnotator`
     """
     # import gui here since it imports packages that will cause errors in CLI-only environments
     import thelper.gui
