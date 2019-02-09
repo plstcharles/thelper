@@ -31,6 +31,7 @@ In the sections below, we first introduce the framework's `Command-Line Interfac
 used to define the settings of these jobs, and the `session directories <#session-directories>`_ that
 contain job outputs. Then, we 
 
+-----
 
 Command-Line Interface
 ======================
@@ -52,6 +53,10 @@ application.
 Creating a training session
 ---------------------------
 
+Usage from the terminal::
+
+  $ thelper new <PATH_TO_CONFIG_FILE.json> <PATH_TO_SAVE_DIRECTORY>
+
 To create a training session, the ``new`` operation of the CLI is used. This redirects the execution flow
 of the CLI to :meth:`thelper.cli.create_session`. The configuration dictionary that is provided must
 contain all sections required to train a model, namely ``datasets``, ``loaders``, ``model``, and
@@ -65,13 +70,13 @@ later in the process. This CLI entrypoint can therefore be used to start trainin
 Finally, note that since starting a training session produces logs and data, the path to a directory where
 the output can be created must be provided as the second argument.
 
-Usage from the terminal::
-
-  $ thelper new <PATH_TO_CONFIG_FILE.json> <PATH_TO_SAVE_DIRECTORY>
-
 
 Resuming a training session
 ---------------------------
+
+Usage from the terminal::
+
+  $ thelper resume <PATH_TO_SESSION_DIR_OR_CHECKPT> [-m MAP_LOCATION] [-c OVERRIDE_CFG] [...]
 
 If a previously created training session was halted for any reason, it is possible to resume it with the
 ``resume`` operation of the CLI. To do so, you must provide either the path to the session directory
@@ -87,13 +92,13 @@ user. A session can also be resumed only to evaluate the (best) trained model pe
 set. This is done by adding the ``--eval-only`` flag at the end of the command line. For more information
 on the parameters, see the documentation of :meth:`thelper.cli.resume_session`.
 
-Usage from the terminal::
-
-  $ thelper resume <PATH_TO_SESSION_DIR_OR_CHECKPT> [-m MAP_LOCATION] [-c OVERRIDE_CFG] [...]
-
 
 Visualizing data
 ----------------
+
+Usage from the terminal::
+
+  $ thelper viz <PATH_TO_CONFIG_FILE.json>
 
 Visualizing the images that will be forwarded to the model during training after applying data
 augmentation operations can be useful to determine whether they still look natural or not. The ``viz``
@@ -102,13 +107,13 @@ configuration dictionary that would normally be given to the CLI under the ``new
 operation modes. For more information on this mode, see the documentation of
 :meth:`thelper.cli.visualize_data`.
 
-Usage from the terminal::
-
-  $ thelper viz <PATH_TO_CONFIG_FILE.json>
-
 
 Annotating data
 ---------------
+
+Usage from the terminal::
+
+  $ thelper annot <PATH_TO_CONFIG_FILE.json> <PATH_TO_SAVE_DIRECTORY>
 
 Lastly, the ``annot`` CLI operation allows the user to browse a dataset and annotate individual
 samples from it using a specialized GUI tool. The configuration dictionary that is provided must contain
@@ -117,10 +122,7 @@ the GUI tool settings used to create annotations. During an annotation session, 
 created by the user will be saved into the session directory. For more information on the parameters,
 refer to the documentation of :meth:`thelper.cli.annotate_data`.
 
-Usage from the terminal::
-
-  $ thelper annot <PATH_TO_CONFIG_FILE.json> <PATH_TO_SAVE_DIRECTORY>
-
+-----
 
 Configuration Files
 ===================
@@ -136,7 +138,10 @@ only look at the datasets and data loaders sections).
 
 For now, all configuration files are expected to be in JSON format, but future versions of the framework
 will support YAML configurations as well as raw python modules (.py files) that define each section
-as a dictionary.
+as a dictionary. Examples of complete configuration files used for various purposes are available in the
+``config`` directory located with the code (`[see them here]`__).
+
+.. __: https://github.com/plstcharles/thelper/tree/master/configs
 
 
 Datasets section
@@ -225,7 +230,7 @@ data transforms), while others can be specified for each loader individually (e.
 size). The meta-settings that should always be set however are the split ratios that define the fraction
 of samples from each parser to use in a data loader. As shown in the example below, these ratios allow
 us to split a dataset into different loaders automatically, and without any possibility of data leakage
-between them. If all seed are also set in this section, then the split will be fixed between experiments,
+between them. If all seeds are also set in this section, then the split will be fixed between experiments,
 ensuring that the difference between the performance of two models trained in two different sessions is
 never due to a difference in their training data.
 
@@ -236,7 +241,7 @@ with each color channel normalized to either the [-1, 1] range, or using pre-com
 deviation values. We can define such operations directly using the classes available in the
 :mod:`thelper.transforms` module. This is also demonstrated in the example configuration below::
 
-    # note: this example is in line with the ``datasets`` example given earlier
+    # note: this example is in line with the "datasets" example given earlier
     "loaders": {
         "batch_size": 32,     # pack 32 images per minibatch
         "valid_seed": 0,  
@@ -244,33 +249,36 @@ deviation values. We can define such operations directly using the classes avail
         "torch_seed": 0,      # (otherwise, random seed will be picked and printed in logs)
         "numpy_seed": 0,
         "random_seed": 0,
-        "workers": 4,         # use 4 threads to load independent minibatches in parallel
-        "base_transforms": [  # defines list of operations to apply to ALL loaded samples
-            {   # first, normalize 8-bit images to the [-1, 1] range
+        "workers": 4,         # means that we will be loading 4 minibatches in parallel
+        "base_transforms": [  # defines the list of operations to apply to all loaded samples
+            {
+                # first, normalize 8-bit images to the [-1, 1] range
                 "operation": "thelper.transforms.NormalizeMinMax",
                 "params": {
                     "min": [127, 127, 127],
                     "max": [255, 255, 255]
                 }
             },
-            {   # next, resize the CIFAR10 images to 224x224 for the model
+            {
+                # next, resize the CIFAR10 images to 224x224 for the model
                 "operation": "thelper.transforms.Resize",
                 "params": {
                     "dsize": [224, 224]
                 }
             },
-            {   # finally, transform the opencv/numpy arrays to torch.Tensor arrays
+            {
+                # finally, transform the opencv/numpy arrays to torch.Tensor arrays
                 "operation": "torchvision.transforms.ToTensor"
             }
         ],
-        # we reserve 20% of the samples from the training data parser for validation
+        # we reserve 20% of the samples from the training parser for validation
         "train_split": {
             "cifar10_train": 0.8
         },
         "valid_split": {
             "cifar10_train": 0.2
         },
-        # we use 100% of the samples from the test data parser for testing
+        # we use 100% of the samples from the test parser for testing
         "test_split": {
             "cifar10_test": 1.0
         }
@@ -278,7 +286,7 @@ deviation values. We can define such operations directly using the classes avail
 
 The example above prepares the CIFAR10 dataset for standard training using a 80%-20% training-validation
 split, and keeps all the original CIFAR10 testing data for actual testing. All loaded samples will be
-normalized and resized to fit the expected input resolution of a ResNet18 model, detailed in the next
+normalized and resized to fit the expected input resolution of a typical model, as shown in the next
 subsection. This example however contains no data augmentation pipelines; refer to the `[relevant sections
 further down] <#defining-a-data-augmentation-pipeline>`_ for actual usage examples. Similarly, no sampler
 is used above to rebalance the classes; `[see here] <#using-a-data-sampler-to-rebalance-a-dataset>`_ for
@@ -289,27 +297,187 @@ the documentation of :meth:`thelper.data.utils.create_loaders`.
 Model section
 -------------
 
-Section statement here @@@@@@
+The ``model`` section of the configuration defines the model that will be trained, fine-tuned, or evaluated
+during the session. The model can be defined in two ways. If you are starting to train a new model from
+scratch (i.e. using randomly initialized weights), you simply have to specify the type of the class that
+will implement the model's architecture along with its constructor's parameters. This is shown in the
+example below for an instance of MobileNet taken from the framework itself::
+
+    "model": {
+        "type": "thelper.nn.mobilenet.MobileNetV2",
+        "params": {
+            "input_size": 224
+        }
+    }
+
+In this case, the constructor of :class:`thelper.nn.mobilenet.MobileNetV2` will only receive a single
+argument, that is the size of the tensors it should expect as input. Some implementations of model
+architectures such as those in ``torchvision.models`` (`[see them here]`__) might allow you to specify
+a ``pretrained`` parameter. Setting this parameter to ``True`` will let you automatically download the
+weights of that model (trained on ImageNet) from official repositories and thus allow you fine-tune it
+directly::
+
+    "model": {
+        "type" : "torchvision.models.resnet.resnet18",
+        "params": {
+            "pretrained": true
+        }
+    }
+
+.. __: https://pytorch.org/docs/stable/torchvision/models.html
+
+The second option to fine-tune a model that is not available via ``torchvision`` is to specify the
+path to a checkpoint produced by the framework as such::
+
+    "model": {
+        "chkptdata" : "<PATH_TO_ANY_THELPER_CHECKPOINT.pth>"
+    }
+
+When using this approach, the framework will first open the checkpoint and reinstantiate the model using
+its original fully qualified class name and the parameters originally passed to its constructor. Then,
+that model will be checked for task compatibility, and its weights will finally be loaded in. For more
+information on the checkpoints produced by the framework, see the `[relevant section below] <#checkpoints>`_.
+For more information on the model creation/loading process, refer to :meth:`thelper.nn.utils.create_model`.
 
 
 Trainer section
 ---------------
 
-Section statement here @@@@@@
+The ``trainer`` section of the configuration defines trainer, optimization, and metric-related settings
+used in a session. These settings include the type of trainer to use, the number of epochs to train for,
+the list of metrics to compute during training, the name of the metric to continuously monitor for
+improvements, the loss function to use, the optimizer, the scheduler, and the device (CUDA or CPU) that
+the session should be executed on.
+
+First, note here that the type of trainer that is picked must be compatible with the task(s) exposed
+by the dataset parser(s) listed earlier in the configuration. For now, the framework does not
+automatically detect which type of trainer to use for each task, although it probably should and will
+in a future version. If you are using a custom task, or if your model relies on multiple loss functions
+(or any other similar exotic thing), you might have to create your own trainer implementation derived
+from :class:`thelper.train.base.Trainer`. Otherwise, see the trainers module (:mod:`thelper.train`) for
+a list of all available trainers.
+
+All optimization settings are grouped into the ``optimization`` subsection of the ``trainer`` section.
+While specifying a scheduler is optional, an optimizer and a loss function must always be specified.
+The loss function can be provided via the typical type/params setup (as shown below), or obtained from
+the model via a getter function. For more information on the latter option, see
+:meth:`thelper.optim.utils.create_loss_fn`. On the other hand, the nature of the optimizer and
+scheduler can only be specified via a type/param setup (as also shown below). The weights of the model
+specified in the last section will always be passed as the first argument of the optimizer's 
+constructor at runtime. This behavior is compatible with all optimizers defined by PyTorch (`[more info
+here]`__).
+
+.. __: https://pytorch.org/docs/stable/optim.html
+
+The ``trainer`` section finally contains another subsection titled ``metrics``. This subsection defines
+a dictionary of named metrics that should be continuously updated during training, and evaluated at the
+end of each epoch. Numerous types of metrics are already implemented in :mod:`thelper.optim.metrics`,
+and many more will be added in the future. Metrics typically measure the performance of the model based
+on a specific criteria, but they can also do things like save model predictions and create graphs. A
+special "monitored" metric can also be defined in the ``trainer`` section, and it will be used to
+determine whether the model is improving or not during the training session. This is used to keep track
+of the "best" model weights while creating checkpoints, and it might also be used for scheduling.
+
+A complete example of a trainer configuration is shown below::
+
+    "trainer": {
+        # this example is in line with the earlier examples; we create a classifier
+        "type": "thelper.train.ImageClassifTrainer",
+        "device": "cuda:all",   # by default, run the session on all GPUs in parallel
+        "epochs": 50,           # run the session for a maximum of 50 epochs
+        "save_freq": 1,         # save the model in a checkpoint every epoch
+        "monitor": "accuracy",  # monitor the 'accuracy' metric defined below for improvements
+        "use_tbx": true,        # activate tensorboardX metric logging in output directory
+        "optimization": {
+            "loss": {
+                "type": "torch.nn.CrossEntropyLoss",
+                "params": {}    # empty sections like these can actually be removed
+            },
+            "optimizer": {
+                "type": "torch.optim.RMSprop",
+                "params": {
+                    "lr": 0.01, # default learning rate used at the first epoch
+                    "weight_decay": 0.00004
+                }
+            },
+            "scheduler": {
+                # here, we create a fancy scheduler that will check a metric for its steps
+                "type": "torch.optim.lr_scheduler.ReduceLROnPlateau",
+                "params": {
+                    "mode": "max",   # since we will monitor accuracy, we want to maximize it
+                    "factor": 0.1,   # when plateau detected, decrease lr by 90%
+                    "patience": 3    # wait three epochs with no improvement before stepping
+                },
+                # now, we just name the metric defined below for the scheduler to use
+                "step_metric": "accuracy"
+            }
+        },
+        "metrics": {  # this is the list of all metrics we will be evaluating
+            "accuracy": {  # the name of each metric should be unique
+                "type": "thelper.optim.CategoryAccuracy",
+                "params": {
+                    "top_k": 1
+                }
+            },
+            "confmat": {
+                # this is a special metric used to create confusion matrices
+                # (we can't monitor this one, as it does not return a scalar)
+                "type": "thelper.optim.ConfusionMatrix"
+            }
+        },
+        "test_metrics": {  # metrics in this section will only be used for testing
+            "logger": {
+                "type": "thelper.optim.ClassifLogger",
+                "params": {
+                    "top_k": 3
+                }
+            }
+        }
+    }
+
+For more information on the metrics available in the framework, see :mod:`thelper.optim.metrics`.
 
 
 Annotator section
 -----------------
 
-Section statement here @@@@@@
+The ``annotator`` section of the configuration is used solely to define GUI-related settings during
+annotation sessions. For now, it should only contain the type and constructor parameters of the GUI
+tool that will be instantiated to create the annotations. An example is shown below::
+
+    "annotator": {
+        "type": "thelper.gui.ImageSegmentAnnotator",  # type of annotator to instantiate
+        "params": {
+            "sample_input_key": "image",  # this key is tied to the data parser's output
+            "labels": [
+                # for this example, we only use one brush type that draws using solid red
+                {"id": 255, "name": "foreground", "color": [0, 0, 255]}
+            ]
+        }
+    }
+
+In this case, an image segmentation GUI is created that will allow the "image" loaded in each sample
+to be annotated by user with a brush tool. This section (as well as all GUI tools) are still
+experimental. For more information on annotators, refer to :mod:`thelper.gui.annotators`.
 
 
 Global parameters
 -----------------
 
-Section statement here @@@@@@
+Finally, session configurations can also contain global parameters located outside the main sections
+detailed so far. The session name is a global flag which is often mandatory as it is used to identify
+the session and create its output directory. Other global parameters are used to affect the behavior
+of imported package, or are just pretty hacky solutions to problems that should be fixed otherwise.
 
+For now, the global parameters considered "of interest" are the following:
 
+  - ``name`` : specifies the name of the session (mandatory in most operation modes)
+  - ``cudnn_benchmark`` : specifies whether to activate/deactivate cuDNN benchmarking mode
+  - ``cudnn_deterministic`` : specifies whether to activate/deactivate cuDNN deterministic mode
+
+Future global parameters will most likely be handled via :meth:`thelper.utils.setup_globals`.
+
+-----
 
 Session Directories
 ===================
@@ -329,13 +497,13 @@ Session logs
 Section statement here @@@@@@
 
 
-Outputs (TensorboardX, metrics)
--------------------------------
+Outputs
+-------
 
 Section statement here @@@@@@
+(``tensorboardX``, metrics)
 
-
-
+-----
 
 Use Case Examples
 =================
@@ -388,9 +556,8 @@ Using an external augmentation pipeline
 Section statement here @@@@@@
 
 
-Using a data sampler to rebalance a dataset
--------------------------------------------
+Visualizing metrics using ``tensorboardX``
+------------------------------------------
 
 Section statement here @@@@@@
-
 
