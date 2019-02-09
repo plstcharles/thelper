@@ -9,7 +9,6 @@ Contents
    readme
    installation
    usage
-   documentation
    thelper
    contributing
    authors

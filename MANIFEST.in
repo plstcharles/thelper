@@ -6,16 +6,15 @@ graft configs
 
 include .bumpversion.cfg
 include .coveragerc
-include .cookiecutterrc
 include .editorconfig
 include readthedocs.yml
 
 include AUTHORS.rst
 include CHANGELOG.rst
 include CONTRIBUTING.rst
-include DOCUMENTATION.rst
 include INSTALL.rst
 include README.rst
+include USAGE.rst
 
 include LICENSE
 include Makefile
