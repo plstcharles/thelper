@@ -20,7 +20,6 @@ include LICENSE
 include Makefile
 include requirements.txt
 include requirements-dev.txt
-include thelper_usage.txt
 
 include tox.ini
 include conda-env.yml
