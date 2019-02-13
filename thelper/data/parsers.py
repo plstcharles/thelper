@@ -164,6 +164,9 @@ class ClassificationDataset(Dataset):
         return self.task
 
 
+
+
+
 class SegmentationDataset(Dataset):
     """Segmentation dataset specialization interface.
 
@@ -337,6 +340,71 @@ class ImageFolderDataset(ClassificationDataset):
         if self.transforms:
             sample = self.transforms(sample)
         return sample
+
+
+class SRImageFolderDataset(Dataset):
+    """Image folder dataset specialization interface for superresolution tasks.
+
+    This specialization is used to parse simple image subfolders, and it essentially replaces the very
+    basic ``torchvision.datasets.ImageFolder`` interface with similar functionalities. It it used to provide
+    a proper task interface as well as path metadata in each loaded packet for metrics/logging output.
+    """
+
+    def __init__(self, config=None, transforms=None):
+        """Image folder dataset parser constructor."""
+        self.root = thelper.utils.get_key("root", config)
+        if self.root is None or not os.path.isdir(self.root):
+            raise AssertionError("invalid input data root '%s'" % self.root)
+        class_map = {}
+        for child in os.listdir(self.root):
+            if os.path.isdir(os.path.join(self.root, child)):
+                class_map[child] = []
+        if not class_map:
+            raise AssertionError("could not find any image folders at '%s'" % self.root)
+        image_exts = [".jpg", ".jpeg", ".bmp", ".png", ".ppm", ".pgm", ".tif"]
+        samples = []
+        for class_name in class_map:
+            class_folder = os.path.join(self.root, class_name)
+            for folder, subfolder, files in os.walk(class_folder):
+                for file in files:
+                    ext = os.path.splitext(file)[1].lower()
+                    if ext in image_exts:
+                        class_map[class_name].append(len(samples))
+                        samples.append({
+                            'path_key': os.path.join(folder, file),
+                            'label_key': class_name
+                        })
+        class_map = {k: v for k, v in class_map.items() if len(v) > 0}
+        if not class_map:
+            raise AssertionError("could not locate any subdir in '%s' with images to load" % self.root)
+        meta_keys = ['path_key', 'label_key']
+        super().__init__(config=config, transforms=transforms)
+        self.task = thelper.tasks.Regression(input_key='lowres', target_key='highres', meta_keys=meta_keys)
+        self.samples = samples
+
+    def __getitem__(self, idx):
+        """Returns the data sample (a dictionary) for a specific (0-based) index."""
+        if idx < 0 or idx >= len(self.samples):
+            raise AssertionError("sample index is out-of-range")
+        sample = self.samples[idx]
+        image_path = sample['path_key']
+        image = cv.imread(image_path,cv.IMREAD_COLOR)
+        if image is None:
+            raise AssertionError("invalid image at '%s'" % image_path)
+        sample = {
+            'lowres': image,
+            'highres': image,
+             'idx_key': idx,
+            **sample
+        }
+        if self.transforms:
+            sample = self.transforms(sample)
+
+        return sample
+
+    def get_task(self):
+        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
+        return self.task
 
 
 class ExternalDataset(Dataset):

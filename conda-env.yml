@@ -4,6 +4,7 @@ channels:
   - albumentations
 dependencies:
   - pytorch
+  - cudatoolkit=9.2
   - torchvision
   - numpy
   - cython
@@ -14,9 +15,9 @@ dependencies:
   - mock
   - tqdm
   - shapely
-  - albumentations
   - pip:
     - imgaug==0.2.5
     - augmentor
     - tensorboardX
     - pynput
+    - albumentations

@@ -10,6 +10,12 @@ from thelper.train.base import Trainer
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_VIZ = {
+            "train": {"flag": 0, "wait": 10},
+            "valid": {"flag": 0, "wait": 10},
+            "test": {"flag": 0, "wait": 10}
+        }
+
 
 class RegressionTrainer(Trainer):
     """Trainer interface specialized for generic (n-dim) regression.
@@ -40,6 +46,14 @@ class RegressionTrainer(Trainer):
         if isinstance(self.target_max, np.ndarray):
             self.target_max = torch.from_numpy(self.target_max)
         self.meta_keys = self.model.task.get_meta_keys()
+
+        trainer_cfg = thelper.utils.get_key_def('trainer', config, None)
+        viz_cfg = DEFAULT_VIZ
+        if trainer_cfg is not None:
+            viz_cfg = thelper.utils.get_key_def('viz', trainer_cfg, DEFAULT_VIZ)
+        self.train_viz = (viz_cfg["train"]["flag"], viz_cfg["train"]["wait"])
+        self.valid_viz = (viz_cfg["valid"]["flag"], viz_cfg["valid"]["wait"])
+        self.test_viz = (viz_cfg["test"]["flag"], viz_cfg["test"]["wait"])
 
     def _to_tensor(self, sample):
         """Fetches and returns tensors of inputs and targets from a batched sample dictionary."""
@@ -120,6 +134,11 @@ class RegressionTrainer(Trainer):
                 self.train_iter_callback(sample=sample, task=self.model.task, pred=iter_pred,
                                          iter_idx=iter, max_iters=epoch_size,
                                          epoch_idx=epoch, max_epochs=self.epochs)
+
+
+            if self.train_viz[0]:
+                datas = [thelper.utils.crop_size_to(iter_pred, input_val), iter_pred, target]
+                thelper.utils.show_cv_image('Training', datas, 0, self.train_viz[1])
             epoch_loss += iter_loss.item()
             optimizer.step()
             monitor_output = ""
@@ -187,3 +206,7 @@ class RegressionTrainer(Trainer):
                         "   {}: {:.2f}".format(monitor, metrics[monitor].eval()) if monitor is not None else ""
                     )
                 )
+
+                if self.valid_viz[0]:
+                    datas = [thelper.utils.crop_size_to(pred, input_val), pred, target]
+                    thelper.utils.show_cv_image('Valid', datas, 0, self.valid_viz[1])

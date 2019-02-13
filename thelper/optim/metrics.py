@@ -1700,3 +1700,79 @@ class RawPredictions(Metric):
     def goal(self):
         """Returns ``None``, as this class should not be used to directly monitor the training progress."""
         return None
+
+
+class PSNR(Metric):
+    r"""PSNR metric interface.
+    """
+
+    def __init__(self, max_accum=None):
+        """Receives the moving average window size (max_accum).
+        """
+        self.max_accum = max_accum
+        self.correct = deque()
+        self.total = deque()
+        self.warned_eval_bad = False
+        self.data_range = 1.0
+
+    def accumulate(self, pred, gt, meta=None):
+
+        """Receives the latest class prediction and groundtruth labels from the training session.
+
+        The inputs are expected to still be in ``torch.Tensor`` format, but must be located on the
+        CPU. This function computes and accumulate the number of correct and total predictions in
+        the queues, popping them if the maximum window length is reached.
+
+        Args:
+            pred: model class predictions forwarded by the trainer.
+            gt: groundtruth labels forwarded by the trainer (can be ``None`` if unavailable).
+            meta: metadata forwarded by the trainer (unused).
+        """
+        if gt is None:
+            return  # only accumulating results when groundtruth available
+
+        err = np.mean(np.square(pred.data.numpy() - gt.data.numpy()), dtype=np.float64)
+
+        psnr = 10 * np.log10( self.data_range/err)
+
+        self.correct.append(psnr)
+        self.total.append(1)
+        if self.max_accum and len(self.correct) > self.max_accum:
+            self.correct.popleft()
+            self.total.popleft()
+
+    def eval(self):
+        """Returns the current psnr
+
+        Will issue a warning if no predictions have been accumulated yet.
+        """
+        if len(self.total) == 0 or sum(self.total) == 0:
+            if not self.warned_eval_bad:
+                self.warned_eval_bad = True
+                logger.warning("binary accuracy eval result invalid (set as 0.0), no results accumulated")
+            return 0.0
+        return (float(sum(self.correct)) / float(sum(self.total)))
+
+    def reset(self):
+        """Toggles a reset of the metric's internal state, emptying prediction count queues."""
+        self.correct = deque()
+        self.total = deque()
+
+    def needs_reset(self):
+        """If the metric is currently operating in moving average mode, then it does not need to
+        be reset (returns ``False``); else returns ``True``."""
+        return self.max_accum is None
+
+    def set_max_accum(self, max_accum):
+        """Sets the moving average window size.
+
+        This is fairly useful as the total size of the training dataset is unlikely to be known when
+        metrics are instantiated. The current implementation of :class:`thelper.train.trainers.Trainer`
+        will look for this member function and automatically call it with the dataset size when it is
+        available.
+        """
+        self.max_accum = max_accum
+
+    def goal(self):
+        """Returns the scalar optimization goal of this metric (maximization)."""
+        return Metric.maximize
