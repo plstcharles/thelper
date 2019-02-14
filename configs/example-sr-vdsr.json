@@ -46,28 +46,28 @@
             {
                 "operation": "thelper.transforms.CenterCrop",
                 "params": {
-                    "size": [100,100]
+                    "size": [64,64]
                 },
                 "target_key": ["lowres"]
             },
              {
                 "operation": "thelper.transforms.CenterCrop",
                 "params": {
-                    "size": [84,84]
+                    "size": [64,64]
                 },
                 "target_key": [ "highres"]
             },
             {
                 "operation": "thelper.transforms.Resize",
                 "params": {
-                    "dsize": [50, 50]
+                    "dsize": [32, 32]
                 },
                 "target_key": "lowres"
             },
             {
                 "operation": "thelper.transforms.Resize",
                 "params": {
-                    "dsize": [100, 100]
+                    "dsize": [64, 64]
                 },
                 "target_key": "lowres"
             },
@@ -87,7 +87,7 @@
         }
     },
     "model": {
-        "type": "thelper.nn.sr.srcnn"
+        "type": "thelper.nn.sr.vdsr"
     },
     "trainer": {
         "type": "thelper.train.RegressionTrainer",
@@ -117,7 +117,7 @@
                 "params": {
                     "mode": "max",
                     "factor": 0.1,
-                    "patience": 10,
+                    "patience": 3,
                     "verbose": true,
                     "threshold": 0.0001,
                     "threshold_mode": "rel"

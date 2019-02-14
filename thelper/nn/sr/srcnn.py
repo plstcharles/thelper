@@ -10,7 +10,7 @@ __all__ = ['srcnn', 'SRCNN']
 
 class SRCNN(nn.Module):
 
-    def __init__(self, num_channels=3, base_filter=64,  groups=1, **kwargs):
+    def __init__(self, num_channels=1, base_filter=64,  groups=1, **kwargs):
 
         super(SRCNN, self).__init__()
         self.conv1 = ConvBlock(num_channels, base_filter*groups,
@@ -24,10 +24,12 @@ class SRCNN(nn.Module):
         self.conv3 = ConvBlock((base_filter // 2)*groups, num_channels, kernel_size=5, stride=1, padding=0, activation=None, norm=None,groups=groups)
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        return x
+        x0 = x.view(x.shape[0] * x.shape[1], 1, x.shape[2], x.shape[3])
+        x0 = self.conv1(x0)
+        x0 = self.conv2(x0)
+        x0 = self.conv3(x0)
+        x0 = x0.view( x.shape[0],  x.shape[1],  x0.shape[2],  x0.shape[3])
+        return x0
 
     def weight_init(self, mean=0.0, std=0.001):
         for m in self.modules():

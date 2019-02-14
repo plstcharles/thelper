@@ -1,0 +1,142 @@
+{
+    "name": "example-supperresolution",
+    "cudnn": {
+        "benchmark": false,
+        "deterministic": true
+    },
+    "datasets": {
+        "superres_train": {
+            "type": "thelper.data.SRImageFolderDataset",
+            "params": {
+                "root": "/misc/archive06/visi/datasets/Textures/dtd/images",
+                "train": true
+            }
+
+        },
+        "superres_test": {
+            "type": "thelper.data.SRImageFolderDataset",
+            "params": {
+                "root": "/misc/archive06/visi/datasets/Textures/dtd/images",
+                "train": false
+            }
+
+        }
+    },
+    "loaders": {
+        "batch_size": 32,
+        "train_shuffle": true,
+        "valid_shuffle": true,
+        "test_shuffle": true,
+        "valid_seed": 0,
+        "test_seed": 0,
+        "torch_seed": 0,
+        "numpy_seed": 0,
+        "random_seed": 0,
+        "workers": 8,
+        "pin_memory": false,
+        "drop_last": false,
+        "train_scale": 2.0,
+        "train_augments": {
+
+        },
+        "eval_augments": {
+
+        },
+        "base_transforms": [
+            {
+                "operation": "thelper.transforms.CenterCrop",
+                "params": {
+                    "size": [100,100]
+                },
+                "target_key": ["lowres"]
+            },
+             {
+                "operation": "thelper.transforms.CenterCrop",
+                "params": {
+                    "size": [84,84]
+                },
+                "target_key": [ "highres"]
+            },
+            {
+                "operation": "thelper.transforms.Resize",
+                "params": {
+                    "dsize": [50, 50]
+                },
+                "target_key": "lowres"
+            },
+            {
+                "operation": "thelper.transforms.Resize",
+                "params": {
+                    "dsize": [100, 100]
+                },
+                "target_key": "lowres"
+            },
+            {
+                "operation": "torchvision.transforms.ToTensor",
+                "target_key": ["lowres", "highres"]
+            }
+        ],
+        "train_split": {
+            "superres_train": 0.8
+        },
+        "valid_split": {
+            "superres_train": 0.2
+        },
+        "test_split": {
+            "superres_test": 1.0
+        }
+    },
+    "model": {
+        "type": "thelper.nn.sr.srcnn"
+    },
+    "trainer": {
+        "type": "thelper.train.RegressionTrainer",
+        "device": "cuda:all",
+        "epochs": 150,
+        "save_freq": 1,
+        "monitor": "psnr",
+        "use_tbx": true,
+        "viz": {
+            "train": {"flag": 1, "wait": 10},
+            "valid": {"flag": 1, "wait": 10},
+            "test": {"flag": 1, "wait": 10}
+        },
+        "optimization": {
+            "loss": {
+                "type": "torch.nn.MSELoss",
+                "params": {}
+            },
+            "optimizer": {
+                "type": "torch.optim.Adam",
+                "params": {
+                    "lr": 0.001
+                }
+            },
+            "scheduler": {
+                "type": "torch.optim.lr_scheduler.ReduceLROnPlateau",
+                "params": {
+                    "mode": "max",
+                    "factor": 0.1,
+                    "patience": 3,
+                    "verbose": true,
+                    "threshold": 0.0001,
+                    "threshold_mode": "rel"
+                },
+                "step_metric": "psnr"
+            }
+        },
+        "metrics": {
+            "psnr": {
+                "type": "thelper.optim.PSNR",
+                "params": {}
+            }
+        },
+        "test_metrics": {
+            "psnr": {
+                "type": "thelper.optim.PSNR",
+                "params": {}
+            }
+
+        }
+    }
+}
