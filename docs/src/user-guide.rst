@@ -1,5 +1,3 @@
-.. _user-guide:
-
 ==========
 User Guide
 ==========
@@ -482,26 +480,147 @@ Future global parameters will most likely be handled via :meth:`thelper.utils.se
 Session Directories
 ===================
 
-Overview statement here @@@@@@
+If the framework is used in a way that requires it to produce outputs, they will always be located
+somewhere in the "session directory". This directory is created in the root output directory provided
+to the CLI (also often called the "save" directory), and it is named after the session itself. The
+session directory contains three main folders that hold checkpoints, logs, and outputs. These are
+discussed in the following subsections. The general structure of a session directory is shown below::
+
+    <session_directory_name>
+      |
+      |-- checkpoints
+      |     |-- ckpt.0000.<platform>-<date>-<time>.pth
+      |     |-- ckpt.0001.<platform>-<date>-<time>.pth
+      |     |-- ckpt.0002.<platform>-<date>-<time>.pth
+      |     |-- ...
+      |     \-- ckpt.best.pth
+      |
+      |-- logs
+      |     |-- <dataset1-name>.log
+      |     |-- <dataset2-name>.log
+      |     |-- ...
+      |     |-- config.<platform>-<date>-<time>.json
+      |     |-- data.log
+      |     |-- modules.log
+      |     |-- packages.log
+      |     |-- task.log
+      |     \-- trainer.log
+      |
+      |-- output
+      |     \-- <session_directory_name>
+      |           |-- train-<platform>-<date>-<time>
+      |           |     |-- events.out.tfevents.<something>.<platform>
+      |           |     \-- ...
+      |           |
+      |           |-- valid-<platform>-<date>-<time>
+      |           |     |-- events.out.tfevents.<something>.<platform>
+      |           |     \-- ...
+      |           |
+      |           |-- test-<platform>-<date>-<time>
+      |           |     |-- events.out.tfevents.<something>.<platform>
+      |           |     \-- ...
+      |           |
+      |           \-- ...
+      |
+      \-- config.latest.json
 
 
 Checkpoints
 -----------
 
-Section statement here @@@@@@
+The ``checkpoints`` folder contains the binary files pickled by PyTorch that store all training data
+required to resume a session. These files are automatically saved at the end of each epoch during
+a training session. The checkpoints are named using the ``ckpt.XXXX.YYYYY-ZZZZZZ-ZZZZZZ.pth`` template,
+where ``XXXX`` is the epoch index (0-based), ``YYYYY`` is the platform or hostname, and ``ZZZZZZ-ZZZZZZ``
+defines the date and time of their creation (in YYYYMMDD-HHMMSS format). All checkpoints will use this
+template except for the ``best`` checkpoint that may be created in monitored training sessions. In this
+case, it will simply be named ``ckpt.best.pth``. Its content is the same as other checkpoints however,
+and it is actually just a copy of the corresponding "best" checkpoint in the same directory.
+
+Checkpoints can be opened directly using ``torch.load()``. Their content is a dictionary with the
+following fields:
+
+  - ``name`` : the name of the training session
+  - ``epoch`` : the epoch index (0-based) at the end of which the checkpoint was saved
+  - ``iter`` : the total number of iterations computed so far in the training session
+  - ``source`` : the name of the host that created the checkpoint and its time of creation
+  - ``sha1`` : the sha1 signature of the framework's latest git commit
+  - ``version`` : the version of the framework used for tranining
+  - ``task`` : a string representation of the task the model was being trained for
+  - ``outputs`` : the outputs (e.g. metrics) of the session at the current epoch
+  - ``model`` : the weights (or "state dictionary") of the model at the current epoch
+  - ``model_type`` : the type (or class name) of the model (used to reinstantiate it)
+  - ``model_params`` : the constructor parameters of the model (used to reinstantiate it)
+  - ``optimizer`` : the state of the optimizer at the current epoch (can be ``None``)
+  - ``scheduler`` : the state of the scheduler at the current epoch (can be ``None``)
+  - ``monitor_best`` : the "best" value for the metric being monitorered so far
+  - ``config`` : the full session configuration directionary originally passed to the CLI
+
+By default, these fields do not contain any object or class directly tied to the framework, meaning any
+PyTorch installation should be able to open a checkpoint without crashing. This means that a model
+trained with this framework can be opened and reused in any other framework, as long as you are willing
+to extract its weights from the checkpoint yourself. An example of this procedure is given `further
+down <#manually-reloading-a-model>`_.
+
+Scripts used to migrate external checkpoints to this format are currently in development. Also, future
+checkpoints might contain models exported in ONNX format instead of relying on the type/parameters needed
+to reinstantiate their architecture. This would allow us to reload a model without possessing a copy of
+the original implementation file (.py) associated with that model.
 
 
 Session logs
 ------------
 
-Section statement here @@@@@@
+All information printed to the terminal during a session will also automatically be printed to files
+located in the ``logs`` folder of the session directory. Moreover, useful information about the
+training environment and datasets will be printed in other files in the same location. A brief
+description of these files is provided below:
+
+  - ``<dataset_name>.log`` : contains metadata (in JSON format) of the named dataset, its loaded sample
+    count, and the separation of its sample indices across the train/valid/test sets. Can be used to
+    validate the data split and keep track of which sample is used in which set.
+  - ``config.<PLATFORM>-<DATE>-<TIME>.json`` : backup of the (JSON) configuration file of the session
+    that created or modified the current session directory.
+  - ``data.log`` : logger output that provides high-level information about the loaded dataset parsers
+    including given names, sizes, task interfaces, and base transforms.
+  - ``modules.log`` : logger output that provides details regarding the instantiated model type (class
+    name), the parameters passed to its constructor, and a full list of its layers once constructed.
+  - ``packages.log`` : lists all packages installed in the runtime environment as well as their version.
+  - ``task.log`` : provides the full string representation of the task object used during the session.
+  - ``trainer.log`` : logger output that details the training progress during the session. This file
+    can become very large for long sessions; and might be rotated past a certain size in the future.
+
+Specialized CLI operations and trainers as well as custom implementations might create additional logs
+in this directory. In all cases, logs are provided as nice-to-have for debugging purposes only, and their
+content/structure might change in future versions.
 
 
 Outputs
 -------
 
-Section statement here @@@@@@
-(``tensorboardX``, metrics)
+Finally, the session directory contains an ``output`` folder that is used to store all the evaluation
+results generated by the metrics as well as the ``tensorboard`` event files. The first level of the
+``output`` directory is named after the session itself so that it may easily be copied elsewhere
+without creating conflicts. This also allows ``tensorboard`` to display the session name in its UI.
+That folder then contains the training, validation, and testing outputs generated for each session.
+These outputs are separated so that individual curves can be turned on and off in ``tensorboard``.
+A typical output directory loaded in ``tensorboard`` is shown below.
+
+.. image:: images/tensorboard_ex.jpg
+  :target: https://github.com/plstcharles/thelper/raw/master/docs/src/images/tensorboard_ex.jpg
+
+In this example, the training and validation outputs of several sessions are combined. The metrics
+of each session that produced scalar values were used to generate plots. The scalars are evaluated
+once every epoch, and are grouped automatically in a section named ``epoch``. The loss and learning
+rates are also automatically plotted in this section. Additional tabs holding model weight histograms
+and text outputs are also available. If a metric had been used that generated images, those would
+also be available in another tab.
+
+For more information on available metrics, see :mod:`thelper.optim.metrics`. For more information
+about ``tensorboard``, visit `the official site`__.
+
+.. __: https://www.tensorflow.org/guide/summaries_and_tensorboard
+
 
 -----
 
@@ -558,6 +677,12 @@ Section statement here @@@@@@
 
 Visualizing metrics using ``tensorboardX``
 ------------------------------------------
+
+Section statement here @@@@@@
+
+
+Manually reloading a model
+--------------------------
 
 Section statement here @@@@@@
 

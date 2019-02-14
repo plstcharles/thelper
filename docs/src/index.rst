@@ -8,7 +8,7 @@ Contents
 
    readme
    installation
-   usage
+   user-guide
    thelper
    contributing
    authors
