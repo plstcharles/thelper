@@ -52,9 +52,11 @@ from the Centre de Recherche Informatique de Montréal / Computer Research Insti
 
 .. __: <https://tldrlegal.com/license/apache-license-2.0-(apache-2.0)>
 
-For installation instructions, refer to the `installation guide <https://github.com/plstcharles/thelper/blob/master/INSTALL.rst>`_.
-For usage instructions, refer to the `user guide <https://thelper.readthedocs.io/en/latest/user-guide.html>`_.
-The auto-generated documentation is available via `readthedocs.io <https://thelper.readthedocs.io/en/latest/>`_.
+To get a general idea of what this framework can be used for, visit the `FAQ page
+<https://thelper.readthedocs.io/en/latest/faq.html>`_. For installation instructions, refer to the
+`installation guide <https://github.com/plstcharles/thelper/blob/master/INSTALL.rst>`_. For usage instructions,
+refer to the `user guide <https://thelper.readthedocs.io/en/latest/user-guide.html>`_. The auto-generated
+documentation is available via `readthedocs.io <https://thelper.readthedocs.io/en/latest/>`_.
 
 
 Notes

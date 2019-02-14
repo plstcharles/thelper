@@ -18,16 +18,16 @@ good reproducibility standards.
 
 If your problem is related to one of the aforementionned tasks, and if you can solve this problem using
 a standard model architecture already included in PyTorch or in the framework itself, then you might be
-able to train and export a solution without writing a single line of code. Examples of such use-cases
-`are detailed below <#use-case-examples>`_. It is however typical to work with a custom model, a custom
-trainer, or even a custom task/objective. This is also supported by the framework, as most classes can
-be either imported as-is, or they can replace the internal classes of the framework by inheriting their
-parent interface.
+able to train and export a solution without writing a single line of code. It is however typical to
+work with a custom model, a custom trainer, or even a custom task/objective. This is also supported
+by the framework, as most classes can be either imported as-is, or they can replace the internal
+classes of the framework by inheriting their parent interface.
 
 In the sections below, we first introduce the framework's `Command-Line Interface (CLI)
 <#command-line-interface>`_ used to launch jobs, the `session configuration files <#configuration-files>`_
 used to define the settings of these jobs, and the `session directories <#session-directories>`_ that
-contain job outputs. Then, we 
+contain job outputs. Then, we provide `some use case examples <#use-case-examples>`_ on how to use
+different functionalities of the framework.
 
 -----
 
@@ -119,6 +119,8 @@ a ``datasets`` section to define the parsers that load the data, and an ``annota
 the GUI tool settings used to create annotations. During an annotation session, all annotations that are
 created by the user will be saved into the session directory. For more information on the parameters,
 refer to the documentation of :meth:`thelper.cli.annotate_data`.
+
+`[to top] <#user-guide>`_
 
 -----
 
@@ -475,6 +477,8 @@ For now, the global parameters considered "of interest" are the following:
 
 Future global parameters will most likely be handled via :meth:`thelper.utils.setup_globals`.
 
+`[to top] <#user-guide>`_
+
 -----
 
 Session Directories
@@ -617,15 +621,22 @@ and text outputs are also available. If a metric had been used that generated im
 also be available in another tab.
 
 For more information on available metrics, see :mod:`thelper.optim.metrics`. For more information
-about ``tensorboard``, visit `the official site`__.
+about ``tensorboard``, visit `[the official site]`__.
 
 .. __: https://www.tensorflow.org/guide/summaries_and_tensorboard
 
+`[to top] <#user-guide>`_
 
 -----
 
 Use Case Examples
 =================
+
+This section is still under construction. Some example configuration files are available in the
+``config`` directory of the repository (`[see them here]`__).
+
+.. __: https://github.com/plstcharles/thelper/tree/master/configs
+
 
 Image classification
 --------------------
@@ -686,3 +697,4 @@ Manually reloading a model
 
 Section statement here @@@@@@
 
+`[to top] <#user-guide>`_

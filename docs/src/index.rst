@@ -6,7 +6,8 @@ Contents
 .. toctree::
    :maxdepth: 2
 
-   readme
+   overview
+   faq
    installation
    user-guide
    thelper

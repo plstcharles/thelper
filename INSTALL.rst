@@ -87,7 +87,7 @@ that all dependencies can be loaded at runtime::
     >>> print(thelper.__version__)
     x.y.z
 
-You can now refer to the `user guide`__ for more information on how to use the framework.
+You can now refer to the `[user guide]`__ for more information on how to use the framework.
 
 .. __: https://thelper.readthedocs.io/en/latest/user-guide.html
 
