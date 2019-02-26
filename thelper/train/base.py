@@ -13,13 +13,14 @@ import random
 import time
 from abc import abstractmethod
 from copy import deepcopy
+from typing import AnyStr
 
 import cv2 as cv
 import numpy as np
 import torch
 import torch.optim
 
-import thelper.typedefs
+import thelper.typedefs as typ
 import thelper.utils
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,7 @@ class Trainer:
     """
 
     def __init__(self, session_name, save_dir, model, loaders, config, ckptdata=None):
+        # type: (AnyStr, AnyStr, typ.ModelType, typ.MultiLoaderType, typ.ConfigDict, typ.CheckpointContentType) -> None
         """Receives the trainer configuration dictionary, parses it, and sets up the session."""
         if not model or not loaders or not config:
             raise AssertionError("missing input args")
@@ -264,15 +266,15 @@ class Trainer:
             self.outputs = {}
         # callbacks (see ``thelper.typedefs.IterCallbackType`` and ``thelper.typedefs.IterCallbackParams`` definitions)
         self.train_iter_callback = thelper.utils.get_key_def(
-            "train_iter_callback", trainer_config, None)    # type: thelper.typedefs.IterCallbackType
+            "train_iter_callback", trainer_config, None)    # type: typ.IterCallbackType
         if self.train_iter_callback is not None and isinstance(self.train_iter_callback, str):
             self.train_iter_callback = thelper.utils.import_function(
-                self.train_iter_callback)                   # type: thelper.typedefs.IterCallbackType
+                self.train_iter_callback)                   # type: typ.IterCallbackType
         self.eval_iter_callback = thelper.utils.get_key_def(
-            "eval_iter_callback", trainer_config, None)     # type: thelper.typedefs.IterCallbackType
+            "eval_iter_callback", trainer_config, None)     # type: typ.IterCallbackType
         if self.eval_iter_callback is not None and isinstance(self.eval_iter_callback, str):
             self.eval_iter_callback = thelper.utils.import_function(
-                self.eval_iter_callback)                    # type: thelper.typedefs.IterCallbackType
+                self.eval_iter_callback)                    # type: typ.IterCallbackType
         display_predictions = thelper.utils.get_key_def("display_preds", trainer_config, False)
         if display_predictions:
             if self.train_iter_callback is not None:
@@ -282,9 +284,9 @@ class Trainer:
                 raise AssertionError("cannot use 'display_preds' while also using an external callback")
             self.eval_iter_callback = thelper.utils.import_function("thelper.train.utils._draw_minibatch_wrapper")
         if self.train_iter_callback is not None:
-            thelper.utils.check_func_signature(self.train_iter_callback, thelper.typedefs.IterCallbackParams)
+            thelper.utils.check_func_signature(self.train_iter_callback, typ.IterCallbackParams)
         if self.eval_iter_callback is not None:
-            thelper.utils.check_func_signature(self.eval_iter_callback, thelper.typedefs.IterCallbackParams)
+            thelper.utils.check_func_signature(self.eval_iter_callback, typ.IterCallbackParams)
         self.skip_eval_iter = thelper.utils.get_key_def("skip_eval_iter", trainer_config, 0)
 
     def _init_writer(self, writer, path):

@@ -11,6 +11,8 @@ from torch import Tensor
 
 if TYPE_CHECKING:
     from thelper.tasks.utils import Task
+    from thelper.nn.utils import Module
+    from thelper.data.loaders import DataLoader
 
     ArrayType = np.ndarray
     ArrayShapeType = Union[List[int], Tuple[int]]
@@ -35,5 +37,9 @@ if TYPE_CHECKING:
     CheckpointLoadingType = Union[AnyStr, io.FileIO]
     CheckpointContentType = Dict[AnyStr, Any]
     MapLocationType = Union[Callable, AnyStr, Dict[AnyStr, AnyStr]]
+
+    ModelType = Module
+    LoaderType = DataLoader
+    MultiLoaderType = List[Union[LoaderType, None]]
 
 IterCallbackParams = ["sample", "task", "pred", "iter_idx", "max_iters", "epoch_idx", "max_epochs"]
