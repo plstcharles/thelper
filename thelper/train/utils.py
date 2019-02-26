@@ -4,7 +4,7 @@ This module contains utilities and tools used to instantiate training sessions.
 """
 
 import logging
-from typing import AnyStr, List, Optional  # noqa: F401
+from typing import AnyStr, Optional  # noqa: F401
 
 import thelper.utils
 
@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 def create_trainer(session_name,    # type: AnyStr
                    save_dir,        # type: AnyStr
                    config,          # type: thelper.typedefs.ConfigDict
-                   model,           # type: thelper.nn.Module
-                   loaders,         # type: List[thelper.data.loaders.DataLoader]
+                   model,           # type: thelper.typedefs.ModelType
+                   loaders,         # type: thelper.typedefs.MultiLoaderType
                    ckptdata=None    # type: Optional[thelper.typedefs.CheckpointContentType]
                    ):               # type: (...) -> thelper.train.Trainer
     """Instantiates the trainer object based on the type contained in the config dictionary.
