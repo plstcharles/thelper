@@ -1064,9 +1064,14 @@ class ConfusionMatrix(Metric):
             return None
         confmat = self.matrix(self.gt.numpy(), self.pred.numpy(), self.class_names)
         if self.class_names:
-            fig = thelper.utils.draw_confmat(confmat, self.class_names, normalize=self.draw_normalized)
-            array = thelper.utils.fig2array(fig)
-            return array
+            try:
+                fig = thelper.utils.draw_confmat(confmat, self.class_names, normalize=self.draw_normalized)
+                array = thelper.utils.fig2array(fig)
+                return array
+            except AttributeError:
+                logger.warning("failed to render confusion matrix figure (caught exception)")
+                # return None if rendering fails (probably due to matplotlib on displayless server)
+                return None
         else:
             raise NotImplementedError
 
@@ -1321,9 +1326,14 @@ class ROCCurve(Metric):
         if self.score is None:
             return None
         fpr, tpr, t = self.curve(self.true.numpy(), self.score.numpy(), self.target_idx, self.target_inv)
-        fig = thelper.utils.draw_roc_curve(fpr, tpr)
-        array = thelper.utils.fig2array(fig)
-        return array
+        try:
+            fig = thelper.utils.draw_roc_curve(fpr, tpr)
+            array = thelper.utils.fig2array(fig)
+            return array
+        except AttributeError:
+            logger.warning("failed to render confusion matrix figure (caught exception)")
+            # return None if rendering fails (probably due to matplotlib on displayless server)
+            return None
 
     def print(self):
         """Returns the logged metadata of badly predicted samples if logging is activated, and ``None`` otherwise.
