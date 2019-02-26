@@ -13,14 +13,14 @@ import random
 import time
 from abc import abstractmethod
 from copy import deepcopy
-from typing import AnyStr
+from typing import AnyStr  # noqa: F401
 
 import cv2 as cv
 import numpy as np
 import torch
 import torch.optim
 
-import thelper.typedefs as typ
+import thelper.typedefs as typ  # noqa: F401
 import thelper.utils
 
 logger = logging.getLogger(__name__)
