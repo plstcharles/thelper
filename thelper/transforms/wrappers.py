@@ -97,6 +97,8 @@ class AlbumentationsWrapper(object):
                     params["keypoints"] = keypoints
             if self.bboxes_key in sample and sample[self.bboxes_key] is not None:
                 params["bboxes"] = sample[self.bboxes_key]
+            else:
+                params["bboxes"] = []
             if self.mask_key in sample and sample[self.mask_key] is not None:
                 params["mask"] = sample[self.mask_key]
             output = self.pipeline(**params)
