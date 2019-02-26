@@ -121,6 +121,12 @@ lint: conda-env
 		test -f $(CONDA_ENV_PATH)/bin/flake8 || pip install flake8; \
 		flake8 thelper tests || true"
 
+.PHONY: check
+check: install
+	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
+		test -f $(CONDA_ENV_PATH)/bin/tox || pip install tox; \
+		tox -e check"
+
 .PHONY: test
 test: install
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
