@@ -33,6 +33,8 @@ class ImageSegmTrainer(Trainer):
         self.meta_keys = self.model.task.get_meta_keys()
         self.class_idxs_map = self.model.task.get_class_idxs_map()
         self.dontcare_val = self.model.task.get_dontcare_val()
+        trainer_config = thelper.utils.get_key_def("params", config["trainer"], {})
+        self.scale_preds = thelper.utils.get_key_def("scale_preds", trainer_config, default=False)
         metrics = list(self.train_metrics.values()) + list(self.valid_metrics.values()) + list(self.test_metrics.values())
         for metric in metrics:  # check all metrics for classification-specific attributes, and set them
             if hasattr(metric, "set_class_names") and callable(metric.set_class_names):
@@ -111,6 +113,8 @@ class ImageSegmTrainer(Trainer):
                 augs_count = len(input_val)
                 for aug_idx in range(augs_count):
                     aug_pred = model(self._upload_tensor(input_val[aug_idx], dev))
+                    if self.scale_preds:
+                        aug_pred = torch.nn.functional.interpolate(aug_pred, size=input_val[aug_idx].shape[-2:], mode="bilinear")
                     aug_loss = loss(aug_pred, label_map[aug_idx].long())
                     aug_loss.backward()  # test backprop all at once? might not fit in memory...
                     if iter_pred is None:
@@ -123,6 +127,8 @@ class ImageSegmTrainer(Trainer):
                 label_map = torch.cat(label_map, dim=0)
             else:
                 iter_pred = model(self._upload_tensor(input_val, dev))
+                if self.scale_preds:
+                    iter_pred = torch.nn.functional.interpolate(iter_pred, size=input_val.shape[-2:], mode="bilinear")
                 # todo: find a more efficient way to compute loss w/ byte vals directly?
                 iter_loss = loss(iter_pred, self._upload_tensor(label_map, dev).long())
                 iter_loss.backward()
@@ -200,6 +206,8 @@ class ImageSegmTrainer(Trainer):
                     pred = torch.mean(preds, dim=0)
                 else:
                     pred = model(self._upload_tensor(input_val, dev))
+                if self.scale_preds:
+                    pred = torch.nn.functional.interpolate(pred, size=input_val.shape[-2:], mode="bilinear")
                 if metrics:
                     meta = {key: sample[key] if key in sample else None for key in self.meta_keys} if self.meta_keys else None
                     for metric in metrics.values():
