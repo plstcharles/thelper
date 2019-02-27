@@ -178,16 +178,12 @@ class RegressionTrainer(Trainer):
                     self.eval_iter_callback(sample=sample, task=self.model.task, pred=pred,
                                             iter_idx=idx, max_iters=epoch_size,
                                             epoch_idx=epoch, max_epochs=self.epochs)
-                if monitor is not None:
-                    monitor_output = "{}: {:.2f}".format(monitor, metrics[monitor].eval())
-                else:
-                    monitor_output = "(not monitoring)"
                 self.logger.info(
-                    "eval epoch#{}   batch: {}/{} ({:.0f}%)   {}".format(
+                    "eval epoch#{}   batch: {}/{} ({:.0f}%){}".format(
                         epoch,
                         idx + 1,
                         epoch_size,
                         ((idx + 1) / epoch_size) * 100.0,
-                        monitor_output
+                        "   {}: {:.2f}".format(monitor, metrics[monitor].eval()) if monitor is not None else ""
                     )
                 )
