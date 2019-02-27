@@ -48,7 +48,10 @@ def create_session(config, save_dir):
     loaders = (train_loader, valid_loader, test_loader)
     trainer = thelper.train.create_trainer(session_name, save_dir, config, model, loaders)
     logger.debug("starting trainer")
-    trainer.train()
+    if train_loader:
+        trainer.train()
+    else:
+        trainer.eval()
     logger.debug("all done")
     return 0
 
