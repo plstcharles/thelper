@@ -228,6 +228,57 @@ class ResNet(thelper.nn.Module):
         self.task = task
 
 
+class FCResNet(ResNet):
+
+    def __init__(self, task, ckptdata, map_location="cpu", avgpool_size=0):
+        if isinstance(ckptdata, str):
+            ckptdata = thelper.utils.load_checkpoint(ckptdata, map_location=map_location)
+        model_type = ckptdata["model_type"]
+        if model_type != "thelper.nn.resnet.ResNet":
+            raise AssertionError("cannot convert non-resnet model to fully conv with this impl")
+        model_params = ckptdata["model_params"]
+        if isinstance(ckptdata["task"], str):
+            old_model_task = thelper.tasks.create_task(ckptdata["task"])
+        else:
+            old_model_task = ckptdata["task"]
+        self.task = None
+        self.avgpool_size = avgpool_size
+        super().__init__(old_model_task, **model_params)
+        self.load_state_dict(ckptdata["model"], strict=False)  # assumes model always stored as weight dict
+        self.finallayer = torch.nn.Conv2d(self.out_features, self.fc.out_features, kernel_size=1)
+        self.finallayer.weight = torch.nn.Parameter(self.fc.weight.view(self.fc.out_features, self.out_features, 1, 1))
+        self.finallayer.bias = torch.nn.Parameter(self.fc.bias)
+        self.set_task(task)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        if self.layer5 is not None:
+            x = self.layer5(x)
+        if self.avgpool_size > 0:
+            x = torch.nn.functional.avg_pool2d(x, kernel_size=self.avgpool_size, stride=1)
+        x = self.finallayer(x)
+        return x
+
+    def set_task(self, task):
+        if isinstance(task, (thelper.tasks.Segmentation, thelper.tasks.Classification)):
+            num_classes = len(task.get_class_names())
+            if self.fc.out_features != num_classes:
+                self.fc = torch.nn.Linear(self.out_features, num_classes)
+                self.finallayer = torch.nn.Conv2d(self.out_features, num_classes, kernel_size=1)
+                self.finallayer.weight = torch.nn.Parameter(self.fc.weight.view(self.fc.out_features, self.out_features, 1, 1))
+                self.finallayer.bias = torch.nn.Parameter(self.fc.bias)
+        else:
+            raise AssertionError("missing impl for non-segm/classif task type")
+        self.task = task
+
+
 def resnet18(pretrained=False, **kwargs):
     """Constructs a ResNet-18 model.
 
