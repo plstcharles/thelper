@@ -338,8 +338,10 @@ def create_parsers(config, base_transforms=None):
             # assume that the dataset is derived from thelper.data.parsers.Dataset (it is fully sampling-ready)
             dataset = dataset_type(config=dataset_params, transforms=transforms)
             if "task" in dataset_config:
-                logger.warning("'task' field detected in dataset '%s' config; will be ignored (interface should provide it)" % dataset_name)
-            task = dataset.get_task()
+                logger.warning("'task' field detected in dataset '%s' config; dataset's default task will be ignored" % dataset_name)
+                task = thelper.tasks.create_task(dataset_config["task"])
+            else:
+                task = dataset.get_task()
         else:
             if "task" not in dataset_config or not dataset_config["task"]:
                 raise AssertionError("external dataset '%s' must define task interface in its configuration dict" % dataset_name)

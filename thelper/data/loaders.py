@@ -352,8 +352,6 @@ class _LoaderFactory(object):
             global_class_names = task.get_class_names() + [unset_class_key]  # extra name added for unlabeled samples (if needed!)
             sample_maps = {}
             for dataset_name, dataset in datasets.items():
-                if not task.check_compat(dataset.get_task()):
-                    raise AssertionError("global task should already have been compatible with all datasets")
                 if isinstance(dataset, thelper.data.ExternalDataset):
                     if hasattr(dataset.samples, "samples") and isinstance(dataset.samples.samples, list):
                         sample_maps[dataset_name] = task.get_class_sample_map(dataset.samples.samples, unset_class_key)
