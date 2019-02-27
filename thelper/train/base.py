@@ -235,7 +235,7 @@ class Trainer:
             self.test_metrics = {**self.test_metrics, **thelper.optim.create_metrics(trainer_config["test_metrics"])}
         for metric_name, metric in self.test_metrics.items():
             self.logger.info("parsed test metric '%s': %s" % (metric_name, str(metric)))
-        self.monitor, self.monitor_best = None, None
+        self.monitor, self.monitor_best, self.monitor_best_epoch = None, None, -1
         if "monitor" in trainer_config and trainer_config["monitor"]:
             self.monitor = trainer_config["monitor"]
             if self.monitor not in self.train_metrics and self.monitor not in self.valid_metrics:
@@ -253,6 +253,7 @@ class Trainer:
                 raise AssertionError("monitored metric does not return proper optimization goal")
         if ckptdata is not None:
             self.monitor_best = ckptdata["monitor_best"]
+            self.monitor_best_epoch = ckptdata["monitor_best_epoch"] if "monitor_best_epoch" in ckptdata else -1
             self.optimizer_state = ckptdata["optimizer"] if "optimizer" in ckptdata else None
             self.scheduler_state = ckptdata["scheduler"] if "scheduler" in ckptdata else None
             self.current_iter = ckptdata["iter"]
@@ -496,6 +497,7 @@ class Trainer:
                     if (self.monitor_goal == thelper.optim.Metric.minimize and monitor_val < self.monitor_best) or \
                        (self.monitor_goal == thelper.optim.Metric.maximize and monitor_val > self.monitor_best):
                         self.monitor_best = monitor_val
+                        self.monitor_best_epoch = self.current_epoch
                         new_best = True
                 if not isinstance(value, dict):
                     self.logger.debug(" epoch#{} result =>  {}: {}".format(self.current_epoch, str(key), value))
@@ -505,7 +507,10 @@ class Trainer:
             if self.monitor is not None:
                 if monitor_val is None:
                     raise AssertionError("training/validation did not produce required monitoring variable '%s'" % self.monitor)
-                best_str = "(new best value)" if new_best else ("(previous best = %s)" % self.monitor_best)
+                if new_best:
+                    best_str = "(new best value)"
+                else:
+                    best_str = ("(previous best = %s @ epoch = %d)" % (self.monitor_best, self.monitor_best_epoch))
                 self.logger.info("epoch %d, monitored %s = %s  %s" % (self.current_epoch, self.monitor, monitor_val, best_str))
             self.outputs[self.current_epoch] = result
             if new_best or (self.current_epoch % self.save_freq) == 0:
@@ -684,6 +689,7 @@ class Trainer:
             "scheduler": scheduler.state_dict() if (scheduler is not None and
                                                     hasattr(scheduler, "state_dict")) else None,
             "monitor_best": self.monitor_best,
+            "monitor_best_epoch": self.monitor_best_epoch,
             "config": self.config  # note: this is the global app config
         }
         filename = "ckpt.%04d.%s.pth" % (epoch, log_stamp)
