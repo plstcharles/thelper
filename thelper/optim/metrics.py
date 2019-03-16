@@ -692,7 +692,7 @@ class ExternalMetric(Metric):
         gt: queue used to store groundtruth-related values for window-based averaging.
     """
 
-    def __init__(self, metric_name, metric_params, metric_type, target_name=None,
+    def __init__(self, metric_name, metric_type, metric_params=None, target_name=None,
                  goal=None, class_names=None, max_accum=None, force_softmax=True):
         """Receives all necessary arguments for wrapper initialization and external metric instantiation.
 
@@ -700,7 +700,7 @@ class ExternalMetric(Metric):
         """
         if not isinstance(metric_name, str):
             raise AssertionError("metric_name must be fully qualifiied class name to import")
-        if metric_params is not None and not isinstance(metric_params, dict):
+        if metric_params is not None and not isinstance(metric_params, (list, dict)):
             raise AssertionError("metric_params must be dictionary")
         supported_handling_types = [
             "classif_top1", "classif_best",  # the former is for backwards-compat with the latter
@@ -816,7 +816,12 @@ class ExternalMetric(Metric):
             y_pred = [pred for preds in self.pred for pred in preds]
             if len(y_gt) != len(y_pred):
                 raise AssertionError("list flattening failed")
-            return self.metric(y_gt, y_pred, **self.metric_params)
+            if isinstance(self.metric_params, list):
+                return self.metric(y_gt, y_pred, *self.metric_params)
+            elif isinstance(self.metric_params, dict):
+                return self.metric(y_gt, y_pred, **self.metric_params)
+            else:
+                return self.metric(y_gt, y_pred, self.metric_params)
         else:
             raise NotImplementedError
 
