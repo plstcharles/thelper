@@ -848,9 +848,9 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
     """Returns a directory path in which the app can save its data.
 
     If a folder with name ``dir_name`` already exists in the directory ``out_root``, then the user will be
-    asked to pick a new name. If the user refuses, ``sys.exit(1)`` is called. If config is not None, it will
-    be saved to the output directory as a json file. Finally, a ``logs`` directory will also be created in
-    the output directory for writing logger files.
+    asked to pick a new name. If the user refuses, ``sys.exit(1)`` is called. If config is not ``None``, it
+    will be saved to the output directory as a json file. Finally, a ``logs`` directory will also be created
+    in the output directory for writing logger files.
 
     Args:
         out_root: path to the directory root where the save directory should be created.
@@ -865,6 +865,9 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
     """
     func_logger = get_func_logger()
     save_dir = out_root
+    if save_dir is None:
+        time.sleep(0.25)  # to make sure all debug/info prints are done, and we see the question
+        save_dir = query_string("Please provide the path to where session directories should be created/saved:")
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     save_dir = os.path.join(save_dir, dir_name)
