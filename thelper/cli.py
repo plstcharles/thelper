@@ -323,7 +323,13 @@ def main(args=None):
             override_config = json.load(open(args.override_cfg))
         save_dir = args.save_dir
         if save_dir is None:
-            save_dir = os.path.abspath(os.path.join(os.path.dirname(args.ckpt_path), "../.."))
+            ckpt_dir_path = os.path.dirname(os.path.abspath(args.ckpt_path)) \
+                if not os.path.isdir(args.ckpt_path) else os.path.abspath(args.ckpt_path)
+            # find session dir by looking for 'logs' directory
+            if os.path.isdir(os.path.join(ckpt_dir_path, "logs")):
+                save_dir = os.path.abspath(os.path.join(ckpt_dir_path, ".."))
+            elif os.path.isdir(os.path.join(ckpt_dir_path, "../logs")):
+                save_dir = os.path.abspath(os.path.join(ckpt_dir_path, "../.."))
         return resume_session(ckptdata, save_dir, config=override_config, eval_only=args.eval_only)
     elif args.mode == "viz" or args.mode == "annot":
         if os.path.isdir(args.cfg_path):
