@@ -121,5 +121,4 @@ class CustomStepLR(torch.optim.lr_scheduler._LRScheduler):
     def get_lr(self):
         """Returns the learning rate to use given the current epoch and scaling factors."""
         scale = self.scales[self._get_stage_idx(self.last_epoch)]
-        print("found scale = %s closest at epoch = %s" % (str(scale), str(self.last_epoch)))
         return [base_lr * scale for base_lr in self.base_lrs]
