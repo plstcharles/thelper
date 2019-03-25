@@ -1492,6 +1492,8 @@ class ClassifLogger(Metric):
             raise AssertionError("expected list for class names")
         if len(class_names) < 2:
             raise AssertionError("not enough classes in provided class list")
+        if self.top_k > len(class_names):
+            raise AssertionError(f"cannot log top-{self.top_k} predictions with only {len(class_names)} classes")
         self.class_names = class_names
 
     def accumulate(self, pred, gt, meta=None):
