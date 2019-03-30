@@ -164,9 +164,6 @@ class ClassificationDataset(Dataset):
         return self.task
 
 
-
-
-
 class SegmentationDataset(Dataset):
     """Segmentation dataset specialization interface.
 
