@@ -16,7 +16,7 @@ GPU clusters by keeping track of their jobs more easily. This framework will not
 perfect solution for your particular problem, but it will help you discover a solution while enforcing
 good reproducibility standards.
 
-If your problem is related to one of the aforementionned tasks, and if you can solve this problem using
+If your problem is related to one of the aforementioned tasks, and if you can solve this problem using
 a standard model architecture already included in PyTorch or in the framework itself, then you might be
 able to train and export a solution without writing a single line of code. It is however typical to
 work with a custom model, a custom trainer, or even a custom task/objective. This is also supported
@@ -330,7 +330,7 @@ The second option to fine-tune a model that is not available via ``torchvision``
 path to a checkpoint produced by the framework as such::
 
     "model": {
-        "chkptdata" : "<PATH_TO_ANY_THELPER_CHECKPOINT.pth>"
+        "ckptdata" : "<PATH_TO_ANY_THELPER_CHECKPOINT.pth>"
     }
 
 When using this approach, the framework will first open the checkpoint and reinstantiate the model using
@@ -534,15 +534,16 @@ Checkpoints
 
 The ``checkpoints`` folder contains the binary files pickled by PyTorch that store all training data
 required to resume a session. These files are automatically saved at the end of each epoch during
-a training session. The checkpoints are named using the ``ckpt.XXXX.YYYYY-ZZZZZZ-ZZZZZZ.pth`` template,
+a training session. The checkpoints are named using the ``ckpt.XXXX.YYYYY-ZZZZZZ-ZZZZZZ.pth`` convention,
 where ``XXXX`` is the epoch index (0-based), ``YYYYY`` is the platform or hostname, and ``ZZZZZZ-ZZZZZZ``
-defines the date and time of their creation (in YYYYMMDD-HHMMSS format). All checkpoints will use this
-template except for the ``best`` checkpoint that may be created in monitored training sessions. In this
-case, it will simply be named ``ckpt.best.pth``. Its content is the same as other checkpoints however,
-and it is actually just a copy of the corresponding "best" checkpoint in the same directory.
+defines the date and time of their creation (in YYYYMMDD-HHMMSS format). All checkpoints created by the
+framework will use this naming convention except for the ``best`` checkpoint that might be created in
+monitored training sessions (for early stopping and final evaluation). In this case, it will simply be
+named ``ckpt.best.pth``. Its content is the same as other checkpoints however, and it is actually just
+a copy of the corresponding "best" checkpoint in the same directory.
 
-Checkpoints can be opened directly using ``torch.load()``. Their content is a dictionary with the
-following fields:
+Checkpoints can be opened directly using ``torch.load()``. They contain a dictionary with the following
+fields:
 
   - ``name`` : the name of the training session
   - ``epoch`` : the epoch index (0-based) at the end of which the checkpoint was saved
