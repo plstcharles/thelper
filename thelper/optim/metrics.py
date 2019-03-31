@@ -107,10 +107,15 @@ class Metric(ABC):
         """
         raise NotImplementedError
 
+    def anti_goal(self):
+        """Returns the opposite of the scalar optimization goal of the metric, if available."""
+        if not self.is_scalar():
+            raise AssertionError("undefined anti goal behavior when metric is not scalar")
+        return Metric.maximize if self.goal() == Metric.minimize else Metric.minimize
+
     def is_scalar(self):
         """Returns whether the metric evaluates to a scalar based on its goal."""
-        curr_goal = self.goal()
-        return curr_goal == Metric.minimize or curr_goal == Metric.maximize
+        return self.goal() == Metric.minimize or self.goal() == Metric.maximize
 
     def __repr__(self):
         """Returns a generic print-friendly string containing info about this metric."""
@@ -380,7 +385,7 @@ class MeanAbsoluteError(Metric):
     where :math:`N` is the batch size. If ``reduction`` is not ``'none'``, then:
 
     .. math::
-        MAE(x, y) =
+        \text{MAE}(x, y) =
         \begin{cases}
             \operatorname{mean}(E), & \text{if reduction } = \text{mean.}\\
             \operatorname{sum}(E),  & \text{if reduction } = \text{sum.}
@@ -499,7 +504,7 @@ class MeanSquaredError(Metric):
     where :math:`N` is the batch size. If ``reduction`` is not ``'none'``, then:
 
     .. math::
-        MSE(x, y) =
+        \text{MSE}(x, y) =
         \begin{cases}
             \operatorname{mean}(E), & \text{if reduction } = \text{mean.}\\
             \operatorname{sum}(E),  & \text{if reduction } = \text{sum.}
@@ -514,7 +519,7 @@ class MeanSquaredError(Metric):
         "metrics": {
             # ...
             # this is the name of the example metric; it is used for lookup/printing only
-            "mae": {
+            "mse": {
                 # this type is used to instantiate the error metric
                 "type": "thelper.optim.metrics.MeanSquaredError",
                 "params": {

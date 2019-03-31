@@ -434,11 +434,15 @@ class Trainer:
                         scheduler.step(metrics=latest_loss, epoch=self.current_epoch)
                     else:
                         if self.valid_loader and scheduler_step_metric in self.valid_metrics:
-                            scheduler.step(metrics=self.valid_metrics[scheduler_step_metric].eval(), epoch=self.current_epoch)
+                            metric = self.valid_metrics[scheduler_step_metric]
                         elif self.train_loader and scheduler_step_metric in self.train_metrics:
-                            scheduler.step(metrics=self.train_metrics[scheduler_step_metric].eval(), epoch=self.current_epoch)
+                            metric = self.train_metrics[scheduler_step_metric]
                         else:
-                            raise AssertionError("cannot use metric '%s' for scheduler step" % scheduler_step_metric)
+                            raise AssertionError("cannot find metric '%s' for scheduler step" % scheduler_step_metric)
+                        if not metric.is_scalar():
+                            raise AssertionError("cannot use metric '%s' for scheduler step (not a scalar)" % scheduler_step_metric)
+                        metric_val = metric.eval() if self.current_epoch > 0 else metric.anti_goal()
+                        scheduler.step(metrics=metric_val, epoch=self.current_epoch)
                 else:
                     scheduler.step(epoch=self.current_epoch)
             if train_writer and not self.skip_tbx_histograms and (self.current_epoch % self.tbx_histogram_freq) == 0:
