@@ -1,5 +1,5 @@
 {
-    "name": "example-supperresolution",
+    "name": "example-supperresolution-srcnn",
     "cudnn": {
         "benchmark": false,
         "deterministic": true
@@ -32,7 +32,7 @@
         "torch_seed": 0,
         "numpy_seed": 0,
         "random_seed": 0,
-        "workers": 8,
+        "workers": 0,
         "pin_memory": false,
         "drop_last": false,
         "train_scale": 2.0,
@@ -96,11 +96,6 @@
         "save_freq": 1,
         "monitor": "psnr",
         "use_tbx": true,
-        "viz": {
-            "train": {"flag": 1, "wait": 10},
-            "valid": {"flag": 1, "wait": 10},
-            "test": {"flag": 1, "wait": 10}
-        },
         "optimization": {
             "loss": {
                 "type": "torch.nn.MSELoss",

@@ -45,50 +45,6 @@ class Struct(object):
         return self.__class__.__name__ + ": " + str(self.__dict__)
 
 
-def crop_size_to(template, input):
-    """
-    Crop the the input tensor to the size H0xW0
-    :param template: template tensor N0xB0xH0xW0
-    :param input: input tensor N1xB1xH1xW1
-    :return: N1xB1xH0xW0
-    """
-    x0 = (input.shape[3] - template.shape[3]) // 2
-    y0 = (input.shape[2] - template.shape[2]) // 2
-    xf = input.shape[3]
-    yf = input.shape[2]
-    if x0 > 0: xf -= x0
-    if y0 > 0: yf -= y0
-    return input[:, :, x0:xf, y0:yf]
-
-
-def get_cv_image(input, idx):
-    """
-    :param idx: element index
-    :param input: input tensor (N1xB1xH1xW1)
-    :return:
-    """
-    return input[idx].cpu().data.numpy().transpose(1,2,0)
-
-
-def show_cv_image(title, tensor_stack, idx, waitkey=10):
-    """
-    :param title:
-    :param input:
-    :param idx:
-    :param waitkey:
-    :return:
-    """
-    datas = []
-    for t in tensor_stack:
-        datas.append(get_cv_image(t, idx))
-    datas = np.hstack(datas)
-    cv.imshow(title, datas)
-    cv.waitKey(waitkey)
-
-
-
-
-
 def get_available_cuda_devices(attempts_per_device=5):
     # type: (Optional[int]) -> List[int]
     """
