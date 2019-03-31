@@ -1703,60 +1703,101 @@ class RawPredictions(Metric):
 
 
 class PSNR(Metric):
-    r"""PSNR metric interface.
+    r"""Peak Signal-to-Noise Ratio (PSNR) metric interface.
+
+    This is a scalar metric used to monitor the change in quality of a signal (or image) following a
+    transformation. For more information, see its definition on `[Wikipedia]`__.
+
+    .. __: https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio
+
+    The PSNR (in decibels, dB) between a modified signal :math:`x` and its original version :math:`y` is
+    defined as:
+
+    .. math::
+        \text{PSNR}(x, y) = 10 * \log_{10} \Bigg( \frac{R^2}{\text{MSE}(x, y)} \Bigg)
+
+    where :math:`\text{MSE}(x, y)` returns the mean squared error (see :class:`thelper.optim.metrics.MeanSquaredError`
+    for more information), and :math:`R` is the maximum possible value for a single element in the input signal
+    (i.e. its maximum "range").
+
+    Usage example inside a session configuration file::
+
+        # ...
+        # lists all metrics to instantiate as a dictionary
+        "metrics": {
+            # ...
+            # this is the name of the example metric; it is used for lookup/printing only
+            "psnr": {
+                # this type is used to instantiate the metric
+                "type": "thelper.optim.metrics.PSNR",
+                "params": {
+                    "data_range": "255"
+                }
+            },
+            # ...
+        }
+        # ...
+
+    Attributes:
+        max_accum: if using a moving average, this is the window size to use (default=None).
+        data_range: maximum value of an element in the analyzed signal.
+        decompose_batch: toggles whether batches should be decomposed along 0-th dim or not.
     """
 
-    def __init__(self, max_accum=None):
-        """Receives the moving average window size (max_accum).
+    def __init__(self, max_accum=None, data_range=1.0, decompose_batch=True):
+        """Receives all necessary initialization arguments to compute signal PSNRs,
+
+        See :class:`thelper.optim.metrics.PSNR` for information on arguments.
         """
         self.max_accum = max_accum
-        self.correct = deque()
-        self.total = deque()
+        self.psnrs = deque()  # will contain lists to avoid merging batch PSNRs early
         self.warned_eval_bad = False
-        self.data_range = 1.0
+        self.data_range = data_range
+        self.decompose_batch = decompose_batch
 
-    def accumulate(self, pred, gt, meta=None):
-
-        """Receives the latest class prediction and groundtruth labels from the training session.
+    def accumulate(self, pred, target, meta=None):
+        """Receives the latest predictions and target values from the training session.
 
         The inputs are expected to still be in ``torch.Tensor`` format, but must be located on the
-        CPU. This function computes and accumulate the number of correct and total predictions in
-        the queues, popping them if the maximum window length is reached.
+        CPU. This function computes and accumulate the PSNR value in a queue, popping it if the maximum
+        window length is reached.
 
         Args:
-            pred: model class predictions forwarded by the trainer.
-            gt: groundtruth labels forwarded by the trainer (can be ``None`` if unavailable).
+            pred: model prediction values forwarded by the trainer.
+            target: target prediction values forwarded by the trainer (can be ``None`` if unavailable).
             meta: metadata forwarded by the trainer (unused).
         """
-        if gt is None:
+        if target is None or target.numel() == 0:
             return  # only accumulating results when groundtruth available
-
-        err = np.mean(np.square(pred.data.numpy() - gt.data.numpy()), dtype=np.float64)
-
-        psnr = 10 * np.log10( self.data_range/err)
-
-        self.correct.append(psnr)
-        self.total.append(1)
-        if self.max_accum and len(self.correct) > self.max_accum:
-            self.correct.popleft()
-            self.total.popleft()
+        if pred.shape != target.shape:
+            raise AssertionError("prediction/gt tensors shape mismatch")
+        if not self.decompose_batch:
+            mse = np.mean(np.square(pred.numpy() - target.numpy()), dtype=np.float64)
+            psnr = 10 * np.log10(self.data_range / mse)
+            self.psnrs.append([psnr])
+        else:
+            pred = pred.view(pred.shape[0], -1)
+            target = target.view(target.shape[0], -1)
+            mse = np.mean(np.square(pred.numpy() - target.numpy()), axis=1, dtype=np.float64)
+            self.psnrs.append([10 * np.log10(self.data_range / e) for e in mse])
+        if self.max_accum and len(self.psnrs) > self.max_accum:
+            self.psnrs.popleft()
 
     def eval(self):
-        """Returns the current psnr
+        """Returns the current (average) PSNR based on the accumulated values.
 
         Will issue a warning if no predictions have been accumulated yet.
         """
-        if len(self.total) == 0 or sum(self.total) == 0:
+        if len(self.psnrs) == 0:
             if not self.warned_eval_bad:
                 self.warned_eval_bad = True
-                logger.warning("binary accuracy eval result invalid (set as 0.0), no results accumulated")
+                logger.warning("psnr eval result invalid (set as 0.0), no results accumulated")
             return 0.0
-        return (float(sum(self.correct)) / float(sum(self.total)))
+        return np.mean(np.array([psnr for psnr_list in self.psnrs for psnr in psnr_list]))
 
     def reset(self):
-        """Toggles a reset of the metric's internal state, emptying prediction count queues."""
-        self.correct = deque()
-        self.total = deque()
+        """Toggles a reset of the metric's internal state, emptying value queues."""
+        self.psnrs = deque()
 
     def needs_reset(self):
         """If the metric is currently operating in moving average mode, then it does not need to
