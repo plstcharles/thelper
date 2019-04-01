@@ -7,10 +7,9 @@ headers for more information.
 
 import logging
 
+import thelper.nn.common  # noqa: F401
 import thelper.nn.utils  # noqa: F401
 from thelper.nn.utils import Module  # noqa: F401
 from thelper.nn.utils import create_model  # noqa: F401
-
-import thelper.nn.netutils  # noqa: F401
 
 logger = logging.getLogger("thelper.nn")

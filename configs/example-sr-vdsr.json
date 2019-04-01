@@ -47,7 +47,7 @@
         }
     },
     "model": {
-        "type": "thelper.nn.sr.vdsr"
+        "type": "thelper.nn.sr.VDSR"
     },
     "trainer": {
         "type": "thelper.train.RegressionTrainer",

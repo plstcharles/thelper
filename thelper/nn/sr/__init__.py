@@ -7,12 +7,8 @@ headers for more information.
 
 import logging
 
-import logging
-
-import thelper.nn.utils  # noqa: F401
-import thelper.nn.netutils  # noqa: F401
-from thelper.nn.sr.srcnn import srcnn  # noqa: F401
-from thelper.nn.sr.vdsr import vdsr  # noqa: F401
-from thelper.nn.utils import create_model  # noqa: F401
+import thelper.nn  # noqa: F401
+from thelper.nn.sr.srcnn import SRCNN  # noqa: F401
+from thelper.nn.sr.vdsr import VDSR  # noqa: F401
 
 logger = logging.getLogger("thelper.nn.sr")

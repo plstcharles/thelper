@@ -54,7 +54,7 @@
         }
     },
     "model": {
-        "type": "thelper.nn.sr.srcnn"
+        "type": "thelper.nn.sr.SRCNN"
     },
     "trainer": {
         "type": "thelper.train.RegressionTrainer",
