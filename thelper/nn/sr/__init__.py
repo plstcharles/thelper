@@ -1,8 +1,8 @@
-"""Neural network and model package for supperresolution.
+"""Neural network and model package for super resolution.
 
-This package contains classes that define blocks and modules used in various neural network for supperesoltion
-architectures. Most of these classes have been adapted from external sources; see their individual
-headers for more information.
+This package contains classes that define blocks and modules used in various neural network for super
+resolution architectures. Most of these classes have been adapted from external sources; see their
+individual headers for more information.
 """
 
 import logging

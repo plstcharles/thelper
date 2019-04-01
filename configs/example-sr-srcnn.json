@@ -1,5 +1,5 @@
 {
-    "name": "example-supperresolution-srcnn",
+    "name": "example-superresolution-srcnn",
     "overwrite": true,
     "cudnn": {
         "benchmark": false,

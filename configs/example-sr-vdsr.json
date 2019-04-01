@@ -1,5 +1,5 @@
 {
-    "name": "example-supperresolution-vdsr",
+    "name": "example-superresolution-vdsr",
     "overwrite": true,
     "cudnn": {
         "benchmark": false,
