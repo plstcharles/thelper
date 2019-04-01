@@ -1,25 +1,19 @@
 {
     "name": "example-supperresolution-vdsr",
+    "overwrite": true,
     "cudnn": {
         "benchmark": false,
         "deterministic": true
     },
     "datasets": {
-        "superres_train": {
-            "type": "thelper.data.SRImageFolderDataset",
+        "superres": {
+            "type": "thelper.data.SuperResFolderDataset",
             "params": {
-                "root": "/misc/archive06/visi/datasets/Textures/dtd/images",
-                "train": true
+                "root": "@@@@@@@@@@ PATH_TO_IMAGE_FOLDER @@@@@@@@@@",
+                "downscale_factor": 2.0,
+                "rescale_lowres": true,
+                "center_crop": [64, 64]
             }
-
-        },
-        "superres_test": {
-            "type": "thelper.data.SRImageFolderDataset",
-            "params": {
-                "root": "/misc/archive06/visi/datasets/Textures/dtd/images",
-                "train": false
-            }
-
         }
     },
     "loaders": {
@@ -38,46 +32,18 @@
         "train_scale": 2.0,
         "base_transforms": [
             {
-                "operation": "thelper.transforms.CenterCrop",
-                "params": {
-                    "size": [64,64]
-                },
-                "target_key": ["lowres"]
-            },
-             {
-                "operation": "thelper.transforms.CenterCrop",
-                "params": {
-                    "size": [64,64]
-                },
-                "target_key": [ "highres"]
-            },
-            {
-                "operation": "thelper.transforms.Resize",
-                "params": {
-                    "dsize": [32, 32]
-                },
-                "target_key": "lowres"
-            },
-            {
-                "operation": "thelper.transforms.Resize",
-                "params": {
-                    "dsize": [64, 64]
-                },
-                "target_key": "lowres"
-            },
-            {
                 "operation": "torchvision.transforms.ToTensor",
-                "target_key": ["lowres", "highres"]
+                "target_key": ["lowres_image", "highres_image"]
             }
         ],
         "train_split": {
-            "superres_train": 0.8
+            "superres": 0.7
         },
         "valid_split": {
-            "superres_train": 0.2
+            "superres": 0.2
         },
         "test_split": {
-            "superres_test": 1.0
+            "superres": 0.1
         }
     },
     "model": {
@@ -117,15 +83,10 @@
         "metrics": {
             "psnr": {
                 "type": "thelper.optim.PSNR",
-                "params": {}
+                "params": {
+                    "data_range": 1.0
+                }
             }
-        },
-        "test_metrics": {
-            "psnr": {
-                "type": "thelper.optim.PSNR",
-                "params": {}
-            }
-
         }
     }
 }
