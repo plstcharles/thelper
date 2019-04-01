@@ -190,6 +190,7 @@ class _LoaderFactory(object):
                     raise AssertionError("ratio should never be negative...")
                 elif 0 < usage < 1 and not self.skip_split_norm:
                     query_msg = "dataset split for '%s' has a ratio sum less than 1; do you want to normalize the split?" % name
+                    query_msg += f"\n\t (train={self.train_split[name]}, valid={self.valid_split[name]}, test={self.test_split[name]})"
                     normalize_ratios = thelper.utils.query_yes_no(query_msg, bypass="n")
                 if (normalize_ratios or usage > 1) and usage > 0:
                     if usage > 1:
