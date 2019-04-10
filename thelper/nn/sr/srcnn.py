@@ -9,7 +9,7 @@ class SRCNN(thelper.nn.Module):
     information (https://arxiv.org/abs/1501.00092).
     """
 
-    def __init__(self, task, num_channels=1, base_filter=64,  groups=1):
+    def __init__(self, task, num_channels=1, base_filter=64, groups=1):
         super(SRCNN, self).__init__(task)
         self.conv1 = thelper.nn.common.ConvBlock(num_channels, base_filter * groups, kernel_size=9,
                                                  stride=1, padding=0, activation="relu", norm=None, groups=groups)
@@ -24,7 +24,7 @@ class SRCNN(thelper.nn.Module):
         x0 = self.conv1(x0)
         x0 = self.conv2(x0)
         x0 = self.conv3(x0)
-        x0 = x0.view( x.shape[0],  x.shape[1],  x0.shape[2],  x0.shape[3])
+        x0 = x0.view(x.shape[0], x.shape[1], x0.shape[2], x0.shape[3])
         return x0
 
     def weight_init(self):

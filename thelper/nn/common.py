@@ -77,7 +77,7 @@ class ConvBlock(torch.nn.Module):
 
     def forward_act_bn(self, x):
         x = self.conv(x)
-        if  self.act is not None:
+        if self.act is not None:
             x = self.act(x)
         if self.bn is not None:
             x = self.bn(x)
@@ -160,7 +160,8 @@ class ResNetBlock(torch.nn.Module):
 
 
 class PSBlock(torch.nn.Module):
-    def __init__(self, input_size, output_size, scale_factor, kernel_size=3, stride=1, padding=1, bias=True, activation='relu', norm='batch'):
+    def __init__(self, input_size, output_size, scale_factor, kernel_size=3,
+                 stride=1, padding=1, bias=True, activation='relu', norm='batch'):
         super(PSBlock, self).__init__()
         self.conv = torch.nn.Conv2d(input_size, output_size * scale_factor**2, kernel_size, stride, padding, bias=bias)
         self.ps = torch.nn.PixelShuffle(scale_factor)

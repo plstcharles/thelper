@@ -9,6 +9,7 @@ import logging
 import thelper.optim.metrics  # noqa: F401
 import thelper.optim.schedulers  # noqa: F401
 import thelper.optim.utils  # noqa: F401
+from thelper.optim.metrics import PSNR  # noqa: F401
 from thelper.optim.metrics import BinaryAccuracy  # noqa: F401
 from thelper.optim.metrics import CategoryAccuracy  # noqa: F401
 from thelper.optim.metrics import ClassifLogger  # noqa: F401
@@ -18,7 +19,6 @@ from thelper.optim.metrics import ExternalMetric  # noqa: F401
 from thelper.optim.metrics import MeanAbsoluteError  # noqa: F401
 from thelper.optim.metrics import MeanSquaredError  # noqa: F401
 from thelper.optim.metrics import Metric  # noqa: F401
-from thelper.optim.metrics import PSNR  # noqa: F401
 from thelper.optim.metrics import RawPredictions  # noqa: F401
 from thelper.optim.metrics import ROCCurve  # noqa: F401
 from thelper.optim.schedulers import CustomStepLR  # noqa: F401
