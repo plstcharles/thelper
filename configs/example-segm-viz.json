@@ -12,5 +12,9 @@
             }
         }
     },
-    "viz_block": false
+    "viz": {
+        "kwargs": {
+            "block": false
+        }
+    }
 }

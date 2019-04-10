@@ -145,9 +145,9 @@ def visualize_data(config):
 
     If the configuration dictionary includes a 'loaders' field, it will be parsed and used. Otherwise,
     if only a 'datasets' field is available, basic loaders will be instantiated to load the data. The
-    'loaders' field can also be ignored if 'viz_ignore_loaders' is found within the config and set
-    to ``True``. Each minibatch will be displayed via pyplot. The display will block and wait for user
-    input, unless 'viz_block' is found within the config and set to ``False``.
+    'loaders' field can also be ignored if 'ignore_loaders' is found within the 'viz' section of the config
+    and set to ``True``. Each minibatch will be displayed via pyplot or OpenCV. The display will block and
+    wait for user input, unless 'block' is set within the 'viz' section's 'kwargs' config as ``False``.
 
     Args:
         config: a dictionary that provides all required data configuration parameters; see
@@ -157,32 +157,42 @@ def visualize_data(config):
         | :func:`thelper.data.utils.create_loaders`
         | :func:`thelper.data.utils.create_parsers`
     """
-    # todo: move all 'viz' miniconfig stuff to its own section in the config file?
     logger = thelper.utils.get_func_logger()
     logger.info("creating visualization session...")
     thelper.utils.setup_globals(config)
-    ignore_loaders = thelper.utils.get_key_def("viz_ignore_loaders", config, default=False)
-    use_cv2 = thelper.utils.get_key_def("use_cv2", config, default=True)
+    viz_config = thelper.utils.get_key_def("viz", config, default={})
+    if not isinstance(viz_config, dict):
+        raise AssertionError("unexpected viz config type")
+    ignore_loaders = thelper.utils.get_key_def("ignore_loaders", viz_config, default=False)
+    viz_kwargs = thelper.utils.get_key_def("kwargs", viz_config, default={})
+    if not isinstance(viz_kwargs, dict):
+        raise AssertionError("unexpected viz kwargs type")
     if thelper.utils.get_key_def(["data_config", "loaders"], config, default=None) is None or ignore_loaders:
         datasets, task = thelper.data.create_parsers(config)
         loader_map = {dataset_name: torch.utils.data.DataLoader(dataset,) for dataset_name, dataset in datasets.items()}
         # we assume no transforms were done in the parser, and images are given as read by opencv
-        ch_transpose = thelper.utils.get_key_def("viz_ch_transpose", config, False)
-        flip_bgr = thelper.utils.get_key_def("viz_flip_bgr", config, False)
+        viz_kwargs["ch_transpose"] = thelper.utils.get_key_def("ch_transpose", viz_kwargs, False)
+        viz_kwargs["flip_bgr"] = thelper.utils.get_key_def("flip_bgr", viz_kwargs, False)
     else:
         task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config)
         loader_map = {"train": train_loader, "valid": valid_loader, "test": test_loader}
         # we assume transforms were done in the loader, and images are given as expected by pytorch
-        ch_transpose = thelper.utils.get_key_def("viz_ch_transpose", config, True)
-        flip_bgr = thelper.utils.get_key_def("viz_flip_bgr", config, False)
+        viz_kwargs["ch_transpose"] = thelper.utils.get_key_def("ch_transpose", viz_kwargs, True)
+        viz_kwargs["flip_bgr"] = thelper.utils.get_key_def("flip_bgr", viz_kwargs, False)
     redraw = None
-    block = thelper.utils.get_key_def("viz_block", config, default=True)
+    viz_kwargs["block"] = thelper.utils.get_key_def("block", viz_kwargs, default=True)
     while True:
-        choice = thelper.utils.query_string("Which loader would you like to visualize?", choices=list(loader_map.keys()))
+        if len(loader_map) > 1:
+            choice = thelper.utils.query_string("Which loader would you like to visualize?", choices=list(loader_map.keys()))
+        else:
+            choice = next(iter(loader_map.keys()))
         loader = loader_map[choice]
         if loader is None:
             logger.info("loader '%s' is empty" % choice)
-            continue
+            if len(loader_map) > 1:
+                continue
+            else:
+                break
         batch_count = len(loader)
         logger.info("initializing loader '%s' with %d batches..." % (choice, batch_count))
         for batch_idx, samples in enumerate(loader):
@@ -193,8 +203,7 @@ def visualize_data(config):
                     logger.debug("(indices = %s)" % indices.tolist())
                 else:
                     logger.debug("(indices = %s)" % indices)
-            redraw = thelper.utils.draw_minibatch(samples, task, ch_transpose=ch_transpose, flip_bgr=flip_bgr,
-                                                  block=block, redraw=redraw, use_cv2=use_cv2)
+            redraw = thelper.utils.draw_minibatch(samples, task, redraw=redraw, **viz_kwargs)
         logger.info("all done")
 
 
