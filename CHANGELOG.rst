@@ -2,6 +2,16 @@
 Changelog
 =========
 
+0.2.8 (2019/03/17)
+--------------------------
+
+* Cleaned up build tools & docstrings throughout api
+* Added user guide in documentation build
+* Update tasks to allow dataset interface override
+* Cleaned up trainer output logs
+* Added fully convolutional resnet implementation
+* Fixup various issues related to fine-tuning via 'resume'
+
 0.2.7 (2019/02/04)
 --------------------------
 
