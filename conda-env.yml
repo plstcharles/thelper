@@ -9,6 +9,7 @@ dependencies:
   - cython
   - matplotlib
   - opencv
+  - h5py
   - scikit-learn
   - gitpython
   - mock
