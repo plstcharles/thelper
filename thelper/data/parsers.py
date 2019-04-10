@@ -395,7 +395,7 @@ class SuperResFolderDataset(Dataset):
             raise AssertionError("could not locate any subdir in '%s' with images to load" % self.root)
         meta_keys = [self.path_key, self.idx_key, self.label_key]
         super().__init__(config=config, transforms=transforms)
-        self.task = thelper.tasks.Regression(input_key=self.lowres_image_key, target_key=self.highres_image_key, meta_keys=meta_keys)
+        self.task = thelper.tasks.SuperResolution(input_key=self.lowres_image_key, target_key=self.highres_image_key, meta_keys=meta_keys)
         self.samples = samples
 
     def __getitem__(self, idx):
