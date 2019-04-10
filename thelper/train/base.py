@@ -276,11 +276,17 @@ class Trainer:
         if self.eval_iter_callback is not None and isinstance(self.eval_iter_callback, str):
             self.eval_iter_callback = thelper.utils.import_function(
                 self.eval_iter_callback)                    # type: typ.IterCallbackType
-        display_predictions = thelper.utils.get_key_def("display_preds", trainer_config, False)
-        if display_predictions:
+        self.callback_kwargs = thelper.utils.get_key_def("callback_kwargs", trainer_config, {})
+        if not isinstance(self.callback_kwargs, dict):
+            raise AssertionError("invalid callback kwargs type")
+        display_predictions = thelper.utils.get_key_def(["display_preds", "display_predictions"], trainer_config, False)
+        display_train_predictions = thelper.utils.get_key_def(["display_train_preds", "display_train_predictions"], trainer_config, False)
+        display_eval_predictions = thelper.utils.get_key_def(["display_eval_preds", "display_eval_predictions"], trainer_config, False)
+        if display_predictions or display_train_predictions:
             if self.train_iter_callback is not None:
                 raise AssertionError("cannot use 'display_preds' while also using an external callback")
             self.train_iter_callback = thelper.utils.import_function("thelper.train.utils._draw_minibatch_wrapper")
+        if display_predictions or display_eval_predictions:
             if self.eval_iter_callback is not None:
                 raise AssertionError("cannot use 'display_preds' while also using an external callback")
             self.eval_iter_callback = thelper.utils.import_function("thelper.train.utils._draw_minibatch_wrapper")

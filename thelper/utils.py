@@ -1001,6 +1001,8 @@ def get_displayable_image(image,                # type: thelper.typedefs.ArrayTy
         image = image[..., :3]
     if grayscale and image.shape[2] != 1:
         image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    elif not grayscale and image.shape[2] == 1:
+        image = cv.cvtColor(image, cv.COLOR_GRAY2BGR)
     image_normalized = np.empty_like(image, dtype=np.uint8).copy()  # copy needed here due to ocv 3.3 bug
     cv.normalize(image, image_normalized, 0, 255, cv.NORM_MINMAX, dtype=cv.CV_8U)
     return image_normalized
@@ -1059,27 +1061,47 @@ def draw_popbars(labels,                # type: thelper.typedefs.LabelList
     return fig
 
 
-def draw_classifs(images,               # type: thelper.typedefs.OneOrManyArrayType
-                  labels_gt=None,       # type: Optional[thelper.typedefs.LabelList]
-                  labels_pred=None,     # type: Optional[thelper.typedefs.LabelList]
-                  labels_map=None,      # type: Optional[thelper.typedefs.LabelDict]
-                  redraw=None,          # type: Optional[thelper.typedefs.DrawingType]
-                  use_cv2=True,         # type: Optional[bool]
-                  img_shape=None,       # type: Optional[thelper.typedefs.ArrayShapeType]
-                  max_img_size=None,    # type: Optional[thelper.typedefs.ArrayShapeType]
-                  ):                    # type: (...) -> thelper.typedefs.DrawingType
-    """Draws and returns a figure of classification results using pyplot."""
+def draw_images(images,               # type: thelper.typedefs.OneOrManyArrayType
+                captions=None,        # type: Optional[List[str]]
+                redraw=None,          # type: Optional[thelper.typedefs.DrawingType]
+                block=False,          # type: Optional[bool]
+                use_cv2=True,         # type: Optional[bool]
+                cv2_flip_bgr=True,    # type: Optional[bool]
+                img_shape=None,       # type: Optional[thelper.typedefs.ArrayShapeType]
+                max_img_size=None,    # type: Optional[thelper.typedefs.ArrayShapeType]
+                grid_size_x=None,     # type: Optional[int]
+                grid_size_y=None,     # type: Optional[int]
+                caption_opts=None,
+                window_name=None,     # type: Optional[str]
+                ):                    # type: (...) -> thelper.typedefs.DrawingType
+    """Draws a set of images with optional captions."""
     nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
     if nb_imgs < 1:
         return None
+    if captions is not None and len(captions) != nb_imgs:
+        raise AssertionError("captions count mismatch with image count")
     if max_img_size is None:
-        max_img_size = (800, 1600)
-    grid_size_x = int(math.ceil(math.sqrt(nb_imgs)))
-    grid_size_y = int(math.ceil(nb_imgs / grid_size_x))
+        max_img_size = (800, 1600)  # for display on typical monitors... (height, width)
+    if grid_size_x is None:
+        grid_size_x = int(math.ceil(math.sqrt(nb_imgs)))
+    if grid_size_y is None:
+        grid_size_y = int(math.ceil(nb_imgs / grid_size_x))
     if grid_size_x * grid_size_y < nb_imgs:
-        raise AssertionError("bad gridding for subplots")
+        raise AssertionError(f"bad gridding for subplots (need at least {nb_imgs} tiles)")
     if use_cv2:
-        img_grid_shape, img_grid = None, (None if redraw is None else redraw[1])
+        if caption_opts is None:
+            caption_opts = {
+                "org": (10, 40),
+                "fontFace": cv.FONT_HERSHEY_SIMPLEX,
+                "fontScale": 0.40,
+                "color": (255, 255, 255),
+                "thickness": 1,
+                "lineType": cv.LINE_AA
+            }
+        if window_name is None:
+            window_name = "images"
+        img_grid_shape = None
+        img_grid = None if redraw is None else redraw[1]
         for img_idx in range(nb_imgs):
             image = images[img_idx] if isinstance(images, list) else images[img_idx, ...]
             if img_shape is None:
@@ -1088,32 +1110,17 @@ def draw_classifs(images,               # type: thelper.typedefs.OneOrManyArrayT
                 img_grid_shape = (img_shape[0] * grid_size_y, img_shape[1] * grid_size_x, img_shape[2])
             if img_grid is None or img_grid.shape != img_grid_shape:
                 img_grid = np.zeros(img_grid_shape, dtype=np.uint8)
-            if labels_gt is not None or labels_pred is not None:
-                if labels_gt is not None:
-                    if labels_map and labels_gt[img_idx] in labels_map:
-                        curr_label_gt = labels_map[labels_gt[img_idx]]
-                    else:
-                        curr_label_gt = labels_gt[img_idx]
-                else:
-                    curr_label_gt = "<unknown>"
-                if labels_pred is not None:
-                    if labels_map and labels_pred[img_idx] in labels_map:
-                        curr_label_pred = labels_map[labels_pred[img_idx]]
-                    else:
-                        curr_label_pred = labels_pred[img_idx]
-                    xlabel = "GT={0}\nPred={1}".format(curr_label_gt, curr_label_pred)
-                else:
-                    xlabel = "GT={0}".format(curr_label_gt)
-                image = image.copy()
-                color = (255, 255, 255)
-                bottom_left = (10, 40)
-                image = cv.putText(image, xlabel, bottom_left, cv.FONT_HERSHEY_SIMPLEX, 0.40, color, 1, cv.LINE_AA)
+            if image.shape[2] != img_shape[2]:
+                raise AssertionError(f"unexpected image depth ({image.shape[2]} vs {img_shape[2]})")
+            if image.shape != img_shape:
+                image = cv.resize(image, (img_shape[1], img_shape[0]), interpolation=cv.INTER_NEAREST)
+            if captions is not None and str(captions[img_idx]):
+                image = cv.putText(image.copy(), str(captions[img_idx]), **caption_opts)
             offsets = (img_idx // grid_size_x) * img_shape[0], (img_idx % grid_size_x) * img_shape[1]
-            np.copyto(img_grid[offsets[0]:(offsets[0] + img_shape[0]),
-                      offsets[1]:(offsets[1] + img_shape[1]), :], image)
-        win_name = "classifs" if redraw is None else redraw[0]
+            np.copyto(img_grid[offsets[0]:(offsets[0] + img_shape[0]), offsets[1]:(offsets[1] + img_shape[1]), :], image)
+        win_name = str(window_name) if redraw is None else redraw[0]
         if img_grid is not None:
-            display = img_grid[..., ::-1]
+            display = img_grid[..., ::-1] if cv2_flip_bgr else img_grid
             if display.shape[0] > max_img_size[0] or display.shape[1] > max_img_size[1]:
                 if display.shape[0] / max_img_size[0] > display.shape[1] / max_img_size[1]:
                     dsize = (max_img_size[0], int(round(display.shape[1] / (display.shape[0] / max_img_size[0]))))
@@ -1121,104 +1128,7 @@ def draw_classifs(images,               # type: thelper.typedefs.OneOrManyArrayT
                     dsize = (int(round(display.shape[0] / (display.shape[1] / max_img_size[1]))), max_img_size[1])
                 display = cv.resize(display, (dsize[1], dsize[0]))
             cv.imshow(win_name, display)
-        return win_name, img_grid
-    else:
-        fig, axes = redraw if redraw is not None else plt.subplots(grid_size_y, grid_size_x)
-        plt.tight_layout()
-        if nb_imgs == 1:
-            axes = np.array(axes)
-        for ax_idx, ax in enumerate(axes.reshape(-1)):
-            if ax_idx < nb_imgs:
-                if isinstance(images, list):
-                    ax.imshow(images[ax_idx], interpolation='nearest')
-                else:
-                    ax.imshow(images[ax_idx, ...], interpolation='nearest')
-                if labels_gt is not None or labels_pred is not None:
-                    if labels_gt is not None:
-                        if labels_map and labels_gt[ax_idx] in labels_map:
-                            curr_label_gt = labels_map[labels_gt[ax_idx]]
-                        else:
-                            curr_label_gt = labels_gt[ax_idx]
-                    else:
-                        curr_label_gt = "<unknown>"
-                    if labels_pred is not None:
-                        if labels_map and labels_pred[ax_idx] in labels_map:
-                            curr_label_pred = labels_map[labels_pred[ax_idx]]
-                        else:
-                            curr_label_pred = labels_pred[ax_idx]
-                        xlabel = "GT={0}\nPred={1}".format(curr_label_gt, curr_label_pred)
-                    else:
-                        xlabel = "GT={0}".format(curr_label_gt)
-                    ax.set_xlabel(xlabel)
-            ax.set_xticks([])
-            ax.set_yticks([])
-        fig.show()
-        return fig, axes
-
-
-def draw_segments(images,                 # type: thelper.typedefs.OneOrManyArrayType
-                  masks_gt,               # type: Optional[thelper.typedefs.OneOrManyArrayType]
-                  masks_pred=None,        # type: Optional[thelper.typedefs.OneOrManyArrayType]
-                  labels_color_map=None,  # type: Optional[thelper.typedefs.LabelColorMapType]
-                  redraw=None,            # type: Optional[thelper.typedefs.DrawingType]
-                  use_cv2=True,           # type: Optional[bool]
-                  img_shape=None,         # type: Optional[thelper.typedefs.ArrayShapeType]
-                  max_img_size=None,      # type: Optional[thelper.typedefs.ArrayShapeType]
-                  ):                      # type: (...) -> thelper.typedefs.DrawingType
-    """Draws and returns a figure of segmentation results using pyplot."""
-    # todo: display gt if available? (currently skipped)
-    nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
-    if nb_imgs < 1:
-        return None
-    if max_img_size is None:
-        max_img_size = (800, 1600)
-    grid_size_x = int(math.ceil(math.sqrt(nb_imgs)))
-    grid_size_y = int(math.ceil(nb_imgs / grid_size_x))
-    if grid_size_x * grid_size_y < nb_imgs:
-        raise AssertionError("bad gridding for subplots")
-    if labels_color_map is not None and isinstance(labels_color_map, dict):
-        if len(labels_color_map) > 256:
-            raise AssertionError("too many indices for uint8 map")
-        labels_color_map_new = np.zeros((256, 1, 3), dtype=np.uint8)
-        for idx, val in labels_color_map.items():
-            labels_color_map_new[idx, ...] = val
-        labels_color_map = labels_color_map_new
-    if use_cv2:
-        img_grid_shape, img_grid = None, (None if redraw is None else redraw[1])
-        for img_idx in range(nb_imgs):
-            image = images[img_idx] if isinstance(images, list) else images[img_idx, ...]
-            if img_shape is None:
-                img_shape = image.shape
-            if img_grid_shape is None:
-                img_grid_shape = (img_shape[0] * grid_size_y, img_shape[1] * grid_size_x, 3)
-            if img_grid is None or img_grid.shape != img_grid_shape:
-                img_grid = np.zeros(img_grid_shape, dtype=np.uint8)
-            mask = None
-            if masks_pred is not None:
-                mask = masks_pred[img_idx] if isinstance(masks_pred, list) else masks_pred[img_idx, ...]
-            elif masks_gt is not None:
-                mask = masks_gt[img_idx] if isinstance(masks_gt, list) else masks_gt[img_idx, ...]
-            if isinstance(mask, np.ndarray):
-                if labels_color_map is not None:
-                    mask = apply_color_map(mask, labels_color_map)
-                if image.ndim == 2 or image.shape[2] != 3:
-                    image = cv.cvtColor(image, cv.COLOR_GRAY2BGR)
-                image = cv.addWeighted(image, 0.5, mask, 0.5, 0)
-            offsets = (img_idx // grid_size_x) * img_shape[0], (img_idx % grid_size_x) * img_shape[1]
-            if image.ndim < 3 or image.shape[2] == 1:
-                image = cv.cvtColor(image, cv.COLOR_GRAY2BGR)
-            np.copyto(img_grid[offsets[0]:(offsets[0] + img_shape[0]),
-                      offsets[1]:(offsets[1] + img_shape[1]), :], image)
-        win_name = "segments" if redraw is None else redraw[0]
-        if img_grid is not None:
-            display = img_grid[..., ::-1]
-            if display.shape[0] > max_img_size[0] or display.shape[1] > max_img_size[1]:
-                if display.shape[0] / max_img_size[0] > display.shape[1] / max_img_size[1]:
-                    dsize = (max_img_size[0], int(round(display.shape[1] / (display.shape[0] / max_img_size[0]))))
-                else:
-                    dsize = (int(round(display.shape[0] / (display.shape[1] / max_img_size[1]))), max_img_size[1])
-                display = cv.resize(display, (dsize[1], dsize[0]))
-            cv.imshow(win_name, display)
+            cv.waitKey(0 if block else 1)
         return win_name, img_grid
     else:
         fig, axes = redraw if redraw is not None else plt.subplots(grid_size_y, grid_size_x)
@@ -1228,22 +1138,184 @@ def draw_segments(images,                 # type: thelper.typedefs.OneOrManyArra
         for ax_idx, ax in enumerate(axes.reshape(-1)):
             if ax_idx < nb_imgs:
                 image = images[ax_idx] if isinstance(images, list) else images[ax_idx, ...]
-                if masks_pred is not None:
-                    mask = masks_pred[ax_idx] if isinstance(masks_pred, list) else masks_pred[ax_idx, ...]
-                    if labels_color_map is not None:
-                        mask = apply_color_map(mask, labels_color_map)
-                    if image.ndim == 2 or image.shape[2] != 3:
-                        image = cv.cvtColor(image, cv.COLOR_GRAY2BGR)
-                    image = cv.addWeighted(image, 0.5, mask, 0.5, 0)
+                if image.shape != img_shape:
+                    image = cv.resize(image, (img_shape[1], img_shape[0]), interpolation=cv.INTER_NEAREST)
                 ax.imshow(image, interpolation='nearest')
+                if captions is not None and str(captions[ax_idx]):
+                    ax.set_xlabel(str(captions[ax_idx]))
             ax.set_xticks([])
             ax.set_yticks([])
         fig.show()
+        if block:
+            plt.show(block=block)
+            return None
+        plt.pause(0.5)
         return fig, axes
 
 
-def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True,
-                   flip_bgr=False, redraw=None, use_cv2=True):
+def draw_predicts(images, preds=None, targets=None, swap_channels=False, redraw=None, block=False, **kwargs):
+    """Draws and returns a set of generic prediction results."""
+    image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+    image_gray_list = [cv.cvtColor(cv.cvtColor(image, cv.COLOR_BGR2GRAY), cv.COLOR_GRAY2BGR) for image in image_list]
+    nb_imgs = len(image_list)
+    caption_list = [""] * nb_imgs
+    grid_size_x, grid_size_y = nb_imgs, 1  # all images on one row, by default (add gt and preds as extra rows)
+    if targets is not None:
+        if not isinstance(targets, list) and not (isinstance(targets, torch.Tensor) and targets.shape[0] == nb_imgs):
+            raise AssertionError("expected targets to be in list or tensor format (Bx...)")
+        if isinstance(targets, list):
+            if all([isinstance(t, list) for t in targets]):
+                targets = list(itertools.chain.from_iterable(targets))  # merge all augmented lists together
+            targets = torch.cat(targets, 0)  # merge all masks into a single tensor
+        if targets.shape[0] != nb_imgs:
+            raise AssertionError("images/targets count mismatch")
+        targets = targets.numpy()
+        if swap_channels:
+            if not targets.ndim == 4:
+                raise AssertionError("unexpected swap for targets tensor that is not 4-dim")
+            targets = np.transpose(targets, (0, 2, 3, 1))  # BxCxHxW to BxHxWxC
+        if ((targets.ndim == 4 and targets.shape[1] == 1) or targets.ndim == 3) and targets.shape[-2:] == images.shape[1:3]:
+            target_list = [get_displayable_heatmap(targets[batch_idx, ...]) for batch_idx in range(nb_imgs)]
+            target_list = [cv.addWeighted(image_gray_list[idx], 0.3, target_list[idx], 0.7, 0) for idx in range(nb_imgs)]
+            image_list += target_list
+            caption_list += [""] * nb_imgs
+            grid_size_y += 1
+        elif targets.shape == images.shape:
+            image_list += [get_displayable_image(targets[batch_idx, ...]) for batch_idx in range(nb_imgs)]
+            caption_list += [""] * nb_imgs
+            grid_size_y += 1
+        else:
+            for idx in range(nb_imgs):
+                caption_list[idx] = f"GT={str(targets[idx])}"
+    if preds is not None:
+        if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and preds.shape[0] == nb_imgs):
+            raise AssertionError("expected preds to be in list or tensor shape (Bx...)")
+        if isinstance(preds, list):
+            if all([isinstance(p, list) for p in preds]):
+                preds = list(itertools.chain.from_iterable(preds))  # merge all augmented lists together
+            preds = torch.cat(preds, 0)  # merge all preds into a single tensor
+        if preds.shape[0] != nb_imgs:
+            raise AssertionError("images/preds count mismatch")
+        preds = preds.numpy()
+        if swap_channels:
+            if not preds.ndim == 4:
+                raise AssertionError("unexpected swap for targets tensor that is not 4-dim")
+            preds = np.transpose(preds, (0, 2, 3, 1))  # BxCxHxW to BxHxWxC
+        if targets is not None and preds.shape != targets.shape:
+            raise AssertionError("preds/targets shape mismatch")
+        if ((preds.ndim == 4 and preds.shape[1] == 1) or preds.ndim == 3) and preds.shape[-2:] == images.shape[1:3]:
+            pred_list = [get_displayable_heatmap(preds[batch_idx, ...]) for batch_idx in range(nb_imgs)]
+            pred_list = [cv.addWeighted(image_gray_list[idx], 0.3, pred_list[idx], 0.7, 0) for idx in range(nb_imgs)]
+            image_list += pred_list
+            caption_list += [""] * nb_imgs
+            grid_size_y += 1
+        elif preds.shape == images.shape:
+            image_list += [get_displayable_image(preds[batch_idx, ...]) for batch_idx in range(nb_imgs)]
+            caption_list += [""] * nb_imgs
+            grid_size_y += 1
+        else:
+            for idx in range(nb_imgs):
+                if len(caption_list[idx]) != 0:
+                    caption_list[idx] += ", "
+                caption_list[idx] = f"Pred={str(preds[idx])}"
+    return draw_images(image_list, captions=caption_list, redraw=redraw, window_name="predictions",
+                       block=block, grid_size_x=grid_size_x, grid_size_y=grid_size_y, **kwargs)
+
+
+def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, block=False, **kwargs):
+    """Draws and returns a set of segmentation results."""
+    image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+    image_gray_list = [cv.cvtColor(cv.cvtColor(image, cv.COLOR_BGR2GRAY), cv.COLOR_GRAY2BGR) for image in image_list]
+    nb_imgs = len(image_list)
+    grid_size_x, grid_size_y = nb_imgs, 1  # all images on one row, by default (add gt and preds as extra rows)
+    if color_map is not None and isinstance(color_map, dict):
+        if len(color_map) > 256:
+            raise AssertionError("too many indices for uint8 map")
+        color_map_new = np.zeros((256, 1, 3), dtype=np.uint8)
+        for idx, val in color_map.items():
+            color_map_new[idx, ...] = val
+        color_map = color_map_new
+    if masks is not None:
+        if not isinstance(masks, list) and not (isinstance(masks, torch.Tensor) and masks.dim() == 3):
+            raise AssertionError("expected segmentation masks to be in list or 3-d tensor format (BxHxW)")
+        if isinstance(masks, list):
+            if all([isinstance(m, list) for m in masks]):
+                masks = list(itertools.chain.from_iterable(masks))  # merge all augmented lists together
+            masks = torch.cat(masks, 0)  # merge all masks into a single tensor
+        if masks.shape[0] != nb_imgs:
+            raise AssertionError("images/masks count mismatch")
+        if images.shape[0:3] != masks.shape:
+            raise AssertionError("images/masks shape mismatch")
+        masks = masks.numpy()
+        if color_map is not None:
+            masks = [apply_color_map(masks[idx], color_map) for idx in range(masks.shape[0])]
+        image_list += [cv.addWeighted(image_gray_list[idx], 0.3, masks[idx], 0.7, 0) for idx in range(nb_imgs)]
+        grid_size_y += 1
+    if preds is not None:
+        if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and preds.dim() == 4):
+            raise AssertionError("expected segmentation preds to be in list or 3-d tensor format (BxCxHxW)")
+        if isinstance(preds, list):
+            if all([isinstance(p, list) for p in preds]):
+                preds = list(itertools.chain.from_iterable(preds))  # merge all augmented lists together
+            preds = torch.cat(preds, 0)  # merge all preds into a single tensor
+        with torch.no_grad():
+            preds = torch.squeeze(preds.topk(k=1, dim=1)[1], dim=1)  # keep top prediction index only
+        if preds.shape[0] != nb_imgs:
+            raise AssertionError("images/preds count mismatch")
+        if images.shape[0:3] != preds.shape:
+            raise AssertionError("images/preds shape mismatch")
+        preds = preds.numpy()
+        if color_map is not None:
+            preds = [apply_color_map(preds[idx], color_map) for idx in range(preds.shape[0])]
+        image_list += [cv.addWeighted(image_gray_list[idx], 0.3, preds[idx], 0.7, 0) for idx in range(nb_imgs)]
+        grid_size_y += 1
+    return draw_images(image_list, redraw=redraw, window_name="segments", block=block,
+                       grid_size_x=grid_size_x, grid_size_y=grid_size_y, **kwargs)
+
+
+def draw_classifs(images, preds=None, labels=None, class_names_map=None, redraw=None, block=False, **kwargs):
+    """Draws and returns a set of classification results."""
+    image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+    caption_list = [""] * len(image_list)
+    if labels is not None:  # convert labels to flat list, if available
+        if not isinstance(labels, list) and not (isinstance(labels, torch.Tensor) and labels.dim() == 1):
+            raise AssertionError("expected classification labels to be in list or 1-d tensor format")
+        if isinstance(labels, list):
+            if all([isinstance(l, list) for l in labels]):
+                labels = list(itertools.chain.from_iterable(labels))  # merge all augmented lists together
+            if all([isinstance(t, torch.Tensor) for t in labels]):
+                labels = torch.cat(labels, 0)
+        if isinstance(labels, torch.Tensor):
+            labels = labels.tolist()
+        if images.shape[0] != len(labels):
+            raise AssertionError("images/labels count mismatch")
+        if class_names_map is not None:
+            labels = [class_names_map[lbl] if lbl in class_names_map else lbl for lbl in labels]
+        for idx in range(len(image_list)):
+            caption_list[idx] = f"GT={labels[idx]}"
+    if preds is not None:  # convert predictions to flat list, if available
+        if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and preds.dim() == 2):
+            raise AssertionError("expected classification predictions to be in list or 2-d tensor format (BxC)")
+        if isinstance(preds, list):
+            if all([isinstance(p, list) for p in preds]):
+                preds = list(itertools.chain.from_iterable(preds))  # merge all augmented lists together
+            if all([isinstance(t, torch.Tensor) for t in preds]):
+                preds = torch.cat(preds, 0)
+        with torch.no_grad():
+            preds = torch.squeeze(preds.topk(1, dim=1)[1], dim=1)
+        if images.shape[0] != preds.shape[0]:
+            raise AssertionError("images/predictions count mismatch")
+        preds = preds.tolist()
+        if class_names_map is not None:
+            preds = [class_names_map[lbl] if lbl in class_names_map else lbl for lbl in preds]
+        for idx in range(len(image_list)):
+            if len(caption_list[idx]) != 0:
+                caption_list[idx] += ", "
+            caption_list[idx] += f"Pred={preds[idx]}"
+    return draw_images(image_list, captions=caption_list, redraw=redraw, window_name="classifs", block=block, **kwargs)
+
+
+def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, flip_bgr=False, redraw=None, **kwargs):
     """Draws and returns a figure of a minibatch using pyplot or OpenCV."""
     if not isinstance(minibatch, dict):
         raise AssertionError("expected dict-based sample")
@@ -1267,124 +1339,31 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True,
     if flip_bgr:
         images = images[..., ::-1]  # BGR to RGB
     if preds is not None:
-        preds = preds.cpu()  # avoid latency for preprocessing on gpu
-    image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+        preds = preds.cpu().detach()  # avoid latency for preprocessing on gpu
     if isinstance(task, thelper.tasks.Classification):
         label_key, labels = task.get_gt_key(), None
         if label_key in minibatch and minibatch[label_key] is not None:
             labels = minibatch[label_key]
-            if not isinstance(labels, list) and not (isinstance(labels, torch.Tensor) and labels.dim() == 1):
-                raise AssertionError("expected classification labels to be in list or 1-d tensor format")
-            if isinstance(labels, list):
-                if all([isinstance(l, list) for l in labels]):
-                    labels = list(itertools.chain.from_iterable(labels))  # merge all augmented lists together
-                if all([isinstance(t, torch.Tensor) for t in labels]):
-                    labels = torch.cat(labels, 0)
-            if isinstance(labels, torch.Tensor):
-                labels = labels.tolist()
-            if images.shape[0] != len(labels):
-                raise AssertionError("images/labels count mismatch")
-        if preds is not None:
-            if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and preds.dim() == 2):
-                raise AssertionError("expected classification predictions to be in list or 2-d tensor format (BxC)")
-            if isinstance(preds, list):
-                if all([isinstance(p, list) for p in preds]):
-                    preds = list(itertools.chain.from_iterable(preds))  # merge all augmented lists together
-                if all([isinstance(t, torch.Tensor) for t in preds]):
-                    preds = torch.cat(preds, 0)
-            with torch.no_grad():
-                preds = torch.squeeze(preds.topk(1, dim=1)[1], dim=1)
-            if images.shape[0] != preds.shape[0]:
-                raise AssertionError("images/predictions count mismatch")
-            preds = preds.tolist()
         class_names_map = {idx: name for name, idx in task.get_class_idxs_map().items()}
-        redraw = draw_classifs(image_list, labels_gt=labels, labels_pred=preds, labels_map=class_names_map,
-                               redraw=redraw, use_cv2=use_cv2)
+        return draw_classifs(images, preds, labels, class_names_map=class_names_map, redraw=redraw, block=block, **kwargs)
     elif isinstance(task, thelper.tasks.Segmentation):
         mask_key, masks = task.get_gt_key(), None
         if mask_key in minibatch and minibatch[mask_key] is not None:
             masks = minibatch[mask_key]
-            if not isinstance(masks, list) and not (isinstance(masks, torch.Tensor) and masks.dim() == 3):
-                raise AssertionError("expected segmentation masks to be in list or 3-d tensor format (BxHxW)")
-            if isinstance(masks, list):
-                if all([isinstance(m, list) for m in masks]):
-                    masks = list(itertools.chain.from_iterable(masks))  # merge all augmented lists together
-                masks = torch.cat(masks, 0)  # merge all masks into a single tensor
-            if images.shape[0:3] != masks.shape:
-                raise AssertionError("images/masks shape mismatch")
-            masks = masks.numpy().copy()
-        if preds is not None:
-            if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and preds.dim() == 4):
-                raise AssertionError("expected segmentation preds to be in list or 3-d tensor format (BxCxHxW)")
-            if isinstance(preds, list):
-                if all([isinstance(p, list) for p in preds]):
-                    preds = list(itertools.chain.from_iterable(preds))  # merge all augmented lists together
-                preds = torch.cat(preds, 0)  # merge all preds into a single tensor
-            with torch.no_grad():
-                preds = torch.squeeze(preds.topk(1, dim=1)[1], dim=1)
-            if images.shape[0:3] != preds.shape:
-                raise AssertionError("images/preds shape mismatch")
-            preds = preds.numpy().copy()
         name_color_map = task.get_color_map()
         if name_color_map is not None:
             idx_color_map = {idx: name_color_map[name] for name, idx in task.get_class_idxs_map().items()}
         else:
             idx_color_map = {idx: get_label_color_mapping(idx) for idx in task.get_class_idxs_map().values()}
-        redraw = draw_segments(image_list, masks_gt=masks, masks_pred=preds, labels_color_map=idx_color_map,
-                               redraw=redraw, use_cv2=use_cv2)
+        return draw_segments(images, preds, masks, color_map=idx_color_map, redraw=redraw, block=block, **kwargs)
     elif isinstance(task, thelper.tasks.Regression):
         target_key, targets = task.get_gt_key(), None
         if target_key in minibatch and minibatch[target_key] is not None:
             targets = minibatch[target_key]
-            if not isinstance(targets, list) and not (isinstance(targets, torch.Tensor) and
-                                                      targets.shape[0] == images.shape[0]):
-                raise AssertionError("expected targets to be in list or tensor format (Bx...)")
-            if isinstance(targets, list):
-                if all([isinstance(t, list) for t in targets]):
-                    targets = list(itertools.chain.from_iterable(targets))  # merge all augmented lists together
-                targets = torch.cat(targets, 0)  # merge all masks into a single tensor
-            targets = targets.numpy().copy()
-        if preds is not None:
-            if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and targets.shape == preds.shape):
-                raise AssertionError("expected preds to be in list or target-compat tensor shape (Bx...)")
-            if isinstance(preds, list):
-                if all([isinstance(p, list) for p in preds]):
-                    preds = list(itertools.chain.from_iterable(preds))  # merge all augmented lists together
-                preds = torch.cat(preds, 0)  # merge all preds into a single tensor
-            if targets is not None and preds.shape != targets.shape:
-                raise AssertionError("preds/targets shape mismatch")
-            preds = preds.numpy().copy()
-        if targets is not None:
-            if ((targets.ndim == 4 and targets.shape[1] == 1) or targets.ndim == 3) \
-                    and targets.shape[-2:] == images.shape[1:3]:
-                image_list = [get_displayable_image(images[batch_idx, ...], grayscale=True)
-                              for batch_idx in range(images.shape[0])]
-                tgt_heatmap_list = [get_displayable_heatmap(targets[batch_idx, ...])
-                                    for batch_idx in range(images.shape[0])]
-                pred_heatmap_list = None
-                if preds is not None:
-                    pred_heatmap_list = [get_displayable_heatmap(preds[batch_idx, ...])
-                                         for batch_idx in range(images.shape[0])]
-                redraw = draw_segments(image_list, masks_gt=tgt_heatmap_list, masks_pred=pred_heatmap_list,
-                                       redraw=redraw, use_cv2=use_cv2)
-            elif targets.ndim == 1 and targets.shape[0] == images.shape[0]:
-                image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
-                redraw = draw_classifs(image_list, labels_gt=targets, labels_pred=preds, redraw=redraw, use_cv2=use_cv2)
-            else:
-                redraw = draw_classifs(image_list, redraw=redraw, use_cv2=use_cv2)  # draw only images
-        else:
-            redraw = draw_classifs(image_list, redraw=redraw, use_cv2=use_cv2)  # draw only images
+        swap_channels = isinstance(task, thelper.tasks.SuperResolution)  # must update BxCxHxW to BxHxWxC in targets/preds
+        return draw_predicts(images, preds, targets, swap_channels=swap_channels, redraw=redraw, block=block, **kwargs)
     else:
         raise AssertionError("unhandled drawing mode, missing impl")
-    if use_cv2:
-        cv.waitKey(0 if block else 1)
-        return redraw
-    else:
-        if block:
-            plt.show(block=block)
-            return None
-        plt.pause(0.5)
-        return redraw
 
 
 # noinspection PyUnusedLocal
