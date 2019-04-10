@@ -53,7 +53,7 @@ def create_session(config, save_dir):
     else:
         trainer.eval()
     logger.debug("all done")
-    return 0
+    return trainer.outputs
 
 
 def resume_session(ckptdata, save_dir, config=None, eval_only=False):
@@ -132,7 +132,7 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
         logger.info("resuming training session '%s' @ epoch %d" % (trainer.name, trainer.current_epoch))
         trainer.train()
     logger.debug("all done")
-    return 0
+    return trainer.outputs
 
 
 def visualize_data(config):
@@ -240,7 +240,6 @@ def annotate_data(config, save_dir):
     logger.debug("starting annotator")
     annotator.run()
     logger.debug("all done")
-    return 0
 
 
 def main(args=None):
@@ -322,7 +321,7 @@ def main(args=None):
                 if ("train_device" in trainer_config or "valid_device" in trainer_config or
                         "test_device" in trainer_config or "device" in trainer_config):
                     raise AssertionError("cannot specify device in config for cluster sessions, it is determined at runtime")
-        return create_session(config, args.save_dir)
+        create_session(config, args.save_dir)
     elif args.mode == "resume":
         ckptdata = thelper.utils.load_checkpoint(args.ckpt_path, map_location=args.map_location,
                                                  always_load_latest=(not args.eval_only))
@@ -339,7 +338,7 @@ def main(args=None):
                 save_dir = os.path.abspath(os.path.join(ckpt_dir_path, ".."))
             elif os.path.isdir(os.path.join(ckpt_dir_path, "../logs")):
                 save_dir = os.path.abspath(os.path.join(ckpt_dir_path, "../.."))
-        return resume_session(ckptdata, save_dir, config=override_config, eval_only=args.eval_only)
+        resume_session(ckptdata, save_dir, config=override_config, eval_only=args.eval_only)
     elif args.mode == "viz" or args.mode == "annot":
         if os.path.isdir(args.cfg_path):
             thelper.logger.debug("will search directory '%s' for a config to load..." % args.cfg_path)
@@ -358,9 +357,10 @@ def main(args=None):
                 raise AssertionError("no config file found at path '%s'" % args.cfg_path)
             config = json.load(open(args.cfg_path))
         if args.mode == "viz":
-            return visualize_data(config)
+            visualize_data(config)
         elif args.mode == "annot":
-            return annotate_data(config, args.save_dir)
+            annotate_data(config, args.save_dir)
+    return 0
 
 
 if __name__ == "__main__":
