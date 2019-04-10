@@ -911,7 +911,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
     return save_dir
 
 
-def safe_crop(image, tl, br, bordertype=cv.BORDER_CONSTANT, borderval=0):
+def safe_crop(image, tl, br, bordertype=cv.BORDER_CONSTANT, borderval=0, force_copy=False):
     """Safely crops a region from within an image, padding borders if needed.
 
     Args:
@@ -922,6 +922,8 @@ def safe_crop(image, tl, br, bordertype=cv.BORDER_CONSTANT, borderval=0):
             See ``cv2.copyMakeBorder`` for more information.
         borderval: border value to use when the image is too small for the required crop size. See
             ``cv2.copyMakeBorder`` for more information.
+        force_copy: defines whether to force a copy of the target image region even when it can be
+            avoided.
 
     Returns:
         The cropped image.
@@ -944,6 +946,9 @@ def safe_crop(image, tl, br, bordertype=cv.BORDER_CONSTANT, borderval=0):
         if tl[1] < 0:
             br[1] -= tl[1]
             tl[1] = 0
+        return image[tl[1]:br[1], tl[0]:br[0], ...]
+    if force_copy:
+        return np.copy(image[tl[1]:br[1], tl[0]:br[0], ...])
     return image[tl[1]:br[1], tl[0]:br[0], ...]
 
 
