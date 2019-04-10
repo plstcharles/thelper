@@ -107,10 +107,15 @@ class Metric(ABC):
         """
         raise NotImplementedError
 
+    def anti_goal(self):
+        """Returns the opposite of the scalar optimization goal of the metric, if available."""
+        if not self.is_scalar():
+            raise AssertionError("undefined anti goal behavior when metric is not scalar")
+        return Metric.maximize if self.goal() == Metric.minimize else Metric.minimize
+
     def is_scalar(self):
         """Returns whether the metric evaluates to a scalar based on its goal."""
-        curr_goal = self.goal()
-        return curr_goal == Metric.minimize or curr_goal == Metric.maximize
+        return self.goal() == Metric.minimize or self.goal() == Metric.maximize
 
     def __repr__(self):
         """Returns a generic print-friendly string containing info about this metric."""
@@ -380,7 +385,7 @@ class MeanAbsoluteError(Metric):
     where :math:`N` is the batch size. If ``reduction`` is not ``'none'``, then:
 
     .. math::
-        MAE(x, y) =
+        \text{MAE}(x, y) =
         \begin{cases}
             \operatorname{mean}(E), & \text{if reduction } = \text{mean.}\\
             \operatorname{sum}(E),  & \text{if reduction } = \text{sum.}
@@ -499,7 +504,7 @@ class MeanSquaredError(Metric):
     where :math:`N` is the batch size. If ``reduction`` is not ``'none'``, then:
 
     .. math::
-        MSE(x, y) =
+        \text{MSE}(x, y) =
         \begin{cases}
             \operatorname{mean}(E), & \text{if reduction } = \text{mean.}\\
             \operatorname{sum}(E),  & \text{if reduction } = \text{sum.}
@@ -514,7 +519,7 @@ class MeanSquaredError(Metric):
         "metrics": {
             # ...
             # this is the name of the example metric; it is used for lookup/printing only
-            "mae": {
+            "mse": {
                 # this type is used to instantiate the error metric
                 "type": "thelper.optim.metrics.MeanSquaredError",
                 "params": {
@@ -1700,3 +1705,120 @@ class RawPredictions(Metric):
     def goal(self):
         """Returns ``None``, as this class should not be used to directly monitor the training progress."""
         return None
+
+
+class PSNR(Metric):
+    r"""Peak Signal-to-Noise Ratio (PSNR) metric interface.
+
+    This is a scalar metric used to monitor the change in quality of a signal (or image) following a
+    transformation. For more information, see its definition on `[Wikipedia]`__.
+
+    .. __: https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio
+
+    The PSNR (in decibels, dB) between a modified signal :math:`x` and its original version :math:`y` is
+    defined as:
+
+    .. math::
+        \text{PSNR}(x, y) = 10 * \log_{10} \Bigg( \frac{R^2}{\text{MSE}(x, y)} \Bigg)
+
+    where :math:`\text{MSE}(x, y)` returns the mean squared error (see :class:`thelper.optim.metrics.MeanSquaredError`
+    for more information), and :math:`R` is the maximum possible value for a single element in the input signal
+    (i.e. its maximum "range").
+
+    Usage example inside a session configuration file::
+
+        # ...
+        # lists all metrics to instantiate as a dictionary
+        "metrics": {
+            # ...
+            # this is the name of the example metric; it is used for lookup/printing only
+            "psnr": {
+                # this type is used to instantiate the metric
+                "type": "thelper.optim.metrics.PSNR",
+                "params": {
+                    "data_range": "255"
+                }
+            },
+            # ...
+        }
+        # ...
+
+    Attributes:
+        max_accum: if using a moving average, this is the window size to use (default=None).
+        data_range: maximum value of an element in the analyzed signal.
+        decompose_batch: toggles whether batches should be decomposed along 0-th dim or not.
+    """
+
+    def __init__(self, max_accum=None, data_range=1.0, decompose_batch=True):
+        """Receives all necessary initialization arguments to compute signal PSNRs,
+
+        See :class:`thelper.optim.metrics.PSNR` for information on arguments.
+        """
+        self.max_accum = max_accum
+        self.psnrs = deque()  # will contain lists to avoid merging batch PSNRs early
+        self.warned_eval_bad = False
+        self.data_range = data_range
+        self.decompose_batch = decompose_batch
+
+    def accumulate(self, pred, target, meta=None):
+        """Receives the latest predictions and target values from the training session.
+
+        The inputs are expected to still be in ``torch.Tensor`` format, but must be located on the
+        CPU. This function computes and accumulate the PSNR value in a queue, popping it if the maximum
+        window length is reached.
+
+        Args:
+            pred: model prediction values forwarded by the trainer.
+            target: target prediction values forwarded by the trainer (can be ``None`` if unavailable).
+            meta: metadata forwarded by the trainer (unused).
+        """
+        if target is None or target.numel() == 0:
+            return  # only accumulating results when groundtruth available
+        if pred.shape != target.shape:
+            raise AssertionError("prediction/gt tensors shape mismatch")
+        if not self.decompose_batch:
+            mse = np.mean(np.square(pred.numpy() - target.numpy()), dtype=np.float64)
+            psnr = 10 * np.log10(self.data_range / mse)
+            self.psnrs.append([psnr])
+        else:
+            pred = pred.view(pred.shape[0], -1)
+            target = target.view(target.shape[0], -1)
+            mse = np.mean(np.square(pred.numpy() - target.numpy()), axis=1, dtype=np.float64)
+            self.psnrs.append([10 * np.log10(self.data_range / e) for e in mse])
+        if self.max_accum and len(self.psnrs) > self.max_accum:
+            self.psnrs.popleft()
+
+    def eval(self):
+        """Returns the current (average) PSNR based on the accumulated values.
+
+        Will issue a warning if no predictions have been accumulated yet.
+        """
+        if len(self.psnrs) == 0:
+            if not self.warned_eval_bad:
+                self.warned_eval_bad = True
+                logger.warning("psnr eval result invalid (set as 0.0), no results accumulated")
+            return 0.0
+        return np.mean(np.array([psnr for psnr_list in self.psnrs for psnr in psnr_list]))
+
+    def reset(self):
+        """Toggles a reset of the metric's internal state, emptying value queues."""
+        self.psnrs = deque()
+
+    def needs_reset(self):
+        """If the metric is currently operating in moving average mode, then it does not need to
+        be reset (returns ``False``); else returns ``True``."""
+        return self.max_accum is None
+
+    def set_max_accum(self, max_accum):
+        """Sets the moving average window size.
+
+        This is fairly useful as the total size of the training dataset is unlikely to be known when
+        metrics are instantiated. The current implementation of :class:`thelper.train.trainers.Trainer`
+        will look for this member function and automatically call it with the dataset size when it is
+        available.
+        """
+        self.max_accum = max_accum
+
+    def goal(self):
+        """Returns the scalar optimization goal of this metric (maximization)."""
+        return Metric.maximize

@@ -339,6 +339,98 @@ class ImageFolderDataset(ClassificationDataset):
         return sample
 
 
+class SuperResFolderDataset(Dataset):
+    """Image folder dataset specialization interface for super-resolution tasks.
+
+    This specialization is used to parse simple image subfolders, and it essentially replaces the very
+    basic ``torchvision.datasets.ImageFolder`` interface with similar functionalities. It it used to provide
+    a proper task interface as well as path/class metadata in each loaded packet for metrics/logging output.
+    """
+
+    def __init__(self, config=None, transforms=None):
+        """Image folder dataset parser constructor."""
+        downscale_factor = thelper.utils.get_key_def("downscale_factor", config, 2.0)
+        if isinstance(downscale_factor, int):
+            downscale_factor = float(downscale_factor)
+        if not isinstance(downscale_factor, float) or downscale_factor <= 1.0:
+            raise AssertionError("invalid downscale factor (should be greater than one)")
+        self.downscale_factor = downscale_factor
+        self.rescale_lowres = thelper.utils.get_key_def("rescale_lowres", config, True)
+        center_crop = thelper.utils.get_key_def("center_crop", config, None)
+        if center_crop is not None:
+            if isinstance(center_crop, int):
+                center_crop = (center_crop, center_crop)
+            if not isinstance(center_crop, (list, tuple)):
+                raise AssertionError("invalid center crop size type")
+        self.center_crop = center_crop
+        self.root = thelper.utils.get_key("root", config)
+        if self.root is None or not os.path.isdir(self.root):
+            raise AssertionError("invalid input data root '%s'" % self.root)
+        class_map = {}
+        for child in os.listdir(self.root):
+            if os.path.isdir(os.path.join(self.root, child)):
+                class_map[child] = []
+        if not class_map:
+            raise AssertionError("could not find any image folders at '%s'" % self.root)
+        image_exts = [".jpg", ".jpeg", ".bmp", ".png", ".ppm", ".pgm", ".tif"]
+        self.lowres_image_key = thelper.utils.get_key_def("lowres_image_key", config, "lowres_image")
+        self.highres_image_key = thelper.utils.get_key_def("lowres_image_key", config, "highres_image")
+        self.path_key = thelper.utils.get_key_def("path_key", config, "path")
+        self.idx_key = thelper.utils.get_key_def("idx_key", config, "idx")
+        self.label_key = thelper.utils.get_key_def("label_key", config, "label")  # == orig folder name
+        samples = []
+        for class_name in class_map:
+            class_folder = os.path.join(self.root, class_name)
+            for folder, subfolder, files in os.walk(class_folder):
+                for file in files:
+                    ext = os.path.splitext(file)[1].lower()
+                    if ext in image_exts:
+                        class_map[class_name].append(len(samples))
+                        samples.append({
+                            self.path_key: os.path.join(folder, file),
+                            self.label_key: class_name
+                        })
+        class_map = {k: v for k, v in class_map.items() if len(v) > 0}
+        if not class_map:
+            raise AssertionError("could not locate any subdir in '%s' with images to load" % self.root)
+        meta_keys = [self.path_key, self.idx_key, self.label_key]
+        super().__init__(config=config, transforms=transforms)
+        self.task = thelper.tasks.SuperResolution(input_key=self.lowres_image_key, target_key=self.highres_image_key, meta_keys=meta_keys)
+        self.samples = samples
+
+    def __getitem__(self, idx):
+        """Returns the data sample (a dictionary) for a specific (0-based) index."""
+        if idx < 0 or idx >= len(self.samples):
+            raise AssertionError("sample index is out-of-range")
+        sample = self.samples[idx]
+        image_path = sample[self.path_key]
+        image = cv.imread(image_path)
+        if image is None:
+            raise AssertionError("invalid image at '%s'" % image_path)
+        if self.center_crop is not None:
+            tl = (image.shape[1] // 2 - self.center_crop[0] // 2,
+                  image.shape[0] // 2 - self.center_crop[1] // 2)
+            br = (tl[0] + self.center_crop[0], tl[1] + self.center_crop[1])
+            image = thelper.utils.safe_crop(image, tl, br)
+        scale = 1.0 / self.downscale_factor
+        image_lowres = cv.resize(image, dsize=(0, 0), fx=scale, fy=scale)
+        if self.rescale_lowres:
+            image_lowres = cv.resize(image_lowres, dsize=(image.shape[1], image.shape[0]))
+        sample = {
+            self.lowres_image_key: image_lowres,
+            self.highres_image_key: image,
+            self.idx_key: idx,
+            **sample
+        }
+        if self.transforms:
+            sample = self.transforms(sample)
+        return sample
+
+    def get_task(self):
+        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
+        return self.task
+
+
 class ExternalDataset(Dataset):
     """External dataset interface.
 

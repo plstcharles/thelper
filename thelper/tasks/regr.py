@@ -155,3 +155,33 @@ class Regression(Task):
             "target_min": self.get_target_min(),
             "target_max": self.get_target_max()
         })
+
+
+class SuperResolution(Regression):
+    """Interface for super-resolution tasks.
+
+    This specialization requests that when given an input tensor, the trained model should
+    provide an identically-shape target prediction that essentially contains more (or more
+    adequate) high-frequency spatial components.
+
+    This specialized regression interface is currently used to help display functions.
+
+    Attributes:
+        input_shape: a numpy-compatible shape to expect model inputs/outputs to be in.
+        target_type: a numpy-compatible type to cast the predictions to (if needed).
+        target_min: an n-dim tensor containing minimum target values (if applicable).
+        target_max: an n-dim tensor containing maximum target values (if applicable).
+        input_key: the key used to fetch input tensors from a sample dictionary.
+        target_key: the key used to fetch target (groundtruth) values from a sample dictionary.
+        meta_keys: the list of extra keys provided by the data parser inside each sample.
+
+    .. seealso::
+        | :class:`thelper.tasks.utils.Task`
+        | :class:`thelper.train.regr.RegressionTrainer`
+    """
+
+    def __init__(self, input_key, target_key, meta_keys=None, input_shape=None, target_type=None,
+                 target_min=None, target_max=None):
+        """Receives and stores the target specs, input tensor key, and the extra (meta) keys produced by the dataset parser(s)."""
+        super().__init__(input_key, target_key, meta_keys, input_shape=input_shape, target_shape=input_shape,
+                         target_type=target_type, target_min=target_min, target_max=target_max)

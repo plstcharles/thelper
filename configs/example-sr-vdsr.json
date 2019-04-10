@@ -1,0 +1,92 @@
+{
+    "name": "example-superresolution-vdsr",
+    "overwrite": true,
+    "cudnn": {
+        "benchmark": false,
+        "deterministic": true
+    },
+    "datasets": {
+        "superres": {
+            "type": "thelper.data.SuperResFolderDataset",
+            "params": {
+                "root": "@@@@@@@@@@ PATH_TO_IMAGE_FOLDER @@@@@@@@@@",
+                "downscale_factor": 2.0,
+                "rescale_lowres": true,
+                "center_crop": [64, 64]
+            }
+        }
+    },
+    "loaders": {
+        "batch_size": 32,
+        "train_shuffle": true,
+        "valid_shuffle": true,
+        "test_shuffle": true,
+        "valid_seed": 0,
+        "test_seed": 0,
+        "torch_seed": 0,
+        "numpy_seed": 0,
+        "random_seed": 0,
+        "workers": 0,
+        "pin_memory": false,
+        "drop_last": false,
+        "train_scale": 2.0,
+        "base_transforms": [
+            {
+                "operation": "torchvision.transforms.ToTensor",
+                "target_key": ["lowres_image", "highres_image"]
+            }
+        ],
+        "train_split": {
+            "superres": 0.7
+        },
+        "valid_split": {
+            "superres": 0.2
+        },
+        "test_split": {
+            "superres": 0.1
+        }
+    },
+    "model": {
+        "type": "thelper.nn.sr.VDSR"
+    },
+    "trainer": {
+        "type": "thelper.train.RegressionTrainer",
+        "device": "cuda:all",
+        "epochs": 150,
+        "save_freq": 1,
+        "monitor": "psnr",
+        "use_tbx": true,
+        "optimization": {
+            "loss": {
+                "type": "torch.nn.MSELoss",
+                "params": {}
+            },
+            "optimizer": {
+                "type": "torch.optim.Adam",
+                "params": {
+                    "lr": 0.001
+                }
+            },
+            "scheduler": {
+                "type": "torch.optim.lr_scheduler.ReduceLROnPlateau",
+                "params": {
+                    "mode": "max",
+                    "factor": 0.1,
+                    "patience": 3,
+                    "verbose": true,
+                    "threshold": 0.0001,
+                    "threshold_mode": "rel"
+                },
+                "step_metric": "psnr"
+            }
+        },
+        "metrics": {
+            "psnr": {
+                "type": "thelper.optim.PSNR",
+                "params": {
+                    "data_range": 1.0
+                }
+            }
+        }
+    }
+}

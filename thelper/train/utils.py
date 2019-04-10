@@ -57,7 +57,8 @@ def _draw_minibatch_wrapper(sample,         # type: thelper.typedefs.SampleType
                             max_iters,      # type: int
                             epoch_idx,      # type: int
                             max_epochs,     # type: int
+                            **kwargs
                             ):              # type: (...) -> None
 
     """Wrapper to :func:`thelper.utils.draw_minibatch` used as a callback entrypoint for trainers."""
-    thelper.utils.draw_minibatch(sample, task, preds=pred, ch_transpose=True, flip_bgr=False, block=False)
+    thelper.utils.draw_minibatch(sample, task, preds=pred, **kwargs)

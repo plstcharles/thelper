@@ -139,7 +139,8 @@ class ImageSegmTrainer(Trainer):
             if self.train_iter_callback is not None:
                 self.train_iter_callback(sample=sample, task=self.model.task, pred=iter_pred,
                                          iter_idx=iter, max_iters=epoch_size,
-                                         epoch_idx=epoch, max_epochs=self.epochs)
+                                         epoch_idx=epoch, max_epochs=self.epochs,
+                                         **self.callback_kwargs)
             epoch_loss += iter_loss.item()
             optimizer.step()
             monitor_output = ""
@@ -215,7 +216,8 @@ class ImageSegmTrainer(Trainer):
                 if self.eval_iter_callback is not None:
                     self.eval_iter_callback(sample=sample, task=self.model.task, pred=pred,
                                             iter_idx=idx, max_iters=epoch_size,
-                                            epoch_idx=epoch, max_epochs=self.epochs)
+                                            epoch_idx=epoch, max_epochs=self.epochs,
+                                            **self.callback_kwargs)
                 self.logger.info(
                     "eval epoch#{}   batch: {}/{} ({:.0f}%){}".format(
                         epoch,
