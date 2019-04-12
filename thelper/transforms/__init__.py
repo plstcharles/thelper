@@ -22,6 +22,7 @@ from thelper.transforms.operations import Resize  # noqa: F401
 from thelper.transforms.operations import Tile  # noqa: F401
 from thelper.transforms.operations import ToNumpy  # noqa: F401
 from thelper.transforms.operations import Transpose  # noqa: F401
+from thelper.transforms.operations import Unsqueeze  # noqa: F401
 from thelper.transforms.utils import load_augments  # noqa: F401
 from thelper.transforms.utils import load_transforms  # noqa: F401
 from thelper.transforms.wrappers import AlbumentationsWrapper  # noqa: F401

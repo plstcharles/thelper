@@ -896,6 +896,60 @@ class Transpose(object):
         return self.__class__.__name__ + ": {{axes: {0}}}".format(self.axes)
 
 
+class Unsqueeze(object):
+    """Expands a dimension in the input array via numpy/PyTorch.
+
+    This operation is deterministic.
+
+    Attributes:
+        axis: the axis on which to apply the expansion.
+    """
+
+    def __init__(self, axis):
+        """Validates and initializes tranpose parameters.
+
+        Args:
+            axis: the axis on which to apply the expansion.
+        """
+        self.axis = axis
+
+    def __call__(self, sample):
+        """Expands a dimension in the input array via numpy/PyTorch.
+
+        Args:
+            sample: the array to expand.
+
+        Returns:
+            The array with an extra dimension.
+        """
+        if isinstance(sample, np.ndarray):
+            return np.expand_dims(sample, self.axis)
+        elif isinstance(sample, torch.Tensor):
+            return torch.unsqueeze(sample, self.axis)
+        else:
+            raise AssertionError(f"unexpected input type ('{type(sample)}')")
+
+    def invert(self, sample):
+        """Squeezes a dimension in the input array via numpy/PyTorch.
+
+        Args:
+            sample: the array to squeeze.
+
+        Returns:
+            The array with one less dimension.
+        """
+        if isinstance(sample, np.ndarray):
+            return np.squeeze(sample, self.axis)
+        elif isinstance(sample, torch.Tensor):
+            return torch.squeeze(sample, self.axis)
+        else:
+            raise AssertionError(f"unexpected input type ('{type(sample)}')")
+
+    def __repr__(self):
+        """Provides print-friendly output for class attributes."""
+        return self.__class__.__name__ + ": {{axis: {0}}}".format(self.axis)
+
+
 class Duplicator(NoTransformWrapper):
     """Duplicates and returns a list of copies of the input sample.
 
