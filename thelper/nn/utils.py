@@ -106,7 +106,9 @@ def create_model(config, task, save_dir=None, ckptdata=None):
             task = thelper.tasks.create_task(ckptdata["task"]) if isinstance(ckptdata["task"], str) else ckptdata["task"]
             if "model_type" not in ckptdata or not isinstance(ckptdata["model_type"], str):
                 raise AssertionError("invalid checkpoint, cannot reload previous model type")
-            model_type = thelper.utils.import_class(ckptdata["model_type"])
+            model_type = ckptdata["model_type"]
+            if isinstance(model_type, str):
+                model_type = thelper.utils.import_class(model_type)
             if "model_params" not in ckptdata or not isinstance(ckptdata["model_params"], dict):
                 raise AssertionError("invalid checkpoint, cannot reload previous model params")
             model_params = ckptdata["model_params"]
@@ -116,15 +118,21 @@ def create_model(config, task, save_dir=None, ckptdata=None):
             if "model" not in old_config or not isinstance(old_config["model"], dict):
                 raise AssertionError("invalid checkpoint, cannot reload previous model config")
             old_model_config = old_config["model"]
-            if "type" in old_model_config and thelper.utils.import_class(old_model_config["type"]) != model_type:
-                raise AssertionError("old model config 'type' field mismatch with ckptdata type")
+            if "type" in old_model_config:
+                old_model_type = old_model_config["type"]
+                if isinstance(old_model_type, str):
+                    old_model_type = thelper.utils.import_class(old_model_type)
+                if old_model_type != model_type:
+                    raise AssertionError("old model config 'type' field mismatch with ckptdata type")
     else:
         if not isinstance(task, thelper.tasks.Task):
             raise AssertionError("bad task type passed to create_model")
         logger.debug("loading model type/params current config")
         if "type" not in model_config or not model_config["type"]:
             raise AssertionError("model config missing 'type' field")
-        model_type = thelper.utils.import_class(model_config["type"])
+        model_type = model_config["type"]
+        if isinstance(model_config["type"], str):
+            model_type = thelper.utils.import_class(model_type)
         model_params = thelper.utils.get_key_def("params", model_config, {})
     if model is None:
         # if model not already loaded from checkpoint, instantiate it fully from type/params/task
