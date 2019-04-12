@@ -43,7 +43,6 @@ class Dataset(torch.utils.data.Dataset):
     :func:`thelper.data.parsers.Dataset.get_task`, and store its samples as dictionaries in ``self.samples``.
 
     Attributes:
-        config: dictionary of extra parameters that are required by the dataset interface.
         transforms: function or object that should be applied to all loaded samples in order to
             return the data in the requested transformed/augmented state.
         deepcopy: specifies whether this dataset interface should be deep-copied inside
@@ -62,16 +61,13 @@ class Dataset(torch.utils.data.Dataset):
         | :class:`thelper.data.parsers.ExternalDataset`
     """
 
-    def __init__(self, config=None, transforms=None, deepcopy=False):
+    def __init__(self, transforms=None, deepcopy=False):
         """Dataset parser constructor.
 
-        In order for derived datasets to be instantiated automatically be the framework from a
-        configuration file, the signature of their constructors should match the one shown here.
-        This means all required extra parameters must be passed in the 'config' argument, which is
-        a dictionary.
+        In order for derived datasets to be instantiated automatically by the framework from a configuration
+        file, they must minimally accept a 'transforms' argument like the shown one here.
 
         Args:
-            config: dictionary of extra parameters that are required by the dataset interface.
             transforms: function or object that should be applied to all loaded samples in order to
                 return the data in the requested transformed/augmented state.
             deepcopy: specifies whether this dataset interface should be deep-copied inside
@@ -80,7 +76,6 @@ class Dataset(torch.utils.data.Dataset):
                 or buffer that might cause problems in multi-threaded data loaders.
         """
         super().__init__()
-        self.config = config
         self.transforms = transforms
         self.deepcopy = deepcopy  # will determine if we deepcopy in each loader
         self.samples = None  # must be filled by the derived class as a list of dictionaries
@@ -124,7 +119,7 @@ class HDF5Dataset(Dataset):
 
     Attributes:
         archive: file descriptor for the opened hdf5 dataset.
-        group: hdf5 group section representing the targeted set.
+        subset: hdf5 group section representing the targeted set.
         input_dset: hdf5 dataset object representing the input data.
         input_dtype: numpy data type indicating whether we must decompress or not.
         input_shape: original shape of the input data tensors.
@@ -144,24 +139,16 @@ class HDF5Dataset(Dataset):
         | :func:`thelper.cli.split_data`
     """
 
-    def __init__(self, config, transforms=None):
+    def __init__(self, root, subset="train", transforms=None):
         """HDF5 dataset parser constructor.
 
-        This baseline constructor matches the signature of :class:`thelper.data.parsers.Dataset`, and simply
-        forwards its parameters. It will look for the path to the HDF5 archive using the 'root' key in the
-        configuration directionary. It will also look for a 'set' key to determine which dataset to load (by
-        default, it will only load the training set).
+        This constructor receives the path to the HDF5 archive as well as a subset indicating which
+        section of the archive to load. By default, it loads the training set.
         """
-        super().__init__(config=config, transforms=transforms, deepcopy=False)
-        self.root = thelper.utils.get_key_def("root", config, None)
-        if self.root is None or not os.path.isfile(self.root):
-            raise AssertionError(f"invalid input data file '{self.root}'")
-        set = thelper.utils.get_key_def("set", config, None)
-        if set is None:
-            set = "train"
-        elif set not in ["train", "valid", "test"]:
-            raise AssertionError(f"unrecognized data set option '{set}'")
-        self.archive = h5py.File(self.root, "r")
+        super().__init__(transforms=transforms, deepcopy=False)
+        if subset not in ["train", "valid", "test"]:
+            raise AssertionError(f"unrecognized subset '{subset}'")
+        self.archive = h5py.File(root, "r")
         self.name = self.archive.attrs["name"]
         self.source = self.archive.attrs["source"]
         self.git_sha1 = self.archive.attrs["git_sha1"]
@@ -169,13 +156,13 @@ class HDF5Dataset(Dataset):
         self.task = thelper.tasks.create_task(self.archive.attrs["task"])
         self.orig_config = eval(self.archive.attrs["config"])
         compr_config = eval(self.archive.attrs["compression"])
-        if set not in self.archive:
-            raise AssertionError(f"group '{set}' not found in hdf5 archive")
-        self.group = self.archive[set]
-        sample_count = self.group.attrs["count"]
+        if subset not in self.archive:
+            raise AssertionError(f"subset '{subset}' not found in hdf5 archive")
+        self.subset = self.archive[subset]
+        sample_count = self.subset.attrs["count"]
         self.samples = [{}] * sample_count
         for meta_key in self.task.get_meta_keys():
-            meta_dset = self.group["meta/" + meta_key]
+            meta_dset = self.subset["meta/" + meta_key]
             if meta_dset.len() != len(self.samples):
                 raise AssertionError("unexpected/mismatched meta dataset lengths")
             meta_dtype = meta_dset.attrs["orig_dtype"] if "orig_dtype" in meta_dset.attrs else None
@@ -188,13 +175,13 @@ class HDF5Dataset(Dataset):
         input_compr_config = thelper.utils.get_key_def("input", compr_config, default={})
         self.input_compr = (thelper.utils.get_key_def("type", input_compr_config, default="none"),
                             thelper.utils.get_key_def("decode_params", input_compr_config, default={}))
-        self.input_dset = self.group["input"]
+        self.input_dset = self.subset["input"]
         self.input_dtype = self.input_dset.attrs["orig_dtype"] if "orig_dtype" in self.input_dset.attrs else None
         self.input_shape = self.input_dset.attrs["orig_shape"] if "orig_shape" in self.input_dset.attrs else None
         gt_compr_config = thelper.utils.get_key_def("gt", compr_config, default={})
         self.gt_compr = (thelper.utils.get_key_def("type", gt_compr_config, default="none"),
                          thelper.utils.get_key_def("decode_params", gt_compr_config, default={}))
-        self.gt_dset = self.group["gt"]
+        self.gt_dset = self.subset["gt"]
         self.gt_dtype = self.gt_dset.attrs["orig_dtype"] if "orig_dtype" in self.gt_dset.attrs else None
         self.gt_shape = self.gt_dset.attrs["orig_shape"] if "orig_shape" in self.gt_dset.attrs else None
 
@@ -242,21 +229,16 @@ class ClassificationDataset(Dataset):
         | :class:`thelper.data.parsers.Dataset`
     """
 
-    def __init__(self, class_names, input_key, label_key, meta_keys=None, config=None,
-                 transforms=None, deepcopy=False):
+    def __init__(self, class_names, input_key, label_key, meta_keys=None, transforms=None, deepcopy=False):
         """Classification dataset parser constructor.
 
-        In order for derived datasets to be instantiated automatically by the framework from a
-        configuration file, the signature of their constructors should match the one shown here.
-        This means all required extra parameters must be passed in the 'config' argument, which is
-        a dictionary.
+        This constructor receives all extra arguments necessary to build a classification task object.
 
         Args:
             class_names: list of all class names (or labels) that will be associated with the samples.
             input_key: key used to index the input data in the loaded samples.
             label_key: key used to index the label (or class name) in the loaded samples.
             meta_keys: list of extra keys that will be available in the loaded samples.
-            config: dictionary of extra parameters that are required by the dataset interface.
             transforms: function or object that should be applied to all loaded samples in order to
                 return the data in the requested transformed/augmented state.
             deepcopy: specifies whether this dataset interface should be deep-copied inside
@@ -264,7 +246,7 @@ class ClassificationDataset(Dataset):
                 different threads. This is false by default, as we assume datasets do not contain a state
                 or buffer that might cause problems in multi-threaded data loaders.
         """
-        super().__init__(config=config, transforms=transforms, deepcopy=deepcopy)
+        super().__init__(transforms=transforms, deepcopy=deepcopy)
         self.task = thelper.tasks.Classification(class_names, input_key, label_key, meta_keys=meta_keys)
 
     @abstractmethod
@@ -292,21 +274,16 @@ class SegmentationDataset(Dataset):
         | :class:`thelper.data.parsers.Dataset`
     """
 
-    def __init__(self, class_names, input_key, label_map_key, meta_keys=None, dontcare=None,
-                 config=None, transforms=None, deepcopy=False):
+    def __init__(self, class_names, input_key, label_map_key, meta_keys=None, dontcare=None, transforms=None, deepcopy=False):
         """Segmentation dataset parser constructor.
 
-        In order for derived datasets to be instantiated automatically by the framework from a
-        configuration file, the signature of their constructors should match the one shown here.
-        This means all required extra parameters must be passed in the 'config' argument, which is
-        a dictionary.
+        This constructor receives all extra arguments necessary to build a segmentation task object.
 
         Args:
             class_names: list of all class names (or labels) that must be predicted in the image.
             input_key: key used to index the input image in the loaded samples.
             label_map_key: key used to index the label map in the loaded samples.
             meta_keys: list of extra keys that will be available in the loaded samples.
-            config: dictionary of extra parameters that are required by the dataset interface.
             transforms: function or object that should be applied to all loaded samples in order to
                 return the data in the requested transformed/augmented state.
             deepcopy: specifies whether this dataset interface should be deep-copied inside
@@ -314,9 +291,8 @@ class SegmentationDataset(Dataset):
                 different threads. This is false by default, as we assume datasets do not contain a state
                 or buffer that might cause problems in multi-threaded data loaders.
         """
-        super().__init__(config=config, transforms=transforms, deepcopy=deepcopy)
-        self.task = thelper.tasks.Segmentation(class_names, input_key, label_map_key,
-                                               meta_keys=meta_keys, dontcare=dontcare)
+        super().__init__(transforms=transforms, deepcopy=deepcopy)
+        self.task = thelper.tasks.Segmentation(class_names, input_key, label_map_key, meta_keys=meta_keys, dontcare=dontcare)
 
     @abstractmethod
     def __getitem__(self, idx):
@@ -341,19 +317,18 @@ class ImageDataset(Dataset):
         | :class:`thelper.data.parsers.Dataset`
     """
 
-    def __init__(self, config=None, transforms=None):
+    def __init__(self, root, transforms=None, image_key="image", path_key="path", idx_key="idx"):
         """Image dataset parser constructor.
 
-        This baseline constructor matches the signature of :class:`thelper.data.parsers.Dataset`, and simply
-        forwards its parameters.
+        This constructor exposes some of the configurable keys used to index sample dictionaries.
         """
-        super().__init__(config=config, transforms=transforms)
-        self.root = thelper.utils.get_key("root", config)
+        super().__init__(transforms=transforms)
+        self.root = root
         if self.root is None or not os.path.isdir(self.root):
             raise AssertionError("invalid input data root '%s'" % self.root)
-        self.image_key = thelper.utils.get_key_def("image_key", config, "image")
-        self.path_key = thelper.utils.get_key_def("path_key", config, "path")
-        self.idx_key = thelper.utils.get_key_def("idx_key", config, "idx")
+        self.image_key = image_key
+        self.path_key = path_key
+        self.idx_key = idx_key
         self.samples = []
         for folder, subfolder, files in os.walk(self.root):
             for file in files:
@@ -397,9 +372,9 @@ class ImageFolderDataset(ClassificationDataset):
         | :class:`thelper.data.parsers.ClassificationDataset`
     """
 
-    def __init__(self, config=None, transforms=None):
+    def __init__(self, root, transforms=None, image_key="image", label_key="label", path_key="path", idx_key="idx"):
         """Image folder dataset parser constructor."""
-        self.root = thelper.utils.get_key("root", config)
+        self.root = root
         if self.root is None or not os.path.isdir(self.root):
             raise AssertionError("invalid input data root '%s'" % self.root)
         class_map = {}
@@ -409,10 +384,10 @@ class ImageFolderDataset(ClassificationDataset):
         if not class_map:
             raise AssertionError("could not find any image folders at '%s'" % self.root)
         image_exts = [".jpg", ".jpeg", ".bmp", ".png", ".ppm", ".pgm", ".tif"]
-        self.image_key = thelper.utils.get_key_def("image_key", config, "image")
-        self.path_key = thelper.utils.get_key_def("path_key", config, "path")
-        self.idx_key = thelper.utils.get_key_def("idx_key", config, "idx")
-        self.label_key = thelper.utils.get_key_def("label_key", config, "label")
+        self.image_key = image_key
+        self.path_key = path_key
+        self.idx_key = idx_key
+        self.label_key = label_key
         samples = []
         for class_name in class_map:
             class_folder = os.path.join(self.root, class_name)
@@ -430,7 +405,7 @@ class ImageFolderDataset(ClassificationDataset):
             raise AssertionError("could not locate any subdir in '%s' with images to load" % self.root)
         meta_keys = [self.path_key, self.idx_key]
         super().__init__(class_names=list(class_map.keys()), input_key=self.image_key,
-                         label_key=self.label_key, meta_keys=meta_keys, config=config, transforms=transforms)
+                         label_key=self.label_key, meta_keys=meta_keys, transforms=transforms)
         self.samples = samples
 
     def __getitem__(self, idx):
@@ -460,23 +435,22 @@ class SuperResFolderDataset(Dataset):
     a proper task interface as well as path/class metadata in each loaded packet for metrics/logging output.
     """
 
-    def __init__(self, config=None, transforms=None):
+    def __init__(self, root, downscale_factor=2.0, rescale_lowres=True, center_crop=None, transforms=None,
+                 lowres_image_key="lowres_image", highres_image_key="highres_image", path_key="path", idx_key="idx", label_key="label"):
         """Image folder dataset parser constructor."""
-        downscale_factor = thelper.utils.get_key_def("downscale_factor", config, 2.0)
         if isinstance(downscale_factor, int):
             downscale_factor = float(downscale_factor)
         if not isinstance(downscale_factor, float) or downscale_factor <= 1.0:
             raise AssertionError("invalid downscale factor (should be greater than one)")
         self.downscale_factor = downscale_factor
-        self.rescale_lowres = thelper.utils.get_key_def("rescale_lowres", config, True)
-        center_crop = thelper.utils.get_key_def("center_crop", config, None)
+        self.rescale_lowres = rescale_lowres
         if center_crop is not None:
             if isinstance(center_crop, int):
                 center_crop = (center_crop, center_crop)
             if not isinstance(center_crop, (list, tuple)):
                 raise AssertionError("invalid center crop size type")
         self.center_crop = center_crop
-        self.root = thelper.utils.get_key("root", config)
+        self.root = root
         if self.root is None or not os.path.isdir(self.root):
             raise AssertionError("invalid input data root '%s'" % self.root)
         class_map = {}
@@ -486,11 +460,11 @@ class SuperResFolderDataset(Dataset):
         if not class_map:
             raise AssertionError("could not find any image folders at '%s'" % self.root)
         image_exts = [".jpg", ".jpeg", ".bmp", ".png", ".ppm", ".pgm", ".tif"]
-        self.lowres_image_key = thelper.utils.get_key_def("lowres_image_key", config, "lowres_image")
-        self.highres_image_key = thelper.utils.get_key_def("lowres_image_key", config, "highres_image")
-        self.path_key = thelper.utils.get_key_def("path_key", config, "path")
-        self.idx_key = thelper.utils.get_key_def("idx_key", config, "idx")
-        self.label_key = thelper.utils.get_key_def("label_key", config, "label")  # == orig folder name
+        self.lowres_image_key = lowres_image_key
+        self.highres_image_key = highres_image_key
+        self.path_key = path_key
+        self.idx_key = idx_key
+        self.label_key = label_key  # to provide folder names
         samples = []
         for class_name in class_map:
             class_folder = os.path.join(self.root, class_name)
@@ -507,7 +481,7 @@ class SuperResFolderDataset(Dataset):
         if not class_map:
             raise AssertionError("could not locate any subdir in '%s' with images to load" % self.root)
         meta_keys = [self.path_key, self.idx_key, self.label_key]
-        super().__init__(config=config, transforms=transforms)
+        super().__init__(transforms=transforms)
         self.task = thelper.tasks.SuperResolution(input_key=self.lowres_image_key, target_key=self.highres_image_key, meta_keys=meta_keys)
         self.samples = samples
 
@@ -558,7 +532,7 @@ class ExternalDataset(Dataset):
     information.
 
     Attributes:
-        dataset_type: type of the external dataset object to instantiate
+        dataset_type: type of the external dataset object to instantiate,
         task: task object containing the key information passed in the external configuration.
         samples: instantiation of the dataset object itself, faking the presence of a list of samples
         warned_dictionary: specifies whether the user was warned about missing keys in the output
@@ -568,13 +542,12 @@ class ExternalDataset(Dataset):
         | :class:`thelper.data.parsers.Dataset`
     """
 
-    def __init__(self, dataset_type, task, config=None, transforms=None, deepcopy=False):
+    def __init__(self, dataset_type, task, transforms=None, deepcopy=False, **kwargs):
         """External dataset parser constructor.
 
         Args:
             dataset_type: fully qualified name of the dataset object to instantiate
             task: fully constructed task object providing key information for sample loading.
-            config: dictionary of extra parameters that are required by the dataset interface.
             transforms: function or object that should be applied to all loaded samples in order to
                 return the data in the requested transformed/augmented state.
             deepcopy: specifies whether this dataset interface should be deep-copied inside
@@ -582,14 +555,14 @@ class ExternalDataset(Dataset):
                 different threads. This is false by default, as we assume datasets do not contain a state
                 or buffer that might cause problems in multi-threaded data loaders.
         """
-        super().__init__(config=config, transforms=transforms, deepcopy=deepcopy)
+        super().__init__(transforms=transforms, deepcopy=deepcopy)
         if not dataset_type or not hasattr(dataset_type, "__getitem__") or not hasattr(dataset_type, "__len__"):
             raise AssertionError("external dataset type must implement '__getitem__' and '__len__' methods")
         if task is None or not isinstance(task, thelper.tasks.Task):
             raise AssertionError("task type must derive from thelper.tasks.Task")
         self.dataset_type = dataset_type
         self.task = task
-        self.samples = dataset_type(**config)
+        self.samples = dataset_type(**kwargs)
         self.warned_dictionary = False
 
     def _get_derived_name(self):

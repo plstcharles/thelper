@@ -67,15 +67,15 @@ class PASCALVOC(Dataset):
     _train_archive_md5 = "6cd6e144f989b92b3379bac3b3de84fd"
     _test_archive_md5 = "9065beb292b6c291fad82b2725749fda"
 
-    def __init__(self, config, transforms=None):
-        self.task_name = str(thelper.utils.get_key_def("task", config, "segm")).lower()
+    def __init__(self, root, task="segm", subset="trainval", target_labels=None, download=False, preload=True, use_difficult=False,
+                 use_occluded=True, use_truncated=True, transforms=None, image_key="image", sample_name_key="name",
+                 image_path_key="image_path", gt_path_key="gt_path", bboxes_key="bboxes", label_map_key="label_map"):
+        self.task_name = task
         if self.task_name not in self._supported_tasks:
             raise AssertionError("unrecognized task type '%s'" % self.task_name)
-        subset = str(thelper.utils.get_key_def("subset", config, "trainval")).lower()
         if subset not in self._supported_subsets:
             raise AssertionError("unrecognized data subset '%s'" % subset)
-        download = thelper.utils.str2bool(thelper.utils.get_key_def("download", config, False))
-        root = os.path.abspath(thelper.utils.get_key("root", config))
+        root = os.path.abspath(root)
         devkit_path = os.path.join(root, "VOCdevkit")
         if not os.path.isdir(devkit_path):
             if not download:
@@ -101,22 +101,18 @@ class PASCALVOC(Dataset):
         imagesets_path = os.path.join(dataset_path, "ImageSets")
         if not os.path.isdir(dataset_path):
             raise AssertionError("could not locate image sets folder at '%s'" % imagesets_path)
-        super().__init__(config=config, transforms=transforms)
-        self.preload = thelper.utils.str2bool(thelper.utils.get_key_def("preload", config, True))  # @@@ CHANGE TODO
+        super().__init__(transforms=transforms)
+        self.preload = preload
         # should use_difficult be true for training, but false for validation?
-        use_difficult = thelper.utils.str2bool(thelper.utils.get_key_def("use_difficult", config, False))
-        use_occluded = thelper.utils.str2bool(thelper.utils.get_key_def("use_occluded", config, True))
-        use_truncated = thelper.utils.str2bool(thelper.utils.get_key_def("use_truncated", config, True))
-        self.image_key = thelper.utils.get_key_def("image_key", config, "image")
-        self.sample_name_key = thelper.utils.get_key_def("name_key", config, "name")
-        self.image_path_key = thelper.utils.get_key_def("image_path_key", config, "image_path")
-        self.gt_path_key = thelper.utils.get_key_def("gt_path_key", config, "gt_path")
+        self.image_key = image_key
+        self.sample_name_key = sample_name_key
+        self.image_path_key = image_path_key
+        self.gt_path_key = gt_path_key
         meta_keys = [self.sample_name_key, self.image_path_key, self.gt_path_key]
         self.gt_key = None
         self.task = None
         image_set_name = None
         valid_sample_names = None
-        target_labels = thelper.utils.get_key_def("target_labels", config, None)
         if target_labels is not None:
             if not isinstance(target_labels, list):
                 target_labels = [target_labels]
@@ -131,12 +127,12 @@ class PASCALVOC(Dataset):
         self.label_colors = {idx: thelper.utils.get_label_color_mapping(self._label_name_map[name])[::-1]
                              for name, idx in self.label_name_map.items()}
         if self.task_name == "detect":
-            self.gt_key = thelper.utils.get_key_def("bboxes_key", config, "bboxes")
+            self.gt_key = bboxes_key
             # self.task = thelper.tasks.Detection(...)
             image_set_name = "Main"
             raise NotImplementedError
         elif self.task_name == "segm":
-            self.gt_key = thelper.utils.get_key_def("label_map_key", config, "label_map")
+            self.gt_key = label_map_key
             color_map = {name: self.label_colors[idx][::-1] for name, idx in self.label_name_map.items()}
             self.task = thelper.tasks.Segmentation(self.label_name_map, input_key=self.image_key,
                                                    label_map_key=self.gt_key, meta_keys=meta_keys,

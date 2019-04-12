@@ -280,8 +280,7 @@ def create_parsers(config, base_transforms=None):
     datasets are instantiated, this function will also verify their task compatibility and return the global
     task. The dataset interfaces themselves should be derived from :class:`thelper.data.parsers.Dataset`, be
     compatible with :class:`thelper.data.parsers.ExternalDataset`, or should provide a 'task' field specifying
-    all the information related to sample dictionary keys and model i/o. An example configuration is provided
-    in :func:`thelper.data.utils.create_parsers`.
+    all the information related to sample dictionary keys and model i/o.
 
     The provided configuration will be parsed for a 'datasets' dictionary entry. The keys in this dictionary
     are treated as unique dataset names and are used for lookups. The value associated to each key (or dataset
@@ -336,7 +335,7 @@ def create_parsers(config, base_transforms=None):
             transforms = base_transforms
         if issubclass(dataset_type, thelper.data.Dataset):
             # assume that the dataset is derived from thelper.data.parsers.Dataset (it is fully sampling-ready)
-            dataset = dataset_type(config=dataset_params, transforms=transforms)
+            dataset = dataset_type(transforms=transforms, **dataset_params)
             if "task" in dataset_config:
                 logger.warning("'task' field detected in dataset '%s' config; dataset's default task will be ignored" % dataset_name)
                 task = thelper.tasks.create_task(dataset_config["task"])
@@ -347,7 +346,7 @@ def create_parsers(config, base_transforms=None):
                 raise AssertionError("external dataset '%s' must define task interface in its configuration dict" % dataset_name)
             task = thelper.tasks.create_task(dataset_config["task"])
             # assume that __getitem__ and __len__ are implemented, but we need to make it sampling-ready
-            dataset = thelper.data.ExternalDataset(dataset_type, task, config=dataset_params, transforms=transforms)
+            dataset = thelper.data.ExternalDataset(dataset_type, task, transforms=transforms, **dataset_params)
         if task is None:
             raise AssertionError("parsed task interface should not be None anymore (old code doing something strange?)")
         tasks.append(task)
