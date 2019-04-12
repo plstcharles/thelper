@@ -42,9 +42,18 @@ class DataLoader(torch.utils.data.DataLoader):
         if not isinstance(epoch, int) or epoch < 0:
             raise AssertionError("invalid epoch value")
         self.epoch = epoch
+        self.num_workers = kwargs["num_workers"] if "num_workers" in kwargs else 0
 
     def __iter__(self):
         """Advances the epoch number for the workers initialization function."""
+        if self.num_workers == 0:
+            if "torch" in self.seeds:
+                torch.manual_seed(self.seeds["torch"] + self.epoch)
+                torch.cuda.manual_seed_all(self.seeds["torch"] + self.epoch)
+            if "numpy" in self.seeds:
+                np.random.seed(self.seeds["numpy"] + self.epoch)
+            if "random" in self.seeds:
+                random.seed(self.seeds["random"] + self.epoch)
         result = super().__iter__()
         self.epoch += 1
         return result
