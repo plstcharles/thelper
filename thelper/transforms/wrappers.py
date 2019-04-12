@@ -430,7 +430,7 @@ class TransformWrapper(object):
                 raise AssertionError("top-level call should never provide in_cvts")
             # capture non-scalar objects (according to numpy) if no keys are provided
             key_vals = [(k, v) for k, v in sample.items() if (
-                (self.target_keys is None and not np.isscalar(v)) or
+                (self.target_keys is None and not thelper.utils.is_scalar(v)) or
                 (self.target_keys is not None and k in self.target_keys))]
             keys, vals = map(list, zip(*key_vals))
             lengths = [len(v) if isinstance(v, (list, tuple)) else -1 for v in vals]
