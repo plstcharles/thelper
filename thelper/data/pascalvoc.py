@@ -68,7 +68,7 @@ class PASCALVOC(Dataset):
     _test_archive_md5 = "9065beb292b6c291fad82b2725749fda"
 
     def __init__(self, root, task="segm", subset="trainval", target_labels=None, download=False, preload=True, use_difficult=False,
-                 use_occluded=True, use_truncated=True, transforms=None, image_key="image", sample_name_key="name",
+                 use_occluded=True, use_truncated=True, transforms=None, image_key="image", sample_name_key="name", idx_key="idx",
                  image_path_key="image_path", gt_path_key="gt_path", bboxes_key="bboxes", label_map_key="label_map"):
         self.task_name = task
         if self.task_name not in self._supported_tasks:
@@ -105,10 +105,11 @@ class PASCALVOC(Dataset):
         self.preload = preload
         # should use_difficult be true for training, but false for validation?
         self.image_key = image_key
+        self.idx_key = idx_key
         self.sample_name_key = sample_name_key
         self.image_path_key = image_path_key
         self.gt_path_key = gt_path_key
-        meta_keys = [self.sample_name_key, self.image_path_key, self.gt_path_key]
+        meta_keys = [self.sample_name_key, self.image_path_key, self.gt_path_key, self.idx_key]
         self.gt_key = None
         self.task = None
         image_set_name = None
@@ -243,6 +244,12 @@ class PASCALVOC(Dataset):
 
     def __getitem__(self, idx):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
+        if isinstance(idx, slice):
+            return self._getitems(idx)
+        if idx >= len(self.samples):
+            raise AssertionError("sample index is out-of-range")
+        if idx < 0:
+            idx = len(self.samples) + idx
         sample = self.samples[idx]
         if not self.preload:
             image = cv.imread(sample[self.image_path_key])
@@ -264,6 +271,7 @@ class PASCALVOC(Dataset):
             self.gt_path_key: sample[self.gt_path_key],
             self.image_key: image,
             self.gt_key: gt,
+            self.idx_key: idx
         }
         if self.transforms:
             sample = self.transforms(sample)

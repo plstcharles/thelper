@@ -98,6 +98,12 @@ class Dataset(torch.utils.data.Dataset):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
         raise NotImplementedError
 
+    def _getitems(self, idxs):
+        """Returns a list of dictionaries corresponding to the sliced sample indices."""
+        if not isinstance(idxs, slice):
+            raise AssertionError("unexpected input (should be slice)")
+        return [self[idx] for idx in range(*idxs.indices(len(self)))]
+
     @abstractmethod
     def get_task(self):
         """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
@@ -196,7 +202,9 @@ class HDF5Dataset(Dataset):
 
     def __getitem__(self, idx):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
-        if idx < 0 or idx >= len(self.samples):
+        if isinstance(idx, slice):
+            return self._getitems(idx)
+        if idx >= len(self.samples):
             raise AssertionError("sample index is out-of-range")
         sample = {
             self.task.get_input_key(): self._unpack(self.input_dset, idx, self.input_dtype, self.input_shape,
@@ -339,8 +347,12 @@ class ImageDataset(Dataset):
 
     def __getitem__(self, idx):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
-        if idx < 0 or idx >= len(self.samples):
+        if isinstance(idx, slice):
+            return self._getitems(idx)
+        if idx >= len(self.samples):
             raise AssertionError("sample index is out-of-range")
+        if idx < 0:
+            idx = len(self.samples) + idx
         sample = self.samples[idx]
         image_path = sample[self.path_key]
         image = cv.imread(image_path)
@@ -410,8 +422,12 @@ class ImageFolderDataset(ClassificationDataset):
 
     def __getitem__(self, idx):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
-        if idx < 0 or idx >= len(self.samples):
+        if isinstance(idx, slice):
+            return self._getitems(idx)
+        if idx >= len(self.samples):
             raise AssertionError("sample index is out-of-range")
+        if idx < 0:
+            idx = len(self.samples) + idx
         sample = self.samples[idx]
         image_path = sample[self.path_key]
         image = cv.imread(image_path)
@@ -487,8 +503,12 @@ class SuperResFolderDataset(Dataset):
 
     def __getitem__(self, idx):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
-        if idx < 0 or idx >= len(self.samples):
+        if isinstance(idx, slice):
+            return self._getitems(idx)
+        if idx >= len(self.samples):
             raise AssertionError("sample index is out-of-range")
+        if idx < 0:
+            idx = len(self.samples) + idx
         sample = self.samples[idx]
         image_path = sample[self.path_key]
         image = cv.imread(image_path)
@@ -571,6 +591,10 @@ class ExternalDataset(Dataset):
 
     def __getitem__(self, idx):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
+        if isinstance(idx, slice):
+            return self._getitems(idx)
+        if idx >= len(self.samples):
+            raise AssertionError("sample index is out-of-range")
         sample = self.samples[idx]
         if sample is None:
             # since might have provided an invalid sample count before, it's dangerous to skip empty samples here
@@ -578,11 +602,11 @@ class ExternalDataset(Dataset):
         warn_dictionary = False
         if isinstance(sample, (list, tuple)):
             out_sample_list = []
-            for idx, subs in enumerate(sample):
+            for key_idx, subs in enumerate(sample):
                 if isinstance(subs, PIL.Image.Image):
                     subs = np.array(subs)
                 out_sample_list.append(subs)
-            sample = {str(idx): out_sample_list[idx] for idx in range(len(out_sample_list))}
+            sample = {str(key_idx): out_sample_list[key_idx] for key_idx in range(len(out_sample_list))}
             warn_dictionary = True
         elif isinstance(sample, (np.ndarray, PIL.Image.Image, torch.Tensor)):
             sample = {"0": sample}
