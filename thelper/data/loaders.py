@@ -124,8 +124,8 @@ class _LoaderFactory(object):
         self.valid_collate_fn = self._get_collate_fn(thelper.utils.get_key_def("valid_collate_fn", config, default_collate_fn))
         self.test_collate_fn = self._get_collate_fn(thelper.utils.get_key_def("test_collate_fn", config, default_collate_fn))
         self.train_shuffle = thelper.utils.str2bool(thelper.utils.get_key_def(["shuffle", "train_shuffle"], config, True))
-        self.valid_shuffle = thelper.utils.str2bool(thelper.utils.get_key_def("valid_shuffle", config, False))
-        self.test_shuffle = thelper.utils.str2bool(thelper.utils.get_key_def("test_shuffle", config, False))
+        self.valid_shuffle = thelper.utils.str2bool(thelper.utils.get_key_def(["shuffle", "valid_shuffle"], config, False))
+        self.test_shuffle = thelper.utils.str2bool(thelper.utils.get_key_def(["shuffle", "test_shuffle"], config, False))
         np.random.seed()  # for seed generation below (if needed); will be reseeded afterwards
         test_seed = self._get_seed(["test_seed", "test_split_seed"], config, (int, str))
         valid_seed = self._get_seed(["valid_seed", "valid_split_seed"], config, (int, str))
@@ -479,7 +479,7 @@ class _LoaderFactory(object):
                         sampler = thelper.data.SubsetRandomSampler(loader_sample_idxs, seeds=self.seeds, scale=scale)
                     else:
                         if scale != 1.0:
-                            raise AssertionError("sequential sampler currently does not handle scale changes")
+                            raise AssertionError("sequential sampler currently does not handle scale changes (turn on shuffling)")
                         sampler = thelper.data.SubsetSequentialSampler(loader_sample_idxs)
                 if not hasattr(sampler, "__len__"):
                     raise AssertionError("sampler should always expose sample count via '__len__'")
