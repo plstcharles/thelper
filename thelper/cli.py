@@ -13,7 +13,10 @@ import logging
 import os
 import sys
 
+import h5py
+import numpy as np
 import torch
+import tqdm
 
 import thelper
 
@@ -195,8 +198,7 @@ def visualize_data(config):
                 break
         batch_count = len(loader)
         logger.info("initializing loader '%s' with %d batches..." % (choice, batch_count))
-        for batch_idx, samples in enumerate(loader):
-            logger.debug("at batch = %d / %d" % (batch_idx, batch_count))
+        for samples in tqdm.tqdm(loader):
             if "idx" in samples:
                 indices = samples["idx"]
                 if isinstance(indices, torch.Tensor):
@@ -242,6 +244,112 @@ def annotate_data(config, save_dir):
     logger.debug("all done")
 
 
+def split_data(config, save_dir):
+    """Launches a dataset splitting session.
+
+    This mode will generate an HDF5 archive that contains the split datasets defined in the session
+    configuration file. This archive can then be reused in a new training session to guarantee a fixed
+    distribution of training, validation, and testing samples. It can also be used outside the framework
+    in order to reproduce an experiment.
+
+    The configuration dictionary must minimally contain two sections: 'datasets' and 'loaders'. A third
+    section, 'split', can be used to provide settings regarding the archive packing and compression
+    approaches to use.
+
+    The HDF5 archive will be saved in the session's output directory.
+
+    Args:
+        config: a dictionary that provides all required data configuration parameters; see
+            :func:`thelper.data.utils.create_loaders` for more information.
+        save_dir: the path to the root directory where the session directory should be saved. Note that
+            this is not the path to the session directory itself, but its parent, which may also contain
+            other session directories.
+
+    .. seealso::
+        | :func:`thelper.data.utils.create_loaders`
+        | :class:`thelper.data.parsers.HDF5Dataset`
+    """
+    logger = thelper.utils.get_func_logger()
+    if "name" not in config or not config["name"]:
+        raise AssertionError("config missing 'name' field")
+    session_name = config["name"]
+    split_config = thelper.utils.get_key_def("split", config, default={})
+    if not isinstance(split_config, dict):
+        raise AssertionError("unexpected split config type")
+    compression = thelper.utils.get_key_def("compression", split_config, default={})
+    if not isinstance(compression, dict):
+        raise AssertionError("compression params should be given as dictionary")
+    archive_name = thelper.utils.get_key_def("archive_name", split_config, default=(session_name + ".hdf5"))
+    logger.info("creating new splitting session '%s'..." % session_name)
+    thelper.utils.setup_globals(config)
+    save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
+    logger.debug("session will be saved at '%s'" % os.path.abspath(save_dir).replace("\\", "/"))
+    task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config, save_dir)
+    if task is None:
+        raise AssertionError("task interface cannot be none (it must be stored in hdf5 w/ keys)")
+    archive_path = os.path.join(save_dir, archive_name)
+    with h5py.File(archive_path, "w") as fd:
+        fd.attrs["name"] = archive_name
+        fd.attrs["source"] = thelper.utils.get_log_stamp()
+        fd.attrs["git_sha1"] = thelper.utils.get_git_stamp()
+        fd.attrs["version"] = thelper.__version__
+        fd.attrs["task"] = str(task)
+        fd.attrs["config"] = str(config)
+        fd.attrs["compression"] = str(compression)
+        dtype = h5py.special_dtype(vlen=np.uint8)
+
+        def create_dataset(name, max_len, tensor):
+            if tensor.ndim > 1:
+                dset = fd.create_dataset(name, shape=(max_len,), maxshape=(max_len,), dtype=dtype)
+                dset.attrs["orig_dtype"] = str(tensor.dtype)
+                dset.attrs["orig_shape"] = tensor.shape[1:]  # removes batch dim
+            else:
+                dset = fd.create_dataset(name, shape=(max_len,), maxshape=(max_len,), dtype=tensor.dtype)
+            return dset
+
+        def fill_dataset(dset, dset_idx, tensor_idx, tensor, compr, **compr_kwargs):
+            if tensor.ndim > 1:
+                dset[dset_idx] = np.frombuffer(thelper.utils.encode_data(tensor[tensor_idx], compr, **compr_kwargs), dtype=np.uint8)
+            else:
+                dset[dset_idx] = tensor[tensor_idx]
+
+        def get_compr_args(group, config):
+            config = thelper.utils.get_key_def(group, config, default={})
+            compr_type = thelper.utils.get_key_def("type", config, default="none")
+            encode_params = thelper.utils.get_key_def("encode_params", config, default={})
+            return compr_type, encode_params
+
+        for loader, group in [(train_loader, "train"), (valid_loader, "valid"), (test_loader, "test")]:
+            if loader is None:
+                continue
+            max_dataset_len = len(loader) * loader.batch_size
+            input_dataset, gt_dataset, meta_datasets = None, None, {meta_key: None for meta_key in task.get_meta_keys()}
+            input_compr, gt_compr = get_compr_args("input", compression), get_compr_args("gt", compression)
+            curr_dataset_len = 0
+            for batch in tqdm.tqdm(loader, desc=f"packing {group} loader batches"):
+                input_tensor = thelper.utils.to_numpy(batch[task.get_input_key()])
+                gt_tensor = thelper.utils.to_numpy(batch[task.get_gt_key()])
+                meta_tensors = {meta_key: thelper.utils.to_numpy(batch[meta_key]) for meta_key in task.get_meta_keys()}
+                meta_compr = {meta_key: get_compr_args(meta_key, compression) for meta_key in task.get_meta_keys()}
+                if curr_dataset_len == 0:
+                    input_dataset = create_dataset(group + "/input", max_dataset_len, input_tensor)
+                    gt_dataset = create_dataset(group + "/gt", max_dataset_len, gt_tensor)
+                    for meta_key in task.get_meta_keys():
+                        meta_datasets[meta_key] = create_dataset(group + "/meta/" + meta_key, max_dataset_len, meta_tensors[meta_key])
+                for idx in range(input_tensor.shape[0]):
+                    fill_dataset(input_dataset, curr_dataset_len, idx, input_tensor, input_compr[0], **input_compr[1])
+                    fill_dataset(gt_dataset, curr_dataset_len, idx, gt_tensor, gt_compr[0], **gt_compr[1])
+                    for meta_key in task.get_meta_keys():
+                        fill_dataset(meta_datasets[meta_key], curr_dataset_len, idx, meta_tensors[meta_key], meta_compr[0], **meta_compr[1])
+                    curr_dataset_len += 1
+            fd[group].attrs["count"] = curr_dataset_len
+            input_dataset.resize(size=(curr_dataset_len, ))
+            gt_dataset.resize(size=(curr_dataset_len, ))
+            for meta_key in task.get_meta_keys():
+                meta_datasets[meta_key].resize(size=(curr_dataset_len, ))
+    logger.debug("all done")
+
+
 def main(args=None):
     """Main entrypoint to use with console applications.
 
@@ -282,6 +390,9 @@ def main(args=None):
     annot_ap = subparsers.add_parser("annot", help="launches a dataset annotation session with a GUI tool")
     annot_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session save directory)")
     annot_ap.add_argument("save_dir", type=str, help="path to the root directory where annotations should be saved")
+    split_ap = subparsers.add_parser("split", help="launches a dataset splitting session from a config file")
+    split_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session save directory)")
+    split_ap.add_argument("save_dir", type=str, help="path to the root directory where the split hdf5 dataset archive should be saved")
     args = ap.parse_args(args=args)
     if args.verbose == 0:
         args.verbose = 3
@@ -339,7 +450,7 @@ def main(args=None):
             elif os.path.isdir(os.path.join(ckpt_dir_path, "../logs")):
                 save_dir = os.path.abspath(os.path.join(ckpt_dir_path, "../.."))
         resume_session(ckptdata, save_dir, config=override_config, eval_only=args.eval_only)
-    elif args.mode == "viz" or args.mode == "annot":
+    elif args.mode == "viz" or args.mode == "annot" or args.mode == "split":
         if os.path.isdir(args.cfg_path):
             thelper.logger.debug("will search directory '%s' for a config to load..." % args.cfg_path)
             search_cfg_names = ["config.json", "config.latest.json", "test.json"]
@@ -360,6 +471,8 @@ def main(args=None):
             visualize_data(config)
         elif args.mode == "annot":
             annotate_data(config, args.save_dir)
+        elif args.mode == "split":
+            split_data(config, args.save_dir)
     return 0
 
 
