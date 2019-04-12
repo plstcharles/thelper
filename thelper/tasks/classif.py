@@ -7,6 +7,10 @@ import logging
 import os
 from typing import Optional  # noqa: F401
 
+import numpy as np
+import torch
+
+import thelper.utils
 from thelper.tasks.utils import Task
 
 logger = logging.getLogger(__name__)
@@ -105,7 +109,11 @@ class Classification(Task):
                 if isinstance(class_name, str):
                     if class_name not in self.class_names:
                         raise AssertionError("label '%s' not found in class names provided earlier" % class_name)
-                elif isinstance(class_name, int):
+                elif isinstance(class_name, (int, np.ndarray, torch.Tensor)):
+                    if not thelper.utils.is_scalar(class_name):
+                        raise AssertionError("class name should be string or scalar (int)")
+                    if isinstance(class_name, torch.Tensor):
+                        class_name = class_name.item()
                     # dataset must already be using indices, we will forgive this...
                     # (this is pretty much always the case for torchvision datasets)
                     if class_name < 0 or class_name >= len(self.class_names):
