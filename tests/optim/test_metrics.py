@@ -45,7 +45,3 @@ class TestMetrics(unittest.TestCase):
         for mp, tp in zip(metric.predictions, list(pred) + list(pred)):
             for mp_pred, tp_pred in zip(mp['predictions'], tp):
                 assert mp_pred == tp_pred, "corresponding predictions should be transferred to serializable list"
-
-
-if __name__ == '__main__':
-    unittest.main()
