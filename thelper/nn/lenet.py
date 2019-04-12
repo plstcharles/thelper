@@ -3,6 +3,7 @@ import torch
 
 import thelper
 
+
 class LeNet(thelper.nn.Module):
     """LeNet CNN implementation.
 
