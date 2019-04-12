@@ -9,6 +9,7 @@ import os
 from abc import abstractmethod
 
 import cv2 as cv
+import h5py
 import numpy as np
 import PIL
 import PIL.Image
@@ -112,6 +113,118 @@ class Dataset(torch.utils.data.Dataset):
         return self._get_derived_name() + ": {{\n\tsize: {},\n\tdeepcopy: {},\n\ttransforms: {}\n}}".format(
             str(len(self)), str(self.deepcopy), str(self.transforms)
         )
+
+
+class HDF5Dataset(Dataset):
+    """HDF5 dataset specialization interface.
+
+    This specialization is compatible with the HDF5 packages made by the CLI's "split" operation. The
+    archives it loads contains pre-split datasets that can be reloaded without having to resplit their
+    data. The archive also contains useful metadata, and a task interface.
+
+    Attributes:
+        archive: file descriptor for the opened hdf5 dataset.
+        group: hdf5 group section representing the targeted set.
+        input_dset: hdf5 dataset object representing the input data.
+        input_dtype: numpy data type indicating whether we must decompress or not.
+        input_shape: original shape of the input data tensors.
+        input_compr: compression arguments used to pack the input data.
+        gt_dset: hdf5 dataset object representing the groundtruth data.
+        gt_dtype: numpy data type indicating whether we must decompress or not.
+        gt_shape: original shape of the groundtruth data tensors.
+        gt_compr: compression arguments used to pack the groundtruth data.
+        name: name of the hdf5 dataset.
+        source: source logstamp of the hdf5 dataset.
+        git_sha1: framework git tag of the hdf5 dataset.
+        version: version of the framework that saved the hdf5 dataset.
+        task: task object reinstantiated from the hdf5 dataset.
+        orig_config: configuration used to originally generate the hdf5 dataset.
+
+    .. seealso::
+        | :func:`thelper.cli.split_data`
+    """
+
+    def __init__(self, config, transforms=None):
+        """HDF5 dataset parser constructor.
+
+        This baseline constructor matches the signature of :class:`thelper.data.parsers.Dataset`, and simply
+        forwards its parameters. It will look for the path to the HDF5 archive using the 'root' key in the
+        configuration directionary. It will also look for a 'set' key to determine which dataset to load (by
+        default, it will only load the training set).
+        """
+        super().__init__(config=config, transforms=transforms, deepcopy=False)
+        self.root = thelper.utils.get_key_def("root", config, None)
+        if self.root is None or not os.path.isfile(self.root):
+            raise AssertionError(f"invalid input data file '{self.root}'")
+        set = thelper.utils.get_key_def("set", config, None)
+        if set is None:
+            set = "train"
+        elif set not in ["train", "valid", "test"]:
+            raise AssertionError(f"unrecognized data set option '{set}'")
+        self.archive = h5py.File(self.root, "r")
+        self.name = self.archive.attrs["name"]
+        self.source = self.archive.attrs["source"]
+        self.git_sha1 = self.archive.attrs["git_sha1"]
+        self.version = self.archive.attrs["version"]
+        self.task = thelper.tasks.create_task(self.archive.attrs["task"])
+        self.orig_config = eval(self.archive.attrs["config"])
+        compr_config = eval(self.archive.attrs["compression"])
+        if set not in self.archive:
+            raise AssertionError(f"group '{set}' not found in hdf5 archive")
+        self.group = self.archive[set]
+        sample_count = self.group.attrs["count"]
+        self.samples = [{}] * sample_count
+        for meta_key in self.task.get_meta_keys():
+            meta_dset = self.group["meta/" + meta_key]
+            if meta_dset.len() != len(self.samples):
+                raise AssertionError("unexpected/mismatched meta dataset lengths")
+            meta_dtype = meta_dset.attrs["orig_dtype"] if "orig_dtype" in meta_dset.attrs else None
+            meta_shape = meta_dset.attrs["orig_shape"] if "orig_shape" in meta_dset.attrs else None
+            meta_compr_config = thelper.utils.get_key_def(meta_key, compr_config, default={})
+            meta_compr_type = thelper.utils.get_key_def("type", meta_compr_config, default="none")
+            meta_compr_kwargs = thelper.utils.get_key_def("decode_params", meta_compr_config, default={})
+            for idx in range(sample_count):
+                self.samples[idx][meta_key] = self._unpack(meta_dset, idx, meta_dtype, meta_shape, meta_compr_type, **meta_compr_kwargs)
+        input_compr_config = thelper.utils.get_key_def("input", compr_config, default={})
+        self.input_compr = (thelper.utils.get_key_def("type", input_compr_config, default="none"),
+                            thelper.utils.get_key_def("decode_params", input_compr_config, default={}))
+        self.input_dset = self.group["input"]
+        self.input_dtype = self.input_dset.attrs["orig_dtype"] if "orig_dtype" in self.input_dset.attrs else None
+        self.input_shape = self.input_dset.attrs["orig_shape"] if "orig_shape" in self.input_dset.attrs else None
+        gt_compr_config = thelper.utils.get_key_def("gt", compr_config, default={})
+        self.gt_compr = (thelper.utils.get_key_def("type", gt_compr_config, default="none"),
+                         thelper.utils.get_key_def("decode_params", gt_compr_config, default={}))
+        self.gt_dset = self.group["gt"]
+        self.gt_dtype = self.gt_dset.attrs["orig_dtype"] if "orig_dtype" in self.gt_dset.attrs else None
+        self.gt_shape = self.gt_dset.attrs["orig_shape"] if "orig_shape" in self.gt_dset.attrs else None
+
+    def _unpack(self, dset, idx, dtype=None, shape=None, compr_type="none", **compr_kwargs):
+        if dtype is not None:
+            array = np.frombuffer(thelper.utils.decode_data(dset[idx], compr_type, **compr_kwargs), dtype=dtype)
+        else:
+            array = dset[idx]
+        if shape is not None:
+            array = array.reshape(shape)
+        return array
+
+    def __getitem__(self, idx):
+        """Returns the data sample (a dictionary) for a specific (0-based) index."""
+        if idx < 0 or idx >= len(self.samples):
+            raise AssertionError("sample index is out-of-range")
+        sample = {
+            self.task.get_input_key(): self._unpack(self.input_dset, idx, self.input_dtype, self.input_shape,
+                                                    self.input_compr[0], **self.input_compr[1]),
+            self.task.get_gt_key(): self._unpack(self.gt_dset, idx, self.gt_dtype, self.gt_shape,
+                                                 self.gt_compr[0], **self.gt_compr[1]),
+            **self.samples[idx]
+        }
+        if self.transforms:
+            sample = self.transforms(sample)
+        return sample
+
+    def get_task(self):
+        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
+        return self.task
 
 
 class ClassificationDataset(Dataset):

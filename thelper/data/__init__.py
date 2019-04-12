@@ -17,6 +17,7 @@ from thelper.data.loaders import DataLoader  # noqa: F401
 from thelper.data.parsers import ClassificationDataset  # noqa: F401
 from thelper.data.parsers import Dataset  # noqa: F401
 from thelper.data.parsers import ExternalDataset  # noqa: F401
+from thelper.data.parsers import HDF5Dataset  # noqa: F401
 from thelper.data.parsers import ImageDataset  # noqa: F401
 from thelper.data.parsers import ImageFolderDataset  # noqa: F401
 from thelper.data.parsers import SuperResFolderDataset  # noqa: F401

@@ -687,7 +687,7 @@ class Trainer:
             "epoch": epoch,
             "iter": iter,
             "source": log_stamp,
-            "sha1": thelper.utils.get_git_stamp(),
+            "git_sha1": thelper.utils.get_git_stamp(),
             "version": thelper.__version__,
             "task": str(self.model.task) if self.save_raw else self.model.task,
             "outputs": self.outputs[epoch],
