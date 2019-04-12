@@ -1096,6 +1096,16 @@ def get_displayable_heatmap(array,              # type: thelper.typedefs.ArrayTy
     return heatmap
 
 
+def is_scalar(val):
+    """Returns whether the input value is a scalar according to numpy and PyTorch."""
+    if np.isscalar(val):
+        return True
+    if isinstance(val, torch.Tensor):
+        if val.dim() == 0:
+            return True
+    return False
+
+
 def to_numpy(array):
     """Converts a list or PyTorch tensor to numpy. Does nothing if already a numpy array."""
     if isinstance(array, list):
