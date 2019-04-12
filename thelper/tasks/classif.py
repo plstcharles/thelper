@@ -139,7 +139,7 @@ class Classification(Task):
                      self.get_gt_key() == other.get_gt_key()) and
                     all([cls in self.get_class_names() for cls in other.get_class_names()]) and
                     (not exact or (self.get_class_names() == other.get_class_names() and
-                                   self.get_meta_keys() == other.get_meta_keys())))
+                                   set(self.get_meta_keys()) == set(other.get_meta_keys()))))
         elif type(other) == Task:
             # if 'other' simply has no gt, compatibility rests on input key only
             return not exact and self.get_input_key() == other.get_input_key() and other.get_gt_key() is None

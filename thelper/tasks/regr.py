@@ -126,7 +126,7 @@ class Regression(Task):
                      self.get_target_min() == other.get_target_min()) and
                     (self.get_target_max() is None or other.get_target_max() is None or
                      self.get_target_max() == other.get_target_max()) and
-                    (not exact or (self.get_meta_keys() == other.get_meta_keys())))
+                    (not exact or (set(self.get_meta_keys()) == set(other.get_meta_keys()))))
         elif type(other) == Task:
             # if 'other' simply has no gt, compatibility rests on input key only
             return not exact and self.get_input_key() == other.get_input_key() and other.get_gt_key() is None
