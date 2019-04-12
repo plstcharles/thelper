@@ -552,7 +552,8 @@ class Trainer:
                              self.test_metrics, self.monitor, test_writer)
             self._write_epoch_output(best_epoch, self.test_metrics, test_writer, self.test_output_path)
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
-            self.outputs[best_epoch] = {**ckptdata["outputs"], "test/metrics": test_metric_vals}
+            prev_best_epoch_output = ckptdata["outputs"][best_epoch] if best_epoch in ckptdata["outputs"] else {}
+            self.outputs[best_epoch] = {**prev_best_epoch_output, "test/metrics": test_metric_vals}
             for key, value in self.outputs[best_epoch].items():
                 if not isinstance(value, dict):
                     self.logger.debug(" final result =>  {}: {}".format(str(key), value))
@@ -588,6 +589,7 @@ class Trainer:
             self._write_epoch_output(self.current_epoch, self.test_metrics, test_writer, self.test_output_path)
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
             result = {**result, **test_metric_vals}
+            output_group = "test/metrics"
         elif self.valid_loader:
             self._set_rng_state(self.valid_loader.seeds, self.current_epoch)
             model.eval()
@@ -601,15 +603,16 @@ class Trainer:
             self._write_epoch_output(self.current_epoch, self.valid_metrics, valid_writer, self.valid_output_path)
             valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()}
             result = {**result, **valid_metric_vals}
+            output_group = "valid/metrics"
         for key, value in result.items():
             if not isinstance(value, dict):
                 self.logger.debug(" final result =>  {}: {}".format(str(key), value))
             else:
                 for subkey, subvalue in value.items():
                     self.logger.debug(" final result =>  {}:{}: {}".format(str(key), str(subkey), subvalue))
-        self.outputs[self.current_epoch] = result
+        self.outputs[self.current_epoch][output_group] = result
         self.logger.info("evaluation for session '%s' done" % self.name)
-        return result
+        return self.outputs
 
     @abstractmethod
     def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
@@ -690,7 +693,7 @@ class Trainer:
             "git_sha1": thelper.utils.get_git_stamp(),
             "version": thelper.__version__,
             "task": str(self.model.task) if self.save_raw else self.model.task,
-            "outputs": self.outputs[epoch],
+            "outputs": self.outputs,
             # we save model type/params here in case those are not in the current config
             "model": self.model.state_dict() if self.save_raw else self.model,
             "model_type": self.model.get_name(),
