@@ -1,0 +1,62 @@
+{
+    "name": "example-split-cifar10-viz",
+    "datasets": {
+        "cifar10_train": {
+            "type": "thelper.data.HDF5Dataset",
+            "params": {
+                "root": "data/saved/example-split-cifar10/test-80-10-10_jpg.hdf5",
+                "set": "train"
+            }
+        },
+        "cifar10_valid": {
+            "type": "thelper.data.HDF5Dataset",
+            "params": {
+                "root": "data/saved/example-split-cifar10/test-80-10-10_jpg.hdf5",
+                "set": "valid"
+            }
+        },
+        "cifar10_test": {
+            "type": "thelper.data.HDF5Dataset",
+            "params": {
+                "root": "data/saved/example-split-cifar10/test-80-10-10_jpg.hdf5",
+                "set": "test"
+            }
+        }
+    },
+    "loaders": {
+        "workers": 0,
+        "batch_size": 32,
+        "base_transforms": [
+            {
+                "operation": "thelper.transforms.NormalizeMinMax",
+                "params": {
+                    "min": [127, 127, 127],
+                    "max": [255, 255, 255]
+                }
+            },
+            {
+                "operation": "thelper.transforms.Resize",
+                "params": {
+                    "dsize": [224, 224]
+                }
+            },
+            {
+                "operation": "torchvision.transforms.ToTensor"
+            }
+        ],
+        "train_split": {
+            "cifar10_train": 1.0
+        },
+        "valid_split": {
+            "cifar10_valid": 1.0
+        },
+        "test_split": {
+            "cifar10_test": 1.0
+        }
+    },
+    "viz": {
+        "kwargs": {
+            "block": false
+        }
+    }
+}

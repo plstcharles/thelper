@@ -1,0 +1,47 @@
+{
+    "name": "example-split-cifar10",
+    "datasets": {
+        "cifar10": {
+            "type": "torchvision.datasets.CIFAR10",
+            "params": {
+                "root": "data/cifar/train",
+                "download": true
+            },
+            "task": {
+                "type": "thelper.tasks.Classification",
+                "params": {
+                    "class_names": [
+                        "airplane", "car", "bird", "cat", "deer",
+                        "dog", "frog", "horse", "ship", "truck"
+                    ],
+                    "input_key": "0",
+                    "label_key": "1"
+                }
+            }
+        }
+    },
+    "loaders": {
+        "batch_size": 32,
+        "train_split": {
+            "cifar10": 0.8
+        },
+        "valid_split": {
+            "cifar10": 0.1
+        },
+        "test_split": {
+            "cifar10": 0.1
+        }
+    },
+    "split": {
+        "archive_name": "test-80-10-10_jpg.hdf5",
+        "compression": {
+            "input": {
+                "type": "jpg",
+                "decode_params": {"flags": "cv.IMREAD_COLOR"}
+            },
+            "gt": {
+                "type": "none"
+            }
+        }
+    }
+}
