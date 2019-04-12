@@ -22,6 +22,7 @@ import time
 from typing import AnyStr, Callable, List, Optional  # noqa: F401
 
 import cv2 as cv
+import lz4
 import matplotlib.pyplot as plt
 import numpy as np
 import PIL.Image
@@ -578,6 +579,60 @@ def check_func_signature(func,      # type: Callable
         for p in params:
             if p not in func_sig.parameters:
                 raise AssertionError("function missing parameter '%s'" % p)
+
+
+def encode_data(data, approach="lz4", **kwargs):
+    """Encodes a numpy array using a given coding approach.
+
+    Args:
+        data: the numpy array to encode.
+        approach: the encoding; supports `none`, `lz4`, `jpg`, `png`.
+
+    .. seealso::
+        | :func:`thelper.utils.decode_data`
+    """
+    supported_approaches = ["none", "lz4", "jpg", "png"]
+    if approach not in supported_approaches:
+        raise AssertionError(f"unexpected approach type (got '{approach}')")
+    if approach == "none":
+        return data
+    elif approach == "lz4":
+        return lz4.frame.compress(data, **kwargs)
+    elif approach == "jpg" or approach == "jpeg":
+        ret, buf = cv.imencode(".jpg", data, **kwargs)
+    elif approach == "png":
+        ret, buf = cv.imencode(".png", data, **kwargs)
+    else:
+        raise NotImplementedError
+    if not ret:
+        raise AssertionError("failed to encode data")
+    return buf
+
+
+def decode_data(data, approach="lz4", **kwargs):
+    """Decodes a binary array using a given coding approach.
+
+    Args:
+        data: the binary array to decode.
+        approach: the encoding; supports `none`, `lz4`, `jpg`, `png`.
+
+    .. seealso::
+        | :func:`thelper.utils.encode_data`
+    """
+    supported_approach_types = ["none", "lz4", "jpg", "png"]
+    if approach not in supported_approach_types:
+        raise AssertionError(f"unexpected approach type (got '{approach}')")
+    if approach == "none":
+        return data
+    elif approach == "lz4":
+        return lz4.frame.decompress(data, **kwargs)
+    elif approach in ["jpg", "jpeg", "png"]:
+        kwargs = copy.deepcopy(kwargs)
+        if isinstance(kwargs["flags"], str):  # required arg by opencv
+            kwargs["flags"] = eval(kwargs["flags"])
+        return cv.imdecode(data, **kwargs)
+    else:
+        raise NotImplementedError
 
 
 def get_class_logger(skip=0):
