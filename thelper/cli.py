@@ -410,19 +410,7 @@ def main(args=None):
     if args.mode is None:
         ap.print_help()
         return 1
-    logging.getLogger().setLevel(logging.NOTSET)
-    thelper.logger.propagate = 0
-    logger_format = logging.Formatter("[%(asctime)s - %(name)s] %(levelname)s : %(message)s")
-    if args.log:
-        logger_fh = logging.FileHandler(args.log)
-        logger_fh.setLevel(logging.DEBUG)
-        logger_fh.setFormatter(logger_format)
-        thelper.logger.addHandler(logger_fh)
-    stream = sys.stdout if args.force_stdout else None
-    logger_ch = logging.StreamHandler(stream=stream)
-    logger_ch.setLevel(log_level)
-    logger_ch.setFormatter(logger_format)
-    thelper.logger.addHandler(logger_ch)
+    thelper.utils.init_logger(log_level, args.log, args.force_stdout)
     if args.mode == "new" or args.mode == "cl_new":
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
         config = json.load(open(args.cfg_path))

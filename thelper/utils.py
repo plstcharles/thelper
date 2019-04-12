@@ -498,6 +498,23 @@ def reporthook(count, block_size, total_size):
     sys.stdout.flush()
 
 
+def init_logger(log_level=logging.NOTSET, filename=None, force_stdout=False):
+    """Initializes the framework logger with a specific filter level, and optional file output."""
+    logging.getLogger().setLevel(logging.NOTSET)
+    thelper.logger.propagate = 0
+    logger_format = logging.Formatter("[%(asctime)s - %(name)s] %(levelname)s : %(message)s")
+    if filename is not None:
+        logger_fh = logging.FileHandler(filename)
+        logger_fh.setLevel(logging.DEBUG)
+        logger_fh.setFormatter(logger_format)
+        thelper.logger.addHandler(logger_fh)
+    stream = sys.stdout if force_stdout else None
+    logger_ch = logging.StreamHandler(stream=stream)
+    logger_ch.setLevel(log_level)
+    logger_ch.setFormatter(logger_format)
+    thelper.logger.addHandler(logger_ch)
+
+
 def resolve_import(fullname):
     # type: (AnyStr) -> AnyStr
     """
