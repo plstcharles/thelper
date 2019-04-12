@@ -195,9 +195,9 @@ class AugmentorWrapper(object):
             # recursive call for unpacking sample content w/ target keys
             if in_cvts is not None:
                 raise AssertionError("top-level call should never provide in_cvts")
-            # capture all array-like objects via __getitem__ test (if no keys are provided)
+            # capture non-scalar objects (according to numpy) if no keys are provided
             key_vals = [(k, v) for k, v in sample.items() if (
-                (self.target_keys is None and hasattr(v, "__getitem__") and not isinstance(v, str)) or
+                (self.target_keys is None and not np.isscalar(v)) or
                 (self.target_keys is not None and k in self.target_keys))]
             keys, vals = map(list, zip(*key_vals))
             lengths = [len(v) if isinstance(v, (list, tuple)) else -1 for v in vals]
@@ -428,9 +428,9 @@ class TransformWrapper(object):
             # recursive call for unpacking sample content w/ target keys
             if in_cvts is not None:
                 raise AssertionError("top-level call should never provide in_cvts")
-            # capture all array-like objects via __getitem__ test (if no keys are provided)
+            # capture non-scalar objects (according to numpy) if no keys are provided
             key_vals = [(k, v) for k, v in sample.items() if (
-                (self.target_keys is None and hasattr(v, "__getitem__") and not isinstance(v, str)) or
+                (self.target_keys is None and not np.isscalar(v)) or
                 (self.target_keys is not None and k in self.target_keys))]
             keys, vals = map(list, zip(*key_vals))
             lengths = [len(v) if isinstance(v, (list, tuple)) else -1 for v in vals]
