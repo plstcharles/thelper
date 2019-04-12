@@ -1100,9 +1100,8 @@ def is_scalar(val):
     """Returns whether the input value is a scalar according to numpy and PyTorch."""
     if np.isscalar(val):
         return True
-    if isinstance(val, torch.Tensor):
-        if val.dim() == 0:
-            return True
+    if isinstance(val, torch.Tensor) and (val.dim() == 0 or val.numel() == 1):
+        return True
     return False
 
 
