@@ -320,33 +320,37 @@ def create_parsers(config, base_transforms=None):
     datasets = {}
     tasks = []
     for dataset_name, dataset_config in config.items():
-        logger.debug("loading dataset '%s' configuration..." % dataset_name)
-        if "type" not in dataset_config:
-            raise AssertionError("missing field 'type' for instantiation of dataset '%s'" % dataset_name)
-        dataset_type = thelper.utils.import_class(dataset_config["type"])
-        dataset_params = thelper.utils.get_key_def(["params", "parameters"], dataset_config, {})
-        transforms = None
-        if "transforms" in dataset_config and dataset_config["transforms"]:
-            logger.debug("loading custom transforms for dataset '%s'..." % dataset_name)
-            transforms = thelper.transforms.load_transforms(dataset_config["transforms"])
-            if base_transforms is not None:
-                transforms = thelper.transforms.Compose([transforms, base_transforms])
-        elif base_transforms is not None:
-            transforms = base_transforms
-        if issubclass(dataset_type, thelper.data.Dataset):
-            # assume that the dataset is derived from thelper.data.parsers.Dataset (it is fully sampling-ready)
-            dataset = dataset_type(transforms=transforms, **dataset_params)
-            if "task" in dataset_config:
-                logger.warning("'task' field detected in dataset '%s' config; dataset's default task will be ignored" % dataset_name)
-                task = thelper.tasks.create_task(dataset_config["task"])
-            else:
-                task = dataset.get_task()
+        if isinstance(dataset_config, thelper.data.Dataset):
+            dataset = dataset_config
+            task = dataset.get_task()
         else:
-            if "task" not in dataset_config or not dataset_config["task"]:
-                raise AssertionError("external dataset '%s' must define task interface in its configuration dict" % dataset_name)
-            task = thelper.tasks.create_task(dataset_config["task"])
-            # assume that __getitem__ and __len__ are implemented, but we need to make it sampling-ready
-            dataset = thelper.data.ExternalDataset(dataset_type, task, transforms=transforms, **dataset_params)
+            logger.debug("loading dataset '%s' configuration..." % dataset_name)
+            if "type" not in dataset_config:
+                raise AssertionError("missing field 'type' for instantiation of dataset '%s'" % dataset_name)
+            dataset_type = thelper.utils.import_class(dataset_config["type"])
+            dataset_params = thelper.utils.get_key_def(["params", "parameters"], dataset_config, {})
+            transforms = None
+            if "transforms" in dataset_config and dataset_config["transforms"]:
+                logger.debug("loading custom transforms for dataset '%s'..." % dataset_name)
+                transforms = thelper.transforms.load_transforms(dataset_config["transforms"])
+                if base_transforms is not None:
+                    transforms = thelper.transforms.Compose([transforms, base_transforms])
+            elif base_transforms is not None:
+                transforms = base_transforms
+            if issubclass(dataset_type, thelper.data.Dataset):
+                # assume that the dataset is derived from thelper.data.parsers.Dataset (it is fully sampling-ready)
+                dataset = dataset_type(transforms=transforms, **dataset_params)
+                if "task" in dataset_config:
+                    logger.warning("'task' field detected in dataset '%s' config; dataset's default task will be ignored" % dataset_name)
+                    task = thelper.tasks.create_task(dataset_config["task"])
+                else:
+                    task = dataset.get_task()
+            else:
+                if "task" not in dataset_config or not dataset_config["task"]:
+                    raise AssertionError("external dataset '%s' must define task interface in its configuration dict" % dataset_name)
+                task = thelper.tasks.create_task(dataset_config["task"])
+                # assume that __getitem__ and __len__ are implemented, but we need to make it sampling-ready
+                dataset = thelper.data.ExternalDataset(dataset_type, task, transforms=transforms, **dataset_params)
         if task is None:
             raise AssertionError("parsed task interface should not be None anymore (old code doing something strange?)")
         tasks.append(task)
