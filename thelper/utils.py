@@ -1024,6 +1024,18 @@ def get_displayable_heatmap(array,              # type: thelper.typedefs.ArrayTy
     return heatmap
 
 
+def to_numpy(array):
+    """Converts a list or PyTorch tensor to numpy. Does nothing if already a numpy array."""
+    if isinstance(array, list):
+        return np.asarray(array)
+    elif isinstance(array, torch.Tensor):
+        return array.cpu().numpy()
+    elif isinstance(array, np.ndarray):
+        return array
+    else:
+        raise AssertionError(f"unexpected input type ({type(array)})")
+
+
 def draw_histogram(data,                # type: thelper.typedefs.ArrayType
                    bins=50,             # type: Optional[int]
                    xlabel="",           # type: Optional[thelper.typedefs.LabelType]
