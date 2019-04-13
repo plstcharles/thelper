@@ -4,6 +4,7 @@ This module contains dataset parser interfaces and base classes that define basi
 operations so that the framework can automatically interact with training data.
 """
 
+import inspect
 import logging
 import os
 from abc import abstractmethod
@@ -529,9 +530,9 @@ class ExternalDataset(Dataset):
     information.
 
     Attributes:
-        dataset_type: type of the external dataset object to instantiate,
+        dataset_type: type of the internally instantiated or provided dataset object.
         task: task object containing the key information passed in the external configuration.
-        samples: instantiation of the dataset object itself, faking the presence of a list of samples
+        samples: instantiation of the dataset object itself, faking the presence of a list of samples.
         warned_dictionary: specifies whether the user was warned about missing keys in the output
             samples dictionaries.
 
@@ -539,11 +540,11 @@ class ExternalDataset(Dataset):
         | :class:`thelper.data.parsers.Dataset`
     """
 
-    def __init__(self, dataset_type, task, transforms=None, deepcopy=False, **kwargs):
+    def __init__(self, dataset, task, transforms=None, deepcopy=False, **kwargs):
         """External dataset parser constructor.
 
         Args:
-            dataset_type: fully qualified name of the dataset object to instantiate
+            dataset: fully qualified name of the dataset object to instantiate, or the dataset itself.
             task: fully constructed task object providing key information for sample loading.
             transforms: function or object that should be applied to all loaded samples in order to
                 return the data in the requested transformed/augmented state.
@@ -553,13 +554,18 @@ class ExternalDataset(Dataset):
                 or buffer that might cause problems in multi-threaded data loaders.
         """
         super().__init__(transforms=transforms, deepcopy=deepcopy)
-        if not dataset_type or not hasattr(dataset_type, "__getitem__") or not hasattr(dataset_type, "__len__"):
+        if isinstance(dataset, str):
+            dataset = thelper.utils.import_class(dataset)
+        if dataset is None or not hasattr(dataset, "__getitem__") or not hasattr(dataset, "__len__"):
             raise AssertionError("external dataset type must implement '__getitem__' and '__len__' methods")
+        if inspect.isclass(dataset):
+            self.samples = dataset(**kwargs)
+        else:
+            self.samples = dataset
         if task is None or not isinstance(task, thelper.tasks.Task):
             raise AssertionError("task type must derive from thelper.tasks.Task")
-        self.dataset_type = dataset_type
+        self.dataset_type = type(self.samples)
         self.task = task
-        self.samples = dataset_type(**kwargs)
         self.warned_dictionary = False
 
     def _get_derived_name(self):
