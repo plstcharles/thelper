@@ -29,9 +29,20 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-class NoTransformWrapper(object):
+class NoTransform(object):
     """Used to flag some ops that should not be externally wrapped for sample/key handling."""
-    pass
+
+    def __call__(self, sample):
+        """Identity transform."""
+        return sample
+
+    def invert(self, sample):
+        """Identity transform."""
+        return sample
+
+    def __repr__(self):
+        """Provides print-friendly output for class attributes."""
+        return self.__class__.__name__ + ": {}"
 
 
 class Compose(torchvision.transforms.Compose):
@@ -950,7 +961,7 @@ class Unsqueeze(object):
         return self.__class__.__name__ + ": {{axis: {0}}}".format(self.axis)
 
 
-class Duplicator(NoTransformWrapper):
+class Duplicator(NoTransform):
     """Duplicates and returns a list of copies of the input sample.
 
     This operation is used in data augmentation pipelines that rely on probabilistic or preset transformations.
