@@ -153,6 +153,19 @@ class Task(object):
         """
         return self.meta_keys
 
+    def get_keys(self):
+        """Returns a list of all keys used to carry tensors and metadata in samples.
+
+        The keys can be of any type, as long as they can be used to index a dictionary.
+        Print-friendly types (e.g. string) are recommended for debugging. This list
+        should always contain at least one key (i.e. the input key).
+        """
+        keys = [self.get_input_key()]
+        if self.get_gt_key() is not None:
+            keys.append(self.get_gt_key())
+        keys += self.get_meta_keys()
+        return list(set(keys))
+
     def check_compat(self, other, exact=False):
         """Returns whether the current task is compatible with the provided one or not.
 

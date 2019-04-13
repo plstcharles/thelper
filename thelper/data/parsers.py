@@ -160,9 +160,7 @@ class HDF5Dataset(Dataset):
         self.subset = self.archive[subset]
         sample_count = self.subset.attrs["count"]
         self.samples = [{}] * sample_count
-        target_keys = [self.task.get_input_key(), *self.task.get_meta_keys()]
-        if self.task.get_gt_key() is not None:
-            target_keys.append(self.task.get_gt_key())
+        target_keys = self.task.get_keys()
         self.target_args = {}
         for key in target_keys:
             dset = self.subset[key]

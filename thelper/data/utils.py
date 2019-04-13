@@ -423,9 +423,7 @@ def create_hdf5(archive_path, task, train_loader, valid_loader, test_loader, com
         fd.attrs["config"] = str(config_backup)
         fd.attrs["compression"] = str(compression)
         dtype = h5py.special_dtype(vlen=np.uint8)
-        target_keys = [task.get_input_key(), *task.get_meta_keys()]
-        if task.get_gt_key() is not None:
-            target_keys.append(task.get_gt_key())
+        target_keys = task.get_keys()
 
         def create_dataset(name, max_len, array_template):
             if array_template.ndim > 1:
