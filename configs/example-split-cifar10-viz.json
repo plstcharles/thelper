@@ -5,21 +5,21 @@
             "type": "thelper.data.HDF5Dataset",
             "params": {
                 "root": "data/saved/example-split-cifar10/test-80-10-10_jpg.hdf5",
-                "set": "train"
+                "subset": "train"
             }
         },
         "cifar10_valid": {
             "type": "thelper.data.HDF5Dataset",
             "params": {
                 "root": "data/saved/example-split-cifar10/test-80-10-10_jpg.hdf5",
-                "set": "valid"
+                "subset": "valid"
             }
         },
         "cifar10_test": {
             "type": "thelper.data.HDF5Dataset",
             "params": {
                 "root": "data/saved/example-split-cifar10/test-80-10-10_jpg.hdf5",
-                "set": "test"
+                "subset": "test"
             }
         }
     },

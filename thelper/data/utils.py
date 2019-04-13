@@ -8,6 +8,10 @@ import logging
 import os
 import sys
 
+import h5py
+import numpy as np
+import tqdm
+
 import thelper.tasks
 import thelper.transforms
 import thelper.utils
@@ -356,6 +360,114 @@ def create_parsers(config, base_transforms=None):
         tasks.append(task)
         datasets[dataset_name] = dataset
     return datasets, thelper.tasks.create_global_task(tasks)
+
+
+def create_hdf5(archive_path, task, train_loader, valid_loader, test_loader, compression=None, config_backup=None):
+    """Saves the samples loaded from train/valid/test data loaders into an HDF5 archive.
+
+    The loaded minibatches are decomposed into individual samples. The keys provided via the task interface are used
+    to fetch elements (input, groundtruth, ...) from the samples, and save them in the archive. The archive will
+    contain three groups (`train`, `valid`, and `test`), and each group will contain a dataset for each element
+    originally found in the samples.
+
+    Args:
+        archive_path: path pointing where the HDF5 archive should be created.
+        task: task object that defines the input, groundtruth, and meta keys tied to elements that should be
+            parsed from loaded samples and saved in the HDF5 archive.
+        train_loader: training data loader (can be `None`).
+        valid_loader: validation data loader (can be `None`).
+        test_loader: testing data loader (can be `None`).
+        compression: the compression configuration dictionary that will be parsed to determine how sample
+            elements should be compressed. If a mapping is missing, that element will not be compressed.
+        config_backup: optional session configuration file that should be saved in the HDF5 archive.
+
+    Example compression configuration::
+
+        # the config is given as a dictionary
+        {
+            # each field is a key that corresponds to an element in each sample
+            "key1": {
+                # the 'type' identifies the compression approach to use
+                # (see thelper.utils.encode_data for more information)
+                "type": "jpg",
+                # extra parameters might be needed to encode the data
+                # (see thelper.utils.encode_data for more information)
+                "encode_params": {}
+                # these parameters are packed and kept for decoding
+                # (see thelper.utils.decode_data for more information)
+                "decode_params": {"flags": "cv.IMREAD_COLOR"}
+            },
+            "key2": {
+                # this explicitly means that no encoding should be performed
+                "type": "none"
+            },
+            ...
+            # if a key is missing, its elements will not be compressed
+        }
+
+    .. seealso::
+        | :func:`thelper.cli.split_data`
+        | :class:`thelper.data.parsers.HDF5Dataset`
+        | :func:`thelper.utils.encode_data`
+        | :func:`thelper.utils.decode_data`
+    """
+    if compression is None:
+        compression = {}
+    if config_backup is None:
+        config_backup = {}
+    with h5py.File(archive_path, "w") as fd:
+        fd.attrs["source"] = thelper.utils.get_log_stamp()
+        fd.attrs["git_sha1"] = thelper.utils.get_git_stamp()
+        fd.attrs["version"] = thelper.__version__
+        fd.attrs["task"] = str(task)
+        fd.attrs["config"] = str(config_backup)
+        fd.attrs["compression"] = str(compression)
+        dtype = h5py.special_dtype(vlen=np.uint8)
+        target_keys = [task.get_input_key(), *task.get_meta_keys()]
+        if task.get_gt_key() is not None:
+            target_keys.append(task.get_gt_key())
+
+        def create_dataset(name, max_len, array_template):
+            if array_template.ndim > 1:
+                dset = fd.create_dataset(name, shape=(max_len,), maxshape=(max_len,), dtype=dtype)
+                dset.attrs["orig_dtype"] = str(array_template.dtype)
+                dset.attrs["orig_shape"] = array_template.shape[1:]  # removes batch dim
+            else:
+                dset = fd.create_dataset(name, shape=(max_len,), maxshape=(max_len,), dtype=array_template.dtype)
+            return dset
+
+        def fill_dataset(dset, dset_idx, array_idx, array, compr, **compr_kwargs):
+            if array.ndim > 1:
+                dset[dset_idx] = np.frombuffer(thelper.utils.encode_data(array[array_idx], compr, **compr_kwargs), dtype=np.uint8)
+            else:
+                assert thelper.utils.is_scalar(array[array_idx])
+                dset[dset_idx] = array[array_idx]
+
+        def get_compr_args(key, config):
+            config = thelper.utils.get_key_def(key, config, default={})
+            compr_type = thelper.utils.get_key_def("type", config, default="none")
+            encode_params = thelper.utils.get_key_def("encode_params", config, default={})
+            return compr_type, encode_params
+
+        for loader, group in [(train_loader, "train"), (valid_loader, "valid"), (test_loader, "test")]:
+            if loader is None:
+                continue
+            max_dataset_len = len(loader) * loader.batch_size
+            datasets = {key: None for key in target_keys}
+            datasets_len = {key: 0 for key in target_keys}
+            datasets_compr = {key: get_compr_args(key, compression) for key in target_keys}
+            for batch in tqdm.tqdm(loader, desc=f"packing {group} loader"):
+                for key in target_keys:
+                    tensor = thelper.utils.to_numpy(batch[key])
+                    if datasets[key] is None:
+                        datasets[key] = create_dataset(group + "/" + key, max_dataset_len, tensor)
+                    for idx in range(tensor.shape[0]):
+                        fill_dataset(datasets[key], datasets_len[key], idx, tensor, datasets_compr[key][0], **datasets_compr[key][1])
+                        datasets_len[key] += 1
+            assert len(set(datasets_len.values())) == 1
+            fd[group].attrs["count"] = datasets_len[task.get_input_key()]
+            for key in target_keys:
+                datasets[key].resize(size=(datasets_len[key],))
 
 
 def get_class_weights(label_map, stype, invmax, maxw=float('inf'), minw=0.0, norm=True):

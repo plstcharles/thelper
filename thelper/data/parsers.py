@@ -126,15 +126,7 @@ class HDF5Dataset(Dataset):
     Attributes:
         archive: file descriptor for the opened hdf5 dataset.
         subset: hdf5 group section representing the targeted set.
-        input_dset: hdf5 dataset object representing the input data.
-        input_dtype: numpy data type indicating whether we must decompress or not.
-        input_shape: original shape of the input data tensors.
-        input_compr: compression arguments used to pack the input data.
-        gt_dset: hdf5 dataset object representing the groundtruth data.
-        gt_dtype: numpy data type indicating whether we must decompress or not.
-        gt_shape: original shape of the groundtruth data tensors.
-        gt_compr: compression arguments used to pack the groundtruth data.
-        name: name of the hdf5 dataset.
+        target_args: list decompression args required for each sample key.
         source: source logstamp of the hdf5 dataset.
         git_sha1: framework git tag of the hdf5 dataset.
         version: version of the framework that saved the hdf5 dataset.
@@ -143,6 +135,7 @@ class HDF5Dataset(Dataset):
 
     .. seealso::
         | :func:`thelper.cli.split_data`
+        | :func:`thelper.data.utils.create_hdf5`
     """
 
     def __init__(self, root, subset="train", transforms=None):
@@ -155,7 +148,6 @@ class HDF5Dataset(Dataset):
         if subset not in ["train", "valid", "test"]:
             raise AssertionError(f"unrecognized subset '{subset}'")
         self.archive = h5py.File(root, "r")
-        self.name = self.archive.attrs["name"]
         self.source = self.archive.attrs["source"]
         self.git_sha1 = self.archive.attrs["git_sha1"]
         self.version = self.archive.attrs["version"]
@@ -167,29 +159,19 @@ class HDF5Dataset(Dataset):
         self.subset = self.archive[subset]
         sample_count = self.subset.attrs["count"]
         self.samples = [{}] * sample_count
-        for meta_key in self.task.get_meta_keys():
-            meta_dset = self.subset["meta/" + meta_key]
-            if meta_dset.len() != len(self.samples):
-                raise AssertionError("unexpected/mismatched meta dataset lengths")
-            meta_dtype = meta_dset.attrs["orig_dtype"] if "orig_dtype" in meta_dset.attrs else None
-            meta_shape = meta_dset.attrs["orig_shape"] if "orig_shape" in meta_dset.attrs else None
-            meta_compr_config = thelper.utils.get_key_def(meta_key, compr_config, default={})
-            meta_compr_type = thelper.utils.get_key_def("type", meta_compr_config, default="none")
-            meta_compr_kwargs = thelper.utils.get_key_def("decode_params", meta_compr_config, default={})
-            for idx in range(sample_count):
-                self.samples[idx][meta_key] = self._unpack(meta_dset, idx, meta_dtype, meta_shape, meta_compr_type, **meta_compr_kwargs)
-        input_compr_config = thelper.utils.get_key_def("input", compr_config, default={})
-        self.input_compr = (thelper.utils.get_key_def("type", input_compr_config, default="none"),
-                            thelper.utils.get_key_def("decode_params", input_compr_config, default={}))
-        self.input_dset = self.subset["input"]
-        self.input_dtype = self.input_dset.attrs["orig_dtype"] if "orig_dtype" in self.input_dset.attrs else None
-        self.input_shape = self.input_dset.attrs["orig_shape"] if "orig_shape" in self.input_dset.attrs else None
-        gt_compr_config = thelper.utils.get_key_def("gt", compr_config, default={})
-        self.gt_compr = (thelper.utils.get_key_def("type", gt_compr_config, default="none"),
-                         thelper.utils.get_key_def("decode_params", gt_compr_config, default={}))
-        self.gt_dset = self.subset["gt"]
-        self.gt_dtype = self.gt_dset.attrs["orig_dtype"] if "orig_dtype" in self.gt_dset.attrs else None
-        self.gt_shape = self.gt_dset.attrs["orig_shape"] if "orig_shape" in self.gt_dset.attrs else None
+        target_keys = [self.task.get_input_key(), *self.task.get_meta_keys()]
+        if self.task.get_gt_key() is not None:
+            target_keys.append(self.task.get_gt_key())
+        self.target_args = {}
+        for key in target_keys:
+            dset = self.subset[key]
+            assert dset.len() == len(self.samples)
+            dtype = dset.attrs["orig_dtype"] if "orig_dtype" in dset.attrs else None
+            shape = dset.attrs["orig_shape"] if "orig_shape" in dset.attrs else None
+            compr_config = thelper.utils.get_key_def(key, compr_config, default={})
+            compr_type = thelper.utils.get_key_def("type", compr_config, default="none")
+            compr_kwargs = thelper.utils.get_key_def("decode_params", compr_config, default={})
+            self.target_args[key] = {"dset": dset, "dtype": dtype, "shape": shape, "compr_type": compr_type, "compr_kwargs": compr_kwargs}
 
     def _unpack(self, dset, idx, dtype=None, shape=None, compr_type="none", **compr_kwargs):
         if dtype is not None:
@@ -206,13 +188,8 @@ class HDF5Dataset(Dataset):
             return self._getitems(idx)
         if idx >= len(self.samples):
             raise AssertionError("sample index is out-of-range")
-        sample = {
-            self.task.get_input_key(): self._unpack(self.input_dset, idx, self.input_dtype, self.input_shape,
-                                                    self.input_compr[0], **self.input_compr[1]),
-            self.task.get_gt_key(): self._unpack(self.gt_dset, idx, self.gt_dtype, self.gt_shape,
-                                                 self.gt_compr[0], **self.gt_compr[1]),
-            **self.samples[idx]
-        }
+        sample = {key: self._unpack(args["dset"], idx, args["dtype"], args["shape"],
+                                    args["compr_type"], **args["compr_kwargs"]) for key, args in self.target_args.items()}
         if self.transforms:
             sample = self.transforms(sample)
         return sample

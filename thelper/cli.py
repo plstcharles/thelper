@@ -12,8 +12,6 @@ import json
 import logging
 import os
 
-import h5py
-import numpy as np
 import torch
 import tqdm
 
@@ -266,6 +264,7 @@ def split_data(config, save_dir):
 
     .. seealso::
         | :func:`thelper.data.utils.create_loaders`
+        | :func:`thelper.data.utils.create_hdf5`
         | :class:`thelper.data.parsers.HDF5Dataset`
     """
     logger = thelper.utils.get_func_logger()
@@ -287,65 +286,7 @@ def split_data(config, save_dir):
     if task is None:
         raise AssertionError("task interface cannot be none (it must be stored in hdf5 w/ keys)")
     archive_path = os.path.join(save_dir, archive_name)
-    with h5py.File(archive_path, "w") as fd:
-        fd.attrs["name"] = archive_name
-        fd.attrs["source"] = thelper.utils.get_log_stamp()
-        fd.attrs["git_sha1"] = thelper.utils.get_git_stamp()
-        fd.attrs["version"] = thelper.__version__
-        fd.attrs["task"] = str(task)
-        fd.attrs["config"] = str(config)
-        fd.attrs["compression"] = str(compression)
-        dtype = h5py.special_dtype(vlen=np.uint8)
-
-        def create_dataset(name, max_len, tensor):
-            if tensor.ndim > 1:
-                dset = fd.create_dataset(name, shape=(max_len,), maxshape=(max_len,), dtype=dtype)
-                dset.attrs["orig_dtype"] = str(tensor.dtype)
-                dset.attrs["orig_shape"] = tensor.shape[1:]  # removes batch dim
-            else:
-                dset = fd.create_dataset(name, shape=(max_len,), maxshape=(max_len,), dtype=tensor.dtype)
-            return dset
-
-        def fill_dataset(dset, dset_idx, tensor_idx, tensor, compr, **compr_kwargs):
-            if tensor.ndim > 1:
-                dset[dset_idx] = np.frombuffer(thelper.utils.encode_data(tensor[tensor_idx], compr, **compr_kwargs), dtype=np.uint8)
-            else:
-                dset[dset_idx] = tensor[tensor_idx]
-
-        def get_compr_args(group, config):
-            config = thelper.utils.get_key_def(group, config, default={})
-            compr_type = thelper.utils.get_key_def("type", config, default="none")
-            encode_params = thelper.utils.get_key_def("encode_params", config, default={})
-            return compr_type, encode_params
-
-        for loader, group in [(train_loader, "train"), (valid_loader, "valid"), (test_loader, "test")]:
-            if loader is None:
-                continue
-            max_dataset_len = len(loader) * loader.batch_size
-            input_dataset, gt_dataset, meta_datasets = None, None, {meta_key: None for meta_key in task.get_meta_keys()}
-            input_compr, gt_compr = get_compr_args("input", compression), get_compr_args("gt", compression)
-            curr_dataset_len = 0
-            for batch in tqdm.tqdm(loader, desc=f"packing {group} loader batches"):
-                input_tensor = thelper.utils.to_numpy(batch[task.get_input_key()])
-                gt_tensor = thelper.utils.to_numpy(batch[task.get_gt_key()])
-                meta_tensors = {meta_key: thelper.utils.to_numpy(batch[meta_key]) for meta_key in task.get_meta_keys()}
-                meta_compr = {meta_key: get_compr_args(meta_key, compression) for meta_key in task.get_meta_keys()}
-                if curr_dataset_len == 0:
-                    input_dataset = create_dataset(group + "/input", max_dataset_len, input_tensor)
-                    gt_dataset = create_dataset(group + "/gt", max_dataset_len, gt_tensor)
-                    for meta_key in task.get_meta_keys():
-                        meta_datasets[meta_key] = create_dataset(group + "/meta/" + meta_key, max_dataset_len, meta_tensors[meta_key])
-                for idx in range(input_tensor.shape[0]):
-                    fill_dataset(input_dataset, curr_dataset_len, idx, input_tensor, input_compr[0], **input_compr[1])
-                    fill_dataset(gt_dataset, curr_dataset_len, idx, gt_tensor, gt_compr[0], **gt_compr[1])
-                    for meta_key in task.get_meta_keys():
-                        fill_dataset(meta_datasets[meta_key], curr_dataset_len, idx, meta_tensors[meta_key], meta_compr[0], **meta_compr[1])
-                    curr_dataset_len += 1
-            fd[group].attrs["count"] = curr_dataset_len
-            input_dataset.resize(size=(curr_dataset_len, ))
-            gt_dataset.resize(size=(curr_dataset_len, ))
-            for meta_key in task.get_meta_keys():
-                meta_datasets[meta_key].resize(size=(curr_dataset_len, ))
+    thelper.data.create_hdf5(archive_path, task, train_loader, valid_loader, test_loader, compression, config)
     logger.debug("all done")
 
 

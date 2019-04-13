@@ -35,11 +35,11 @@
     "split": {
         "archive_name": "test-80-10-10_jpg.hdf5",
         "compression": {
-            "input": {
+            "0": {
                 "type": "jpg",
                 "decode_params": {"flags": "cv.IMREAD_COLOR"}
             },
-            "gt": {
+            "1": {
                 "type": "none"
             }
         }
