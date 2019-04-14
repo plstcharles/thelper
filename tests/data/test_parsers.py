@@ -93,7 +93,8 @@ def test_external_dataset(fake_op, mnist):
         _ = thelper.data.ExternalDataset(dataset=torchvision.datasets.MNIST, task=thelper.tasks.Task("0"))
     with pytest.raises(AssertionError):
         _ = thelper.data.ExternalDataset(dataset=torchvision.datasets.MNIST, task=None, root=test_mnist_path, train=False)
-    dataset = thelper.data.ExternalDataset(dataset=torchvision.datasets.MNIST, task=thelper.tasks.Task("0", "1"), root=test_mnist_path, train=False)
+    dataset = thelper.data.ExternalDataset(dataset=torchvision.datasets.MNIST, task=thelper.tasks.Task("0", "1"),
+                                           root=test_mnist_path, train=False)
     assert dataset._get_derived_name() == "torchvision.datasets.MNIST" or dataset._get_derived_name() == "torchvision.datasets.mnist.MNIST"
     dataset = thelper.data.ExternalDataset(dataset=mnist, task=thelper.tasks.Task("0", "1"), root=test_mnist_path, train=False)
     assert dataset._get_derived_name() == "torchvision.datasets.MNIST" or dataset._get_derived_name() == "torchvision.datasets.mnist.MNIST"
