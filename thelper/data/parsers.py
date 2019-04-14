@@ -200,6 +200,11 @@ class HDF5Dataset(Dataset):
         """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
         return self.task
 
+    def close(self):
+        """Closes the internal HDF5 file."""
+        # note: if we dont do it explicitly, it will be done by the garbage collector on destruction, but it might take time...
+        self.archive.close()
+
 
 class ClassificationDataset(Dataset):
     """Classification dataset specialization interface.
