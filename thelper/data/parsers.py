@@ -178,7 +178,10 @@ class HDF5Dataset(Dataset):
         else:
             array = dset[idx]
         if shape is not None:
-            array = array.reshape(shape)
+            if np.issubdtype(dtype, np.dtype(str).type) and len(shape) == 0:
+                array = "".join(array)  # reassemble string if needed
+            else:
+                array = array.reshape(shape)
         return array
 
     def __getitem__(self, idx):
