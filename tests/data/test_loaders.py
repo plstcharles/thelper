@@ -52,9 +52,12 @@ def test_tensor_loader_interface(tensor_dataset, num_workers):
         loader.set_epoch(None)
     loader.set_epoch(0)
     assert loader.epoch == 0
-    for batch in loader:
-        assert all([torch.all(torch.eq(rand_vals[idx], batch[1:4][idx])) for idx in range(3)])
-        break
+    for batch_idx, batch in enumerate(loader):
+        if batch_idx == 0:
+            assert all([torch.all(torch.eq(rand_vals[idx], batch[1:4][idx])) for idx in range(3)])
+        else:
+            break
+        assert batch[0].shape == (2,)
     assert loader.epoch == 1
 
 

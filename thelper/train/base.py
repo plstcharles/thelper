@@ -194,11 +194,7 @@ class Trainer:
         foldernames = [train_foldername, valid_foldername, test_foldername]
         output_paths = [None, None, None]
         for idx, (loader, foldername) in enumerate(zip(loaders, foldernames)):
-            if loader:
-                out_dir = os.path.join(output_root_dir, foldername)
-                if os.path.exists(out_dir):
-                    raise AssertionError("output session paths should be unique")
-                output_paths[idx] = out_dir
+            output_paths[idx] = os.path.join(output_root_dir, foldername) if loader else None
         self.train_output_path, self.valid_output_path, self.test_output_path = output_paths
         self.model = model
         self.config = config
