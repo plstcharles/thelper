@@ -230,7 +230,7 @@ def test_image_dataset(fake_op, fake_image_root, mocker):
     with pytest.raises(AssertionError):
         _ = dataset[len(dataset)]
     sample = dataset[len(dataset) - 1]
-    assert sample["i"] == 9 and sample["p"] == os.path.join(fake_image_root, "9.jpg")
+    assert sample["i"] == 9
     assert sample == dataset[-1]
     fake_op.side_effect = lambda x: x
     dataset.transforms = thelper.transforms.Compose([thelper.transforms.CenterCrop(size=5)])
@@ -279,7 +279,7 @@ def test_image_folder_dataset(fake_op, fake_image_folder_root, mocker):
     with pytest.raises(AssertionError):
         _ = dataset[len(dataset)]
     sample = dataset[len(dataset) - 1]
-    assert sample["i"] == 99 and sample["p"] == os.path.join(fake_image_folder_root, "9", "9.jpg")
+    assert sample["i"] == 99
     assert sample == dataset[-1]
     fake_op.side_effect = lambda x: x
     dataset.transforms = thelper.transforms.Compose([thelper.transforms.CenterCrop(size=5)])
@@ -324,7 +324,7 @@ def test_superres_dataset(fake_op, fake_image_folder_root, mocker):
     with pytest.raises(AssertionError):
         _ = dataset[len(dataset)]
     sample = dataset[len(dataset) - 1]
-    assert sample["i"] == 99 and sample["p"] == os.path.join(fake_image_folder_root, "9", "9.jpg")
+    assert sample["i"] == 99
     assert sample["p"] == dataset[-1]["p"]
     assert not fake_crop.called
     fake_resize.reset_mock()
