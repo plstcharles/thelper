@@ -45,8 +45,6 @@ class DummyDataset(thelper.data.Dataset):
         self.samples = np.arange(nb_samples)
 
     def __getitem__(self, idx):
-        if isinstance(idx, slice):
-            return self._getitems(idx)
         return {"0": torch.randn(3, 224, 224), "1": torch.randint(1000, size=())}
 
     def get_task(self):
