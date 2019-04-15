@@ -13,6 +13,9 @@ dependencies:
   - scikit-learn
   - gitpython
   - mock
+  - pytest
+  - pytest-cov
+  - pytest-mock
   - tqdm
   - shapely
   - albumentations
