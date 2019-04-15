@@ -524,39 +524,6 @@ class Trainer:
                 self._save(self.current_epoch, self.current_iter, optimizer, scheduler, save_best=new_best)
             self.current_epoch += 1
         self.logger.info("training for session '%s' done" % self.name)
-        if self.test_loader:
-            # reload 'best' model checkpoint on cpu (will remap to current device setup)
-            filename_best = os.path.join(self.checkpoint_dir, "ckpt.best.pth")
-            self.logger.info("loading best model & initializing final test run")
-            ckptdata = thelper.utils.load_checkpoint(filename_best, map_location="cpu")
-            if self.config != ckptdata["config"]:  # todo: dig into members and check only critical ones
-                raise AssertionError("could not load compatible best checkpoint to run test eval")
-            if self.save_raw:
-                self.model.load_state_dict(ckptdata["model"])
-            else:
-                self.model = ckptdata["model"]
-            best_epoch = ckptdata["epoch"]
-            model = self._upload_model(self.model, self.devices)
-            self._set_rng_state(self.test_loader.seeds, best_epoch)
-            model.eval()
-            test_writer = self._init_writer(test_writer, self.test_output_path)
-            for metric in self.test_metrics.values():
-                metric.reset()  # force reset here, we always evaluate from a clean state
-            if hasattr(self.test_loader, "set_epoch") and callable(self.test_loader.set_epoch):
-                self.test_loader.set_epoch(best_epoch)
-            self._eval_epoch(model, best_epoch, self.devices, self.test_loader,
-                             self.test_metrics, self.monitor, test_writer)
-            self._write_epoch_output(best_epoch, self.test_metrics, test_writer, self.test_output_path)
-            test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
-            prev_best_epoch_output = ckptdata["outputs"][best_epoch] if best_epoch in ckptdata["outputs"] else {}
-            self.outputs[best_epoch] = {**prev_best_epoch_output, "test/metrics": test_metric_vals}
-            for key, value in self.outputs[best_epoch].items():
-                if not isinstance(value, dict):
-                    self.logger.debug(" final result =>  {}: {}".format(str(key), value))
-                else:
-                    for subkey, subvalue in value.items():
-                        self.logger.debug(" final result =>  {}:{}: {}".format(str(key), str(subkey), subvalue))
-            self.logger.info("evaluation for session '%s' done" % self.name)
         return self.outputs
 
     def eval(self):
