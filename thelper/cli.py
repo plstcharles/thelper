@@ -181,27 +181,19 @@ def visualize_data(config):
         viz_kwargs["flip_bgr"] = thelper.utils.get_key_def("flip_bgr", viz_kwargs, False)
     redraw = None
     viz_kwargs["block"] = thelper.utils.get_key_def("block", viz_kwargs, default=True)
+    assert "quit" not in loader_map
+    choices = list(loader_map.keys()) + ["quit"]
     while True:
-        if len(loader_map) > 1:
-            choice = thelper.utils.query_string("Which loader would you like to visualize?", choices=list(loader_map.keys()))
-        else:
-            choice = next(iter(loader_map.keys()))
+        choice = thelper.utils.query_string("Which loader would you like to visualize?", choices=choices)
+        if choice == "quit":
+            break
         loader = loader_map[choice]
         if loader is None:
             logger.info("loader '%s' is empty" % choice)
-            if len(loader_map) > 1:
-                continue
-            else:
-                break
+            continue
         batch_count = len(loader)
         logger.info("initializing loader '%s' with %d batches..." % (choice, batch_count))
         for samples in tqdm.tqdm(loader):
-            if "idx" in samples:
-                indices = samples["idx"]
-                if isinstance(indices, torch.Tensor):
-                    logger.debug("(indices = %s)" % indices.tolist())
-                else:
-                    logger.debug("(indices = %s)" % indices)
             redraw = thelper.utils.draw_minibatch(samples, task, redraw=redraw, **viz_kwargs)
         logger.info("all done")
 
