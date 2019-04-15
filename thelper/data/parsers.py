@@ -600,9 +600,6 @@ class ExternalDataset(Dataset):
         elif isinstance(sample, (np.ndarray, PIL.Image.Image, torch.Tensor)):
             sample = {"0": sample}
             warn_dictionary = True
-        if not isinstance(sample, dict):
-            # could add checks to see if the sample already behaves like a dict? todo
-            raise AssertionError("no clue how to convert given data sample into dictionary")
         if warn_dictionary and not self.warned_dictionary:
             logger.warning("dataset '%s' not returning samples as dictionaries;"
                            " will blindly map elements to their indices" % self._get_derived_name())

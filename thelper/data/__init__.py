@@ -20,6 +20,7 @@ from thelper.data.parsers import ExternalDataset  # noqa: F401
 from thelper.data.parsers import HDF5Dataset  # noqa: F401
 from thelper.data.parsers import ImageDataset  # noqa: F401
 from thelper.data.parsers import ImageFolderDataset  # noqa: F401
+from thelper.data.parsers import SegmentationDataset  # noqa: F401
 from thelper.data.parsers import SuperResFolderDataset  # noqa: F401
 from thelper.data.pascalvoc import PASCALVOC  # noqa: F401
 from thelper.data.samplers import SubsetRandomSampler  # noqa: F401

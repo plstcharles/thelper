@@ -55,6 +55,8 @@ class Segmentation(Task):
             with open(class_names, "r") as fd:
                 class_names = json.load(fd)
         if isinstance(class_names, list):
+            if len(class_names) != len(set(class_names)):
+                raise AssertionError("class names should not contain duplicates")
             class_map = {class_name: class_idx for class_idx, class_name in enumerate(class_names)}
         elif isinstance(class_names, dict):
             class_map = copy.copy(class_names)
