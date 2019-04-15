@@ -12,6 +12,8 @@ test_save_path = ".pytest_cache"
 
 test_mnist_path = os.path.join(test_save_path, "mnist")
 test_hdf5_path = os.path.join(test_save_path, "test.hdf5")
+test_images_path = os.path.join(test_save_path, "images")
+test_folders_path = os.path.join(test_save_path, "folders")
 
 
 class DummyIntegerDataset(thelper.data.Dataset):
@@ -143,7 +145,9 @@ def dummy_hdf5(request):
     return dataset
 
 
-def test_hdf5_dataset(dummy_hdf5):
+@mock.patch.object(thelper.transforms.CenterCrop, "__call__")
+def test_hdf5_dataset(fake_op, dummy_hdf5):
+    fake_op.side_effect = lambda x: x
     with pytest.raises(AssertionError):
         _ = thelper.data.HDF5Dataset(test_hdf5_path, subset="valid")
     with pytest.raises(AssertionError):
@@ -159,3 +163,208 @@ def test_hdf5_dataset(dummy_hdf5):
     for idx in range(len(dummy_hdf5)):
         for key in keys:
             assert np.array_equal(dummy_hdf5[idx][key], hdf5_dataset[idx][key])
+    with pytest.raises(AssertionError):
+        _ = hdf5_dataset[len(hdf5_dataset)]
+    sliced = hdf5_dataset[5:8]
+    assert len(sliced) == 3
+    hdf5_dataset.transforms = thelper.transforms.Compose([thelper.transforms.CenterCrop(size=5)])
+    sample = hdf5_dataset[len(hdf5_dataset) - 1]
+    fake_op.assert_called_with(sample)
+    hdf5_dataset.close()
+
+
+def test_classif_dataset():
+    with pytest.raises(AssertionError):
+        _ = thelper.data.ClassificationDataset(["0", "0"], "input", "label")
+    with pytest.raises(AssertionError):
+        _ = thelper.data.ClassificationDataset(["0", "1"], None, "label")
+    with pytest.raises(AssertionError):
+        _ = thelper.data.ClassificationDataset(["0", "1"], "input", "label", "meta")
+    with pytest.raises(AssertionError):
+        _ = thelper.data.ClassificationDataset([], "input", "label")
+    dataset = thelper.data.ClassificationDataset(["0", "1"], "input", "label")
+    assert dataset.get_task().check_compat(thelper.tasks.Classification(["0", "1"], "input", "label"), exact=True)
+    with pytest.raises(NotImplementedError):
+        _ = dataset[0]
+
+
+def test_segm_dataset():
+    with pytest.raises(AssertionError):
+        _ = thelper.data.SegmentationDataset(["0", "0"], "input", "label")
+    with pytest.raises(AssertionError):
+        _ = thelper.data.SegmentationDataset(["0", "1"], None, "label")
+    with pytest.raises(AssertionError):
+        _ = thelper.data.SegmentationDataset(["0", "1"], "input", "label", "meta")
+    with pytest.raises(AssertionError):
+        _ = thelper.data.SegmentationDataset([], "input", "label")
+    dataset = thelper.data.SegmentationDataset(["0", "1"], "input", "label")
+    assert dataset.get_task().check_compat(thelper.tasks.Segmentation(["0", "1"], "input", "label"), exact=True)
+    with pytest.raises(NotImplementedError):
+        _ = dataset[0]
+
+
+@pytest.fixture
+def fake_image_root(request):
+    def fin():
+        shutil.rmtree(test_images_path, ignore_errors=True)
+    fin()
+    request.addfinalizer(fin)
+    os.makedirs(test_images_path, exist_ok=True)
+    for idx in range(10):
+        open(os.path.join(test_images_path, str(idx) + ".jpg"), "a").close()
+    open(os.path.join(test_images_path, "unknown.type"), "a").close()
+    return test_images_path
+
+
+@mock.patch.object(thelper.transforms.CenterCrop, "__call__")
+def test_image_dataset(fake_op, fake_image_root, mocker):
+    fake_imread = mocker.patch("cv2.imread")
+    fake_imread.side_effect = lambda x: x
+    with pytest.raises(AssertionError):
+        _ = thelper.data.ImageDataset(None)
+    with pytest.raises(AssertionError):
+        _ = thelper.data.ImageDataset(os.path.join(fake_image_root, "0.jpg"))
+    dataset = thelper.data.ImageDataset(fake_image_root, None, "0", "p", "i")
+    assert dataset.get_task().check_compat(thelper.tasks.Task("0", None, ["p", "i"]))
+    assert len(dataset) == 10
+    with pytest.raises(AssertionError):
+        _ = dataset[len(dataset)]
+    sample = dataset[len(dataset) - 1]
+    assert sample["i"] == 9 and sample["p"] == os.path.join(fake_image_root, "9.jpg")
+    assert sample == dataset[-1]
+    fake_op.side_effect = lambda x: x
+    dataset.transforms = thelper.transforms.Compose([thelper.transforms.CenterCrop(size=5)])
+    sample = dataset[0]
+    fake_op.assert_called_with(sample)
+    assert len(dataset[0:2]) == 2
+    with pytest.raises(AssertionError):
+        fake_imread.side_effect = lambda x: None
+        _ = dataset[0]
+
+
+@pytest.fixture
+def fake_image_folder_root(request):
+    def fin():
+        shutil.rmtree(test_folders_path, ignore_errors=True)
+        shutil.rmtree(test_images_path, ignore_errors=True)
+    fin()
+    request.addfinalizer(fin)
+    os.makedirs(test_folders_path, exist_ok=True)
+    os.makedirs(test_images_path, exist_ok=True)
+    for cls in range(10):
+        os.makedirs(os.path.join(test_folders_path, str(cls)))
+        open(os.path.join(test_folders_path, str(cls) + ".jpg"), "a").close()
+        open(os.path.join(test_images_path, str(cls) + ".jpg"), "a").close()
+        for idx in range(10):
+            open(os.path.join(test_folders_path, str(cls), str(idx) + ".jpg"), "a").close()
+        open(os.path.join(test_folders_path, str(cls), "dummy.notimg"), "a").close()
+    # 100 images total, 10 in each category, with 10 extras to be ignored in root
+    return test_folders_path
+
+
+@mock.patch.object(thelper.transforms.CenterCrop, "__call__")
+def test_image_folder_dataset(fake_op, fake_image_folder_root, mocker):
+    fake_imread = mocker.patch("cv2.imread")
+    fake_imread.side_effect = lambda x: x
+    with pytest.raises(AssertionError):
+        _ = thelper.data.ImageFolderDataset(None)
+    with pytest.raises(AssertionError):
+        _ = thelper.data.ImageFolderDataset(os.path.join(fake_image_folder_root, "0.jpg"))
+    with pytest.raises(AssertionError):
+        _ = thelper.data.ImageFolderDataset(test_images_path)
+    dataset = thelper.data.ImageFolderDataset(fake_image_folder_root, None, "0", "1", "p", "i")
+    classes = [str(idx) for idx in range(10)]
+    assert dataset.get_task().check_compat(thelper.tasks.Classification(classes, "0", "1", ["p", "i"]))
+    assert len(dataset) == 100
+    with pytest.raises(AssertionError):
+        _ = dataset[len(dataset)]
+    sample = dataset[len(dataset) - 1]
+    assert sample["i"] == 99 and sample["p"] == os.path.join(fake_image_folder_root, "9", "9.jpg")
+    assert sample == dataset[-1]
+    fake_op.side_effect = lambda x: x
+    dataset.transforms = thelper.transforms.Compose([thelper.transforms.CenterCrop(size=5)])
+    sample = dataset[0]
+    fake_op.assert_called_with(sample)
+    assert len(dataset[0:2]) == 2
+    with pytest.raises(AssertionError):
+        fake_imread.side_effect = lambda x: None
+        _ = dataset[0]
+    for folder, subfolder, files in os.walk(fake_image_folder_root):
+        for file in files:
+            if file.endswith(".jpg"):
+                os.remove(os.path.join(folder, file))
+    with pytest.raises(AssertionError):
+        _ = thelper.data.ImageFolderDataset(fake_image_folder_root)
+
+
+@mock.patch.object(thelper.transforms.CenterCrop, "__call__")
+def test_superres_dataset(fake_op, fake_image_folder_root, mocker):
+    fake_imread = mocker.patch("cv2.imread")
+    fake_imread.side_effect = lambda x: np.zeros((100, 100))
+    fake_resize = mocker.patch("cv2.resize")
+    fake_resize.side_effect = lambda x, *args, **kwargs: x
+    fake_crop = mocker.patch("thelper.utils.safe_crop")
+    fake_crop.side_effect = lambda x, *args, **kwargs: np.ones((50, 50))
+    with pytest.raises(AssertionError):
+        _ = thelper.data.SuperResFolderDataset(None)
+    with pytest.raises(AssertionError):
+        _ = thelper.data.SuperResFolderDataset(os.path.join(fake_image_folder_root, "0.jpg"))
+    with pytest.raises(AssertionError):
+        _ = thelper.data.SuperResFolderDataset(test_images_path)
+    with pytest.raises(AssertionError):
+        _ = thelper.data.SuperResFolderDataset(fake_image_folder_root, center_crop="potato")
+    _ = thelper.data.SuperResFolderDataset(fake_image_folder_root, downscale_factor=4)
+    with pytest.raises(AssertionError):
+        _ = thelper.data.SuperResFolderDataset(fake_image_folder_root, downscale_factor=0.5)
+    dataset = thelper.data.SuperResFolderDataset(fake_image_folder_root, downscale_factor=4,
+                                                 lowres_image_key="0", highres_image_key="1",
+                                                 path_key="p", idx_key="i", label_key="l")
+    assert dataset.get_task().check_compat(thelper.tasks.SuperResolution("0", "1", ["p", "i", "l"]))
+    assert len(dataset) == 100
+    with pytest.raises(AssertionError):
+        _ = dataset[len(dataset)]
+    sample = dataset[len(dataset) - 1]
+    assert sample["i"] == 99 and sample["p"] == os.path.join(fake_image_folder_root, "9", "9.jpg")
+    assert sample["p"] == dataset[-1]["p"]
+    assert not fake_crop.called
+    fake_resize.reset_mock()
+
+    def resize_check(*args, **kwargs):
+        if "fx" in kwargs and "fy" in kwargs:
+            assert kwargs["fx"] == 1 / 4
+            assert kwargs["fy"] == 1 / 4
+            assert kwargs["dsize"] == (0, 0)
+        else:
+            assert kwargs["dsize"] == (50, 50)
+        return np.zeros((25, 25))
+
+    fake_resize.side_effect = resize_check
+    dataset = thelper.data.SuperResFolderDataset(fake_image_folder_root, downscale_factor=4, center_crop=50,
+                                                 lowres_image_key="0", highres_image_key="1")
+    sample = dataset[-1]
+    assert np.array_equal(sample["0"], np.zeros((25, 25)))
+    assert np.array_equal(sample["1"], np.ones((50, 50)))
+    assert fake_resize.call_count == 2
+    assert fake_crop.call_count == 1
+    fake_resize.reset_mock()
+    dataset = thelper.data.SuperResFolderDataset(fake_image_folder_root, downscale_factor=4,
+                                                 center_crop=50, rescale_lowres=False,
+                                                 lowres_image_key="0", highres_image_key="1")
+    sample = dataset[-1]
+    assert np.array_equal(sample["0"], np.zeros((25, 25)))
+    assert np.array_equal(sample["1"], np.ones((50, 50)))
+    assert fake_resize.call_count == 1
+    fake_op.side_effect = lambda x: x
+    dataset.transforms = thelper.transforms.Compose([thelper.transforms.CenterCrop(size=5)])
+    sample = dataset[0]
+    fake_op.assert_called_with(sample)
+    assert len(dataset[0:2]) == 2
+    with pytest.raises(AssertionError):
+        fake_imread.side_effect = lambda x: None
+        _ = dataset[0]
+    for folder, subfolder, files in os.walk(fake_image_folder_root):
+        for file in files:
+            if file.endswith(".jpg"):
+                os.remove(os.path.join(folder, file))
+    with pytest.raises(AssertionError):
+        _ = thelper.data.SuperResFolderDataset(fake_image_folder_root, downscale_factor=4)
