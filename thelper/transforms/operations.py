@@ -168,12 +168,8 @@ class CustomStepCompose(torchvision.transforms.Compose):
                     raise AssertionError("stage transformations should be callable")
             self.transforms.append(transforms)
         if 0 not in self.stages:
-            print("prestages = %s" % str(self.stages))
             self.stages.insert(0, int(0))
-            print("poststages = %s" % str(self.stages))
-            print("pretransforms = %s" % str(self.transforms))
             self.transforms.insert(0, [])
-            print("posttransforms = %s" % str(self.transforms))
         self.milestones = milestones
         super().__init__(self.transforms)
         self.epoch = last_epoch + 1
@@ -202,10 +198,6 @@ class CustomStepCompose(torchvision.transforms.Compose):
 
     def __call__(self, img):
         """Applies the current stage of transformation operations to a sample."""
-        print("self.stages = %s" % str(self.stages))
-        print("self.epoch = %d" % self.epoch)
-        print("len(self.stages) - 1 = %d" % (len(self.stages) - 1))
-        print("stage_idx = %d" % self._get_stage_idx(self.epoch))
         transforms = self.transforms[self._get_stage_idx(self.epoch)]
         if isinstance(transforms, list):
             for t in transforms:

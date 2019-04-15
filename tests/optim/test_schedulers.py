@@ -21,11 +21,8 @@ def test_transform_custom_step_schedulers():
         12: 2 / 5,
         15: 1 / 2
     })
-    print("start")
     for scheduler in schedulers:
-        print("sched = %s" % str(scheduler))
         for epoch in range(100):
-            print("epoch = %s" % str(epoch))
             scheduler.step(epoch)
             closest_k = None
             for k, v in scheduler.milestones.items():
@@ -37,8 +34,6 @@ def test_transform_custom_step_schedulers():
             if closest_k is None:
                 assert sched_lr == [777]
             else:
-                print("epoch = %d" % epoch)
-                print("closest = " + str(scheduler.milestones[closest_k]))
                 assert sched_lr == [777 * scheduler.milestones[closest_k]]
             if epoch >= 18:
                 assert sched_lr == [777 * (1 / 2)]
