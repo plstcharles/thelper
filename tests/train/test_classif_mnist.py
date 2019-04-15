@@ -46,6 +46,7 @@ def config(request):
         "loaders": {
             "shuffle": True,
             "batch_size": 32,
+            "workers": 0,
             "skip_class_balancing": True,
             "base_transforms": [
                 {
