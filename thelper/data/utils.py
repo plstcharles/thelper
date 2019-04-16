@@ -315,7 +315,8 @@ def create_parsers(config, base_transforms=None):
     config = config["datasets"]  # no need to keep the full config here
     if isinstance(config, str):
         if os.path.isfile(config) and os.path.splitext(config)[1] == ".json":
-            config = json.load(open(config))
+            with open(config) as fd:
+                config = json.load(fd)
         else:
             raise AssertionError("'datasets' string should point to valid json file")
     logger.debug("loading datasets templates")

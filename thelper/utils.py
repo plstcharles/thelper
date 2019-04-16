@@ -505,7 +505,7 @@ def init_logger(log_level=logging.NOTSET, filename=None, force_stdout=False):
     logger_format = logging.Formatter("[%(asctime)s - %(name)s] %(levelname)s : %(message)s")
     if filename is not None:
         logger_fh = logging.FileHandler(filename)
-        logger_fh.setLevel(logging.DEBUG)
+        logger_fh.setLevel(logging.NOTSET)
         logger_fh.setFormatter(logger_format)
         thelper.logger.addHandler(logger_fh)
     stream = sys.stdout if force_stdout else None
@@ -964,7 +964,8 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
         if config is not None:
             config_backup_path = os.path.join(save_dir, "config.latest.json")
             if os.path.exists(config_backup_path):
-                config_backup = json.load(open(config_backup_path, "r"))
+                with open(config_backup_path, "r") as fd:
+                    config_backup = json.load(fd)
                 if config_backup != config:
                     query_msg = "Config backup in '%s' differs from config loaded through checkpoint; overwrite?" \
                                 % config_backup_path
