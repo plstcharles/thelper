@@ -46,6 +46,7 @@ class DataLoader(torch.utils.data.DataLoader):
 
     def __iter__(self):
         """Advances the epoch number for the workers initialization function."""
+        self.set_epoch(self.epoch)  # preset for all attributes
         if self.num_workers == 0:
             if "torch" in self.seeds:
                 torch.manual_seed(self.seeds["torch"] + self.epoch)
@@ -86,9 +87,7 @@ class DataLoader(torch.utils.data.DataLoader):
 
     @property
     def sample_count(self):
-        if self.sampler is not None:
-            return len(self.sampler)
-        return len(self.dataset)
+        return len(self.sampler) if self.sampler is not None else len(self.dataset)
 
 
 class _LoaderFactory(object):
@@ -107,8 +106,6 @@ class _LoaderFactory(object):
     def __init__(self, config):
         """Receives and parses the data configuration dictionary."""
         logger.debug("loading data config")
-        if not isinstance(config, dict):
-            raise AssertionError("input config should be dict")
         default_batch_size = 0
         if "batch_size" in config:
             if any([v in config for v in ["train_batch_size", "valid_batch_size", "test_batch_size"]]):
@@ -159,20 +156,18 @@ class _LoaderFactory(object):
             logger.debug("loaders will drop last batch if sample count not multiple of batch size")
         self.sampler_type = None
         self.train_sampler, self.valid_sampler, self.test_sampler = None, None, None
-        if "sampler" in config:
-            sampler_config = config["sampler"]
-            if sampler_config:
-                if "type" not in sampler_config or not sampler_config["type"]:
-                    raise AssertionError("missing 'type' field for sampler config")
-                self.sampler_type = thelper.utils.import_class(sampler_config["type"])
-                self.sampler_params = thelper.utils.get_key_def(["params", "parameters"], sampler_config, {})
-                logger.debug("will use sampler with type '%s' and config : %s" % (str(self.sampler_type), str(self.sampler_params)))
-                self.sampler_pass_labels = thelper.utils.str2bool(thelper.utils.get_key_def("pass_labels", sampler_config, False))
-                self.sampler_pass_labels_param_name = thelper.utils.get_key_def("pass_labels_param_name", sampler_config, "labels")
-                self.train_sampler = thelper.utils.str2bool(thelper.utils.get_key_def("apply_train", sampler_config, True))
-                self.valid_sampler = thelper.utils.str2bool(thelper.utils.get_key_def("apply_valid", sampler_config, False))
-                self.test_sampler = thelper.utils.str2bool(thelper.utils.get_key_def("apply_test", sampler_config, False))
-                logger.debug("global sampler will be applied as: %s" % str([self.train_sampler, self.valid_sampler, self.test_sampler]))
+        sampler_config = thelper.utils.get_key_def("sampler", config, {})
+        if sampler_config:
+            sampler_type = thelper.utils.get_key("type", sampler_config)
+            self.sampler_type = thelper.utils.import_class(sampler_type)
+            self.sampler_params = thelper.utils.get_key_def(["params", "parameters"], sampler_config, {})
+            logger.debug("will use sampler with type '%s' and config : %s" % (str(self.sampler_type), str(self.sampler_params)))
+            self.sampler_pass_labels = thelper.utils.str2bool(thelper.utils.get_key_def("pass_labels", sampler_config, False))
+            self.sampler_pass_labels_param_name = thelper.utils.get_key_def("pass_labels_param_name", sampler_config, "labels")
+            self.train_sampler = thelper.utils.str2bool(thelper.utils.get_key_def("apply_train", sampler_config, True))
+            self.valid_sampler = thelper.utils.str2bool(thelper.utils.get_key_def("apply_valid", sampler_config, False))
+            self.test_sampler = thelper.utils.str2bool(thelper.utils.get_key_def("apply_test", sampler_config, False))
+            logger.debug("global sampler will be applied as: %s" % str([self.train_sampler, self.valid_sampler, self.test_sampler]))
         train_augs_targets = ["augments", "trainvalid_augments", "train_augments"]
         valid_augs_targets = ["augments", "trainvalid_augments", "eval_augments", "validtest_augments", "valid_augments"]
         test_augs_targets = ["augments", "eval_augments", "validtest_augments", "test_augments"]
@@ -196,9 +191,8 @@ class _LoaderFactory(object):
         for name, usage in self.total_usage.items():
             if usage != 1:
                 normalize_ratios = None
-                if usage < 0:
-                    raise AssertionError("ratio should never be negative...")
-                elif 0 < usage < 1 and not math.isclose(usage, 1) and not self.skip_split_norm:
+                assert usage >= 0
+                if 0 < usage < 1 and not math.isclose(usage, 1) and not self.skip_split_norm:
                     query_msg = f"dataset split for {name} has a ratio sum less than 1; do you want to normalize the split?\n\t("
                     query_msg += f"train={self.train_split[name] if name in self.train_split else None}, "
                     query_msg += f"valid={self.valid_split[name] if name in self.valid_split else None}, "
@@ -217,16 +211,12 @@ class _LoaderFactory(object):
 
     @staticmethod
     def _get_collate_fn(val):
-        if val is torch.utils.data.dataloader.default_collate:
+        if val is torch.utils.data.dataloader.default_collate or callable(val):
             return val
         if isinstance(val, dict):
-            if "type" not in val or "params" not in val:
-                raise AssertionError("unexpected collate function parameter binding dictionary content")
-            if not isinstance(val["type"], str):
-                raise AssertionError("unexpected collate function type")
-            if not isinstance(val["params"], dict):
-                raise AssertionError("unexpected collate function params dict type")
-            return thelper.utils.import_function(val["type"], val["params"])
+            collate_fn_type = thelper.utils.get_key("type", val)
+            collate_fn_params = thelper.utils.get_key_def("params", val, None)
+            return thelper.utils.import_function(collate_fn_type, collate_fn_params)
         elif isinstance(val, str):
             return thelper.utils.import_function(val)
         else:
@@ -253,8 +243,7 @@ class _LoaderFactory(object):
         if key not in config or not config[key]:
             return {}
         split = config[key]
-        if any(ratio < 0 or ratio > 1 for ratio in split.values()):
-            raise AssertionError("split ratios in '%s' must be in [0,1]" % key)
+        assert not any(ratio < 0 for ratio in split.values())
         return split
 
     @staticmethod
@@ -492,10 +481,8 @@ class _LoaderFactory(object):
                         if scale != 1.0:
                             raise AssertionError("sequential sampler currently does not handle scale changes (turn on shuffling)")
                         sampler = thelper.data.SubsetSequentialSampler(loader_sample_idxs)
-                if not hasattr(sampler, "__len__"):
-                    raise AssertionError("sampler should always expose sample count via '__len__'")
-                if batch_size is None or batch_size <= 0:
-                    raise AssertionError("invalid batch size")
+                assert hasattr(sampler, "__len__")
+                assert batch_size > 0
                 loaders.append(DataLoader(dataset=dataset, batch_size=batch_size, sampler=sampler,
                                           num_workers=self.workers, collate_fn=collate_fn,
                                           pin_memory=self.pin_memory, drop_last=self.drop_last,

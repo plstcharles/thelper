@@ -235,7 +235,7 @@ class SubsetRandomSampler(torch.utils.data.sampler.Sampler):
 
     def set_epoch(self, epoch=0):
         """Sets the current epoch number in order to offset the RNG state for sampling."""
-        if not isinstance(epoch, int) or epoch < -1:
+        if not isinstance(epoch, int) or epoch < 0:
             raise AssertionError("invalid epoch value")
         self.epoch = epoch
 
