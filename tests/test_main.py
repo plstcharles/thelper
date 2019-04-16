@@ -72,3 +72,4 @@ def test_main_args(dummy_config, mocker):
     assert mock_query.call_count == 1
     assert mocker_getter.call_count == 1
     assert main(["resume", dummy_ckpt_path]) == 0
+    assert main(["resume", dummy_ckpt_path, "-s=" + dummy_save_path]) == 0

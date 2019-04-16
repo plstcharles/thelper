@@ -146,6 +146,8 @@ def test_resume_session(simple_config, mocker):
     fake_query = mocker.patch("thelper.utils.query_string", return_value="compat")
     thelper.cli.resume_session(ckptdata, test_save_path)
     assert fake_query.call_count == 1
+    _ = mocker.patch("thelper.utils.query_string", return_value="old")
+    thelper.cli.resume_session(ckptdata, test_save_path)
 
 
 def test_visualize_data(simple_config, mocker):
