@@ -367,7 +367,7 @@ def main(args=None):
                 save_dir = thelper.utils.query_string("Please provide the path to where the resumed session output should be saved:")
                 save_dir = thelper.utils.get_save_dir(save_dir, dir_name="", config=override_config)
         resume_session(ckptdata, save_dir, config=override_config, eval_only=args.eval_only)
-    elif args.mode == "viz" or args.mode == "annot" or args.mode == "split":
+    else:
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
         with open(args.cfg_path) as fd:
             config = json.load(fd)
@@ -375,7 +375,7 @@ def main(args=None):
             visualize_data(config)
         elif args.mode == "annot":
             annotate_data(config, args.save_dir)
-        elif args.mode == "split":
+        else:  # if args.mode == "split":
             split_data(config, args.save_dir)
     return 0
 
