@@ -275,8 +275,6 @@ def split_data(config, save_dir):
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
     logger.debug("session will be saved at '%s'" % os.path.abspath(save_dir).replace("\\", "/"))
     task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config, save_dir)
-    if task is None:
-        raise AssertionError("task interface cannot be none (it must be stored in hdf5 w/ keys)")
     archive_path = os.path.join(save_dir, archive_name)
     thelper.data.create_hdf5(archive_path, task, train_loader, valid_loader, test_loader, compression, config)
     logger.debug("all done")
@@ -286,8 +284,7 @@ def main(args=None):
     """Main entrypoint to use with console applications.
 
     This function parses command line arguments and dispatches the execution based on the selected
-    operating mode (new session, resume session, or visualize). Run with ``--help`` for information
-    on the available arguments.
+    operating mode. Run with ``--help`` for information on the available arguments.
 
     .. warning::
         If you are trying to resume a session that was previously executed using a now unavailable GPU,
@@ -298,11 +295,14 @@ def main(args=None):
         | :func:`thelper.cli.create_session`
         | :func:`thelper.cli.resume_session`
         | :func:`thelper.cli.visualize_data`
+        | :func:`thelper.cli.annotate_data`
+        | :func:`thelper.cli.split_data`
     """
     ap = argparse.ArgumentParser(description='thelper model trainer application')
     ap.add_argument("--version", default=False, action="store_true", help="prints the version of the library and exits")
     ap.add_argument("-l", "--log", default=None, type=str, help="path to the top-level log file (default: None)")
     ap.add_argument("-v", "--verbose", action="count", default=0, help="set logging terminal verbosity level (additive)")
+    ap.add_argument("--silent", action="store_true", default=False, help="deactivates all console logging activities")
     ap.add_argument("--force-stdout", action="store_true", default=False, help="force logging output to stdout instead of stderr")
     subparsers = ap.add_subparsers(title="Operating mode", dest="mode")
     new_ap = subparsers.add_parser("new", help="creates a new session from a config file")
@@ -326,32 +326,25 @@ def main(args=None):
     split_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session save directory)")
     split_ap.add_argument("save_dir", type=str, help="path to the root directory where the split hdf5 dataset archive should be saved")
     args = ap.parse_args(args=args)
-    if args.verbose == 0:
-        args.verbose = 3
-    if args.verbose > 2:
-        log_level = logging.NOTSET
-    elif args.verbose > 1:
-        log_level = logging.DEBUG
-    elif args.verbose == 1:
-        log_level = logging.INFO
-    else:
-        log_level = logging.WARNING
     if args.version:
         print(thelper.__version__)
         return 0
     if args.mode is None:
         ap.print_help()
         return 1
+    if args.silent and args.verbose > 0:
+        raise AssertionError("contradicting verbose/silent arguments provided")
+    log_level = logging.INFO if args.verbose < 1 else logging.DEBUG if args.verbose < 2 else logging.NOTSET
     thelper.utils.init_logger(log_level, args.log, args.force_stdout)
     if args.mode == "new" or args.mode == "cl_new":
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
-        config = json.load(open(args.cfg_path))
+        with open(args.cfg_path) as fd:
+            config = json.load(fd)
         if args.mode == "cl_new":
-            trainer_config = config["trainer"] if "trainer" in config else None
-            if trainer_config is not None:
-                if ("train_device" in trainer_config or "valid_device" in trainer_config or
-                        "test_device" in trainer_config or "device" in trainer_config):
-                    raise AssertionError("cannot specify device in config for cluster sessions, it is determined at runtime")
+            trainer_config = thelper.utils.get_key_def("trainer", config, {})
+            device = thelper.utils.get_key_def("device", trainer_config, None)
+            if device is not None:
+                raise AssertionError("cannot specify device in config for cluster sessions, it is determined at runtime")
         create_session(config, args.save_dir)
     elif args.mode == "resume":
         ckptdata = thelper.utils.load_checkpoint(args.ckpt_path, map_location=args.map_location,
@@ -359,7 +352,8 @@ def main(args=None):
         override_config = None
         if args.override_cfg:
             thelper.logger.debug("parsing override config at '%s'" % args.override_cfg)
-            override_config = json.load(open(args.override_cfg))
+            with open(args.override_cfg) as fd:
+                override_config = json.load(fd)
         save_dir = args.save_dir
         if save_dir is None:
             ckpt_dir_path = os.path.dirname(os.path.abspath(args.ckpt_path)) \
@@ -369,24 +363,14 @@ def main(args=None):
                 save_dir = os.path.abspath(os.path.join(ckpt_dir_path, ".."))
             elif os.path.isdir(os.path.join(ckpt_dir_path, "../logs")):
                 save_dir = os.path.abspath(os.path.join(ckpt_dir_path, "../.."))
+            else:
+                save_dir = thelper.utils.query_string("Please provide the path to where the resumed session output should be saved:")
+                save_dir = thelper.utils.get_save_dir(save_dir, dir_name="", config=override_config)
         resume_session(ckptdata, save_dir, config=override_config, eval_only=args.eval_only)
     elif args.mode == "viz" or args.mode == "annot" or args.mode == "split":
-        if os.path.isdir(args.cfg_path):
-            thelper.logger.debug("will search directory '%s' for a config to load..." % args.cfg_path)
-            search_cfg_names = ["config.json", "config.latest.json", "test.json"]
-            cfg_path = None
-            for search_cfg_name in search_cfg_names:
-                search_cfg_path = os.path.join(args.cfg_path, search_cfg_name)
-                if os.path.isfile(search_cfg_path):
-                    cfg_path = search_cfg_path
-                    break
-            if cfg_path is None or not os.path.isfile(cfg_path):
-                raise AssertionError("no valid config found in dir '%s'" % args.cfg_path)
-            config = json.load(open(cfg_path))
-        else:
-            if not os.path.isfile(args.cfg_path):
-                raise AssertionError("no config file found at path '%s'" % args.cfg_path)
-            config = json.load(open(args.cfg_path))
+        thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
+        with open(args.cfg_path) as fd:
+            config = json.load(fd)
         if args.mode == "viz":
             visualize_data(config)
         elif args.mode == "annot":
