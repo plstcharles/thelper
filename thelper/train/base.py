@@ -425,7 +425,7 @@ class Trainer:
         self.logger.debug("loss: %s" % str(loss))
         self.logger.debug("optimizer: %s" % str(optimizer))
         latest_loss = math.inf
-        train_writer, valid_writer, test_writer = None, None, None
+        train_writer, valid_writer = None, None
         while self.current_epoch < self.epochs:
             train_writer = self._init_writer(train_writer, self.train_output_path)
             self.logger.info("at epoch#%d for '%s' (dev=%s)" % (self.current_epoch, self.name, str(self.devices)))

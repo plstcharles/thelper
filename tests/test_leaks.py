@@ -8,7 +8,6 @@ import torch
 import thelper
 import thelper.nn.resnet
 
-
 test_save_path = ".pytest_cache"
 test_classif_leak_name = "test-classif-leak"
 
@@ -17,7 +16,7 @@ test_classif_leak_path = os.path.join(test_save_path, test_classif_leak_name)
 
 def check_gpu_compat():
     return torch.cuda.is_available() and \
-           torch.cuda.get_device_properties(torch.device("cuda")).total_memory >= 4 * 1024 * 1024 * 1024
+        torch.cuda.get_device_properties(torch.device("cuda")).total_memory >= 4 * 1024 * 1024 * 1024
 
 
 @pytest.mark.skipif(not check_gpu_compat(), reason="test requires GPU w/ >4GB RAM")
