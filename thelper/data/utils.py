@@ -3,6 +3,7 @@
 This module contains utility functions and tools used to instantiate data loaders and parsers.
 """
 
+import inspect
 import json
 import logging
 import os
@@ -341,7 +342,12 @@ def create_parsers(config, base_transforms=None):
                 transforms = base_transforms
             if issubclass(dataset_type, thelper.data.Dataset):
                 # assume that the dataset is derived from thelper.data.parsers.Dataset (it is fully sampling-ready)
-                dataset = dataset_type(transforms=transforms, **dataset_params)
+                dataset_sig = inspect.signature(dataset_type)
+                if "config" in dataset_sig.parameters:  # pragma: no cover
+                    # @@@@ for backward compatibility only, will be removed in v0.3
+                    dataset = dataset_type(transforms=transforms, config=dataset_params)
+                else:
+                    dataset = dataset_type(transforms=transforms, **dataset_params)
                 if "task" in dataset_config:
                     logger.warning("'task' field detected in dataset '%s' config; dataset's default task will be ignored" % dataset_name)
                     task = thelper.tasks.create_task(dataset_config["task"])
