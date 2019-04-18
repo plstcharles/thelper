@@ -181,7 +181,7 @@ def test_classif_split_no_balancing(class_split_config):
     assert not bool(set(valid_samples) & set(test_samples))
 
 
-def collate_fn(*args, **kwargs):
+def collate_fn(*args, **kwargs):  # pragma: no cover
     return torch.utils.data.dataloader.default_collate(*args, **kwargs)
 
 

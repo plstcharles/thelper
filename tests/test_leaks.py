@@ -43,7 +43,7 @@ class DummyDataset(thelper.data.Dataset):
         super().__init__(transforms=transforms, deepcopy=deepcopy)
         self.samples = np.arange(nb_samples)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx):  # pragma: no cover
         return {"0": torch.randn(3, 224, 224), "1": torch.randint(1000, size=())}
 
     def get_task(self):
