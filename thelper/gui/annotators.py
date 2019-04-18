@@ -72,9 +72,6 @@ class Annotator:
         repover = thelper.__version__ + ":" + thelper.utils.get_git_stamp()
         self.logger.debug("logstamp = %s" % logstamp)
         self.logger.debug("version = %s" % repover)
-        config_backup_path = os.path.join(save_dir, "logs", "config." + logstamp + ".json")
-        with open(config_backup_path, "w") as fd:
-            json.dump(config, fd, indent=4, sort_keys=False)
 
     @abc.abstractmethod
     def run(self):

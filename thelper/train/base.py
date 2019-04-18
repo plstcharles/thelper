@@ -295,10 +295,8 @@ class Trainer:
     def _init_writer(self, writer, path):
         if self.use_tbx and not writer:
             writer = self.tbx.SummaryWriter(log_dir=path, comment=self.name)
-            config_str = json.dumps(self.config, indent=4, sort_keys=False)
-            writer.add_text("config", config_str)
-            with open(os.path.join(path, "config.json"), "w") as fd:
-                fd.write(config_str)
+            writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False, default=lambda x: str(x)))
+            thelper.utils.save_config(self.config, os.path.join(path, "config.json"))
         return writer
 
     @staticmethod

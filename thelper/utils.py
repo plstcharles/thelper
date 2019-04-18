@@ -15,6 +15,7 @@ import json
 import logging
 import math
 import os
+import pickle
 import platform
 import re
 import sys
@@ -917,7 +918,7 @@ def query_string(question, choices=None, default=None, allow_empty=False, bypass
         sys.stdout.write("Please respond with a valid string.\n")
 
 
-def get_save_dir(out_root, dir_name, config=None, resume=False):
+def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".json"):
     """Returns a directory path in which the app can save its data.
 
     If a folder with name ``dir_name`` already exists in the directory ``out_root``, then the user will be
@@ -932,6 +933,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
             written to the save directory in json format to test writing. Default is ``None``.
         resume: specifies whether this session is new, or resumed from an older one (in the latter
             case, overwriting is allowed, and the user will never have to choose a new folder)
+        backup_ext: extension to use when creating configuration file backups.
 
     Returns:
         The path to the created save directory for this session.
@@ -955,14 +957,12 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
         if config is not None:
-            config_backup_path = os.path.join(save_dir, "config.latest.json")
-            with open(config_backup_path, "w") as fd:
-                json.dump(config, fd, indent=4, sort_keys=False)
+            save_config(config, os.path.join(save_dir, "config.latest" + backup_ext))
     else:
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
         if config is not None:
-            config_backup_path = os.path.join(save_dir, "config.latest.json")
+            config_backup_path = os.path.join(save_dir, "config.latest" + backup_ext)
             if os.path.exists(config_backup_path):
                 with open(config_backup_path, "r") as fd:
                     config_backup = json.load(fd)
@@ -976,12 +976,37 @@ def get_save_dir(out_root, dir_name, config=None, resume=False):
                     else:
                         func_logger.error("config mismatch with previous run; user aborted")
                         sys.exit(1)
-            with open(config_backup_path, "w") as fd:
-                json.dump(config, fd, indent=4, sort_keys=False)
+            save_config(config, config_backup_path)
     logs_dir = os.path.join(save_dir, "logs")
     if not os.path.exists(logs_dir):
         os.mkdir(logs_dir)
+    save_config(config, os.path.join(logs_dir, "config." + thelper.utils.get_log_stamp() + backup_ext))
     return save_dir
+
+
+def save_config(config, path, force_convert=True):
+    """Saves the given session/object configuration dictionary to the provided path.
+
+    The type of file that is created is based on the extension specified in the path. If the file
+    cannot hold some of the objects within the configuration, they will be converted to strings before
+    serialization, unless `force_convert` is set to `False` (in which case the function will raise
+    an exception).
+
+    Args:
+        config: the session/object configuration dictionary to save.
+        path: the path specifying where to create the output file. The extension used will determine
+            what type of backup to create (e.g. Pickle = .pkl, JSON = .json).
+        force_convert: specifies whether non-serializable types should be converted if necessary.
+    """
+    if path.endswith(".json"):
+        serializer = (lambda x: str(x)) if force_convert else None
+        with open(path, "w") as fd:
+            json.dump(config, fd, indent=4, sort_keys=False, default=serializer)
+    elif path.endswith(".pkl"):
+        with open(path, "w") as fd:
+            pickle.dump(config, fd)
+    else:
+        raise AssertionError("unknown output file type")
 
 
 def safe_crop(image, tl, br, bordertype=cv.BORDER_CONSTANT, borderval=0, force_copy=False):

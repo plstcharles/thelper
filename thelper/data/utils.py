@@ -184,9 +184,6 @@ def create_loaders(config, save_dir=None):
         data_logger_fh.setFormatter(data_logger_format)
         logger.addHandler(data_logger_fh)
         logger.info("created data log for session '%s'" % session_name)
-        config_backup_path = os.path.join(data_logger_dir, "config." + logstamp + ".json")
-        with open(config_backup_path, "w") as fd:
-            json.dump(config, fd, indent=4, sort_keys=False)
     logger.debug("loading data usage config")
     # todo: 'data_config' field is deprecated, might be removed later
     if "data_config" in config:
