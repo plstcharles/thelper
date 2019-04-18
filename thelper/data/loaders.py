@@ -259,8 +259,7 @@ class _LoaderFactory(object):
 
     def _get_raw_split(self, indices):
         for name in self.total_usage:
-            if name not in indices:
-                raise AssertionError("dataset '%s' does not exist" % name)
+            assert name in indices, f"dataset '{name}' does not exist"
         _indices, train_idxs, valid_idxs, test_idxs = {}, {}, {}, {}
         for name, indices in indices.items():
             _indices[name] = copy.deepcopy(indices)
@@ -337,8 +336,8 @@ class _LoaderFactory(object):
         must_split = {}
         global_size = 0
         for dataset_name, dataset in datasets.items():
-            if not isinstance(dataset, thelper.data.Dataset) and not isinstance(dataset, thelper.data.ExternalDataset):
-                raise AssertionError("unexpected dataset type for '%s'" % dataset_name)
+            assert isinstance(dataset, thelper.data.Dataset) or isinstance(dataset, thelper.data.ExternalDataset), \
+                f"unexpected dataset type for '{dataset_name}'"
             dataset_sizes[dataset_name] = len(dataset)
             global_size += dataset_sizes[dataset_name]
             # if a single dataset is used in more than a single loader, we cannot skip the rebalancing below
@@ -368,8 +367,7 @@ class _LoaderFactory(object):
                         time.sleep(0.01)
                         samples = []
                         for sample in tqdm.tqdm(dataset):
-                            if label_key not in sample:
-                                raise AssertionError("could not find label key ('%s') in sample dict" % label_key)
+                            assert label_key in sample, f"could not find label key ('{label_key}') in sample dict"
                             samples.append({label_key: sample[label_key]})
                         sample_maps[dataset_name] = task.get_class_sample_map(samples, unset_class_key)
                 elif isinstance(dataset, thelper.data.Dataset):
@@ -471,15 +469,14 @@ class _LoaderFactory(object):
                         sampler_params["seeds"] = self.seeds
                     if "scale" in sampler_sig.parameters:
                         sampler_params["scale"] = scale
-                    elif scale != 1.0:
-                        raise AssertionError("could not apply scale factor to sample with type '%s'" % str(self.sampler_type))
+                    else:
+                        assert scale == 1.0, f"could not apply scale factor to sample with type '{str(self.sampler_type)}'"
                     sampler = self.sampler_type(loader_sample_idxs, **self.sampler_params)
                 else:
                     if shuffle:
                         sampler = thelper.data.SubsetRandomSampler(loader_sample_idxs, seeds=self.seeds, scale=scale)
                     else:
-                        if scale != 1.0:
-                            raise AssertionError("sequential sampler currently does not handle scale changes (turn on shuffling)")
+                        assert scale == 1.0, "sequential sampler currently does not handle scale changes (turn on shuffling)"
                         sampler = thelper.data.SubsetSequentialSampler(loader_sample_idxs)
                 assert hasattr(sampler, "__len__")
                 assert batch_size > 0
