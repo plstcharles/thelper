@@ -11,7 +11,11 @@ Starting with v0.2.5, the latest stable version of the framework can be installe
 dependencies) via `Anaconda <https://docs.anaconda.com/anaconda/install/>`_. In a conda environment,
 simply enter::
 
-  $ conda install -c plstcharles thelper
+  $ conda config --env --add channels plstcharles
+  $ conda config --env --add channels conda-forge
+  $ conda config --env --add channels pytorch
+  $ conda config --env --add channels albumentations
+  $ conda install thelper
 
 This should install the latest stable version of the framework on Windows and Linux, for Python
 3.6 or 3.7. You can check the release notes `on GitHub`__.
