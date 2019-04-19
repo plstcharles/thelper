@@ -175,8 +175,6 @@ def test_hdf5_dataset(fake_op, dummy_hdf5):
 
 def test_classif_dataset():
     with pytest.raises(AssertionError):
-        _ = thelper.data.ClassificationDataset(["0", "0"], "input", "label")
-    with pytest.raises(AssertionError):
         _ = thelper.data.ClassificationDataset(["0", "1"], None, "label")
     with pytest.raises(AssertionError):
         _ = thelper.data.ClassificationDataset(["0", "1"], "input", "label", "meta")

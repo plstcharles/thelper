@@ -48,12 +48,18 @@ class Classification(Task):
         if isinstance(class_names, str) and os.path.exists(class_names):
             with open(class_names, "r") as fd:
                 self.class_names = json.load(fd)
+        if isinstance(self.class_names, dict):
+            assert all([idx in self.class_names or str(idx) in self.class_names for idx in range(len(self.class_names))])
+            self.class_names = [thelper.utils.get_key([idx, str(idx)], self.class_names) for idx in range(len(self.class_names))]
         if not isinstance(self.class_names, list):
             raise AssertionError("expected class names to be provided as a list")
         if len(self.class_names) < 1:
             raise AssertionError("should have at least one class!")
         if len(self.class_names) != len(set(self.class_names)):
-            raise AssertionError("class names should not contain duplicates")
+            # no longer throwing here, image net possesses such a case ('crane#134' and 'crane#517')
+            logger.warning("found duplicated name in class list, might be a data entry problem...")
+            self.class_names = [name if self.class_names.count(name) == 1 else name + "#" + str(idx)
+                                for idx, name in enumerate(self.class_names)]
 
     def get_class_names(self):
         """Returns the list of class names to be predicted by the model."""
