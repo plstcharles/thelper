@@ -125,6 +125,7 @@ class Trainer:
         """Receives the trainer configuration dictionary, parses it, and sets up the session."""
         if not model or not loaders or not config:
             raise AssertionError("missing input args")
+        assert isinstance(model, (thelper.nn.Module, torch.nn.Module)), "unknown model object type"
         train_loader, valid_loader, test_loader = loaders
         if not (train_loader or valid_loader or test_loader):
             raise AssertionError("must provide at least one loader with available data")
@@ -247,20 +248,15 @@ class Trainer:
                 self.monitor_best = thelper.optim.Metric.minimize
             else:
                 raise AssertionError("monitored metric does not return proper optimization goal")
-        if ckptdata is not None:
-            self.monitor_best = ckptdata["monitor_best"]
-            self.monitor_best_epoch = ckptdata["monitor_best_epoch"] if "monitor_best_epoch" in ckptdata else -1
-            self.optimizer_state = ckptdata["optimizer"] if "optimizer" in ckptdata else None
-            self.scheduler_state = ckptdata["scheduler"] if "scheduler" in ckptdata else None
-            self.current_iter = ckptdata["iter"]
-            self.current_epoch = ckptdata["epoch"]
-            self.outputs = ckptdata["outputs"]
-        else:
-            self.optimizer_state = None
-            self.scheduler_state = None
-            self.current_iter = 0
-            self.current_epoch = 0
-            self.outputs = {}
+        if ckptdata is None:
+            ckptdata = {}
+        self.monitor_best = thelper.utils.get_key_def("monitor_best", ckptdata, self.monitor_best)
+        self.monitor_best_epoch = thelper.utils.get_key_def("monitor_best_epoch", ckptdata, -1)
+        self.optimizer_state = thelper.utils.get_key_def("optimizer", ckptdata, None)
+        self.scheduler_state = thelper.utils.get_key_def("scheduler", ckptdata, None)
+        self.current_iter = thelper.utils.get_key_def("iter", ckptdata, 0)
+        self.current_epoch = thelper.utils.get_key_def("epoch", ckptdata, 0)
+        self.outputs = thelper.utils.get_key_def("outputs", ckptdata, {})
         # callbacks (see ``thelper.typedefs.IterCallbackType`` and ``thelper.typedefs.IterCallbackParams`` definitions)
         self.train_iter_callback = thelper.utils.get_key_def(
             "train_iter_callback", trainer_config, None)    # type: typ.IterCallbackType

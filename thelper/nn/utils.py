@@ -62,6 +62,7 @@ def create_model(config, task, save_dir=None, ckptdata=None):
         | :class:`thelper.nn.utils.Module`
         | :class:`thelper.nn.utils.ExternalModule`
         | :class:`thelper.tasks.utils.Task`
+        | :func:`thelper.utils.load_checkpoint`
     """
     if save_dir is not None:
         modules_logger_path = os.path.join(save_dir, "logs", "modules.log")
@@ -69,12 +70,11 @@ def create_model(config, task, save_dir=None, ckptdata=None):
         modules_logger_fh = logging.FileHandler(modules_logger_path)
         modules_logger_fh.setFormatter(modules_logger_format)
         logger.addHandler(modules_logger_fh)
-        logger.info("created modules log for session '%s'" % config["name"])
     logger.debug("loading model")
-    if "model" not in config or not config["model"]:
-        raise AssertionError("config missing 'model' field")
-    model_config = config["model"]
-    if "ckptdata" in model_config:
+    model_config = None
+    if config is not None:
+        model_config = config["model"] if "model" in config else config
+    if model_config is not None and "ckptdata" in model_config:
         if ckptdata is not None:
             logger.warning("config asked to reload ckpt from path, but ckpt already loaded from elsewhere")
         else:
@@ -91,12 +91,16 @@ def create_model(config, task, save_dir=None, ckptdata=None):
         if "name" not in ckptdata or not isinstance(ckptdata["name"], str):
             raise AssertionError("invalid checkpoint, cannot reload previous session name")
         new_task = task  # the 'new task' will later be applied to specialize the model, once it is loaded
-        if "model" not in ckptdata or not isinstance(ckptdata["model"], (Module, dict)):
+        supported_model_types = (torch.nn.Module, thelper.nn.Module, torch.jit.ScriptModule, dict)
+        if "model" not in ckptdata or not isinstance(ckptdata["model"], supported_model_types):
             raise AssertionError("invalid checkpoint, cannot reload previous model state")
-        if isinstance(ckptdata["model"], Module):
+        if isinstance(ckptdata["model"], torch.jit.ScriptModule):
+            logger.debug("loading model trace from session '%s'" % ckptdata["name"])
+            model = ckptdata["model"]
+        elif isinstance(ckptdata["model"], (torch.nn.Module, thelper.nn.Module)):
             logger.debug("loading model object directly from session '%s'" % ckptdata["name"])
             model = ckptdata["model"]
-            if model.get_name() != ckptdata["model_type"]:
+            if hasattr(model, "get_name") and model.get_name() != ckptdata["model_type"]:
                 raise AssertionError("old model type mismatch with ckptdata type")
         elif isinstance(ckptdata["model"], dict):
             logger.debug("loading model type/params from session '%s'" % ckptdata["name"])
@@ -125,6 +129,8 @@ def create_model(config, task, save_dir=None, ckptdata=None):
                 if old_model_type != model_type:
                     raise AssertionError("old model config 'type' field mismatch with ckptdata type")
     else:
+        if model_config is None:
+            raise AssertionError("must provide model config and/or checkpoint data to create a model")
         if not isinstance(task, thelper.tasks.Task):
             raise AssertionError("bad task type passed to create_model")
         logger.debug("loading model type/params current config")
@@ -134,6 +140,9 @@ def create_model(config, task, save_dir=None, ckptdata=None):
         if isinstance(model_config["type"], str):
             model_type = thelper.utils.import_class(model_type)
         model_params = thelper.utils.get_key_def("params", model_config, {})
+        model_state = thelper.utils.get_key_def(["weights", "state", "state_dict"], model_config, None)
+        if model_state is not None and isinstance(model_state, str) and os.path.isfile(model_state):
+            model_state = torch.load(model_state)
     if model is None:
         # if model not already loaded from checkpoint, instantiate it fully from type/params/task
         if model_type is None or model_params is None:
@@ -153,8 +162,11 @@ def create_model(config, task, save_dir=None, ckptdata=None):
     if new_task is not None:
         logger.debug("previous model task = %s" % str(model.task))
         logger.debug("refreshing model for new task = %s" % str(new_task))
-        model.set_task(new_task)
-    if model.config is None:
+        if hasattr(model, "set_task"):
+            model.set_task(new_task)
+        else:
+            logger.warning("model missing 'set_task' interface function")
+    if hasattr(model, "config") and model.config is None:
         model.config = model_params
     if hasattr(model, "summary"):
         model.summary()
@@ -312,4 +324,4 @@ class ExternalClassifModule(ExternalModule):
                 )
                 self.model.num_classes = self.nb_classes
         else:
-            raise AssertionError("could not reconnect fully connected layer for new classes")
+            logger.warning("could not reconnect fully connected layer for new classes; hope your model is already compatible...")

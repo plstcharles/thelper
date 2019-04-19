@@ -174,8 +174,10 @@ def load_checkpoint(ckpt,                      # type: thelper.typedefs.Checkpoi
             raise AssertionError("could not find valid checkpoint at '%s'" % ckpt)
     if isinstance(ckpt, str):
         logger.debug("parsing checkpoint at '%s'" % ckpt)
+        basepath = os.path.dirname(os.path.abspath(ckpt))
     else:
         logger.debug("parsing checkpoint provided via file object")
+        basepath = os.path.dirname(os.path.abspath(ckpt.name))
     ckptdata = torch.load(ckpt, map_location=map_location)
     if not isinstance(ckptdata, dict):
         raise AssertionError("unexpected checkpoint data type")
@@ -207,6 +209,18 @@ def load_checkpoint(ckpt,                      # type: thelper.typedefs.Checkpoi
                 logger.warning("will attempt to load checkpoint anyway (might crash later due to incompatibilities)")
             elif answer == "migrate":
                 ckptdata = migrate_checkpoint(ckptdata)
+    # load model trace if needed (we do it here since we can locate the neighboring file)
+    if "model" in ckptdata and isinstance(ckptdata["model"], str):
+        trace_path = None
+        if os.path.isfile(ckptdata["model"]):
+            trace_path = ckptdata["model"]
+        elif os.path.isfile(os.path.join(basepath, ckptdata["model"])):
+            trace_path = os.path.join(basepath, ckptdata["model"])
+        if trace_path is not None:
+            if trace_path.endswith(".pth"):
+                ckptdata["model"] = torch.load(trace_path, map_location=map_location)
+            elif trace_path.endswith(".zip"):
+                ckptdata["model"] = torch.jit.load(trace_path, map_location=map_location)
     return ckptdata
 
 

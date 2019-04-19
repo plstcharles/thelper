@@ -6,6 +6,8 @@ This module contains utilities and tools used to instantiate training sessions.
 import logging
 from typing import AnyStr, Optional  # noqa: F401
 
+import torch
+
 import thelper.utils
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,8 @@ def create_trainer(session_name,    # type: AnyStr
         | :class:`thelper.train.trainers.Trainer`
 
     """
+    if isinstance(model, torch.jit.ScriptModule):
+        raise AssertionError("cannot train model trace, must derive from torch.nn.Module")
     if "trainer" not in config or not config["trainer"]:
         raise AssertionError("config missing 'trainer' field")
     trainer_config = config["trainer"]
