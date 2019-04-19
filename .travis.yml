@@ -1,6 +1,6 @@
 language: python
 python:
-  - "3.6"
+  - "3.7"
 sudo: false
 cache: pip
 env:
@@ -10,7 +10,7 @@ env:
   matrix:
     - TOXENV=check
     - TOXENV=docs
-    - TOXENV=py36,report
+    - TOXENV=py37,report
 before_install:
   - python --version
   - uname -a
