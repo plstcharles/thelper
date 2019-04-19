@@ -39,6 +39,7 @@ def test_main_args(dummy_config, mocker):
     _ = mocker.patch("thelper.cli.visualize_data")
     _ = mocker.patch("thelper.cli.annotate_data")
     _ = mocker.patch("thelper.cli.split_data")
+    _ = mocker.patch("thelper.cli.export_model")
     from thelper.cli import main
     assert main([]) == 1
     assert main(["--version"]) == 0
@@ -62,6 +63,7 @@ def test_main_args(dummy_config, mocker):
     assert main(["viz", dummy_config_path]) == 0
     assert main(["annot", dummy_config_path, dummy_save_path]) == 0
     assert main(["split", dummy_config_path, dummy_save_path]) == 0
+    assert main(["export", dummy_config_path, dummy_save_path]) == 0
     _ = mocker.patch("thelper.utils.load_checkpoint")
     assert main(["resume", dummy_save_path]) == 0
     assert main(["resume", dummy_save_path, "-c=" + dummy_config_path]) == 0

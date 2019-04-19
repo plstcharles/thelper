@@ -1,0 +1,23 @@
+{
+    "name": "example-export-resnet",
+    "model": {
+        "type": "torchvision.models.resnet.resnet18",
+        "params": {
+            "pretrained": true
+        }
+    },
+    "export": {
+        "ckpt_name": "test-resnet18-imagenet.pth",
+        "trace_name": "test-resnet18-imagenet.zip",
+        "save_raw": true,
+        "trace_input": "torch.rand(1, 3, 224, 224)",
+        "task": {
+            "type": "thelper.tasks.Classification",
+            "params": {
+                "class_names": "tests/utils/imagenet_classes.json",
+                "input_key": "0",
+                "label_key": "1"
+            }
+        }
+    }
+}

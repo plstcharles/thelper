@@ -4,6 +4,7 @@ import shutil
 
 import numpy as np
 import pytest
+import torch
 
 import thelper
 
@@ -309,3 +310,80 @@ def test_split_data(split_config, mocker):
         thelper.cli.split_data(fake_config, test_save_path)
     thelper.cli.split_data(split_config, test_save_path)
     assert fake_create.call_count == 1
+
+
+@pytest.fixture
+def export_config(request):
+    def fin():
+        shutil.rmtree(test_create_simple_path, ignore_errors=True)
+        shutil.rmtree(test_create_simple_images_path, ignore_errors=True)
+
+    fin()
+    request.addfinalizer(fin)
+    os.makedirs(test_create_simple_images_path, exist_ok=True)
+    for cls in range(10):
+        os.makedirs(os.path.join(test_create_simple_images_path, str(cls)), exist_ok=True)
+        for idx in range(10):
+            open(os.path.join(test_create_simple_images_path, str(cls), str(idx) + ".jpg"), "a").close()
+    return {
+        "name": "simple",
+        "bypass_queries": True,
+        "model": {
+            "type": "torchvision.models.resnet.resnet18",
+            "params": {
+                "pretrained": True
+            }
+        },
+        "export": {
+            "ckpt_name": "test-resnet18-imagenet.pth",
+            "trace_name": "test-resnet18-imagenet.zip",
+            "save_raw": True,
+            "trace_input": "torch.rand(1, 3, 224, 224)",
+            "task": {
+                "type": "thelper.tasks.Classification",
+                "params": {
+                    "class_names": "tests/utils/imagenet_classes.json",
+                    "input_key": "0",
+                    "label_key": "1"
+                }
+            }
+        }
+    }
+
+
+def test_export_model_trace(export_config):
+    fake_config = copy.deepcopy(export_config)
+    del fake_config["name"]
+    with pytest.raises(AssertionError):
+        thelper.cli.export_model(fake_config, test_save_path)
+    fake_config = copy.deepcopy(export_config)
+    fake_config["export"] = "dummy"
+    with pytest.raises(AssertionError):
+        thelper.cli.export_model(fake_config, test_save_path)
+    thelper.cli.export_model(export_config, test_save_path)
+    export_ckpt_path = os.path.join(test_create_simple_path, export_config["export"]["ckpt_name"])
+    assert os.path.isfile(export_ckpt_path)
+    ckptdata = thelper.utils.load_checkpoint(export_ckpt_path)
+    model = thelper.nn.create_model(config=None, task=None, ckptdata=ckptdata)
+    assert model(eval(export_config["export"]["trace_input"])).shape == (1, 1000)
+
+
+def test_export_model_weights(export_config):
+    export_config = copy.deepcopy(export_config)
+    del export_config["export"]["trace_input"]
+    del export_config["export"]["trace_name"]
+    del export_config["export"]["task"]
+    export_config["datasets"] = {
+        "dset": {
+            "type": "thelper.data.ImageFolderDataset",
+            "params": {
+                "root": test_create_simple_images_path
+            }
+        }
+    }
+    thelper.cli.export_model(export_config, test_save_path)
+    export_ckpt_path = os.path.join(test_create_simple_path, export_config["export"]["ckpt_name"])
+    assert os.path.isfile(export_ckpt_path)
+    ckptdata = thelper.utils.load_checkpoint(export_ckpt_path)
+    model = thelper.nn.create_model(config=None, task=None, ckptdata=ckptdata)
+    assert model(torch.rand(1, 3, 224, 224)).shape == (1, 10)

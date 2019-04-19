@@ -280,6 +280,77 @@ def split_data(config, save_dir):
     logger.debug("all done")
 
 
+def export_model(config, save_dir):
+    """Launches a model exportation session.
+
+    This function will export a model defined via a configuration file into a new checkpoint that can be
+    loaded elsewhere. The model can be built using the framework, or provided via its type, construction
+    parameters, and weights. Its exported format will be compatible with the framework, and may also be an
+    optimized/compiled version obtained using PyTorch's JIT tracer.
+
+    The configuration dictionary must minimally contain a 'model' section that provides details on the model
+    to be exported. A section named 'export' can be used to provide settings regarding the exportation
+    approaches to use, and the task interface to save with the model. If a task is not explicitly defined in
+    the 'export' section, the session configuration will be parsed for a 'datasets' section as a last resort.
+
+    The exported checkpoint containing the model will be saved in the session's output directory.
+
+    Args:
+        config: a dictionary that provides all required data configuration parameters; see
+            :func:`thelper.nn.utils.create_model` for more information.
+        save_dir: the path to the root directory where the session directory should be saved. Note that
+            this is not the path to the session directory itself, but its parent, which may also contain
+            other session directories.
+
+    .. seealso::
+        | :func:`thelper.nn.utils.create_model`
+    """
+    logger = thelper.utils.get_func_logger()
+    if "name" not in config or not config["name"]:
+        raise AssertionError("config missing 'name' field")
+    session_name = config["name"]
+    export_config = thelper.utils.get_key_def("export", config, default={})
+    if not isinstance(export_config, dict):
+        raise AssertionError("unexpected export config type")
+    ckpt_name = thelper.utils.get_key_def("ckpt_name", export_config, default=(session_name + ".export.pth"))
+    trace_name = thelper.utils.get_key_def("trace_name", export_config, default=(session_name + ".trace.zip"))
+    save_raw = thelper.utils.get_key_def("save_raw", export_config, default=True)
+    trace_input = thelper.utils.get_key_def("trace_input", export_config, default=None)
+    task = thelper.utils.get_key_def("task", export_config, default=None)
+    if isinstance(task, (str, dict)):
+        task = thelper.tasks.create_task(task)
+    if task is None:
+        _, task = thelper.data.create_parsers(config)  # try to load via datasets... (last resort)
+    if isinstance(trace_input, str):
+        trace_input = eval(trace_input)
+    logger.info("exporting model '%s'..." % session_name)
+    thelper.utils.setup_globals(config)
+    save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
+    logger.debug("exported checkpoint will be saved at '%s'" % os.path.abspath(save_dir).replace("\\", "/"))
+    model = thelper.nn.create_model(config, task, save_dir=save_dir)
+    log_stamp = thelper.utils.get_log_stamp()
+    model_type = model.get_name()
+    model_params = model.config if model.config else {}
+    export_state = {
+        "name": session_name,
+        "source": log_stamp,
+        "git_sha1": thelper.utils.get_git_stamp(),
+        "version": thelper.__version__,
+        "task": str(task) if save_raw else task,
+        "model_type": model_type,
+        "model_params": model_params,
+        "config": config
+    }
+    if trace_input is not None:
+        trace_path = os.path.join(save_dir, trace_name)
+        torch.jit.trace(model, trace_input).save(trace_path)
+        export_state["model"] = trace_name  # will be loaded in thelper.utils.load_checkpoint
+    else:
+        export_state["model"] = model.state_dict() if save_raw else model
+    torch.save(export_state, os.path.join(save_dir, ckpt_name))
+    logger.debug("all done")
+
+
 def main(args=None):
     """Main entrypoint to use with console applications.
 
@@ -325,6 +396,9 @@ def main(args=None):
     split_ap = subparsers.add_parser("split", help="launches a dataset splitting session from a config file")
     split_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session save directory)")
     split_ap.add_argument("save_dir", type=str, help="path to the root directory where the split hdf5 dataset archive should be saved")
+    split_ap = subparsers.add_parser("export", help="launches a model exportation session from a config file")
+    split_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session save directory)")
+    split_ap.add_argument("save_dir", type=str, help="path to the root directory where the exported checkpoint should be saved")
     args = ap.parse_args(args=args)
     if args.version:
         print(thelper.__version__)
@@ -375,6 +449,8 @@ def main(args=None):
             visualize_data(config)
         elif args.mode == "annot":
             annotate_data(config, args.save_dir)
+        elif args.mode == "export":
+            export_model(config, args.save_dir)
         else:  # if args.mode == "split":
             split_data(config, args.save_dir)
     return 0
