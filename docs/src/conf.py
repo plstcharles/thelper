@@ -212,6 +212,8 @@ if on_rtd:
         'augmentor',
         'cv2',
         'git',
+        'h5py',
+        'lz4',
         'matplotlib',
         'numpy',
         'PIL',
@@ -219,6 +221,7 @@ if on_rtd:
         'pip',
         'pynput',
         'pynput.keyboard',
+        'scipy'
         'shapely',
         'sklearn',
         'sklearn.metrics',
