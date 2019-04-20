@@ -9,6 +9,12 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
+def create_key_listener(callback):
+    """Returns a key press listener based on pynput.keyboard (used for mocking)."""
+    import pynput.keyboard
+    return pynput.keyboard.Listener(on_press=callback)
+
+
 def create_annotator(session_name, save_dir, config, datasets):
     """Instantiates a GUI annotation tool based on the type contained in the config dictionary.
 

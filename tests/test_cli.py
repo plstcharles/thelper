@@ -242,7 +242,7 @@ def test_annotate_data(annot_config, mocker):
     _ = mocker.patch("cv2.namedWindow")
     _ = mocker.patch("cv2.waitKey")
     _ = mocker.patch("cv2.imshow")
-    _ = mocker.patch("pynput.keyboard.Listener")
+    _ = mocker.patch("thelper.gui.create_key_listener")
     fake_config = copy.deepcopy(annot_config)
     del fake_config["name"]
     with pytest.raises(AssertionError):

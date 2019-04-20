@@ -12,5 +12,6 @@ import thelper.gui.utils  # noqa: F401
 from thelper.gui.annotators import Annotator  # noqa: F401
 from thelper.gui.annotators import ImageSegmentAnnotator  # noqa: F401
 from thelper.gui.utils import create_annotator  # noqa: F401
+from thelper.gui.utils import create_key_listener  # noqa: F401
 
 logger = logging.getLogger("thelper.gui")

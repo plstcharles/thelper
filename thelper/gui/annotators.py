@@ -301,8 +301,7 @@ class ImageSegmentAnnotator(Annotator):
         self.image, self.mask = self.load(self.curr_sample_idx)
         self.image_display, self.image_display_base, self.mask_display = self.refresh_layers()
         self.gui_display = None
-        import pynput.keyboard
-        self.listener = pynput.keyboard.Listener(on_press=ImageSegmentAnnotator.on_press)
+        self.listener = thelper.gui.create_key_listener(ImageSegmentAnnotator.on_press)
         self.listener.start()
         cv.setMouseCallback(self.window_name, ImageSegmentAnnotator.on_mouse)
 
