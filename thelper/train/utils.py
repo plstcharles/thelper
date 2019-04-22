@@ -6,8 +6,6 @@ This module contains utilities and tools used to instantiate training sessions.
 import logging
 from typing import AnyStr, Optional  # noqa: F401
 
-import torch
-
 import thelper.utils
 
 logger = logging.getLogger(__name__)
@@ -17,6 +15,7 @@ def create_trainer(session_name,    # type: AnyStr
                    save_dir,        # type: AnyStr
                    config,          # type: thelper.typedefs.ConfigDict
                    model,           # type: thelper.typedefs.ModelType
+                   task,            # type: thelper.tasks.Task
                    loaders,         # type: thelper.typedefs.MultiLoaderType
                    ckptdata=None    # type: Optional[thelper.typedefs.CheckpointContentType]
                    ):               # type: (...) -> thelper.train.Trainer
@@ -27,11 +26,14 @@ def create_trainer(session_name,    # type: AnyStr
     compatible with the constructor signature of :class:`thelper.train.trainers.Trainer`. The object's constructor will
     be given the full config dictionary and the checkpoint data for resuming the session (if available).
 
+    If the trainer type is missing, it will be automatically deduced based on the task object.
+
     Args:
         session_name: name of the training session used for printing and to create internal tensorboardX directories.
         save_dir: path to the session directory where logs and checkpoints will be saved.
         config: full configuration dictionary that will be parsed for trainer parameters and saved in checkpoints.
         model: model to train/evaluate; should be compatible with :class:`thelper.nn.utils.Module`.
+        task: global task interface defining the type of model and training goal for the session.
         loaders: a tuple containing the training/validation/test data loaders (a loader can be ``None`` if empty).
         ckptdata: raw checkpoint to parse data from when resuming a session (if ``None``, will start from scratch).
 
@@ -42,15 +44,20 @@ def create_trainer(session_name,    # type: AnyStr
         | :class:`thelper.train.trainers.Trainer`
 
     """
-    if isinstance(model, torch.jit.ScriptModule):
-        raise AssertionError("cannot train model trace, must derive from torch.nn.Module")
-    if "trainer" not in config or not config["trainer"]:
-        raise AssertionError("config missing 'trainer' field")
+    assert "trainer" in config and config["trainer"], "session configuration dictionary missing 'trainer' section"
     trainer_config = config["trainer"]
-    if "type" not in trainer_config or not trainer_config["type"]:
-        raise AssertionError("trainer config missing 'type' field")
-    trainer_type = thelper.utils.import_class(trainer_config["type"])
-    return trainer_type(session_name, save_dir, model, loaders, config, ckptdata=ckptdata)
+    if "type" not in trainer_config:
+        if isinstance(task, thelper.tasks.Classification):
+            trainer_type = thelper.train.ImageClassifTrainer
+        elif isinstance(task, thelper.tasks.Regression):
+            trainer_type = thelper.train.RegressionTrainer
+        elif isinstance(task, thelper.tasks.Segmentation):
+            trainer_type = thelper.train.ImageSegmTrainer
+        else:
+            raise AssertionError(f"unknown trainer type required for task '{str(task)}'")
+    else:
+        trainer_type = thelper.utils.import_class(trainer_config["type"])
+    return trainer_type(session_name, save_dir, model, task, loaders, config, ckptdata=ckptdata)
 
 
 # noinspection PyUnusedLocal

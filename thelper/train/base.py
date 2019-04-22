@@ -120,17 +120,20 @@ class Trainer:
         | :func:`thelper.train.utils.create_trainer`
     """
 
-    def __init__(self, session_name, save_dir, model, loaders, config, ckptdata=None):
-        # type: (AnyStr, AnyStr, typ.ModelType, typ.MultiLoaderType, typ.ConfigDict, typ.CheckpointContentType) -> None
+    def __init__(self,
+                 session_name,    # type: AnyStr
+                 save_dir,        # type: AnyStr
+                 model,           # type: thelper.typedefs.ModelType
+                 task,            # type: thelper.tasks.Task
+                 loaders,         # type: thelper.typedefs.MultiLoaderType
+                 config,          # type: thelper.typedefs.ConfigDict
+                 ckptdata=None    # type: Optional[thelper.typedefs.CheckpointContentType]
+                 ):
         """Receives the trainer configuration dictionary, parses it, and sets up the session."""
-        if not model or not loaders or not config:
-            raise AssertionError("missing input args")
         assert isinstance(model, (thelper.nn.Module, torch.nn.Module)), "unknown model object type"
         train_loader, valid_loader, test_loader = loaders
-        if not (train_loader or valid_loader or test_loader):
-            raise AssertionError("must provide at least one loader with available data")
-        if "trainer" not in config or not config["trainer"]:
-            raise AssertionError("config missing 'trainer' field")
+        assert (train_loader or valid_loader or test_loader), "must provide at least one loader with available data"
+        assert "trainer" in config, "session configuration dictionary missing 'trainer' field"
         trainer_config = config["trainer"]
         thelper.utils.save_env_list(os.path.join(save_dir, "logs", "packages.log"))
         train_logger_path = os.path.join(save_dir, "logs", "trainer.log")
@@ -190,6 +193,7 @@ class Trainer:
         for idx, (loader, foldername) in enumerate(zip(loaders, foldernames)):
             output_paths[idx] = os.path.join(output_root_dir, foldername) if loader else None
         self.train_output_path, self.valid_output_path, self.test_output_path = output_paths
+        self.task = task
         self.model = model
         self.config = config
         devices_str = None
@@ -400,6 +404,8 @@ class Trainer:
         """
         if not self.train_loader:
             raise AssertionError("missing training data, invalid loader!")
+        if isinstance(self.model, torch.jit.ScriptModule):
+            raise AssertionError("cannot train model trace")
         self.logger.debug("uploading model to '%s'..." % str(self.devices))
         model = self._upload_model(self.model, self.devices)
         loss, optimizer, scheduler, scheduler_step_metric = self._load_optimization(model, self.devices)
@@ -642,7 +648,7 @@ class Trainer:
             "source": log_stamp,
             "git_sha1": thelper.utils.get_git_stamp(),
             "version": thelper.__version__,
-            "task": str(self.model.task) if self.save_raw else self.model.task,
+            "task": str(self.task) if self.save_raw else self.task,
             "outputs": self.outputs,
             # we save model type/params here in case those are not in the current config
             "model": self.model.state_dict() if self.save_raw else self.model,

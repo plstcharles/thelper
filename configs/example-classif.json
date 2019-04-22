@@ -133,7 +133,6 @@
         "type": "thelper.nn.mobilenet.MobileNetV2"
     },
     "trainer": {
-        "type": "thelper.train.ImageClassifTrainer",
         "device": "cuda:all",
         "epochs": 5,
         "save_freq": 1,

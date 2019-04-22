@@ -23,23 +23,23 @@ class RegressionTrainer(Trainer):
         | :class:`thelper.train.base.Trainer`
     """
 
-    def __init__(self, session_name, save_dir, model, loaders, config, ckptdata=None):
+    def __init__(self, session_name, save_dir, model, task, loaders, config, ckptdata=None):
         """Receives session parameters, parses tensor/target keys from task object, and sets up metrics."""
-        super().__init__(session_name, save_dir, model, loaders, config, ckptdata=ckptdata)
-        if not isinstance(self.model.task, thelper.tasks.Regression):
+        super().__init__(session_name, save_dir, model, task, loaders, config, ckptdata=ckptdata)
+        if not isinstance(self.task, thelper.tasks.Regression):
             raise AssertionError("expected task to be regression")
-        self.input_key = self.model.task.get_input_key()
-        self.target_key = self.model.task.get_gt_key()
-        self.input_shape = self.model.task.get_input_shape()
-        self.target_shape = self.model.task.get_target_shape()
-        self.target_type = self.model.task.get_target_type()
-        self.target_min = self.model.task.get_target_min()
+        self.input_key = self.task.get_input_key()
+        self.target_key = self.task.get_gt_key()
+        self.input_shape = self.task.get_input_shape()
+        self.target_shape = self.task.get_target_shape()
+        self.target_type = self.task.get_target_type()
+        self.target_min = self.task.get_target_min()
         if isinstance(self.target_min, np.ndarray):
             self.target_min = torch.from_numpy(self.target_min)
-        self.target_max = self.model.task.get_target_max()
+        self.target_max = self.task.get_target_max()
         if isinstance(self.target_max, np.ndarray):
             self.target_max = torch.from_numpy(self.target_max)
-        self.meta_keys = self.model.task.get_meta_keys()
+        self.meta_keys = self.task.get_meta_keys()
 
     def _to_tensor(self, sample):
         """Fetches and returns tensors of inputs and targets from a batched sample dictionary."""
@@ -117,7 +117,7 @@ class RegressionTrainer(Trainer):
                 for metric in metrics.values():
                     metric.accumulate(iter_pred.detach().cpu(), target.detach().cpu(), meta=meta)
             if self.train_iter_callback is not None:
-                self.train_iter_callback(sample=sample, task=self.model.task, pred=iter_pred,
+                self.train_iter_callback(sample=sample, task=self.task, pred=iter_pred,
                                          iter_idx=iter, max_iters=epoch_size,
                                          epoch_idx=epoch, max_epochs=self.epochs,
                                          **self.callback_kwargs)
@@ -176,7 +176,7 @@ class RegressionTrainer(Trainer):
                     for metric in metrics.values():
                         metric.accumulate(pred.cpu(), target.cpu() if target is not None else None, meta=meta)
                 if self.eval_iter_callback is not None:
-                    self.eval_iter_callback(sample=sample, task=self.model.task, pred=pred,
+                    self.eval_iter_callback(sample=sample, task=self.task, pred=pred,
                                             iter_idx=idx, max_iters=epoch_size,
                                             epoch_idx=epoch, max_epochs=self.epochs,
                                             **self.callback_kwargs)

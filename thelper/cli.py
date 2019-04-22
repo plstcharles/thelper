@@ -46,7 +46,7 @@ def create_session(config, save_dir):
     task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(config, save_dir)
     model = thelper.nn.create_model(config, task, save_dir=save_dir)
     loaders = (train_loader, valid_loader, test_loader)
-    trainer = thelper.train.create_trainer(session_name, save_dir, config, model, loaders)
+    trainer = thelper.train.create_trainer(session_name, save_dir, config, model, task, loaders)
     logger.debug("starting trainer")
     if train_loader:
         trainer.train()
@@ -124,7 +124,7 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
         task = new_task
     model = thelper.nn.create_model(config, task, save_dir=save_dir, ckptdata=ckptdata)
     loaders = (None if eval_only else train_loader, valid_loader, test_loader)
-    trainer = thelper.train.create_trainer(session_name, save_dir, config, model, loaders, ckptdata=ckptdata)
+    trainer = thelper.train.create_trainer(session_name, save_dir, config, model, task, loaders, ckptdata=ckptdata)
     if eval_only:
         logger.info("evaluating session '%s' checkpoint @ epoch %d" % (trainer.name, trainer.current_epoch))
         trainer.eval()

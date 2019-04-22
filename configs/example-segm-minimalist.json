@@ -40,7 +40,6 @@
         "type" : "thelper.nn.fcn.FCN32s"
     },
     "trainer": {
-        "type": "thelper.train.ImageSegmTrainer",
         "epochs": 100,
         "save_freq": 10,
         "monitor": "accuracy",

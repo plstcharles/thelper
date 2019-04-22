@@ -57,7 +57,6 @@
         "type": "thelper.nn.sr.SRCNN"
     },
     "trainer": {
-        "type": "thelper.train.RegressionTrainer",
         "device": "cuda:all",
         "epochs": 150,
         "save_freq": 1,

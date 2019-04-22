@@ -40,6 +40,6 @@ if TYPE_CHECKING:
 
     ModelType = Module
     LoaderType = DataLoader
-    MultiLoaderType = List[Union[LoaderType, None]]
+    MultiLoaderType = Tuple[Optional[LoaderType], Optional[LoaderType], Optional[LoaderType]]
 
 IterCallbackParams = ["sample", "task", "pred", "iter_idx", "max_iters", "epoch_idx", "max_epochs"]

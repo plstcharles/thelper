@@ -22,17 +22,17 @@ class ImageSegmTrainer(Trainer):
         | :class:`thelper.train.base.Trainer`
     """
 
-    def __init__(self, session_name, save_dir, model, loaders, config, ckptdata=None):
+    def __init__(self, session_name, save_dir, model, task, loaders, config, ckptdata=None):
         """Receives session parameters, parses image/label keys from task object, and sets up metrics."""
-        super().__init__(session_name, save_dir, model, loaders, config, ckptdata=ckptdata)
-        if not isinstance(self.model.task, thelper.tasks.Segmentation):
+        super().__init__(session_name, save_dir, model, task, loaders, config, ckptdata=ckptdata)
+        if not isinstance(self.task, thelper.tasks.Segmentation):
             raise AssertionError("expected task to be segmentation")
-        self.input_key = self.model.task.get_input_key()
-        self.label_map_key = self.model.task.get_gt_key()
-        self.class_names = self.model.task.get_class_names()
-        self.meta_keys = self.model.task.get_meta_keys()
-        self.class_idxs_map = self.model.task.get_class_idxs_map()
-        self.dontcare_val = self.model.task.get_dontcare_val()
+        self.input_key = self.task.get_input_key()
+        self.label_map_key = self.task.get_gt_key()
+        self.class_names = self.task.get_class_names()
+        self.meta_keys = self.task.get_meta_keys()
+        self.class_idxs_map = self.task.get_class_idxs_map()
+        self.dontcare_val = self.task.get_dontcare_val()
         trainer_config = thelper.utils.get_key_def("params", config["trainer"], {})
         self.scale_preds = thelper.utils.get_key_def("scale_preds", trainer_config, default=False)
         metrics = list(self.train_metrics.values()) + list(self.valid_metrics.values()) + list(self.test_metrics.values())
@@ -137,7 +137,7 @@ class ImageSegmTrainer(Trainer):
                 for metric in metrics.values():
                     metric.accumulate(iter_pred.detach().cpu(), label_map.detach().cpu(), meta=meta)
             if self.train_iter_callback is not None:
-                self.train_iter_callback(sample=sample, task=self.model.task, pred=iter_pred,
+                self.train_iter_callback(sample=sample, task=self.task, pred=iter_pred,
                                          iter_idx=iter, max_iters=epoch_size,
                                          epoch_idx=epoch, max_epochs=self.epochs,
                                          **self.callback_kwargs)
@@ -214,7 +214,7 @@ class ImageSegmTrainer(Trainer):
                     for metric in metrics.values():
                         metric.accumulate(pred.cpu(), label_map.cpu() if label_map is not None else None, meta=meta)
                 if self.eval_iter_callback is not None:
-                    self.eval_iter_callback(sample=sample, task=self.model.task, pred=pred,
+                    self.eval_iter_callback(sample=sample, task=self.task, pred=pred,
                                             iter_idx=idx, max_iters=epoch_size,
                                             epoch_idx=epoch, max_epochs=self.epochs,
                                             **self.callback_kwargs)

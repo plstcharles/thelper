@@ -114,7 +114,7 @@ def test_train_decomposed_leak(config, mocker):
     outputs = []
     for idx in range(5):
         model = thelper.nn.create_model(config, task, save_dir=save_dir)
-        trainer = thelper.train.create_trainer(session_name, save_dir, config, model, loaders)
+        trainer = thelper.train.create_trainer(session_name, save_dir, config, model, task, loaders)
         trainer.train()
         outputs.append(trainer.outputs)
 

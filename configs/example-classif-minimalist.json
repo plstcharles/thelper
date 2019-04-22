@@ -54,7 +54,6 @@
         }
     },
     "trainer": {
-        "type": "thelper.train.ImageClassifTrainer",
         "epochs": 5,
         "monitor": "accuracy",
         "optimization": {
