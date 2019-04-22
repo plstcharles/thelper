@@ -1023,6 +1023,21 @@ def save_config(config, path, force_convert=True):
         raise AssertionError("unknown output file type")
 
 
+def save_env_list(path):
+    """Saves a list of all packages installed in the current environment to a log file.
+
+    Args:
+        path: the path where the log file should be created.
+    """
+    with open(path, "w") as fd:
+        pkgs_list = thelper.utils.get_env_list()
+        if pkgs_list:
+            for pkg in pkgs_list:
+                fd.write("%s\n" % pkg)
+        else:
+            fd.write("<n/a>\n")
+
+
 def safe_crop(image, tl, br, bordertype=cv.BORDER_CONSTANT, borderval=0, force_copy=False):
     """Safely crops a region from within an image, padding borders if needed.
 

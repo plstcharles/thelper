@@ -132,14 +132,7 @@ class Trainer:
         if "trainer" not in config or not config["trainer"]:
             raise AssertionError("config missing 'trainer' field")
         trainer_config = config["trainer"]
-        packages_log_path = os.path.join(save_dir, "logs", "packages.log")
-        with open(packages_log_path, "w") as fd:
-            pkgs_list = thelper.utils.get_env_list()
-            if pkgs_list:
-                for pkg in pkgs_list:
-                    fd.write("%s\n" % pkg)
-            else:
-                fd.write("<n/a>\n")
+        thelper.utils.save_env_list(os.path.join(save_dir, "logs", "packages.log"))
         train_logger_path = os.path.join(save_dir, "logs", "trainer.log")
         train_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         train_logger_fh = logging.FileHandler(train_logger_path)
