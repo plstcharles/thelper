@@ -127,7 +127,7 @@ class Trainer:
                  task,            # type: thelper.tasks.Task
                  loaders,         # type: thelper.typedefs.MultiLoaderType
                  config,          # type: thelper.typedefs.ConfigDict
-                 ckptdata=None    # type: Optional[thelper.typedefs.CheckpointContentType]
+                 ckptdata=None    # type: typ.Optional[thelper.typedefs.CheckpointContentType]
                  ):
         """Receives the trainer configuration dictionary, parses it, and sets up the session."""
         assert isinstance(model, (thelper.nn.Module, torch.nn.Module)), "unknown model object type"
