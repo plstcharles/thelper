@@ -607,7 +607,7 @@ to extract its weights from the checkpoint yourself. An example of this procedur
 down <#manually-reloading-a-model>`_.
 
 Experimental support for checkpoint creation outside a training session is available through the CLI's
-``export`` operation. `Click here for more information <#export-model>`_.
+``export`` operation. `See the section above for more information <#export-model>`_.
 
 
 Session logs
