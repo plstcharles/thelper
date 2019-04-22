@@ -32,19 +32,20 @@ What it supports...
   - **PyTorch.** For now, the entire backend is based on the design patterns, interfaces, and
     concepts of the PyTorch library (`[more info] <pytorch_>`_).
   
-  - Image classification, segmentation, and generic regression tasks. More types of tasks (such
-    as object detection and super resolution) are planned in the near future.
+  - Image classification, segmentation, image super-resolution, and generic regression tasks.
+    More types of tasks (such as object detection) are planned in the near future.
 
   - Live evaluation and monitoring of predefined metrics. The framework implements :ref:`[several
-    types of metrics <thelper.optim:thelper.optim.metrics module>`, but custom metrics can also be
+    types of metrics] <thelper.optim:thelper.optim.metrics module>`, but custom metrics can also be
     defined and evaluated at run time.
 
-  - Data augmentation. The framework implements :ref:`[basic transformation operations and wrapper
-    classes] <thelper.transforms:thelper.transforms package>` for large augmentation libraries such
-    as ``albumentations`` (`[more info] <albumen_>`_).
+  - Data augmentation. The framework implements basic :ref:`[transformation operations and wrappers]
+    <thelper.transforms:thelper.transforms package>` for large augmentation libraries such as
+    ``albumentations`` (`[more info] <albumen_>`_).
 
-  - Fine-tuning. Models obtained from the ``torchvision`` package (`[more info] <torchvis_>`_) or
-    pre-trained using the framework can be loaded and fine-tuned directly for any compatible task.
+  - Model fine-tuning and exportation. Models obtained from the ``torchvision`` package (`[more info]
+    <torchvis_>`_) or pre-trained using the framework can be loaded and fine-tuned directly for any
+    compatible task. They can also be exported in PyTorch-JIT optimized format for external inference.
 
   - Tensorboard. Event logs are generated using ``tensorboardX`` (`[more info] <tbx_>`_) and may
     contain plots, visualizations, histograms, graph module trees and more.
