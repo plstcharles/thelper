@@ -6,6 +6,7 @@ graft configs
 
 include .bumpversion.cfg
 include .coveragerc
+include .dockerignore
 include .editorconfig
 include readthedocs.yml
 
@@ -17,6 +18,7 @@ include README.rst
 
 include LICENSE
 include Makefile
+include Dockerfile
 include requirements.txt
 include requirements-dev.txt
 
