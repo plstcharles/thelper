@@ -100,6 +100,15 @@ def test_create_session_eval(simple_config, mocker):
 
 
 def test_resume_session(simple_config, mocker):
+    log_iter = 0
+
+    def get_log_stamp():
+        nonlocal log_iter
+        log_iter += 1
+        return "fake-20000101-%06d" % log_iter
+
+    fake_logstamp = mocker.patch("thelper.utils.get_log_stamp")
+    fake_logstamp.side_effect = get_log_stamp
     with pytest.raises(AssertionError):
         thelper.cli.resume_session(None, test_save_path, simple_config)
     with pytest.raises(AssertionError):
@@ -107,7 +116,6 @@ def test_resume_session(simple_config, mocker):
     with pytest.raises(AssertionError):
         thelper.cli.resume_session({"config": {}}, test_save_path)
     fake_train = mocker.patch.object(thelper.train.classif.ImageClassifTrainer, "_train_epoch", return_value=[0, 0])
-    #fake_train.side_effect = lambda *args, **kwargs: 0, 0
     fake_eval = mocker.patch.object(thelper.train.classif.ImageClassifTrainer, "_eval_epoch")
     with pytest.raises((FileNotFoundError, AssertionError)):
         _ = thelper.utils.load_checkpoint(test_create_simple_path)
@@ -122,19 +130,26 @@ def test_resume_session(simple_config, mocker):
     del nameless_ckptdata["config"]["name"]
     with pytest.raises(AssertionError):
         thelper.cli.resume_session(nameless_ckptdata, test_save_path, eval_only=True)
+    old_task = ckptdata["task"]
     thelper.cli.resume_session(ckptdata, test_save_path, eval_only=True)
+    latest_ckptdata = thelper.utils.load_checkpoint(test_create_simple_path, always_load_latest=True)
+    assert old_task == latest_ckptdata["task"]
     assert fake_train.call_count == 2
     assert fake_eval.call_count == 3
     thelper.cli.resume_session(ckptdata, test_save_path)
+    latest_ckptdata = thelper.utils.load_checkpoint(test_create_simple_path, always_load_latest=True)
+    assert old_task == latest_ckptdata["task"]
     assert fake_train.call_count == 3
     assert fake_eval.call_count == 4
     override_config = ckptdata["config"]
     override_config["trainer"]["epochs"] = 3
     thelper.cli.resume_session(ckptdata, test_save_path, override_config)
+    latest_ckptdata = thelper.utils.load_checkpoint(test_create_simple_path, always_load_latest=True)
+    assert old_task == latest_ckptdata["task"]
     assert fake_train.call_count == 5
     assert fake_eval.call_count == 6
     override_config = ckptdata["config"]
-    override_config["datasets"]["dset"]["task"] = {
+    new_finetune_task = {
         "type": "thelper.tasks.Classification",
         "params": {
             "class_names": [
@@ -144,11 +159,16 @@ def test_resume_session(simple_config, mocker):
             "label_key": "label"
         }
     }
-    fake_query = mocker.patch("thelper.utils.query_string", return_value="compat")
+    override_config["datasets"]["dset"]["task"] = new_finetune_task
+    fake_query = mocker.patch("thelper.utils.query_string", return_value="new")
     thelper.cli.resume_session(ckptdata, test_save_path)
+    latest_ckptdata = thelper.utils.load_checkpoint(test_create_simple_path, always_load_latest=True)
+    assert str(thelper.tasks.create_task(new_finetune_task)) == latest_ckptdata["task"]
     assert fake_query.call_count == 1
     _ = mocker.patch("thelper.utils.query_string", return_value="old")
     thelper.cli.resume_session(ckptdata, test_save_path)
+    latest_ckptdata = thelper.utils.load_checkpoint(test_create_simple_path, always_load_latest=True)
+    assert old_task == latest_ckptdata["task"]
 
 
 def test_visualize_data(simple_config, mocker):
