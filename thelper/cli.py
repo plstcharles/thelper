@@ -115,13 +115,14 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
                                             (f"\tcompat: {str(compat_task)}\n\n" if compat_task is not None else "\n") +
                                             "WARNING: if resuming with new or compat, some weights might be discarded!",
                                             choices=["old", "new", "compat"])
-        task = None if choice == "old" else new_task if choice == "new" else compat_task
+        task = old_task if choice == "old" else new_task if choice == "new" else compat_task
         if choice != "old":
             # saved optimizer state might cause issues with mismatched tasks, let's get rid of it
             logger.warning("dumping optimizer state to avoid issues when resuming with modified task")
             ckptdata["optimizer"], ckptdata["scheduler"] = None, None
     else:
         task = new_task
+    assert task is not None, "invalid task"
     model = thelper.nn.create_model(config, task, save_dir=save_dir, ckptdata=ckptdata)
     loaders = (None if eval_only else train_loader, valid_loader, test_loader)
     trainer = thelper.train.create_trainer(session_name, save_dir, config, model, task, loaders, ckptdata=ckptdata)
