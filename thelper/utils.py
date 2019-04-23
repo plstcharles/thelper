@@ -157,19 +157,22 @@ def load_checkpoint(ckpt,                      # type: thelper.typedefs.Checkpoi
         ckpt_paths = glob.glob(os.path.join(search_dir, "ckpt.*.pth"))
         if not ckpt_paths:
             raise AssertionError("could not find any valid checkpoint files in directory '%s'" % search_dir)
-        latest_checkpoint_epoch = -1
+        latest_epoch, latest_day, latest_time = -1, -1, -1
         for ckpt_path in ckpt_paths:
             # note: the 2nd field in the name should be the epoch index, or 'best' if final checkpoint
-            tag = os.path.basename(ckpt_path).split(".")[1]
-            if tag == "best" and (not always_load_latest or latest_checkpoint_epoch == -1):
+            split = os.path.basename(ckpt_path).split(".")
+            tag = split[1]
+            if tag == "best" and (not always_load_latest or latest_epoch == -1):
                 # if eval-only, always pick the best checkpoint; otherwise, only pick if nothing else exists
                 ckpt = ckpt_path
                 if not always_load_latest:
                     break
-            elif tag != "best" and int(tag) > latest_checkpoint_epoch:  # otherwise, pick latest
-                # note: if several sessions are merged, this will pick the latest checkpoint of the first...
-                ckpt = ckpt_path
-                latest_checkpoint_epoch = int(tag)
+            elif tag != "best":
+                log_stamp = split[2] if len(split) > 2 else ""
+                log_stamp = "fake-0-0" if log_stamp.count("-") != 2 else log_stamp
+                epoch_stamp, day_stamp, time_stamp = int(tag), int(log_stamp.split("-")[1]), int(log_stamp.split("-")[2])
+                if epoch_stamp > latest_epoch or day_stamp > latest_day or time_stamp > latest_time:
+                    ckpt, latest_epoch, latest_day, latest_time = ckpt_path, epoch_stamp, day_stamp, time_stamp
         if not os.path.isfile(ckpt):
             raise AssertionError("could not find valid checkpoint at '%s'" % ckpt)
     if isinstance(ckpt, str):
