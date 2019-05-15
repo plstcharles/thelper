@@ -33,6 +33,8 @@ class Regression(Task):
     .. seealso::
         | :class:`thelper.tasks.utils.Task`
         | :class:`thelper.train.regr.RegressionTrainer`
+        | :class:`thelper.tasks.regr.SuperResolution`
+        | :class:`thelper.tasks.detect.Detection`
     """
 
     def __init__(self, input_key, target_key, meta_keys=None, input_shape=None,
@@ -42,45 +44,37 @@ class Regression(Task):
         if target_min is not None:
             if isinstance(target_min, (list, tuple)):
                 target_min = np.asarray(target_min)
-            if not isinstance(target_min, np.ndarray):
-                raise AssertionError("target_min should be passed as list/tuple/ndarray")
+            assert isinstance(target_min, np.ndarray), "target_min should be passed as list/tuple/ndarray"
         if target_max is not None:
             if isinstance(target_max, (list, tuple)):
                 target_max = np.asarray(target_max)
-            if not isinstance(target_max, np.ndarray):
-                raise AssertionError("target_max should be passed as list/tuple/ndarray")
+            assert isinstance(target_max, np.ndarray), "target_max should be passed as list/tuple/ndarray"
         if target_type is not None:
-            if isinstance(target_min, np.ndarray) and target_min.dtype != target_type:
-                raise AssertionError("invalid target min dtype")
-            if isinstance(target_max, np.ndarray) and target_max.dtype != target_type:
-                raise AssertionError("invalid target max dtype")
+            assert not isinstance(target_min, np.ndarray) or target_min.dtype == target_type, "invalid target min dtype"
+            assert not isinstance(target_max, np.ndarray) or target_max.dtype == target_type, "invalid target max dtype"
         if target_shape is not None:
-            if isinstance(target_min, np.ndarray) and target_min.shape != target_shape:
-                raise AssertionError("invalid target min shape")
-            if isinstance(target_max, np.ndarray) and target_max.shape != target_shape:
-                raise AssertionError("invalid target max shape")
+            assert not isinstance(target_min, np.ndarray) or target_min.shape == target_shape, "invalid target min shape"
+            assert not isinstance(target_max, np.ndarray) or target_max.shape == target_shape, "invalid target max shape"
         if isinstance(target_min, np.ndarray) and isinstance(target_max, np.ndarray):
-            if target_min.shape != target_max.shape:
-                raise AssertionError("target min/max shape mismatch")
+            assert target_min.shape == target_max.shape, "target min/max shape mismatch"
         self.input_shape = input_shape
         if self.input_shape is not None:
             if isinstance(self.input_shape, list):
                 self.input_shape = tuple(self.input_shape)
-            if not isinstance(self.input_shape, tuple) or not all([isinstance(v, int) for v in self.input_shape]):
-                raise AssertionError("unexpected input shape type (should be tuple of integers)")
+            assert isinstance(self.input_shape, tuple) and all([isinstance(v, int) for v in self.input_shape]), \
+                "unexpected input shape type (should be tuple of integers)"
         self.target_shape = target_shape
         if self.target_shape is not None:
             if isinstance(self.target_shape, list):
                 self.target_shape = tuple(self.target_shape)
-            if not isinstance(self.target_shape, tuple) or not all([isinstance(v, int) for v in self.target_shape]):
-                raise AssertionError("unexpected target shape type (should be tuple of integers)")
+            assert isinstance(self.target_shape, tuple) and all([isinstance(v, int) for v in self.target_shape]), \
+                "unexpected target shape type (should be tuple of integers)"
         self.target_type = target_type
         if self.target_type is not None:
             if isinstance(self.target_type, str):
                 import thelper.utils
                 self.target_type = thelper.utils.import_class(self.target_type)
-            if not issubclass(self.target_type, np.generic):
-                raise AssertionError("target type should be a numpy-compatible type")
+            assert issubclass(self.target_type, np.generic), "target type should be a numpy-compatible type"
         self.target_min = target_min
         self.target_max = target_max
 
@@ -134,9 +128,7 @@ class Regression(Task):
 
     def get_compat(self, other):
         """Returns a task instance compatible with the current task and the given one."""
-        if not self.check_compat(other):
-            raise AssertionError("cannot create compatible task instance between:\n"
-                                 "\tself: %s\n\tother: %s" % (str(self), str(other)))
+        assert self.check_compat(other), "cannot create compatible task between:\n\tself: %s\n\tother: %s" % (str(self), str(other))
         meta_keys = list(set(self.get_meta_keys() + other.get_meta_keys()))
         return Regression(self.get_input_key(), self.get_gt_key(),
                           meta_keys=meta_keys, input_shape=self.get_input_shape(),
@@ -177,6 +169,7 @@ class SuperResolution(Regression):
 
     .. seealso::
         | :class:`thelper.tasks.utils.Task`
+        | :class:`thelper.tasks.regr.Regression`
         | :class:`thelper.train.regr.RegressionTrainer`
     """
 

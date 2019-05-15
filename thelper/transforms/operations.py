@@ -481,8 +481,7 @@ class RandomResizedCrop(object):
                 contain both the image and the roi (passed through a composer).
             roi: the roi to check tile intersections with (may be ``None``).
             mask: a mask to crop simultaneously with the input image (may be ``None``).
-            bboxes: a list or array of bounding boxes (in xywh format) to crop with the input image
-                (may be ``None``).
+            bboxes: a list or array of bounding boxes to crop with the input image (may be ``None``).
 
         Returns:
             The randomly selected and resized crop. If mask and/or bboxes is given, the output will be
@@ -499,6 +498,8 @@ class RandomResizedCrop(object):
             raise AssertionError("image type should be np.ndarray")
         if self.probability < 1 and np.random.uniform(0, 1) > self.probability:
             return image
+        if bboxes is not None:
+            raise NotImplementedError
         image_height, image_width = image.shape[0], image.shape[1]
         target_height, target_width = None, None
         target_row, target_col = None, None

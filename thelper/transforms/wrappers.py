@@ -12,6 +12,7 @@ import PIL.Image
 import torch
 
 import thelper.utils
+import thelper.data
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +59,10 @@ class AlbumentationsWrapper(object):
         self.cvt_kpts_to_bboxes = cvt_kpts_to_bboxes
         if cvt_kpts_to_bboxes and "format" not in bbox_params or bbox_params["format"] != "coco":
             raise AssertionError("if converting kpts to bboxes, must use coco format")
+        self.bbox_params = bbox_params
         self.linked_fate = linked_fate
         import albumentations
-        self.pipeline = albumentations.Compose(transforms, to_tensor=to_tensor, bbox_params=bbox_params,
+        self.pipeline = albumentations.Compose(transforms, to_tensor=to_tensor, bbox_params=self.bbox_params,
                                                additional_targets=add_targets, p=probability)
 
     def __call__(self, sample, force_linked_fate=False, op_seed=None):
@@ -76,6 +78,7 @@ class AlbumentationsWrapper(object):
         """
         # todo: add list unwrapping/interlacing support like in other wrappers?
         params = {}
+        unpack_bboxes, decode_bboxes = False, False
         if isinstance(sample, dict):
             if self.image_key not in sample:
                 raise AssertionError("image is missing from sample (key=%s) but it is mandatory" % self.image_key)
@@ -96,7 +99,15 @@ class AlbumentationsWrapper(object):
                 else:
                     params["keypoints"] = keypoints
             if self.bboxes_key in sample and sample[self.bboxes_key] is not None:
-                params["bboxes"] = sample[self.bboxes_key]
+                bboxes = sample[self.bboxes_key]
+                if isinstance(bboxes, thelper.data.BoundingBox):
+                    bboxes = [bboxes]
+                    unpack_bboxes = True
+                if isinstance(bboxes, list) and all([isinstance(bbox, thelper.data.BoundingBox) for bbox in bboxes]):
+                    assert self.bbox_params["format"] in ["coco", "pascal_voc"], "unsupported/unknown bbox format"
+                    bboxes = [bbox.encode(format=self.bbox_params["format"]) for bbox in bboxes]
+                    decode_bboxes = True
+                params["bboxes"] = bboxes
             else:
                 params["bboxes"] = []
             if self.mask_key in sample and sample[self.mask_key] is not None:
@@ -109,7 +120,10 @@ class AlbumentationsWrapper(object):
                 if self.cvt_kpts_to_bboxes:
                     sample[self.keypoints_key] = [[kp[0], kp[1]] for kp in output["bboxes"]]
                 else:
-                    sample[self.bboxes_key] = output["bboxes"]
+                    bboxes = output["bboxes"]
+                    if decode_bboxes:
+                        bboxes = [thelper.data.BoundingBox.decode(bbox, self.bbox_params["format"]) for bbox in bboxes]
+                    sample[self.bboxes_key] = bboxes[0] if unpack_bboxes else bboxes
             if "mask" in output:
                 sample[self.mask_key] = output["mask"]
             return sample
@@ -129,8 +143,8 @@ class AlbumentationsWrapper(object):
         """Create a print-friendly representation of inner augmentation stages."""
         return self.__class__.__name__ + (": {{image_key: {}, bboxes_key: {}, mask_key: {}, keypoints_key: {}, "
                                           .format(self.image_key, self.bboxes_key, self.mask_key, self.keypoints_key) +
-                                          "cvt_kpts_to_bboxes: {}, linked_fate: {}, pipeline: {}"
-                                          .format(self.cvt_kpts_to_bboxes, self.linked_fate, self.pipeline) + "}")
+                                          "cvt_kpts_to_bboxes: {}, bbox_params: {}, linked_fate: {}, pipeline: {}"
+                                          .format(self.cvt_kpts_to_bboxes, self.bbox_params, self.linked_fate, self.pipeline) + "}")
 
     # noinspection PyMethodMayBeStatic
     def set_seed(self, seed):

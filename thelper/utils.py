@@ -1638,27 +1638,32 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
     return fig
 
 
-def draw_bboxes(image, rects, labels=None, confidences=None, win_size=None, thickness=1, show=True):
+def draw_bboxes(image, bboxes, labels=None, confidences=None, win_size=None, thickness=1, show=True):
     """Draws and returns an image with bounding boxes via OpenCV."""
     if isinstance(image, PIL.Image.Image):
         # noinspection PyTypeChecker
         image = np.asarray(image)
     if not isinstance(image, np.ndarray):
         raise AssertionError("expected input image to be numpy array")
-    if not isinstance(rects, list) or not all([isinstance(r, (tuple, list)) and len(r) == 4 for r in rects]):
-        raise AssertionError("expected input rectangles to be list of 4-elem tuples/lists (x,y,w,h)")
-    if labels is not None and (not isinstance(labels, list) or len(labels) != len(rects)):
+    assert isinstance(bboxes, list), "input bboxes should be provided as list"
+    assert all([(isinstance(b, (tuple, list)) and len(b) == 4) or isinstance(b, thelper.data.BoundingBox) for b in bboxes]), \
+        "bounding boxes should be provided as 4-elem arrays (x,y,width,height) or thelper.data.BoundingBox objects"
+    if labels is not None and (not isinstance(labels, list) or len(labels) != len(bboxes)):
         raise AssertionError("bad labels list (check type/length)")
     if confidences is not None and (not isinstance(confidences, list) or len(confidences) != len(confidences)):
         raise AssertionError("bad confidences list (check type/length)")
     display_image = np.copy(image)
     if labels is None and confidences is None:
         # draw all bboxes with unique colors (shuffled)
-        rects = copy.deepcopy(rects)
-        np.random.shuffle(rects)
-        for idx, rect in enumerate(rects):
-            cv.rectangle(display_image, (rect[0], rect[1]), (rect[0] + rect[2], rect[1] + rect[3]),
-                         get_bgr_from_hsl(idx / len(rects) * 360, 1.0, 0.5), thickness)
+        bboxes = copy.deepcopy(bboxes)
+        np.random.shuffle(bboxes)
+        for idx, bbox in enumerate(bboxes):
+            if isinstance(bbox, thelper.data.BoundingBox):
+                cv.rectangle(display_image, *bbox.get_top_left(), *bbox.get_bottom_right(),
+                             get_bgr_from_hsl(idx / len(bboxes) * 360, 1.0, 0.5), thickness)
+            else:
+                cv.rectangle(display_image, (bbox[0], bbox[1]), (bbox[0] + bbox[2], bbox[1] + bbox[3]),
+                             get_bgr_from_hsl(idx / len(bboxes) * 360, 1.0, 0.5), thickness)
     else:
         raise NotImplementedError  # TODO
     if win_size is not None:

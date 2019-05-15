@@ -54,44 +54,33 @@ class Segmentation(Task):
         if isinstance(class_names, str) and os.path.exists(class_names):
             with open(class_names, "r") as fd:
                 class_names = json.load(fd)
+        assert isinstance(class_names, (list, dict)), "expected class names to be provided as a list or map"
         if isinstance(class_names, list):
-            if len(class_names) != len(set(class_names)):
-                raise AssertionError("class names should not contain duplicates")
+            assert len(class_names) == len(set(class_names)), "class names should not contain duplicates"
             class_map = {class_name: class_idx for class_idx, class_name in enumerate(class_names)}
-        elif isinstance(class_names, dict):
-            class_map = copy.copy(class_names)
         else:
-            raise AssertionError("expected class names to be provided as a list or a map of pixel values")
-        if "dontcare" in class_map and dontcare is None:
-            raise AssertionError("'dontcare' class name is reserved")
+            class_map = copy.copy(class_names)
+        assert "dontcare" not in class_map or dontcare is not None, "'dontcare' class name is reserved"
         if dontcare is not None:
-            if not isinstance(dontcare, (int, float)):
-                raise AssertionError("'dontcare' value should be int or float")
+            assert isinstance(dontcare, (int, float)), "'dontcare' value should be int or float"
             if "dontcare" in class_map:
-                if dontcare != class_map["dontcare"]:
-                    raise AssertionError("'dontcare' value mismatch with pre-existing class map")
+                assert dontcare == class_map["dontcare"], "'dontcare' value mismatch with pre-existing class map"
                 del class_map["dontcare"]
             else:
-                if any([dontcare == val for val in class_map.values()]):
-                    raise AssertionError("'dontcare' value matches a pre-existing class name that is not 'dontcare'")
-        if len(class_map) < 1:
-            raise AssertionError("should have at least one class!")
-        if len(class_map) != len(set(class_map)):
-            raise AssertionError("class set should not contain duplicates")
+                assert not any([dontcare == val for val in class_map.values()]), "dontcare val matches another pre-existing class"
+        assert len(class_map) >= 1, "should have at least one class!"
+        assert len(class_map) == len(set(class_map)), "class set should not contain duplicates"
         self.class_map = class_map
         self.dontcare = dontcare
         self.color_map = None
         if color_map is not None:
-            if not isinstance(color_map, dict):
-                raise AssertionError("color map should be given as dictionary")
+            assert isinstance(color_map, dict), "color map should be given as dictionary"
             self.color_map = {}
             for key, val in color_map.items():
-                if key not in self.class_map and key != "dontcare":
-                    raise AssertionError("unknown color map entry '%s'" % key)
+                assert key in self.class_map or key == "dontcare", "unknown color map entry '%s'" % key
                 if isinstance(val, (list, tuple)):
                     val = np.ndarray(val)
-                if not isinstance(val, np.ndarray) or val.size != 3:
-                    raise AssertionError("color values should be given as triplets")
+                assert isinstance(val, np.ndarray) and val.size == 3, "color values should be given as triplets"
                 self.color_map[key] = val
 
     def get_class_names(self):
@@ -108,8 +97,7 @@ class Segmentation(Task):
 
     def get_class_sizes(self, samples):
         """Given a list of samples, returns a map of element counts for each class label."""
-        if samples is None or not samples:
-            raise AssertionError("provided invalid sample list")
+        assert samples is not None and samples, "provided invalid sample list"
         elem_counts = {class_name: 0 for class_name in self.class_map}
         label_map_key = self.get_gt_key()
         warned_unknown_value_flag = False
@@ -122,10 +110,9 @@ class Segmentation(Task):
                     labels = labels.cpu().numpy()
                 if isinstance(labels, PIL.Image.Image):
                     labels = np.array(labels)
-                if not isinstance(labels, np.ndarray):
-                    raise AssertionError("unsupported label map type ('%s')" % str(type(labels)))
+                assert isinstance(labels, np.ndarray), "unsupported label map type ('%s')" % str(type(labels))
                 # here, we assume labels are given as some integer type that corresponds to class name indices
-                curr_elem_counts = {class_name: np.count_nonzero(labels == class_val) for class_name, class_val in self.class_map.items()}
+                curr_elem_counts = {cname: np.count_nonzero(labels == cval) for cname, cval in self.class_map.items()}
                 dontcare_elem_count = 0 if self.dontcare is None else np.count_nonzero(labels == self.dontcare)
                 if (sum(curr_elem_counts.values()) + dontcare_elem_count) != labels.size and not warned_unknown_value_flag:
                     logger.warning("some label maps contain values that are unknown (i.e. with no proper class mapping)")
@@ -168,27 +155,22 @@ class Segmentation(Task):
 
     def get_compat(self, other):
         """Returns a task instance compatible with the current task and the given one."""
+        assert isinstance(other, (Segmentation, Task)), "cannot combine '%s' with '%s'" % (str(other.__class__), str(self.__class__))
         if isinstance(other, Segmentation):
-            if self.get_input_key() != other.get_input_key():
-                raise AssertionError("input key mismatch, cannot create compatible task")
-            if self.get_dontcare_val() != other.get_dontcare_val():
-                raise AssertionError("dontcare value mismatch, cannot create compatible task")
-            if self.get_gt_key() is not None and other.get_gt_key() is not None and self.get_gt_key() != other.get_gt_key():
-                raise AssertionError("gt key mismatch, cannot create compatible task")
+            assert self.get_input_key() == other.get_input_key(), "input key mismatch, cannot create compatible task"
+            assert self.get_dontcare_val() == other.get_dontcare_val(), "dontcare value mismatch, cannot create compatible task"
+            assert self.get_gt_key() is None or other.get_gt_key() is None or self.get_gt_key() == other.get_gt_key(), \
+                "gt key mismatch, cannot create compatible task"
             meta_keys = list(set(self.get_meta_keys() + other.get_meta_keys()))
             # cannot use set for class names, order needs to stay intact!
             class_names = self.get_class_names() + [name for name in other.get_class_names() if name not in self.get_class_names()]
             return Segmentation(class_names, self.get_input_key(), self.get_gt_key(),
                                 meta_keys=meta_keys, dontcare=self.get_dontcare_val())
         elif type(other) == Task:
-            if not self.check_compat(other):
-                raise AssertionError("cannot create compatible task instance between:\n"
-                                     "\tself: %s\n\tother: %s" % (str(self), str(other)))
+            assert self.check_compat(other), "cannot create compat task between:\n\tself: %s\n\tother: %s" % (str(self), str(other))
             meta_keys = list(set(self.get_meta_keys() + other.get_meta_keys()))
             return Segmentation(self.get_class_idxs_map(), self.get_input_key(), self.get_gt_key(),
                                 meta_keys=meta_keys, dontcare=self.get_dontcare_val())
-        else:
-            raise AssertionError("cannot combine task type '%s' with '%s'" % (str(other.__class__), str(self.__class__)))
 
     def __repr__(self):
         """Creates a print-friendly representation of a segmentation task."""
