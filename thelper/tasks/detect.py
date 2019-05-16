@@ -11,8 +11,8 @@ import numpy as np
 import torch
 import tqdm
 
-from thelper.tasks.utils import Task
 from thelper.tasks.regr import Regression
+from thelper.tasks.utils import Task
 
 logger = logging.getLogger(__name__)
 

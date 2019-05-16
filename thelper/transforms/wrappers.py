@@ -11,8 +11,8 @@ import numpy as np
 import PIL.Image
 import torch
 
-import thelper.utils
 import thelper.data
+import thelper.utils
 
 logger = logging.getLogger(__name__)
 

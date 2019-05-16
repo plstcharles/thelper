@@ -11,10 +11,10 @@ import xml.etree.ElementTree
 import cv2 as cv
 import numpy as np
 
+import thelper.data
 import thelper.tasks
 import thelper.utils
 from thelper.data.parsers import Dataset
-from thelper.data import BoundingBox
 
 logger = logging.getLogger(__name__)
 
@@ -202,12 +202,12 @@ class PASCALVOC(Dataset):
                     label = obj.find("name").text
                     if label not in self.label_name_map:
                         continue  # user is skipping some labels from the complete set
-                    gt.append(BoundingBox(class_id=self.label_name_map[label],
-                                          bbox=(bbox.find("xmin").text, bbox.find("xmax").text,
-                                                bbox.find("ymin").text, bbox.find("ymax").text),
-                                          difficult=thelper.utils.str2bool(obj.find("difficult").text),
-                                          occluded=thelper.utils.str2bool(obj.find("occluded").text),
-                                          truncated=thelper.utils.str2bool(obj.find("truncated").text)))
+                    gt.append(thelper.data.BoundingBox(class_id=self.label_name_map[label],
+                                                       bbox=(bbox.find("xmin").text, bbox.find("xmax").text,
+                                                             bbox.find("ymin").text, bbox.find("ymax").text),
+                                                       difficult=thelper.utils.str2bool(obj.find("difficult").text),
+                                                       occluded=thelper.utils.str2bool(obj.find("occluded").text),
+                                                       truncated=thelper.utils.str2bool(obj.find("truncated").text)))
                 if not gt:
                     continue
             self.samples.append({

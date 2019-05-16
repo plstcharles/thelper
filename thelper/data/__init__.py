@@ -30,7 +30,6 @@ from thelper.data.utils import create_hdf5  # noqa: F401
 from thelper.data.utils import create_loaders  # noqa: F401
 from thelper.data.utils import create_parsers  # noqa: F401
 from thelper.data.utils import get_class_weights  # noqa: F401
-
 from thelper.tasks.detect import BoundingBox  # noqa: F401
 
 logger = logging.getLogger("thelper.data")
