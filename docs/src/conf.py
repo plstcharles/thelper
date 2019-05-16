@@ -27,6 +27,8 @@ version = release = '0.2.8'
 
 # -- General configuration ---------------------------------------------------
 
+nitpicky = True
+
 # If your documentation needs a minimal Sphinx version, state it here.
 #
 # needs_sphinx = '1.0'
@@ -246,6 +248,7 @@ def skip(app, what, name, obj, skip, options):
         return False
     return skip
 
+
 def run_apidoc(_):
     if on_rtd:
         argv = ["-M", "-o", ".", "../../thelper"]
@@ -260,6 +263,7 @@ def run_apidoc(_):
         from sphinx import apidoc
         argv.insert(0, apidoc.__file__)
         apidoc.main(argv)
+
 
 def setup(app):
     app.connect("autodoc-skip-member", skip)
