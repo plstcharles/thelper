@@ -1643,39 +1643,66 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
     return fig
 
 
-def draw_bboxes(image, bboxes, labels=None, confidences=None, win_size=None, thickness=1, show=True):
-    """Draws and returns an image with bounding boxes via OpenCV."""
-    if isinstance(image, PIL.Image.Image):
-        # noinspection PyTypeChecker
-        image = np.asarray(image)
-    if not isinstance(image, np.ndarray):
-        raise AssertionError("expected input image to be numpy array")
-    assert isinstance(bboxes, list), "input bboxes should be provided as list"
-    assert all([(isinstance(b, (tuple, list)) and len(b) == 4) or isinstance(b, thelper.data.BoundingBox) for b in bboxes]), \
-        "bounding boxes should be provided as 4-elem arrays (x,y,width,height) or thelper.data.BoundingBox objects"
-    if labels is not None and (not isinstance(labels, list) or len(labels) != len(bboxes)):
-        raise AssertionError("bad labels list (check type/length)")
-    if confidences is not None and (not isinstance(confidences, list) or len(confidences) != len(confidences)):
-        raise AssertionError("bad confidences list (check type/length)")
-    display_image = np.copy(image)
-    if labels is None and confidences is None:
-        # draw all bboxes with unique colors (shuffled)
-        bboxes = copy.deepcopy(bboxes)
-        np.random.shuffle(bboxes)
-        for idx, bbox in enumerate(bboxes):
-            if isinstance(bbox, thelper.data.BoundingBox):
-                cv.rectangle(display_image, *bbox.get_top_left(), *bbox.get_bottom_right(),
-                             get_bgr_from_hsl(idx / len(bboxes) * 360, 1.0, 0.5), thickness)
-            else:
-                cv.rectangle(display_image, (bbox[0], bbox[1]), (bbox[0] + bbox[2], bbox[1] + bbox[3]),
-                             get_bgr_from_hsl(idx / len(bboxes) * 360, 1.0, 0.5), thickness)
-    else:
-        raise NotImplementedError  # TODO
-    if win_size is not None:
-        display_image = cv.resize(display_image, win_size)
-    if show:
-        cv.imshow("bboxes", display_image)
-    return display_image
+def draw_bbox(image, tl, br, text, color, box_thickness=2, font_thickness=1, font_scale=0.4):
+    """Draws a single bounding box on a given image (used in :func:`thelper.utils.draw_bboxes`)."""
+    text_size, baseline = cv.getTextSize(text, fontFace=cv.FONT_HERSHEY_SIMPLEX,
+                                         fontScale=font_scale, thickness=font_thickness)
+    text_bl = (tl[0] + box_thickness + 1, tl[1] + text_size[1] + box_thickness + 1)
+    # note: text will overflow if box is too small
+    text_box_br = (text_bl[0] + text_size[0] + box_thickness, text_bl[1] + box_thickness * 2)
+    cv.rectangle(image, (tl[0] - 1, tl[1] - 1), (text_box_br[0] + 1, text_box_br[1] + 1),
+                 color=(0, 0, 0), thickness=-1)
+    cv.rectangle(image, tl, br, color=(0, 0, 0), thickness=(box_thickness + 1))
+    cv.rectangle(image, tl, br, color=color, thickness=box_thickness)
+    cv.rectangle(image, tl, text_box_br, color=color, thickness=-1)
+    cv.putText(image, text, text_bl, fontFace=cv.FONT_HERSHEY_SIMPLEX, fontScale=font_scale,
+               color=(0, 0, 0), thickness=font_thickness + 1)
+    cv.putText(image, text, text_bl, fontFace=cv.FONT_HERSHEY_SIMPLEX, fontScale=font_scale,
+               color=(255, 255, 255), thickness=font_thickness)
+
+
+def draw_bboxes(images, preds=None, bboxes=None, color_map=None, redraw=None, block=False, **kwargs):
+    """Draws and returns a set of bounding box prediction results."""
+    image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+    if color_map is not None and isinstance(color_map, dict):
+        assert len(color_map) <= 256, "too many indices for uint8 map"
+        color_map_new = np.zeros((256, 3), dtype=np.uint8)
+        for idx, val in color_map.items():
+            color_map_new[idx, ...] = val
+        color_map = color_map_new.tolist()
+    nb_imgs = len(image_list)
+    grid_size_x, grid_size_y = nb_imgs, 1  # all images on one row, by default (add gt and preds as extra rows)
+    box_thickness = thelper.utils.get_key_def("box_thickness", kwargs, default=2, delete=True)
+    font_thickness = thelper.utils.get_key_def("font_thickness", kwargs, default=1, delete=True)
+    font_scale = thelper.utils.get_key_def("font_scale", kwargs, default=0.4, delete=True)
+    if preds is not None:
+        assert len(image_list) == len(bboxes)
+        for bboxes_list, image in zip(bboxes, image_list):
+            for bbox_idx, bbox in enumerate(bboxes_list):
+                assert isinstance(bbox, thelper.data.BoundingBox), "unrecognized bbox type"
+                color = get_bgr_from_hsl(bbox_idx / len(bboxes_list) * 360, 1.0, 0.5) \
+                    if color_map is None else color_map[bbox.class_id]
+                conf = ""
+                if thelper.utils.is_scalar(bbox.confidence):
+                    conf = f" ({bbox.confidence})"
+                elif isinstance(bbox.confidence, (list, tuple, np.ndarray)):
+                    conf = f" ({bbox.confidence[bbox.class_id]})"
+                draw_bbox(image, bbox.top_left, bbox.bottom_right, f"{bbox.task.class_names[bbox.class_id]}{conf}", color,
+                          box_thickness=box_thickness, font_thickness=font_thickness, font_scale=font_scale)
+    if bboxes is not None:
+        assert len(image_list) == len(bboxes), "mismatched bboxes list and image list sizes"
+        clean_image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+        for bboxes_list, image in zip(bboxes, clean_image_list):
+            for bbox_idx, bbox in enumerate(bboxes_list):
+                assert isinstance(bbox, thelper.data.BoundingBox), "unrecognized bbox type"
+                color = get_bgr_from_hsl(bbox_idx / len(bboxes_list) * 360, 1.0, 0.5) \
+                    if color_map is None else color_map[bbox.class_id]
+                draw_bbox(image, bbox.top_left, bbox.bottom_right, f"GT: {bbox.task.class_names[bbox.class_id]}", color,
+                          box_thickness=box_thickness, font_thickness=font_thickness, font_scale=font_scale)
+        grid_size_y += 1
+        image_list += clean_image_list
+    return draw_images(image_list, redraw=redraw, window_name="detections", block=block,
+                       grid_size_x=grid_size_x, grid_size_y=grid_size_y, **kwargs)
 
 
 def get_label_color_mapping(idx):
