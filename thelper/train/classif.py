@@ -26,62 +26,55 @@ class ImageClassifTrainer(Trainer):
         super().__init__(session_name, save_dir, model, task, loaders, config, ckptdata=ckptdata)
         if not isinstance(self.task, thelper.tasks.Classification):
             raise AssertionError("expected task to be classification")
-        self.input_key = self.task.get_input_key()
-        self.label_key = self.task.get_gt_key()
-        self.class_names = self.task.get_class_names()
-        self.meta_keys = self.task.get_meta_keys()
-        self.class_idxs_map = self.task.get_class_idxs_map()
         metrics = list(self.train_metrics.values()) + list(self.valid_metrics.values()) + list(self.test_metrics.values())
         for metric in metrics:  # check all metrics for classification-specific attributes, and set them
             if hasattr(metric, "set_class_names") and callable(metric.set_class_names):
-                metric.set_class_names(self.class_names)
+                metric.set_class_names(self.task.class_names)
         self.warned_no_shuffling_augments = False
 
     def _to_tensor(self, sample):
         """Fetches and returns tensors of input images and class labels from a batched sample dictionary."""
         if not isinstance(sample, dict):
             raise AssertionError("trainer expects samples to come in dicts for key-based usage")
-        if self.input_key not in sample:
-            raise AssertionError("could not find input key '%s' in sample dict" % self.input_key)
-        input_val, label_idx = sample[self.input_key], None
+        if self.task.input_key not in sample:
+            raise AssertionError("could not find input key '%s' in sample dict" % self.task.input_key)
+        input_val, label_idx = sample[self.task.input_key], None
         if isinstance(input_val, list):
-            if self.label_key in sample and sample[self.label_key] is not None:
-                label = sample[self.label_key]
+            if self.task.gt_key in sample and sample[self.task.gt_key] is not None:
+                label = sample[self.task.gt_key]
                 if not isinstance(label, list) or len(label) != len(input_val):
                     raise AssertionError("label should also be a list of the same length as input")
                 label_idx = [None] * len(input_val)
                 for idx in range(len(input_val)):
-                    input_val[idx], label_idx[idx] = self._to_tensor({self.input_key: input_val[idx],
-                                                                      self.label_key: label[idx]})
+                    input_val[idx], label_idx[idx] = self._to_tensor({self.task.input_key: input_val[idx],
+                                                                      self.task.gt_key: label[idx]})
             else:
                 for idx in range(len(input_val)):
                     input_val[idx] = torch.FloatTensor(input_val[idx])
         else:
             input_val = torch.FloatTensor(input_val)
-            if self.label_key in sample and sample[self.label_key] is not None:
-                label = sample[self.label_key]
+            if self.task.gt_key in sample and sample[self.task.gt_key] is not None:
+                label = sample[self.task.gt_key]
                 if isinstance(label, torch.Tensor) and label.numel() == input_val.shape[0] \
                         and label.dtype == torch.int64:
                     label_idx = label  # shortcut with less checks (dataset is already using tensor'd indices)
                 else:
                     label_idx = label_idx or list()
                     for class_name in label:
+                        assert isinstance(class_name, (int, torch.Tensor, str)), \
+                            "expected label to be a name (string) or index (int)"
                         if isinstance(class_name, (int, torch.Tensor)):
                             if isinstance(class_name, torch.Tensor):
-                                if torch.numel(class_name) != 1:
-                                    raise AssertionError("unexpected scalar label, got vector")
+                                assert torch.numel(class_name) == 1, "unexpected scalar label, got vector"
                                 class_name = class_name.item()
                             # dataset must already be using indices, we will forgive this...
-                            if class_name < 0 or class_name >= len(self.class_names):
-                                raise AssertionError("class name given as out-of-range index (%d) "
-                                                     "for class list" % class_name)
-                            class_name = self.class_names[class_name]
-                        elif not isinstance(class_name, str):
-                            raise AssertionError("expected label to be in str format "
-                                                 "(task will convert to proper index)")
-                        if class_name not in self.class_names:
-                            raise AssertionError("got unexpected label '%s' for a sample (unknown class)" % class_name)
-                        label_idx.append(self.class_idxs_map[class_name])
+                            assert 0 <= class_name < len(self.task.class_names), \
+                                "class name given as out-of-range index (%d) for class list" % class_name
+                            label_idx.append(class_name)
+                        else:
+                            assert class_name in self.task.class_names, \
+                                "got unexpected label '%s' for a sample (unknown class)" % class_name
+                            label_idx.append(self.task.class_indices[class_name])
                     label_idx = torch.LongTensor(label_idx)
         return input_val, label_idx
 
@@ -147,7 +140,7 @@ class ImageClassifTrainer(Trainer):
                 iter_loss.backward()
             if metrics:
                 meta = {key: sample[key] if key in sample else None
-                        for key in self.meta_keys} if self.meta_keys else None
+                        for key in self.task.meta_keys} if self.task.meta_keys else None
                 for metric in metrics.values():
                     metric.accumulate(iter_pred.detach().cpu(), label.detach().cpu(), meta=meta)
             if self.train_iter_callback is not None:
@@ -222,7 +215,7 @@ class ImageClassifTrainer(Trainer):
                     pred = model(self._upload_tensor(input_val, dev))
                 if metrics:
                     meta = {key: sample[key] if key in sample else None
-                            for key in self.meta_keys} if self.meta_keys else None
+                            for key in self.task.meta_keys} if self.task.meta_keys else None
                     for metric in metrics.values():
                         metric.accumulate(pred.cpu(), label.cpu() if label is not None else None, meta=meta)
                 if self.eval_iter_callback is not None:

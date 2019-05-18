@@ -348,9 +348,9 @@ class _LoaderFactory(object):
         must_split = any(must_split.values())
         if task is not None and isinstance(task, thelper.tasks.Classification) and not self.skip_class_balancing and must_split:
             # note: with current impl, all class sets will be shuffled the same way... (shouldnt matter, right?)
-            logger.debug("will split evenly over %d classes..." % len(task.get_class_names()))
+            logger.debug("will split evenly over %d classes..." % len(task.class_names))
             unset_class_key = "<unset>"
-            global_class_names = task.get_class_names() + [unset_class_key]  # extra name added for unlabeled samples (if needed!)
+            global_class_names = task.class_names + [unset_class_key]  # extra name added for unlabeled samples (if needed!)
             sample_maps = {}
             for dataset_name, dataset in datasets.items():
                 if isinstance(dataset, thelper.data.ExternalDataset):
@@ -360,7 +360,7 @@ class _LoaderFactory(object):
                         logger.warning(("must fully parse the external dataset '%s' for intra-class shuffling;" % dataset_name) +
                                        " this might take a while!\n(consider making a dataset interface that can return labels" +
                                        " only, it would greatly speed up the analysis of class distributions)")
-                        label_key = task.get_gt_key()
+                        label_key = task.gt_key
                         # to allow glitch-less tqdm printing after latest logger output
                         sys.stdout.flush()
                         sys.stderr.flush()

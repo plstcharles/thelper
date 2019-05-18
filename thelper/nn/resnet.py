@@ -209,12 +209,10 @@ class ResNet(thelper.nn.Module):
         return x
 
     def set_task(self, task):
-        if isinstance(task, thelper.tasks.Classification):
-            num_classes = len(task.get_class_names())
-            if self.fc.out_features != num_classes:
-                self.fc = torch.nn.Linear(self.out_features, num_classes)
-        else:
-            raise AssertionError("missing impl for non-classif task type")
+        assert isinstance(task, thelper.tasks.Classification), "missing impl for non-classif task type"
+        num_classes = len(task.class_names)
+        if self.fc.out_features != num_classes:
+            self.fc = torch.nn.Linear(self.out_features, num_classes)
         self.task = task
 
 
@@ -257,13 +255,12 @@ class FCResNet(ResNet):
         return x
 
     def set_task(self, task):
-        if isinstance(task, (thelper.tasks.Segmentation, thelper.tasks.Classification)):
-            num_classes = len(task.get_class_names())
-            if self.fc.out_features != num_classes:
-                self.fc = torch.nn.Linear(self.out_features, num_classes)
-                self.finallayer = torch.nn.Conv2d(self.out_features, num_classes, kernel_size=1)
-                self.finallayer.weight = torch.nn.Parameter(self.fc.weight.view(self.fc.out_features, self.out_features, 1, 1))
-                self.finallayer.bias = torch.nn.Parameter(self.fc.bias)
-        else:
-            raise AssertionError("missing impl for non-segm/classif task type")
+        assert isinstance(task, (thelper.tasks.Segmentation, thelper.tasks.Classification)), \
+            "missing impl for non-segm/classif task type"
+        num_classes = len(task.class_names)
+        if self.fc.out_features != num_classes:
+            self.fc = torch.nn.Linear(self.out_features, num_classes)
+            self.finallayer = torch.nn.Conv2d(self.out_features, num_classes, kernel_size=1)
+            self.finallayer.weight = torch.nn.Parameter(self.fc.weight.view(self.fc.out_features, self.out_features, 1, 1))
+            self.finallayer.bias = torch.nn.Parameter(self.fc.bias)
         self.task = task

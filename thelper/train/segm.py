@@ -27,41 +27,35 @@ class ImageSegmTrainer(Trainer):
         super().__init__(session_name, save_dir, model, task, loaders, config, ckptdata=ckptdata)
         if not isinstance(self.task, thelper.tasks.Segmentation):
             raise AssertionError("expected task to be segmentation")
-        self.input_key = self.task.get_input_key()
-        self.label_map_key = self.task.get_gt_key()
-        self.class_names = self.task.get_class_names()
-        self.meta_keys = self.task.get_meta_keys()
-        self.class_idxs_map = self.task.get_class_idxs_map()
-        self.dontcare_val = self.task.get_dontcare_val()
         trainer_config = thelper.utils.get_key_def("params", config["trainer"], {})
         self.scale_preds = thelper.utils.get_key_def("scale_preds", trainer_config, default=False)
         metrics = list(self.train_metrics.values()) + list(self.valid_metrics.values()) + list(self.test_metrics.values())
         for metric in metrics:  # check all metrics for classification-specific attributes, and set them
             if hasattr(metric, "set_class_names") and callable(metric.set_class_names):
-                metric.set_class_names(self.class_names)
+                metric.set_class_names(self.task.class_names)
         self.warned_no_shuffling_augments = False
 
     def _to_tensor(self, sample):
         """Fetches and returns tensors of input images and label maps from a batched sample dictionary."""
         if not isinstance(sample, dict):
             raise AssertionError("trainer expects samples to come in dicts for key-based usage")
-        if self.input_key not in sample:
-            raise AssertionError("could not find input key '%s' in sample dict" % self.input_key)
-        input_val, label_map = sample[self.input_key], None
+        if self.task.input_key not in sample:
+            raise AssertionError("could not find input key '%s' in sample dict" % self.task.input_key)
+        input_val, label_map = sample[self.task.input_key], None
         if isinstance(input_val, list):
-            if self.label_map_key in sample and sample[self.label_map_key] is not None:
-                label_map = sample[self.label_map_key]
+            if self.task.gt_key in sample and sample[self.task.gt_key] is not None:
+                label_map = sample[self.task.gt_key]
                 if not isinstance(label_map, list) or len(label_map) != len(input_val):
                     raise AssertionError("label_map should also be a list of the same length as input")
                 for idx in range(len(input_val)):
-                    input_val[idx], label_map[idx] = self._to_tensor({self.input_key: input_val[idx], self.label_map_key: label_map[idx]})
+                    input_val[idx], label_map[idx] = self._to_tensor({self.task.input_key: input_val[idx], self.task.gt_key: label_map[idx]})
             else:
                 for idx in range(len(input_val)):
                     input_val[idx] = torch.FloatTensor(input_val[idx])
         else:
             input_val = torch.FloatTensor(input_val)
-            if self.label_map_key in sample and sample[self.label_map_key] is not None:
-                label_map = sample[self.label_map_key]
+            if self.task.gt_key in sample and sample[self.task.gt_key] is not None:
+                label_map = sample[self.task.gt_key]
                 if isinstance(label_map, list):
                     raise AssertionError("unexpected label map type")
                 label_map = torch.ByteTensor(label_map)
@@ -133,7 +127,7 @@ class ImageSegmTrainer(Trainer):
                 iter_loss = loss(iter_pred, self._upload_tensor(label_map, dev).long())
                 iter_loss.backward()
             if metrics:
-                meta = {key: sample[key] if key in sample else None for key in self.meta_keys} if self.meta_keys else None
+                meta = {key: sample[key] if key in sample else None for key in self.task.meta_keys} if self.task.meta_keys else None
                 for metric in metrics.values():
                     metric.accumulate(iter_pred.detach().cpu(), label_map.detach().cpu(), meta=meta)
             if self.train_iter_callback is not None:
@@ -210,7 +204,7 @@ class ImageSegmTrainer(Trainer):
                 if self.scale_preds:
                     pred = torch.nn.functional.interpolate(pred, size=input_val.shape[-2:], mode="bilinear")
                 if metrics:
-                    meta = {key: sample[key] if key in sample else None for key in self.meta_keys} if self.meta_keys else None
+                    meta = {key: sample[key] if key in sample else None for key in self.task.meta_keys} if self.task.meta_keys else None
                     for metric in metrics.values():
                         metric.accumulate(pred.cpu(), label_map.cpu() if label_map is not None else None, meta=meta)
                 if self.eval_iter_callback is not None:

@@ -431,7 +431,7 @@ def create_hdf5(archive_path, task, train_loader, valid_loader, test_loader, com
         fd.attrs["config"] = str(config_backup)
         fd.attrs["compression"] = str(compression)
         dtype = h5py.special_dtype(vlen=np.uint8)
-        target_keys = task.get_keys()
+        target_keys = task.keys
 
         def create_dataset(name, max_len, array_template, compr_args):
             if array_template.ndim > 1:
@@ -481,7 +481,7 @@ def create_hdf5(archive_path, task, train_loader, valid_loader, test_loader, com
                         fill_dataset(datasets[key], datasets_len[key], idx, tensor, datasets_compr[key][0], **datasets_compr[key][1])
                         datasets_len[key] += 1
             assert len(set(datasets_len.values())) == 1
-            fd[group].attrs["count"] = datasets_len[task.get_input_key()]
+            fd[group].attrs["count"] = datasets_len[task.input_key]
             for key in target_keys:
                 datasets[key].resize(size=(datasets_len[key],))
 

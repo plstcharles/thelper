@@ -114,7 +114,7 @@ def create_loss_fn(config, model, loader=None, uploader=None):
         weight_distrib = config["weight_distribution"]
         if isinstance(weight_distrib, dict):
             for label, weight in weight_distrib.items():
-                if label not in model.task.get_class_names():
+                if label not in model.task.class_names:
                     raise AssertionError("weight distribution label '%s' not in dataset class list" % label)
                 if not isinstance(weight, float):
                     raise AssertionError("expected weight distrib map to provide weights as floats directly")
@@ -131,7 +131,7 @@ def create_loss_fn(config, model, loader=None, uploader=None):
                 label_sizes_map = model.task.get_class_sizes(loader.dataset)
                 weight_norm = False
             else:
-                label_sizes_map = {label: -1 for label in model.task.get_class_names()}  # counts don't matter
+                label_sizes_map = {label: -1 for label in model.task.class_names}  # counts don't matter
                 weight_norm = True
             if "weight_norm" in config:
                 weight_norm = thelper.utils.str2bool(config["weight_norm"])
@@ -143,7 +143,7 @@ def create_loss_fn(config, model, loader=None, uploader=None):
         for label, weight in weight_distrib.items():
             weight_list_str += "\n  \"%s\": %s," % (label, weight)
         logger.info(weight_list_str + "\n}")
-        weight_list = [weight_distrib[label] if label in weight_distrib else 1.0 for label in model.task.get_class_names()]
+        weight_list = [weight_distrib[label] if label in weight_distrib else 1.0 for label in model.task.class_names]
         loss_params[weight_param_name] = uploader(torch.FloatTensor(weight_list))
     if isinstance(model.task, thelper.tasks.Segmentation):
         ignore_index_param_name = thelper.utils.get_key_def("ignore_index_param_name", config, "ignore_index")
@@ -151,9 +151,9 @@ def create_loss_fn(config, model, loader=None, uploader=None):
         loss_sig = inspect.signature(loss_type)
         if ignore_index_param_name in loss_sig.parameters:
             if ignore_index_label_name != "dontcare":
-                loss_params[ignore_index_param_name] = model.task.get_class_idxs_map()[ignore_index_label_name]
+                loss_params[ignore_index_param_name] = model.task.class_indices[ignore_index_label_name]
             else:
-                loss_params[ignore_index_param_name] = model.task.get_dontcare_val()
+                loss_params[ignore_index_param_name] = model.task.dontcare
     loss = loss_type(**loss_params)
     return loss
 

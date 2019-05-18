@@ -160,9 +160,8 @@ class HDF5Dataset(Dataset):
         self.subset = self.archive[subset]
         sample_count = self.subset.attrs["count"]
         self.samples = [{}] * sample_count
-        target_keys = self.task.get_keys()
         self.target_args = {}
-        for key in target_keys:
+        for key in self.task.keys:
             dset = self.subset[key]
             assert dset.len() == len(self.samples)
             dtype = dset.attrs["orig_dtype"] if "orig_dtype" in dset.attrs else None

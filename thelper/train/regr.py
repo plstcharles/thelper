@@ -28,49 +28,43 @@ class RegressionTrainer(Trainer):
         super().__init__(session_name, save_dir, model, task, loaders, config, ckptdata=ckptdata)
         if not isinstance(self.task, thelper.tasks.Regression):
             raise AssertionError("expected task to be regression")
-        self.input_key = self.task.get_input_key()
-        self.target_key = self.task.get_gt_key()
-        self.input_shape = self.task.get_input_shape()
-        self.target_shape = self.task.get_target_shape()
-        self.target_type = self.task.get_target_type()
-        self.target_min = self.task.get_target_min()
+        self.target_min = self.task.target_min
         if isinstance(self.target_min, np.ndarray):
             self.target_min = torch.from_numpy(self.target_min)
-        self.target_max = self.task.get_target_max()
+        self.target_max = self.task.target_max
         if isinstance(self.target_max, np.ndarray):
             self.target_max = torch.from_numpy(self.target_max)
-        self.meta_keys = self.task.get_meta_keys()
 
     def _to_tensor(self, sample):
         """Fetches and returns tensors of inputs and targets from a batched sample dictionary."""
         if not isinstance(sample, dict):
             raise AssertionError("trainer expects samples to come in dicts for key-based usage")
-        if self.input_key not in sample:
-            raise AssertionError("could not find input key '%s' in sample dict" % self.input_key)
-        input_val = sample[self.input_key]
+        if self.task.input_key not in sample:
+            raise AssertionError("could not find input key '%s' in sample dict" % self.task.input_key)
+        input_val = sample[self.task.input_key]
         if isinstance(input_val, np.ndarray):
             input_val = torch.from_numpy(input_val)
         if not isinstance(input_val, torch.Tensor):
             raise AssertionError("unexpected input type; should be torch.Tensor")
-        if self.input_shape is not None:
-            if input_val.dim() != len(self.input_shape) + 1:
+        if self.task.input_shape is not None:
+            if input_val.dim() != len(self.task.input_shape) + 1:
                 raise AssertionError("expected input as Nx[shape] where N = batch size")
-            if self.input_shape != input_val.shape[1:]:
-                raise AssertionError("invalid input shape; got '%s', expected '%s'" % (input_val.shape[1:], self.input_shape))
+            if self.task.input_shape != input_val.shape[1:]:
+                raise AssertionError("invalid input shape; got '%s', expected '%s'" % (input_val.shape[1:], self.task.input_shape))
         target = None
-        if self.target_key in sample:
-            target = sample[self.target_key]
+        if self.task.gt_key in sample:
+            target = sample[self.task.gt_key]
             if isinstance(target, np.ndarray):
-                if self.target_type is not None and target.dtype != self.target_type:
-                    raise AssertionError("unexpected target type, should be %s" % str(self.target_type))
+                if self.task.target_type is not None and target.dtype != self.task.target_type:
+                    raise AssertionError("unexpected target type, should be %s" % str(self.task.target_type))
                 target = torch.from_numpy(target)
             if not isinstance(target, torch.Tensor):
                 raise AssertionError("unexpected target type; should be torch.Tensor")
-            if self.target_shape is not None:
-                if target.dim() != len(self.target_shape) + 1:
+            if self.task.target_shape is not None:
+                if target.dim() != len(self.task.target_shape) + 1:
                     raise AssertionError("expected target as Nx[shape] where N = batch size")
-                if self.target_shape != target.shape[1:]:
-                    raise AssertionError("invalid target shape; got '%s', expected '%s'" % (target.shape[1:], self.target_shape))
+                if self.task.target_shape != target.shape[1:]:
+                    raise AssertionError("invalid target shape; got '%s', expected '%s'" % (target.shape[1:], self.task.target_shape))
         return input_val, target
 
     def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
@@ -113,7 +107,8 @@ class RegressionTrainer(Trainer):
             iter_loss = loss(iter_pred, target.float())
             iter_loss.backward()
             if metrics:
-                meta = {key: sample[key] if key in sample else None for key in self.meta_keys} if self.meta_keys else None
+                meta = {key: sample[key] if key in sample else None
+                        for key in self.task.meta_keys} if self.task.meta_keys else None
                 for metric in metrics.values():
                     metric.accumulate(iter_pred.detach().cpu(), target.detach().cpu(), meta=meta)
             if self.train_iter_callback is not None:
@@ -171,8 +166,7 @@ class RegressionTrainer(Trainer):
                     raise AssertionError("missing regr trainer support for augmented minibatches")  # todo
                 pred = model(self._upload_tensor(input_val, dev))
                 if metrics:
-                    meta = {key: sample[key] if key in sample else None
-                            for key in self.meta_keys} if self.meta_keys else None
+                    meta = {key: sample[key] if key in sample else None for key in self.task.meta_keys} if self.task.meta_keys else None
                     for metric in metrics.values():
                         metric.accumulate(pred.cpu(), target.cpu() if target is not None else None, meta=meta)
                 if self.eval_iter_callback is not None:

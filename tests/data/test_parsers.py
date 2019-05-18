@@ -159,7 +159,7 @@ def test_hdf5_dataset(fake_op, dummy_hdf5):
     hdf5_dataset = thelper.data.HDF5Dataset(test_hdf5_path, subset="train")
     assert len(dummy_hdf5) == len(hdf5_dataset)
     assert dummy_hdf5.get_task().check_compat(hdf5_dataset.get_task(), exact=True)
-    keys = dummy_hdf5.get_task().get_keys()
+    keys = dummy_hdf5.get_task().keys
     for idx in range(len(dummy_hdf5)):
         for key in keys:
             assert np.array_equal(dummy_hdf5[idx][key], hdf5_dataset[idx][key])

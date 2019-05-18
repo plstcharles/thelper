@@ -102,16 +102,14 @@ class MobileNetV2(thelper.nn.Module):
         return x
 
     def set_task(self, task):
-        if isinstance(task, thelper.tasks.Classification):
-            num_classes = len(task.get_class_names())
-            if num_classes != self.classif_features:
-                self.classifier = nn.Sequential(
-                    nn.Dropout(),
-                    nn.Linear(self.last_channel, num_classes),
-                )
-                self.classif_features = num_classes
-        else:
-            raise AssertionError("missing impl for non-classif task type")
+        assert isinstance(task, thelper.tasks.Classification), "missing impl for non-classif task type"
+        num_classes = len(task.class_names)
+        if num_classes != self.classif_features:
+            self.classifier = nn.Sequential(
+                nn.Dropout(),
+                nn.Linear(self.last_channel, num_classes),
+            )
+            self.classif_features = num_classes
         self.task = task
 
     def _initialize_weights(self):

@@ -302,7 +302,7 @@ class ExternalClassifModule(ExternalModule):
         """Rewires the last fully connected layer of the wrapped network to fit the given number of classification targets."""
         if type(task) != thelper.tasks.Classification:
             raise AssertionError("task passed to ExternalClassifModule should be 'thelper.tasks.Classification'")
-        self.nb_classes = self.task.get_nb_classes()
+        self.nb_classes = len(self.task.class_names)
         import torchvision
         if hasattr(self.model, "fc") and isinstance(self.model.fc, torch.nn.Linear):
             if self.model.fc.out_features != self.nb_classes:
