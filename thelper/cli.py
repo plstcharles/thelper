@@ -170,7 +170,7 @@ def visualize_data(config):
         raise AssertionError("unexpected viz kwargs type")
     if thelper.utils.get_key_def(["data_config", "loaders"], config, default=None) is None or ignore_loaders:
         datasets, task = thelper.data.create_parsers(config)
-        loader_map = {dataset_name: torch.utils.data.DataLoader(dataset,) for dataset_name, dataset in datasets.items()}
+        loader_map = {dataset_name: thelper.data.DataLoader(dataset,) for dataset_name, dataset in datasets.items()}
         # we assume no transforms were done in the parser, and images are given as read by opencv
         viz_kwargs["ch_transpose"] = thelper.utils.get_key_def("ch_transpose", viz_kwargs, False)
         viz_kwargs["flip_bgr"] = thelper.utils.get_key_def("flip_bgr", viz_kwargs, False)
