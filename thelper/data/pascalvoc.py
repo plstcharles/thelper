@@ -4,6 +4,7 @@ This module contains a dataset parser used to load the PASCAL Visual Object Clas
 semantic segmentation or object detection. See http://host.robots.ox.ac.uk/pascal/VOC/ for more info.
 """
 
+import copy
 import logging
 import os
 import xml.etree.ElementTree
@@ -117,12 +118,12 @@ class PASCALVOC(Dataset):
                 if name in target_labels or name == "background" or name == "dontcare":
                     self.label_name_map[name] = len(self.label_name_map) if name != "dontcare" else self._dontcare_val
         else:
-            self.label_name_map = self._label_name_map
+            self.label_name_map = copy.deepcopy(self._label_name_map)
         # if using target labels, must rely on image set luts to confirm content
         if target_labels is not None:
             valid_sample_names = set()
             for label in self.label_name_map:
-                if label == "background" or label == "dontcare":
+                if label in ["background", "dontcare"]:
                     continue
                 with open(os.path.join(imagesets_path, "Main", label + "_" + subset + ".txt")) as image_subset_fd:
                     for line in image_subset_fd:
@@ -131,19 +132,22 @@ class PASCALVOC(Dataset):
                             valid_sample_names.add(sample_name)
         self.label_colors = {idx: thelper.utils.get_label_color_mapping(self._label_name_map[name])[::-1]
                              for name, idx in self.label_name_map.items()}
-        color_map = {name: self.label_colors[idx][::-1] for name, idx in self.label_name_map.items()}
+        color_map = {idx: self.label_colors[idx][::-1] for idx in self.label_name_map.values()}
         if self.task_name == "detect":
+            if "dontcare" in self.label_name_map:
+                del color_map[self.label_name_map["dontcare"]]
+                del self.label_name_map["dontcare"]  # no need for obj detection
             self.gt_key = bboxes_key
             self.task = thelper.tasks.Detection(self.label_name_map, input_key=self.image_key,
                                                 bboxes_key=self.gt_key, meta_keys=meta_keys,
+                                                background=self.label_name_map["background"],
                                                 color_map=color_map)
             image_set_name = "Main"
         elif self.task_name == "segm":
             self.gt_key = label_map_key
             self.task = thelper.tasks.Segmentation(self.label_name_map, input_key=self.image_key,
                                                    label_map_key=self.gt_key, meta_keys=meta_keys,
-                                                   dontcare=self._dontcare_val,
-                                                   color_map=color_map)
+                                                   dontcare=self._dontcare_val, color_map=color_map)
             image_set_name = "Segmentation"
         imageset_path = os.path.join(imagesets_path, image_set_name, subset + ".txt")
         assert os.path.isfile(imageset_path), "cannot locate sample set file at '%s'" % imageset_path
@@ -172,7 +176,8 @@ class PASCALVOC(Dataset):
             assert os.path.isfile(annotation_file_path), "cannot load annotation file for sample '%s'" % sample_name
             annotation = xml.etree.ElementTree.parse(annotation_file_path).getroot()
             assert annotation.tag == "annotation", "unexpected xml content"
-            image_path = os.path.join(image_folder_path, annotation.find("filename").text)
+            filename = annotation.find("filename").text
+            image_path = os.path.join(image_folder_path, filename)
             assert os.path.isfile(image_path), "cannot locate image for sample '%s'" % sample_name
             image = None
             if self.preload:
@@ -203,11 +208,12 @@ class PASCALVOC(Dataset):
                     if label not in self.label_name_map:
                         continue  # user is skipping some labels from the complete set
                     gt.append(thelper.data.BoundingBox(class_id=self.label_name_map[label],
-                                                       bbox=(bbox.find("xmin").text, bbox.find("xmax").text,
-                                                             bbox.find("ymin").text, bbox.find("ymax").text),
+                                                       bbox=(int(bbox.find("xmin").text), int(bbox.find("xmax").text),
+                                                             int(bbox.find("ymin").text), int(bbox.find("ymax").text)),
                                                        difficult=thelper.utils.str2bool(obj.find("difficult").text),
                                                        occluded=thelper.utils.str2bool(obj.find("occluded").text),
-                                                       truncated=thelper.utils.str2bool(obj.find("truncated").text)))
+                                                       truncated=thelper.utils.str2bool(obj.find("truncated").text),
+                                                       confidence=None, image_id=filename, task=self.task))
                 if not gt:
                     continue
             self.samples.append({
@@ -236,6 +242,8 @@ class PASCALVOC(Dataset):
                 gt = cv.imread(sample[self.gt_path_key])
                 assert gt is not None and gt.shape == image.shape, "unexpected gt shape for sample '%s'" % sample[self.sample_name_key]
                 gt = self.encode_label_map(gt)
+            elif self.task_name == "detect":
+                gt = sample[self.gt_key]
         else:
             image = sample[self.image_key]
             gt = sample[self.gt_key]
