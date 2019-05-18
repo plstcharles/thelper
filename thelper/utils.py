@@ -1241,16 +1241,11 @@ def draw_images(images,               # type: thelper.typedefs.OneOrManyArrayTyp
     nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
     if nb_imgs < 1:
         return None
-    if captions is not None and len(captions) != nb_imgs:
-        raise AssertionError("captions count mismatch with image count")
-    if max_img_size is None:
-        max_img_size = (800, 1600)  # for display on typical monitors... (height, width)
-    if grid_size_x is None:
-        grid_size_x = int(math.ceil(math.sqrt(nb_imgs)))
-    if grid_size_y is None:
-        grid_size_y = int(math.ceil(nb_imgs / grid_size_x))
-    if grid_size_x * grid_size_y < nb_imgs:
-        raise AssertionError(f"bad gridding for subplots (need at least {nb_imgs} tiles)")
+    assert captions is None or len(captions) == nb_imgs, "captions count mismatch with image count"
+    max_img_size = (800, 1600) if max_img_size is None else max_img_size # for display on typical monitors... (height, width)
+    grid_size_x = int(math.ceil(math.sqrt(nb_imgs))) if grid_size_x is None else grid_size_x
+    grid_size_y = int(math.ceil(nb_imgs / grid_size_x)) if grid_size_y is None else grid_size_y
+    assert grid_size_x * grid_size_y >= nb_imgs, f"bad gridding for subplots (need at least {nb_imgs} tiles)"
     if use_cv2:
         if caption_opts is None:
             caption_opts = {
@@ -1392,8 +1387,7 @@ def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, b
     nb_imgs = len(image_list)
     grid_size_x, grid_size_y = nb_imgs, 1  # all images on one row, by default (add gt and preds as extra rows)
     if color_map is not None and isinstance(color_map, dict):
-        if len(color_map) > 256:
-            raise AssertionError("too many indices for uint8 map")
+        assert len(color_map) <= 256, "too many indices for uint8 map"
         color_map_new = np.zeros((256, 1, 3), dtype=np.uint8)
         for idx, val in color_map.items():
             color_map_new[idx, ...] = val
@@ -1485,10 +1479,9 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
     import thelper.tasks
     if not isinstance(task, thelper.tasks.Task):
         raise AssertionError("invalid task object")
-    image_key = task.get_input_key()
-    if image_key is None or image_key not in minibatch:
-        raise AssertionError("images not found with key '%s'" % image_key)
-    images = minibatch[image_key]
+    if task.input_key not in minibatch:
+        raise AssertionError("images not found in minibatch with key '%s'" % task.input_key)
+    images = minibatch[task.input_key]
     if isinstance(images, list) and all([isinstance(t, torch.Tensor) for t in images]):
         # if we have a list, it must be due to a augmentation stage
         if not all([image.shape == images[0].shape for image in images]):
@@ -1504,27 +1497,26 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
     if preds is not None:
         preds = preds.cpu().detach()  # avoid latency for preprocessing on gpu
     if isinstance(task, thelper.tasks.Classification):
-        label_key, labels = task.get_gt_key(), None
-        if label_key in minibatch and minibatch[label_key] is not None:
-            labels = minibatch[label_key]
-        class_names_map = {idx: name for name, idx in task.get_class_idxs_map().items()}
-        return draw_classifs(images, preds, labels, class_names_map=class_names_map, redraw=redraw, block=block, **kwargs)
+        labels = thelper.utils.get_key_def(task.gt_key, minibatch, None)
+        class_names_map = {idx: name for name, idx in task.class_indices.items()}
+        return draw_classifs(images=images, preds=preds, labels=labels,
+                             class_names_map=class_names_map, redraw=redraw, block=block, **kwargs)
     elif isinstance(task, thelper.tasks.Segmentation):
-        mask_key, masks = task.get_gt_key(), None
-        if mask_key in minibatch and minibatch[mask_key] is not None:
-            masks = minibatch[mask_key]
-        name_color_map = task.get_color_map()
-        if name_color_map is not None:
-            idx_color_map = {idx: name_color_map[name] for name, idx in task.get_class_idxs_map().items()}
-        else:
-            idx_color_map = {idx: get_label_color_mapping(idx) for idx in task.get_class_idxs_map().values()}
-        return draw_segments(images, preds, masks, color_map=idx_color_map, redraw=redraw, block=block, **kwargs)
+        masks = thelper.utils.get_key_def(task.gt_key, minibatch, None)
+        color_map = task.color_map if task.color_map else {idx: get_label_color_mapping(idx) for idx in task.class_indices.values()}
+        if task.dontcare is not None and task.dontcare not in color_map:
+            color_map[task.dontcare] = np.asarray([0, 0, 0])
+        return draw_segments(images=images, preds=preds, masks=masks, color_map=color_map, redraw=redraw, block=block, **kwargs)
+    elif isinstance(task, thelper.tasks.Detection):
+        bboxes = thelper.utils.get_key_def(task.gt_key, minibatch, None)
+        color_map = task.color_map if task.color_map else {idx: get_label_color_mapping(idx) for idx in task.class_indices.values()}
+        return draw_bboxes(images=images, preds=preds, bboxes=bboxes, color_map=color_map, redraw=redraw, block=block, **kwargs)
     elif isinstance(task, thelper.tasks.Regression):
-        target_key, targets = task.get_gt_key(), None
-        if target_key in minibatch and minibatch[target_key] is not None:
-            targets = minibatch[target_key]
+        targets = thelper.utils.get_key_def(task.gt_key, minibatch, None)
         swap_channels = isinstance(task, thelper.tasks.SuperResolution)  # must update BxCxHxW to BxHxWxC in targets/preds
-        return draw_predicts(images, preds, targets, swap_channels=swap_channels, redraw=redraw, block=block, **kwargs)
+        # @@@ todo: cleanup swap_channels above via flag in superres task?
+        return draw_predicts(images=images, preds=preds, targets=targets,
+                             swap_channels=swap_channels, redraw=redraw, block=block, **kwargs)
     else:
         raise AssertionError("unhandled drawing mode, missing impl")
 
