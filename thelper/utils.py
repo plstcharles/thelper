@@ -44,7 +44,8 @@ class Struct(object):
             setattr(self, key, val)
 
     def __repr__(self):
-        return self.__class__.__name__ + ": " + str(self.__dict__)
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
+            "(" + ", ".join([f"{key}={val}" for key, val in self.__dict__.items()]) + ")"
 
 
 def get_available_cuda_devices(attempts_per_device=5):

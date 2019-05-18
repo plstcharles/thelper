@@ -119,9 +119,7 @@ class Metric(ABC):
 
     def __repr__(self):
         """Returns a generic print-friendly string containing info about this metric."""
-        return self.__class__.__module__ + "." + self.__class__.__qualname__ + ": " + str({
-            "goal": self.goal(), "is_scalar": self.is_scalar()
-        })
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + "()"
 
 
 class CategoryAccuracy(Metric):
@@ -249,12 +247,6 @@ class CategoryAccuracy(Metric):
     def goal(self):
         """Returns the scalar optimization goal of this metric (maximization)."""
         return Metric.maximize
-
-    def __repr__(self):
-        """Returns a generic print-friendly string containing info about this metric."""
-        return self.__class__.__module__ + "." + self.__class__.__qualname__ + ": " + str({
-            "top_k": self.top_k
-        })
 
 
 class BinaryAccuracy(Metric):

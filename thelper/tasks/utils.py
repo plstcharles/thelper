@@ -27,8 +27,8 @@ def create_task(config):
         | :class:`thelper.tasks.utils.Task`
         | :func:`thelper.tasks.utils.Task.__repr__`
     """
-    if config is None or not isinstance(config, (str, dict)):
-        raise AssertionError("unexpected config type (should be str or dict)")
+    assert config is not None and isinstance(config, (str, dict)), \
+        "unexpected config type (should be str or dict)"
     if isinstance(config, dict):
         if "type" not in config or not isinstance(config["type"], str):
             raise AssertionError("invalid field 'type' in task config")
@@ -41,13 +41,16 @@ def create_task(config):
             raise AssertionError("the task must be derived from 'thelper.tasks.Task'")
         return task
     elif isinstance(config, str):
-        task_type_name = config.split(": ")[0]
-        if "." not in task_type_name:
-            # dirty hotfix
-            task_type_name = "thelper.tasks." + task_type_name
-        task_type = thelper.utils.import_class(task_type_name)
-        task_params = eval(": ".join(config.split(": ")[1:]))
-        task = task_type(**task_params)
+        if ": " in config:  # for backwards compat (pre v0.3.0)
+            task_type_name = config.split(": ")[0]
+            if "." not in task_type_name:
+                # dirty hotfix
+                task_type_name = "thelper.tasks." + task_type_name
+            task_type = thelper.utils.import_class(task_type_name)
+            task_params = eval(": ".join(config.split(": ")[1:]))
+            task = task_type(**task_params)
+        else:
+            task = eval(config)
         if not isinstance(task, thelper.tasks.Task):
             raise AssertionError("the task must be derived from 'thelper.tasks.Task'")
         return task
