@@ -723,7 +723,7 @@ def get_caller_name(skip=2):
     return ".".join(name)
 
 
-def get_key(key, config, msg=None):
+def get_key(key, config, msg=None, delete=False):
     """Returns a value given a dictionary key, throwing if not available."""
     if isinstance(key, list):
         if len(key) <= 1:
@@ -733,7 +733,10 @@ def get_key(key, config, msg=None):
                 raise AssertionError("must provide at least two valid keys to test")
         for k in key:
             if k in config:
-                return config[k]
+                val = config[k]
+                if delete:
+                    del config[k]
+                return val
         if msg is not None:
             raise AssertionError(msg)
         else:
@@ -745,10 +748,13 @@ def get_key(key, config, msg=None):
             else:
                 raise AssertionError("config dictionary missing '%s' field" % key)
         else:
-            return config[key]
+            val = config[key]
+            if delete:
+                del config[key]
+            return val
 
 
-def get_key_def(key, config, default=None, msg=None):
+def get_key_def(key, config, default=None, msg=None, delete=False):
     """Returns a value given a dictionary key, or the default value if it cannot be found."""
     if isinstance(key, list):
         if len(key) <= 1:
@@ -758,13 +764,19 @@ def get_key_def(key, config, default=None, msg=None):
                 raise AssertionError("must provide at least two valid keys to test")
         for k in key:
             if k in config:
-                return config[k]
+                val = config[k]
+                if delete:
+                    del config[k]
+                return val
         return default
     else:
         if key not in config:
             return default
         else:
-            return config[key]
+            val = config[key]
+            if delete:
+                del config[key]
+            return val
 
 
 def get_log_stamp():
