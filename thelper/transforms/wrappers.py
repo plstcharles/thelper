@@ -147,10 +147,12 @@ class AlbumentationsWrapper(object):
         """Create a print-friendly representation of inner augmentation stages."""
         # for debug purposes only, transforms probably cannot be expressed as a string
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
-            f"(transforms={repr(self.transforms)}, to_tensor={self.to_tensor}, bbox_params={self.bbox_params}, " + \
-            f"add_targets={repr(self.add_targets)}, image_key={repr(self.image_key)}, bboxes_key={repr(self.bboxes_key)}, " + \
-            f"mask_key={repr(self.mask_key)}, keypoints_key={repr(self.keypoints_key)}, probability={self.probability}, " + \
-            f"cvt_kpts_to_bboxes={self.cvt_kpts_to_bboxes}, linked_fate={self.linked_fate})"
+            f"(transforms={repr(self.transforms)}, to_tensor={repr(self.to_tensor)}, " + \
+            f"bbox_params={repr(self.bbox_params)}, add_targets={repr(self.add_targets)}, " + \
+            f"image_key={repr(self.image_key)}, bboxes_key={repr(self.bboxes_key)}, " + \
+            f"mask_key={repr(self.mask_key)}, keypoints_key={repr(self.keypoints_key)}, " + \
+            f"probability={repr(self.probability)}, cvt_kpts_to_bboxes={repr(self.cvt_kpts_to_bboxes)}, " + \
+            f"linked_fate={repr(self.linked_fate)})"
 
     # noinspection PyMethodMayBeStatic
     def set_seed(self, seed):
@@ -295,7 +297,7 @@ class AugmentorWrapper(object):
         """Create a print-friendly representation of inner augmentation stages."""
         # for debug purposes only, pipeline probably cannot be expressed as a string
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
-            f"(pipeline={repr(self.pipeline)}, target_keys={self.target_keys}, linked_fate={self.linked_fate})"
+            f"(pipeline={repr(self.pipeline)}, target_keys={repr(self.target_keys)}, linked_fate={repr(self.linked_fate)})"
 
     # noinspection PyMethodMayBeStatic
     def set_seed(self, seed):
@@ -509,8 +511,8 @@ class TransformWrapper(object):
     def __repr__(self):
         """Create a print-friendly representation of inner augmentation stages."""
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
-            f"(operation={repr(self.operation)}, params={repr(self.params)}, probability={self.probability}, " + \
-            f"convert_pil={self.convert_pil}, target_keys={self.target_keys}, linked_fate={self.linked_fate})"
+            f"(operation={repr(self.operation)}, params={repr(self.params)}, probability={repr(self.probability)}, " + \
+            f"convert_pil={repr(self.convert_pil)}, target_keys={repr(self.target_keys)}, linked_fate={repr(self.linked_fate)})"
 
     # noinspection PyMethodMayBeStatic
     def set_seed(self, seed):

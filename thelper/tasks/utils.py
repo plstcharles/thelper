@@ -210,4 +210,4 @@ class Task(object):
         this string.
         """
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
-            f"(input_key={self.input_key}, gt_key={self.gt_key}, meta_keys={self.meta_keys})"
+            f"(input_key={repr(self.input_key)}, gt_key={repr(self.gt_key)}, meta_keys={repr(self.meta_keys)})"

@@ -112,7 +112,7 @@ class Dataset(torch.utils.data.Dataset):
 
     def __repr__(self):
         """Returns a print-friendly representation of this dataset."""
-        return self._get_derived_name() + f"(transforms={repr(self.transforms)}, deepcopy={self.deepcopy})"
+        return self._get_derived_name() + f"(transforms={repr(self.transforms)}, deepcopy={repr(self.deepcopy)})"
 
 
 class HDF5Dataset(Dataset):

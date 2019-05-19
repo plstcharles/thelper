@@ -186,7 +186,7 @@ class CustomStepCompose(torchvision.transforms.Compose):
     def __repr__(self):
         """Provides print-friendly output for class attributes."""
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + "(milestones={\n\t" + \
-            ",\n\t".join([f"str(k) :{repr(v)}" for k, v in self.milestones.items()]) + "\n})"
+            ",\n\t".join([f"{str(k)} :{repr(v)}" for k, v in self.milestones.items()]) + "\n})"
 
     def set_seed(self, seed):
         """Sets the internal seed to use for stochastic ops."""

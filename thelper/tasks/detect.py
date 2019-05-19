@@ -223,8 +223,9 @@ class BoundingBox:
         """Creates a print-friendly representation of the object detection bbox instance."""
         # note: we do not export the task reference here (it might be too heavy for logs)
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
-            f"(class_id={self.class_id}, bbox={self.bbox}, difficult={self.difficult}, occluded={self.occluded}, " + \
-            f"truncated={self.truncated}, confidence={self.confidence}, image_id={self.image_id})"
+            f"(class_id={repr(self.class_id)}, bbox={repr(self.bbox)}, difficult={repr(self.difficult)}, " + \
+            f"occluded={repr(self.occluded)}, truncated={repr(self.truncated)}, " + \
+            f"confidence={repr(self.confidence)}, image_id={repr(self.image_id)})"
 
 
 class Detection(Regression):
@@ -432,7 +433,8 @@ class Detection(Regression):
     def __repr__(self):
         """Creates a print-friendly representation of a segmentation task."""
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
-            f"(class_names={self.class_indices}, input_key={self.input_key}, bboxes_key={self.gt_key}, " + \
-            f"meta_keys={self.meta_keys}, input_shape={self.input_shape}, target_shape={self.target_shape}, " + \
-            f"target_min={self.target_min}, target_max={self.target_max}, background={self.background}, " + \
-            f"color_map={self.color_map})"
+            f"(class_names={repr(self.class_indices)}, input_key={repr(self.input_key)}, " + \
+            f"bboxes_key={repr(self.gt_key)}, meta_keys={repr(self.meta_keys)}, " + \
+            f"input_shape={repr(self.input_shape)}, target_shape={repr(self.target_shape)}, " + \
+            f"target_min={repr(self.target_min)}, target_max={repr(self.target_max)}, " + \
+            f"background={repr(self.background)}, color_map={self.color_map})"

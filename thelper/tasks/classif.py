@@ -177,5 +177,5 @@ class Classification(Task):
     def __repr__(self):
         """Creates a print-friendly representation of a classification task."""
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
-            f"(class_names={self.class_names}, input_key={self.input_key}, " + \
-            f"label_key={self.gt_key}, meta_keys={self.meta_keys})"
+            f"(class_names={repr(self.class_names)}, input_key={repr(self.input_key)}, " + \
+            f"label_key={repr(self.gt_key)}, meta_keys={repr(self.meta_keys)})"

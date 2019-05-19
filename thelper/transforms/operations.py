@@ -52,12 +52,12 @@ class ToNumpy(object):
     if the input has three channels, the ordering might be optionally changed.
 
     Attributes:
-        reorder_BGR: specifies whether the channels should be reordered in OpenCV format.
+        reorder_bgr: specifies whether the channels should be reordered in OpenCV format.
     """
 
-    def __init__(self, reorder_BGR=False):
+    def __init__(self, reorder_bgr=False):
         """Initializes transformation parameters."""
-        self.reorder_BGR = reorder_BGR
+        self.reorder_bgr = reorder_bgr
 
     def __call__(self, sample):
         """Converts and returns an image in numpy format.
@@ -76,7 +76,7 @@ class ToNumpy(object):
             sample = np.transpose(sample.cpu().numpy(), [1, 2, 0])  # CxHxW to HxWxC
         elif isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
-        return sample[..., ::-1] if self.reorder_BGR else sample
+        return sample[..., ::-1] if self.reorder_bgr else sample
 
     def invert(self, sample):
         """Specifies that this operation cannot be inverted, as the original data type is unknown."""
@@ -119,10 +119,7 @@ class CenterCrop(object):
         assert self.size[0] > 0 and self.size[1] > 0, "crop dimensions must be strictly positive"
         assert isinstance(self.size[0], (float, int)), \
             "unexpected center crop dim input type (need tuple or int/float)"
-        if isinstance(self.size[0], float):
-            self.relative = True
-        elif isinstance(self.size[0], int):
-            self.relative = False
+        self.relative = isinstance(self.size[0], float)
         self.bordertype = thelper.utils.import_class(bordertype) if isinstance(bordertype, str) else bordertype
         self.borderval = borderval
 

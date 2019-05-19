@@ -177,9 +177,10 @@ class Regression(Task):
     def __repr__(self):
         """Creates a print-friendly representation of a segmentation task."""
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
-            f"(input_key={self.input_key}, target_key={self.gt_key}, meta_keys={self.meta_keys}, " + \
-            f"input_shape={self.input_shape}, target_shape={self.target_shape}, target_type={self.target_type}, " + \
-            f"target_min={self.target_min}, target_max={self.target_max})"
+            f"(input_key={repr(self.input_key)}, target_key={repr(self.gt_key)}, " + \
+            f"meta_keys={repr(self.meta_keys)}, input_shape={repr(self.input_shape)}, " + \
+            f"target_shape={repr(self.target_shape)}, target_type={repr(self.target_type)}, " + \
+            f"target_min={repr(self.target_min)}, target_max={repr(self.target_max)})"
 
 
 class SuperResolution(Regression):

@@ -221,5 +221,6 @@ class Segmentation(Task):
     def __repr__(self):
         """Creates a print-friendly representation of a segmentation task."""
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
-            f"(class_names={self.class_indices}, input_key={self.input_key}, label_map_key={self.gt_key}, " + \
-            f"meta_keys={self.meta_keys}, dontcare={self.dontcare}, color_map={self.color_map})"
+            f"(class_names={repr(self.class_indices)}, input_key={repr(self.input_key)}, " + \
+            f"label_map_key={repr(self.gt_key)}, meta_keys={repr(self.meta_keys)}, " + \
+            f"dontcare={repr(self.dontcare)}, color_map={repr(self.color_map)})"
