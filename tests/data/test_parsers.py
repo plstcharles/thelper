@@ -71,7 +71,7 @@ def test_dummy_dataset_getters(dummy_int):
         assert sample["0"] == 10 + idx
     assert "DummyIntegerDataset" in dummy_int._get_derived_name()
     assert "DummyIntegerDataset" in str(dummy_int)
-    assert "size: 1000" in str(dummy_int)
+    assert "data.test_parsers.DummyIntegerDataset" in str(dummy_int)
 
 
 @mock.patch.object(thelper.transforms.CenterCrop, "__call__")
@@ -187,8 +187,6 @@ def test_classif_dataset():
 
 
 def test_segm_dataset():
-    with pytest.raises(AssertionError):
-        _ = thelper.data.SegmentationDataset(["0", "0"], "input", "label")
     with pytest.raises(AssertionError):
         _ = thelper.data.SegmentationDataset(["0", "1"], None, "label")
     with pytest.raises(AssertionError):
