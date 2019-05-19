@@ -142,7 +142,7 @@ class Segmentation(Task):
             if self.dontcare is not None and self.dontcare not in self._color_map:
                 self._color_map[self.dontcare] = np.asarray([0, 0, 0])  # use black as default 'dontcare' color
         else:
-            self.color_map = None
+            self._color_map = None
 
     def get_class_sizes(self, samples):
         """Given a list of samples, returns a map of element counts for each class label."""

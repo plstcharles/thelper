@@ -357,7 +357,7 @@ class Detection(Regression):
             if self.background is not None and self.background not in self._color_map:
                 self._color_map[self.background] = np.asarray([0, 0, 0])  # use black as default 'background' color
         else:
-            self.color_map = None
+            self._color_map = None
 
     def get_class_sizes(self, samples, bbox_format=None):
         """Given a list of samples, returns a map of element counts for each object type."""
