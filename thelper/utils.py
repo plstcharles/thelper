@@ -26,7 +26,6 @@ import cv2 as cv
 import lz4
 import matplotlib.pyplot as plt
 import numpy as np
-import PIL.Image
 import sklearn.metrics
 import torch
 
@@ -45,7 +44,7 @@ class Struct(object):
 
     def __repr__(self):
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
-            "(" + ", ".join([f"{key}={val}" for key, val in self.__dict__.items()]) + ")"
+            "(" + ", ".join([f"{key}={repr(val)}" for key, val in self.__dict__.items()]) + ")"
 
 
 def get_available_cuda_devices(attempts_per_device=5):
@@ -992,13 +991,12 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
         if config is not None:
-            config_backup_path = os.path.join(save_dir, "config.latest" + backup_ext)
-            if os.path.exists(config_backup_path):
-                with open(config_backup_path, "r") as fd:
+            backup_path = os.path.join(save_dir, "config.latest" + backup_ext)
+            if os.path.exists(backup_path):
+                with open(backup_path, "r") as fd:
                     config_backup = json.load(fd)
                 if config_backup != config:
-                    query_msg = "Config backup in '%s' differs from config loaded through checkpoint; overwrite?" \
-                                % config_backup_path
+                    query_msg = f"Config backup in '{backup_path}' differs from config loaded through checkpoint; overwrite?"
                     answer = query_yes_no(query_msg, bypass="y")
                     if answer:
                         func_logger.warning("config mismatch with previous run; "
@@ -1006,7 +1004,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
                     else:
                         func_logger.error("config mismatch with previous run; user aborted")
                         sys.exit(1)
-            save_config(config, config_backup_path)
+            save_config(config, backup_path)
     logs_dir = os.path.join(save_dir, "logs")
     if not os.path.exists(logs_dir):
         os.mkdir(logs_dir)
@@ -1243,7 +1241,8 @@ def draw_images(images,               # type: thelper.typedefs.OneOrManyArrayTyp
     if nb_imgs < 1:
         return None
     assert captions is None or len(captions) == nb_imgs, "captions count mismatch with image count"
-    max_img_size = (800, 1600) if max_img_size is None else max_img_size # for display on typical monitors... (height, width)
+    # for display on typical monitors... (height, width)
+    max_img_size = (800, 1600) if max_img_size is None else max_img_size
     grid_size_x = int(math.ceil(math.sqrt(nb_imgs))) if grid_size_x is None else grid_size_x
     grid_size_y = int(math.ceil(nb_imgs / grid_size_x)) if grid_size_y is None else grid_size_y
     assert grid_size_x * grid_size_y >= nb_imgs, f"bad gridding for subplots (need at least {nb_imgs} tiles)"

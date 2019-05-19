@@ -13,7 +13,7 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-def load_transforms(stages):
+def load_transforms(stages, avoid_transform_wrapper=False):
     """Loads a transformation pipeline from a list of stages.
 
     Each entry in the provided list will be considered a stage in the pipeline. The ordering of the stages
@@ -137,9 +137,9 @@ def load_transforms(stages):
         else:
             operation_type = thelper.utils.import_class(operation_name)
             operation = operation_type(**operation_params)
-            if not isinstance(operation, (thelper.transforms.wrappers.TransformWrapper,
-                                          thelper.transforms.operations.NoTransform,
-                                          torchvision.transforms.Compose)):
+            if not avoid_transform_wrapper and not isinstance(operation, (thelper.transforms.wrappers.TransformWrapper,
+                                                                          thelper.transforms.operations.NoTransform,
+                                                                          torchvision.transforms.Compose)):
                 operations.append(thelper.transforms.wrappers.TransformWrapper(operation,
                                                                                target_keys=operation_targets,
                                                                                linked_fate=linked_fate))

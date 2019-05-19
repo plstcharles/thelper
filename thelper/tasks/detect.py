@@ -391,9 +391,9 @@ class Detection(Regression):
             if not Regression.check_compat(self, task, exact=exact):
                 return False
             return self.background == task.background and \
-                   all([cls in self.class_names for cls in task.class_names]) and \
-                   (not exact or (self.class_names == task.class_names and
-                                  self.color_map == task.color_map))
+                all([cls in self.class_names for cls in task.class_names]) and \
+                (not exact or (self.class_names == task.class_names and
+                               self.color_map == task.color_map))
         elif type(task) == Task:
             # if 'task' simply has no gt, compatibility rests on input key only
             return not exact and self.input_key == task.input_key and task.gt_key is None

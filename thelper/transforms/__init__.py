@@ -9,13 +9,14 @@ import logging
 import thelper.transforms.operations  # noqa: F401
 import thelper.transforms.utils  # noqa: F401
 import thelper.transforms.wrappers  # noqa: F401
+from thelper.transforms.composers import Compose  # noqa: F401
+from thelper.transforms.composers import CustomStepCompose  # noqa: F401
 from thelper.transforms.operations import Affine  # noqa: F401
 from thelper.transforms.operations import CenterCrop  # noqa: F401
-from thelper.transforms.operations import Compose  # noqa: F401
-from thelper.transforms.operations import CustomStepCompose  # noqa: F401
 from thelper.transforms.operations import Duplicator  # noqa: F401
 from thelper.transforms.operations import NormalizeMinMax  # noqa: F401
 from thelper.transforms.operations import NormalizeZeroMeanUnitVar  # noqa: F401
+from thelper.transforms.operations import NoTransform  # noqa: F401
 from thelper.transforms.operations import RandomResizedCrop  # noqa: F401
 from thelper.transforms.operations import RandomShift  # noqa: F401
 from thelper.transforms.operations import Resize  # noqa: F401

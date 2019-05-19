@@ -48,7 +48,8 @@ class ImageSegmTrainer(Trainer):
                 if not isinstance(label_map, list) or len(label_map) != len(input_val):
                     raise AssertionError("label_map should also be a list of the same length as input")
                 for idx in range(len(input_val)):
-                    input_val[idx], label_map[idx] = self._to_tensor({self.task.input_key: input_val[idx], self.task.gt_key: label_map[idx]})
+                    input_val[idx], label_map[idx] = self._to_tensor({self.task.input_key: input_val[idx],
+                                                                      self.task.gt_key: label_map[idx]})
             else:
                 for idx in range(len(input_val)):
                     input_val[idx] = torch.FloatTensor(input_val[idx])
