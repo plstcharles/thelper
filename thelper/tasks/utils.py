@@ -136,7 +136,7 @@ class Task:
         ``None``, as input tensors should always be available in loaded samples.
         """
         assert value is not None, "input key cannot be `None` (input data should always be available)"
-        assert isinstance(value, collections.Hashable), "key type must be hashable"
+        assert isinstance(value, collections.abc.Hashable), "key type must be hashable"
         self._input_key = value
 
     @property

@@ -49,8 +49,6 @@ def test_dataset_inteface():
     assert not dataset.deepcopy
     with pytest.raises(NotImplementedError):
         _ = dataset[0]
-    with pytest.raises(AttributeError):
-        _ = dataset.task
 
 
 def test_dummy_dataset_getters(dummy_int):

@@ -73,7 +73,7 @@ class ToNumpy:
         if isinstance(sample, np.ndarray):
             pass  # no transform needed, channel reordering done at end
         elif isinstance(sample, torch.Tensor):
-            sample = np.transpose(sample.cpu().numpy(), [1, 2, 0])  # CxHxW to HxWxC
+            sample = sample.cpu().numpy()
         elif isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
         return sample[..., ::-1] if self.reorder_bgr else sample

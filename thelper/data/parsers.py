@@ -124,7 +124,7 @@ class Dataset(torch.utils.data.Dataset):
 
     @deepcopy.setter
     def deepcopy(self, deepcopy):
-        assert isinstance(deepcopy, bool), "deepcopy flag should be boolean"
+        assert deepcopy is None or isinstance(deepcopy, bool), "deepcopy flag should be boolean"
         self._deepcopy = deepcopy
 
     @property
