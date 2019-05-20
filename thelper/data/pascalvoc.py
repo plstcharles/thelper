@@ -262,10 +262,6 @@ class PASCALVOC(Dataset):
             sample[self.image_key] = sample[self.image_key].copy()
         return sample
 
-    def get_task(self):
-        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
-        return self.task
-
     def decode_label_map(self, label_map):
         """Returns a color image from a label indices map."""
         assert isinstance(label_map, np.ndarray) and label_map.ndim == 2, "unexpected label map type/shape, should be 2D np.ndarray"

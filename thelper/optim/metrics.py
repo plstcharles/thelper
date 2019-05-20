@@ -3,7 +3,7 @@
 This module contains classes that implement metrics used to monitor training sessions and evaluate models.
 These metrics should all inherit from :class:`thelper.optim.metrics.Metric` to allow them to be dynamically
 instantiated by the framework from a configuration file, and evaluated automatically inside a training
-session. For more information on this, refer to :class:`thelper.train.trainers.Trainer`.
+session. For more information on this, refer to :class:`thelper.train.base.Trainer`.
 """
 
 import copy
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class Metric(ABC):
     """Abstract metric interface.
 
-    This interface defines basic functions required so that :class:`thelper.train.trainers.Trainer` can
+    This interface defines basic functions required so that :class:`thelper.train.base.Trainer` can
     figure out how to instantiate, update, reset, and optimize a given metric while training/evaluating
     a model.
 
@@ -238,7 +238,7 @@ class CategoryAccuracy(Metric):
         """Sets the moving average window size.
 
         This is fairly useful as the total size of the training dataset is unlikely to be known when
-        metrics are instantiated. The current implementation of :class:`thelper.train.trainers.Trainer`
+        metrics are instantiated. The current implementation of :class:`thelper.train.base.Trainer`
         will look for this member function and automatically call it with the dataset size when it is
         available.
         """
@@ -353,7 +353,7 @@ class BinaryAccuracy(Metric):
         """Sets the moving average window size.
 
         This is fairly useful as the total size of the training dataset is unlikely to be known when
-        metrics are instantiated. The current implementation of :class:`thelper.train.trainers.Trainer`
+        metrics are instantiated. The current implementation of :class:`thelper.train.base.Trainer`
         will look for this member function and automatically call it with the dataset size when it is
         available.
         """
@@ -472,7 +472,7 @@ class MeanAbsoluteError(Metric):
         """Sets the moving average window size.
 
         This is fairly useful as the total size of the training dataset is unlikely to be known when
-        metrics are instantiated. The current implementation of :class:`thelper.train.trainers.Trainer`
+        metrics are instantiated. The current implementation of :class:`thelper.train.base.Trainer`
         will look for this member function and automatically call it with the dataset size when it is
         available.
         """
@@ -591,7 +591,7 @@ class MeanSquaredError(Metric):
         """Sets the moving average window size.
 
         This is fairly useful as the total size of the training dataset is unlikely to be known when
-        metrics are instantiated. The current implementation of :class:`thelper.train.trainers.Trainer`
+        metrics are instantiated. The current implementation of :class:`thelper.train.base.Trainer`
         will look for this member function and automatically call it with the dataset size when it is
         available.
         """
@@ -742,7 +742,7 @@ class ExternalMetric(Metric):
         target class index. This is required as predictions are not mapped to their original names
         (in string format) before being forwarded to this object by the trainer.
 
-        The current implementation of :class:`thelper.train.trainers.Trainer` will automatically call
+        The current implementation of :class:`thelper.train.base.Trainer` will automatically call
         this function at runtime if it is available, and provide the dataset's classes as a list of
         strings.
         """
@@ -836,7 +836,7 @@ class ExternalMetric(Metric):
         """Sets the moving average window size.
 
         This is fairly useful as the total size of the training dataset is unlikely to be known when
-        metrics are instantiated. The current implementation of :class:`thelper.train.trainers.Trainer`
+        metrics are instantiated. The current implementation of :class:`thelper.train.base.Trainer`
         will look for this member function and automatically call it with the dataset size when it is
         available.
         """
@@ -913,7 +913,7 @@ class ClassifReport(Metric):
     def set_class_names(self, class_names):
         """Sets the class label names that must be predicted by the model.
 
-        The current implementation of :class:`thelper.train.trainers.Trainer` will automatically
+        The current implementation of :class:`thelper.train.base.Trainer` will automatically
         call this function at runtime if it is available, and provide the dataset's classes as a
         list of strings.
         """
@@ -1022,7 +1022,7 @@ class ConfusionMatrix(Metric):
     def set_class_names(self, class_names):
         """Sets the class label names that must be predicted by the model.
 
-        The current implementation of :class:`thelper.train.trainers.Trainer` will automatically
+        The current implementation of :class:`thelper.train.base.Trainer` will automatically
         call this function at runtime if it is available, and provide the dataset's classes as a
         list of strings.
         """
@@ -1251,7 +1251,7 @@ class ROCCurve(Metric):
 
         This allows the target class name to be mapped to a target class index.
 
-        The current implementation of :class:`thelper.train.trainers.Trainer` will automatically
+        The current implementation of :class:`thelper.train.base.Trainer` will automatically
         call this function at runtime if it is available, and provide the dataset's classes as a
         list of strings.
         """
@@ -1481,7 +1481,7 @@ class ClassifLogger(Metric):
 
         This allows the target class name to be mapped to a target class index.
 
-        The current implementation of :class:`thelper.train.trainers.Trainer` will automatically
+        The current implementation of :class:`thelper.train.base.Trainer` will automatically
         call this function at runtime if it is available, and provide the dataset's classes as a
         list of strings.
         """
@@ -1805,7 +1805,7 @@ class PSNR(Metric):
         """Sets the moving average window size.
 
         This is fairly useful as the total size of the training dataset is unlikely to be known when
-        metrics are instantiated. The current implementation of :class:`thelper.train.trainers.Trainer`
+        metrics are instantiated. The current implementation of :class:`thelper.train.base.Trainer`
         will look for this member function and automatically call it with the dataset size when it is
         available.
         """

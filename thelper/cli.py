@@ -26,14 +26,14 @@ def create_session(config, save_dir):
 
     Args:
         config: a dictionary that provides all required data configuration and trainer parameters; see
-            :class:`thelper.train.trainers.Trainer` and :func:`thelper.data.utils.create_loaders` for more information.
+            :class:`thelper.train.base.Trainer` and :func:`thelper.data.utils.create_loaders` for more information.
             Here, it is only expected to contain a ``name`` field that specifies the name of the session.
         save_dir: the path to the root directory where the session directory should be saved. Note that
             this is not the path to the session directory itself, but its parent, which may also contain
             other session directories.
 
     .. seealso::
-        | :class:`thelper.train.trainers.Trainer`
+        | :class:`thelper.train.base.Trainer`
     """
     logger = thelper.utils.get_func_logger()
     if "name" not in config or not config["name"]:
@@ -82,12 +82,12 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
             this is not the path to the session directory itself, but its parent, which may also contain
             other session directories.
         config: a dictionary that provides all required data configuration and trainer parameters; see
-            :class:`thelper.train.trainers.Trainer` and :func:`thelper.data.utils.create_loaders` for more information.
+            :class:`thelper.train.base.Trainer` and :func:`thelper.data.utils.create_loaders` for more information.
             Here, it is only expected to contain a ``name`` field that specifies the name of the session.
         eval_only: specifies whether training should be resumed or the model should only be evaluated.
 
     .. seealso::
-        | :class:`thelper.train.trainers.Trainer`
+        | :class:`thelper.train.base.Trainer`
     """
     logger = thelper.utils.get_func_logger()
     if ckptdata is None or not ckptdata:

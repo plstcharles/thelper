@@ -33,7 +33,7 @@ class Compose(torchvision.transforms.Compose):
 
     def __init__(self, transforms):
         """Forwards the list of transformations to the base class."""
-        assert isinstance(transforms, list) or transforms, "expected transforms to be provided as a non-empty list"
+        assert isinstance(transforms, list) and transforms, "expected transforms to be provided as a non-empty list"
         if all([isinstance(stage, dict) for stage in transforms]):
             transforms = thelper.transforms.load_transforms(transforms, avoid_transform_wrapper=True)
             transforms = transforms.transforms if isinstance(transforms, Compose) else transforms

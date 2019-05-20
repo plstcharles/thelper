@@ -538,7 +538,7 @@ def resolve_import(fullname):
     """
     Class name resolver.
 
-    Takes a string corresponding to a module and class fullname to be imported with ``thelper.utils.import_class``
+    Takes a string corresponding to a module and class fullname to be imported with :func:`thelper.utils.import_class`
     and resolves any back compatibility issues related to renamed or moved classes.
 
     Args:
@@ -597,12 +597,9 @@ def import_function(fullname, params=None):
 def check_func_signature(func,      # type: Callable
                          params     # type: List[AnyStr]
                          ):         # type: (...) -> None
-    """
-    Checks whether the signature of a function matches the expected parameter list.
+    """Checks whether the signature of a function matches the expected parameter list.
 
-    .. seealso::
-        | :class:`thelper.typedefs.IterCallbackType`
-        | :class:`thelper.typedefs.IterCallbackParams`
+    See ``thelper.typedefs.IterCallbackType`` and ``thelper.typedefs.IterCallbackParams`` for more info.
     """
     if func is None or not callable(func):
         raise AssertionError("invalid function object")

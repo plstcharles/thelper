@@ -139,7 +139,7 @@ class DataLoader(torch.utils.data.DataLoader):
         return len(self.sampler) if self.sampler is not None else len(self.dataset)
 
 
-class _LoaderFactory:
+class LoaderFactory:
     """Factory used for preparing and splitting dataset parsers into usable data loader objects.
 
     This class is responsible for parsing the parameters contained in the 'loaders' field of a
