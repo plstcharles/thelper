@@ -25,7 +25,6 @@ def create_task(config):
 
     .. seealso::
         | :class:`thelper.tasks.utils.Task`
-        | :func:`thelper.tasks.utils.Task.__repr__`
     """
     assert config is not None and isinstance(config, (str, dict)), \
         "unexpected config type (should be str or dict)"

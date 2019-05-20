@@ -67,7 +67,7 @@ class RegressionTrainer(Trainer):
                     raise AssertionError("invalid target shape; got '%s', expected '%s'" % (target.shape[1:], self.task.target_shape))
         return input_val, target
 
-    def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
+    def train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
         """Trains the model for a single epoch using the provided objects.
 
         Args:
@@ -141,7 +141,7 @@ class RegressionTrainer(Trainer):
         epoch_loss /= epoch_size
         return epoch_loss, iter
 
-    def _eval_epoch(self, model, epoch, dev, loader, metrics, monitor=None, writer=None):
+    def eval_epoch(self, model, epoch, dev, loader, metrics, monitor=None, writer=None):
         """Evaluates the model using the provided objects.
 
         Args:

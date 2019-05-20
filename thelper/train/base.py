@@ -32,7 +32,7 @@ class Trainer:
     This interface defines the general behavior of a training session which includes configuration parsing, tensorboard
     setup, metrics and goal setup, and loss/optimizer setup. It also provides utilities for uploading models and tensors
     on specific devices, and for saving the state of a session. This interface should be specialized for every task by
-    implementing the ``_train_epoch`` and ``_eval_epoch`` functions in a derived class. See
+    implementing the ``train_epoch`` and ``eval_epoch`` functions in a derived class. See
     :class:`thelper.train.classif.ImageClassifTrainer` for an example.
 
     The main parameters that will be parsed by this interface from a configuration dictionary are the following:
@@ -400,7 +400,7 @@ class Trainer:
         This function will train the model until the required number of epochs is reached, and then evaluate it
         on the test data. The setup of loggers, tensorboard writers is done here, so is model improvement tracking
         via monitored metrics. However, the code related to loss computation and back propagation is implemented in
-        a derived class via :func:`thelper.train.base.Trainer._train_epoch`.
+        a derived class via :func:`thelper.train.base.Trainer.train_epoch`.
         """
         if not self.train_loader:
             raise AssertionError("missing training data, invalid loader!")
@@ -464,9 +464,9 @@ class Trainer:
                     metric.reset()  # if a metric needs to be reset between two epochs, do it here
             if hasattr(self.train_loader, "set_epoch") and callable(self.train_loader.set_epoch):
                 self.train_loader.set_epoch(self.current_epoch)
-            latest_loss, self.current_iter = self._train_epoch(model, self.current_epoch, self.current_iter, self.devices,
-                                                               loss, optimizer, self.train_loader, self.train_metrics,
-                                                               self.monitor, train_writer)
+            latest_loss, self.current_iter = self.train_epoch(model, self.current_epoch, self.current_iter, self.devices,
+                                                              loss, optimizer, self.train_loader, self.train_metrics,
+                                                              self.monitor, train_writer)
             self._write_epoch_output(self.current_epoch, self.train_metrics, train_writer, self.train_output_path,
                                      loss=latest_loss, optimizer=optimizer)
             train_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.train_metrics.items()}
@@ -480,8 +480,8 @@ class Trainer:
                     metric.reset()  # force reset here, we always evaluate from a clean state
                 if hasattr(self.valid_loader, "set_epoch") and callable(self.valid_loader.set_epoch):
                     self.valid_loader.set_epoch(self.current_epoch)
-                self._eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
-                                 self.valid_metrics, self.monitor, valid_writer)
+                self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
+                                self.valid_metrics, self.monitor, valid_writer)
                 self._write_epoch_output(self.current_epoch, self.valid_metrics, valid_writer, self.valid_output_path)
                 valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()}
                 result = {**result, "valid/metrics": valid_metric_vals}
@@ -524,7 +524,7 @@ class Trainer:
 
         This function will evaluate the model using the test data (or the validation data, if no test data is available),
         and return the results. Note that the code related to the forwarding of samples inside the model itself is implemented
-        in a derived class via :func:`thelper.train.base.Trainer._eval_epoch`.
+        in a derived class via :func:`thelper.train.base.Trainer.eval_epoch`.
         """
         if not self.valid_loader and not self.test_loader:
             raise AssertionError("missing validation/test data, invalid loaders!")
@@ -540,8 +540,8 @@ class Trainer:
                 metric.reset()  # force reset here, we always evaluate from a clean state
             if hasattr(self.test_loader, "set_epoch") and callable(self.test_loader.set_epoch):
                 self.test_loader.set_epoch(self.current_epoch)
-            self._eval_epoch(model, self.current_epoch, self.devices, self.test_loader,
-                             self.test_metrics, self.monitor, test_writer)
+            self.eval_epoch(model, self.current_epoch, self.devices, self.test_loader,
+                            self.test_metrics, self.monitor, test_writer)
             self._write_epoch_output(self.current_epoch, self.test_metrics, test_writer, self.test_output_path)
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()}
             result = {**result, **test_metric_vals}
@@ -554,8 +554,8 @@ class Trainer:
                 metric.reset()  # force reset here, we always evaluate from a clean state
             if hasattr(self.valid_loader, "set_epoch") and callable(self.valid_loader.set_epoch):
                 self.valid_loader.set_epoch(self.current_epoch)
-            self._eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
-                             self.valid_metrics, self.monitor, valid_writer)
+            self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
+                            self.valid_metrics, self.monitor, valid_writer)
             self._write_epoch_output(self.current_epoch, self.valid_metrics, valid_writer, self.valid_output_path)
             valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()}
             result = {**result, **valid_metric_vals}
@@ -571,7 +571,7 @@ class Trainer:
         return self.outputs
 
     @abstractmethod
-    def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
+    def train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
         """Trains the model for a single epoch using the provided objects.
 
         Args:
@@ -589,7 +589,7 @@ class Trainer:
         raise NotImplementedError
 
     @abstractmethod
-    def _eval_epoch(self, model, epoch, dev, loader, metrics, monitor=None, writer=None):
+    def eval_epoch(self, model, epoch, dev, loader, metrics, monitor=None, writer=None):
         """Evaluates the model using the provided objects.
 
         Args:
