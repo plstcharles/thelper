@@ -28,6 +28,12 @@ version = release = '0.2.8'
 # -- General configuration ---------------------------------------------------
 
 nitpicky = True
+nitpick_ignore = [
+    ("py:class", "object"),
+    ("py:class", "torch.utils.data.dataset.Dataset"),
+    ("py:class", "torch.utils.data.dataloader.DataLoader"),
+    ("py:class", "torch.nn.modules.module.Module")
+]
 
 # If your documentation needs a minimal Sphinx version, state it here.
 #
