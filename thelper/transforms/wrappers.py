@@ -18,7 +18,7 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-class AlbumentationsWrapper(object):
+class AlbumentationsWrapper:
     """Albumentations pipeline wrapper that allows dictionary unpacking.
 
     See https://github.com/albu/albumentations for more information.
@@ -173,7 +173,7 @@ class AlbumentationsWrapper(object):
                     t.set_epoch(epoch)
 
 
-class AugmentorWrapper(object):
+class AugmentorWrapper:
     """Augmentor pipeline wrapper that allows pickling and multi-threading.
 
     See https://github.com/mdbloice/Augmentor for more information. This wrapper was last updated to work
@@ -313,7 +313,7 @@ class AugmentorWrapper(object):
                     op.set_epoch(epoch)
 
 
-class TransformWrapper(object):
+class TransformWrapper:
     """Transform wrapper that allows operations on samples, lists, tuples, and single elements.
 
     Can be used to wrap the operations in ``thelper.transforms`` or in ``torchvision.transforms``

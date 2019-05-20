@@ -93,7 +93,7 @@ def create_global_task(tasks):
     return ref_task
 
 
-class Task(object):
+class Task:
     """Basic task interface that defines a training objective and that holds sample i/o keys.
 
     Since the framework's data loaders expect samples to be passed in as dictionaries, keys

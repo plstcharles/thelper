@@ -29,7 +29,7 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-class NoTransform(object):
+class NoTransform:
     """Used to flag some ops that should not be externally wrapped for sample/key handling."""
 
     def __call__(self, sample):
@@ -45,7 +45,7 @@ class NoTransform(object):
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + "()"
 
 
-class ToNumpy(object):
+class ToNumpy:
     """Converts and returns an image in numpy format from a ``torch.Tensor`` or ``PIL.Image`` format.
 
     This operation is deterministic. The returns image will always be encoded as HxWxC, where
@@ -83,7 +83,7 @@ class ToNumpy(object):
         raise RuntimeError("cannot be inverted")
 
 
-class CenterCrop(object):
+class CenterCrop:
     """Returns a center crop from a given image via OpenCV and numpy.
 
     This operation is deterministic. The code relies on OpenCV, meaning the border arguments
@@ -150,7 +150,7 @@ class CenterCrop(object):
             f"(size={self.size}, bordertype={self.bordertype}, borderval={self.borderval})"
 
 
-class RandomResizedCrop(object):
+class RandomResizedCrop:
     """Returns a resized crop of a randomly selected image region.
 
     This operation is stochastic, and thus cannot be inverted. Each time the operation is called,
@@ -355,7 +355,7 @@ class RandomResizedCrop(object):
         np.random.seed(seed)
 
 
-class Resize(object):
+class Resize:
     """Resizes a given image using OpenCV and numpy.
 
     This operation is deterministic. The code relies on OpenCV, meaning the interpolation arguments
@@ -441,7 +441,7 @@ class Resize(object):
             f"(dsize={self.dsize}, fx={self.fx}, fy={self.fy}, interp={self.interp}, buffer={self.buffer})"
 
 
-class Affine(object):
+class Affine:
     """Warps a given image using an affine matrix via OpenCV and numpy.
 
     This operation is deterministic. The code relies on OpenCV, meaning the border arguments
@@ -533,7 +533,7 @@ class Affine(object):
             f"border_mode={self.border_mode}, border_val={self.border_val})"
 
 
-class RandomShift(object):
+class RandomShift:
     """Randomly translates an image in a provided range via OpenCV and numpy.
 
     This operation is stochastic, and thus cannot be inverted. Each time the operation is called,
@@ -622,7 +622,7 @@ class RandomShift(object):
         np.random.seed(seed)
 
 
-class Transpose(object):
+class Transpose:
     """Transposes an image via numpy.
 
     This operation is deterministic.
@@ -674,7 +674,7 @@ class Transpose(object):
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + f"(axes={self.axes})"
 
 
-class Unsqueeze(object):
+class Unsqueeze:
     """Expands a dimension in the input array via numpy/PyTorch.
 
     This operation is deterministic.
@@ -793,7 +793,7 @@ class Duplicator(NoTransform):
             f"(count={self.count}, deepcopy={self.deepcopy})"
 
 
-class Tile(object):
+class Tile:
     """Returns a list of tiles cut out from a given image.
 
     This operation can perform tiling given an optional mask with a target intersection over union (IoU) score,
@@ -956,7 +956,7 @@ class Tile(object):
             f"offset_overlap={self.offset_overlap}, bordertype={self.bordertype}, borderval={self.borderval})"
 
 
-class NormalizeZeroMeanUnitVar(object):
+class NormalizeZeroMeanUnitVar:
     """Normalizes a given image using a set of mean and standard deviation parameters.
 
     The samples will be transformed such that ``s = (s - mean) / std``.
@@ -1020,7 +1020,7 @@ class NormalizeZeroMeanUnitVar(object):
             f"(mean={self.mean}, std={self.std}, out_type={self.out_type})"
 
 
-class NormalizeMinMax(object):
+class NormalizeMinMax:
     """Normalizes a given image using a set of minimum and maximum values.
 
     The samples will be transformed such that ``s = (s - min) / (max - min)``.

@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 bypass_queries = False
 
 
-class Struct(object):
+class Struct:
     """Generic runtime-defined C-like data structure (maps constructor elements to fields)."""
 
     def __init__(self, **kwargs):
