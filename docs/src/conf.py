@@ -27,12 +27,17 @@ version = release = '0.2.8'
 
 # -- General configuration ---------------------------------------------------
 
-nitpicky = True
+nitpicky = False  # caused too many dummy warnings as of 2019/05 due to attribs
 nitpick_ignore = [
     ("py:class", "object"),
+    ("py:class", "abc.ABC"),
+    ("py:class", "torch.optim.lr_scheduler._LRScheduler"),
     ("py:class", "torch.utils.data.dataset.Dataset"),
     ("py:class", "torch.utils.data.dataloader.DataLoader"),
-    ("py:class", "torch.nn.modules.module.Module")
+    ("py:class", "torch.utils.data.sampler.Sampler"),
+    ("py:class", "torch.nn.modules.module.Module"),
+    ("py:class", "torch.nn.Module"),
+    ("py:class", "torchvision.transforms.transforms.Compose")
 ]
 
 # If your documentation needs a minimal Sphinx version, state it here.
