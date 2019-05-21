@@ -82,6 +82,11 @@ class ToNumpy:
         """Specifies that this operation cannot be inverted, as the original data type is unknown."""
         raise RuntimeError("cannot be inverted")
 
+    def __repr__(self):
+        """Provides print-friendly output for class attributes."""
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
+            f"(reorder_bgr={self.reorder_bgr})"
+
 
 class CenterCrop:
     """Returns a center crop from a given image via OpenCV and numpy.
@@ -206,15 +211,14 @@ class RandomResizedCrop:
             min_roi_iou: minimum roi intersection over union (IoU) required for producing a tile.
             flags: interpolation flag forwarded to ``cv2.resize``.
         """
-        if isinstance(output_size, (tuple, list)):
-            assert len(output_size) == 2, "expected output size to be two-element list or tuple, or single scalar"
-            assert all([isinstance(s, int) for s in output_size]) or all([isinstance(s, float) for s in output_size]), \
-                "expected output size pair elements to be the same type (int or float)"
+        if output_size is None or isinstance(output_size, (tuple, list)):
+            if output_size is not None:
+                assert len(output_size) == 2, "expected output size to be two-element list or tuple, or single scalar"
+                assert all([isinstance(s, int) for s in output_size]) or all([isinstance(s, float) for s in output_size]), \
+                    "expected output size pair elements to be the same type (int or float)"
             self.output_size = output_size
         elif isinstance(output_size, (int, float)):
             self.output_size = (output_size, output_size)
-        elif output_size is None:
-            self.output_size = None
         else:
             raise TypeError("unexpected output size type (need tuple/list/int/float)")
         if self.output_size is not None:
@@ -241,15 +245,15 @@ class RandomResizedCrop:
                 for s in t:
                     assert isinstance(s, (int, float)) and not isinstance(type(s), type(input_size[0][0])), \
                         "input sizes should all be same type, either int or float"
-            self.input_size = (min(input_size[0][0], input_size[1][0]), min(input_size[0][1], input_size[1][1]),
-                               max(input_size[0][0], input_size[1][0]), max(input_size[0][1], input_size[1][1]))
+            self.input_size = ((min(input_size[0][0], input_size[1][0]), min(input_size[0][1], input_size[1][1])),
+                               (max(input_size[0][0], input_size[1][0]), max(input_size[0][1], input_size[1][1])))
             self.ratio = None  # ignored since input_size contains all necessary info
         else:
             raise TypeError("expected input size to be two-elem list/tuple of int/float or two-element list/tuple of int/float")
         for t in self.input_size:
-            for s in t:
-                assert ((isinstance(s, float) and 0 < s <= 1) or (isinstance(s, int) and s > 0)), \
-                    f"invalid input size value ({str(s)})"
+            assert ((isinstance(t, float) and 0 < s <= 1) or (isinstance(t, int) and s > 0)) or \
+                all([((isinstance(s, float) and 0 < s <= 1) or (isinstance(s, int) and s > 0)) for s in t]), \
+                "invalid input size value"
         assert 0 <= probability <= 1, "invalid probability value (should be in [0,1]"
         self.probability = probability
         assert random_attempts > 0, "invalid random_attempts value (should be > 0)"
