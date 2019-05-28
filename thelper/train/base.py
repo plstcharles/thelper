@@ -262,10 +262,9 @@ class Trainer:
             display_kwargs = thelper.utils.get_key_def(display_kwargs_keys, trainer_config, {})
             if display_flag:
                 assert "display_callback" not in mset, "metrics set already had a 'display_callback' in it"
-                display_kwargs["set_name"] = cname
-                display_kwargs["writers"] = self.writers  # pass by ref, will be filled later
                 display_kwargs["output_path"] = self.output_paths[cname]
-                display_kwargs["save_draw_output"] = thelper.utils.get_key_def("save_draw_output", display_kwargs, False)
+                display_kwargs["save"] = thelper.utils.get_key_def(["save", "save_draw", "save_draw_output"],
+                                                                   display_kwargs, False)
                 mset["display_callback"] = thelper.train.utils.PredictionCallback("thelper.train.utils._draw_wrapper",
                                                                                   display_kwargs)
             # add logging callback (will print to console and update iter metric evals)
