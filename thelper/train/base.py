@@ -133,6 +133,8 @@ class Trainer:
         """Receives the trainer configuration dictionary, parses it, and sets up the session."""
         assert isinstance(model, (thelper.nn.Module, torch.nn.Module)), "unknown model object type"
         assert isinstance(task, thelper.tasks.Task), "unknown task object type"
+        assert isinstance(loaders, (list, tuple, np.ndarray)) and len(loaders) == 3, "invalid loaders array"
+        assert isinstance(config, dict), "invalid config type"
         self.task = task
         self.model = model
         self.config = config
@@ -175,14 +177,10 @@ class Trainer:
         self.tbx_histogram_freq = int(thelper.utils.get_key_def("tbx_histogram_freq", trainer_config, 1))
         assert self.tbx_histogram_freq >= 1, "histogram output frequency should be strictly positive integer"
         timestr = time.strftime("%Y%m%d-%H%M%S")
-        train_foldername = "train-%s-%s" % (platform.node(), timestr)
-        valid_foldername = "valid-%s-%s" % (platform.node(), timestr)
-        test_foldername = "test-%s-%s" % (platform.node(), timestr)
-        foldernames = [train_foldername, valid_foldername, test_foldername]
-        output_paths = [None, None, None]
-        for idx, (loader, foldername) in enumerate(zip(loaders, foldernames)):
-            output_paths[idx] = os.path.join(output_root_dir, foldername) if loader else None
-        self.train_output_path, self.valid_output_path, self.test_output_path = output_paths
+        self.writers, self.output_paths = {}, {}
+        for cname, loader, foldername in zip(["train", "valid", "test"], loaders):
+            self.output_paths[cname] = f"{cname}-{str(platform.node())}-{timestr}" if loader else None
+            self.writers[cname] = None  # will be instantiated only when needed based on above path
 
         # split loaders
         train_loader, valid_loader, test_loader = loaders
@@ -245,7 +243,6 @@ class Trainer:
         self.outputs = thelper.utils.get_key_def("outputs", ckptdata, {})
 
         # parse callbacks (see ``thelper.typedefs.IterCallbackType`` and ``thelper.typedefs.IterCallbackParams`` definitions)
-        self.writers = {}
         for cname, mset in zip(["train", "valid", "test"], [self.train_metrics, self.valid_metrics, self.test_metrics]):
             # parse user (custom) callback
             user_callback_keys = [f"{cname}_iter_callback", f"{cname}_callback", "callback"]
@@ -265,13 +262,17 @@ class Trainer:
             display_kwargs = thelper.utils.get_key_def(display_kwargs_keys, trainer_config, {})
             if display_flag:
                 assert "display_callback" not in mset, "metrics set already had a 'display_callback' in it"
+                display_kwargs["set_name"] = cname
+                display_kwargs["writers"] = self.writers  # pass by ref, will be filled later
+                display_kwargs["output_path"] = self.output_paths[cname]
+                display_kwargs["save_draw_output"] = thelper.utils.get_key_def("save_draw_output", display_kwargs, False)
                 mset["display_callback"] = thelper.train.utils.PredictionCallback("thelper.train.utils._draw_wrapper",
                                                                                   display_kwargs)
             # add logging callback (will print to console and update iter metric evals)
-            self.writers[cname] = None
             logging_kwargs = thelper.utils.get_key_def("logging_kwargs", trainer_config, {})
             logging_kwargs["set_name"] = cname
-            logging_kwargs["writers"] = self.writers
+            logging_kwargs["writers"] = self.writers  # pass by ref, will be filled later
+            display_kwargs["output_path"] = self.output_paths[cname]
             mset["logging_callback"] = thelper.train.utils.PredictionCallback(self._iter_logger_callback,
                                                                               logging_kwargs)
 
@@ -400,7 +401,7 @@ class Trainer:
         self.logger.debug(f"optimizer: {str(optimizer)}")
         latest_loss = math.inf
         while self.current_epoch < self.epochs:
-            self.writers["train"] = self._init_writer(self.writers["train"], self.train_output_path)
+            self.writers["train"] = self._init_writer(self.writers["train"], self.output_paths["train"])
             self.logger.info("at epoch#%d for '%s' (dev=%s)" % (self.current_epoch, self.name, str(self.devices)))
             if scheduler:
                 if scheduler_step_metric:
@@ -444,7 +445,8 @@ class Trainer:
                 self.train_loader.set_epoch(self.current_epoch)
             latest_loss = self.train_epoch(model, self.current_epoch, self.devices,
                                            loss, optimizer, self.train_loader, self.train_metrics)
-            self._write_epoch_output(self.current_epoch, self.train_metrics, self.writers["train"], self.train_output_path,
+            self._write_epoch_output(self.current_epoch, self.train_metrics,
+                                     self.writers["train"], self.output_paths["train"],
                                      loss=latest_loss, optimizer=optimizer)
             train_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.train_metrics.items()
                                  if isinstance(metric, thelper.optim.metrics.Metric)}
@@ -453,13 +455,14 @@ class Trainer:
             if self.valid_loader:
                 self._set_rng_state(self.valid_loader.seeds, self.current_epoch)
                 model.eval()
-                self.writers["valid"] = self._init_writer(self.writers["valid"], self.valid_output_path)
+                self.writers["valid"] = self._init_writer(self.writers["valid"], self.output_paths["valid"])
                 for metric in self.valid_metrics.values():
                     metric.reset()  # force reset here, we always evaluate from a clean state
                 if hasattr(self.valid_loader, "set_epoch") and callable(self.valid_loader.set_epoch):
                     self.valid_loader.set_epoch(self.current_epoch)
                 self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader, self.valid_metrics)
-                self._write_epoch_output(self.current_epoch, self.valid_metrics, self.writers["valid"], self.valid_output_path)
+                self._write_epoch_output(self.current_epoch, self.valid_metrics,
+                                         self.writers["valid"], self.output_paths["valid"])
                 valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()
                                      if isinstance(metric, thelper.optim.metrics.Metric)}
                 result = {**result, "valid/metrics": valid_metric_vals}
@@ -510,13 +513,14 @@ class Trainer:
         if self.test_loader:
             self._set_rng_state(self.test_loader.seeds, self.current_epoch)
             model.eval()
-            self.writers["test"] = self._init_writer(self.writers["test"], self.test_output_path)
+            self.writers["test"] = self._init_writer(self.writers["test"], self.output_paths["test"])
             for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
             if hasattr(self.test_loader, "set_epoch") and callable(self.test_loader.set_epoch):
                 self.test_loader.set_epoch(self.current_epoch)
             self.eval_epoch(model, self.current_epoch, self.devices, self.test_loader, self.test_metrics)
-            self._write_epoch_output(self.current_epoch, self.test_metrics, self.writers["test"], self.test_output_path)
+            self._write_epoch_output(self.current_epoch, self.test_metrics,
+                                     self.writers["test"], self.output_paths["test"])
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()
                                 if isinstance(metric, thelper.optim.metrics.Metric)}
             result = {**result, **test_metric_vals}
@@ -524,13 +528,14 @@ class Trainer:
         elif self.valid_loader:
             self._set_rng_state(self.valid_loader.seeds, self.current_epoch)
             model.eval()
-            self.writers["valid"] = self._init_writer(self.writers["valid"], self.valid_output_path)
+            self.writers["valid"] = self._init_writer(self.writers["valid"], self.output_paths["valid"])
             for metric in self.valid_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
             if hasattr(self.valid_loader, "set_epoch") and callable(self.valid_loader.set_epoch):
                 self.valid_loader.set_epoch(self.current_epoch)
             self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader, self.valid_metrics)
-            self._write_epoch_output(self.current_epoch, self.valid_metrics, self.writers["valid"], self.valid_output_path)
+            self._write_epoch_output(self.current_epoch, self.valid_metrics,
+                                     self.writers["valid"], self.output_paths["valid"])
             valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()
                                  if isinstance(metric, thelper.optim.metrics.Metric)}
             result = {**result, **valid_metric_vals}
