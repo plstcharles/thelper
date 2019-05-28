@@ -1434,7 +1434,9 @@ def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, b
     grid_size_x, grid_size_y = nb_imgs, 1  # all images on one row, by default (add gt and preds as extra rows)
     if color_map is not None and isinstance(color_map, dict):
         assert len(color_map) <= 256, "too many indices for uint8 map"
-        color_map_new = np.zeros((256, 1, 3), dtype=np.uint8)
+        use_alpha = all([isinstance(val, np.ndarray) and val.dtype in (np.float32, np.float64)
+                         for val in color_map.values()])
+        color_map_new = np.zeros((256, 1, 3), dtype=np.float32 if use_alpha else np.uint8)
         for idx, val in color_map.items():
             color_map_new[idx, ...] = val
         color_map = color_map_new
@@ -1452,7 +1454,9 @@ def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, b
         masks = masks.numpy()
         if color_map is not None:
             masks = [apply_color_map(masks[idx], color_map) for idx in range(masks.shape[0])]
-        image_list += [cv.addWeighted(image_gray_list[idx], 0.3, masks[idx], 0.7, 0) for idx in range(nb_imgs)]
+        image_list += [cv.addWeighted(image_gray_list[idx], 0.3, masks[idx], 0.7, 0)
+                       if masks[idx].dtype == np.uint8 else (image_list[idx] * masks[idx]).astype(np.uint8)
+                       for idx in range(nb_imgs)]
         grid_size_y += 1
     if preds is not None:
         if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and preds.dim() == 4):
@@ -1470,7 +1474,9 @@ def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, b
         preds = preds.numpy()
         if color_map is not None:
             preds = [apply_color_map(preds[idx], color_map) for idx in range(preds.shape[0])]
-        image_list += [cv.addWeighted(image_gray_list[idx], 0.3, preds[idx], 0.7, 0) for idx in range(nb_imgs)]
+        image_list += [cv.addWeighted(image_gray_list[idx], 0.3, preds[idx], 0.7, 0)
+                       if preds[idx].dtype == np.uint8 else (image_list[idx] * preds[idx]).astype(np.uint8)
+                       for idx in range(nb_imgs)]
         grid_size_y += 1
     return draw_images(image_list, redraw=redraw, window_name="segments", block=block,
                        grid_size_x=grid_size_x, grid_size_y=grid_size_y, **kwargs)
@@ -1764,12 +1770,13 @@ def apply_color_map(image, colormap, dst=None):
     """Applies a color map to an image of 8-bit color indices; works similarly to cv2.applyColorMap (v3.3.1)."""
     if not isinstance(image, np.ndarray) or image.ndim != 2:
         raise AssertionError("invalid input image")
-    if not isinstance(colormap, np.ndarray) or colormap.shape != (256, 1, 3) or colormap.dtype != np.uint8:
+    if not isinstance(colormap, np.ndarray) or colormap.shape != (256, 1, 3) or (colormap.dtype != np.uint8 and
+                                                                                 colormap.dtype != np.float32):
         raise AssertionError("invalid color map")
     out_shape = (image.shape[0], image.shape[1], 3)
     if dst is None:
-        dst = np.empty(out_shape, dtype=np.uint8)
-    elif not isinstance(dst, np.ndarray) or dst.shape != out_shape or dst.dtype != np.uint8:
+        dst = np.empty(out_shape, dtype=colormap.dtype)
+    elif not isinstance(dst, np.ndarray) or dst.shape != out_shape or dst.dtype != colormap.dtype:
         raise AssertionError("invalid output image")
     # using np.take might avoid an extra allocation...
     np.copyto(dst, colormap.squeeze()[image.ravel(), :].reshape(out_shape))
