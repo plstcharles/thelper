@@ -569,6 +569,7 @@ class Trainer:
                 for subkey, subvalue in value.items():
                     self.logger.debug(f" final result =>  {str(key)}:{str(subkey)}: {subvalue}")
         if self.current_epoch not in self.outputs:
+            # probably using an 'untrained model' (such as a FCN adapted from a classifier)
             self.outputs[self.current_epoch] = {}
         self.outputs[self.current_epoch][output_group] = result
         self.logger.info(f"evaluation for session '{self.name}' done")
