@@ -422,8 +422,7 @@ class Detection(Regression):
                              target_shape=self.target_shape if self.target_shape is not None else task.target_shape,
                              target_min=self.target_min if self.target_min is not None else task.target_min,
                              target_max=self.target_max if self.target_max is not None else task.target_max,
-                             background=self.background,
-                             color_map=self.color_map)
+                             background=self.background, color_map=color_map)
         elif type(task) == Task:
             assert self.check_compat(task), f"cannot create compatible task between:\n\t{str(self)}\n\t{str(task)}"
             meta_keys = list(set(self.meta_keys + task.meta_keys))
