@@ -27,7 +27,7 @@ class BoundingBox:
 
     Attributes:
         class_id: type identifier for the underlying object instance.
-        bbox: four-element tuple holding the (xmin,xmax,ymin,ymax) bounding box parameters.
+        bbox: four-element tuple holding the (xmin,ymin,xmax,ymax) bounding box parameters.
         difficult: defines whether this instance is considered "difficult" (false by default).
         occluded: defines whether this instance is considered "occluded" (false by default).
         truncated: defines whether this instance is considered "truncated" (false by default).
@@ -43,7 +43,7 @@ class BoundingBox:
     def __init__(self, class_id, bbox, difficult=False, occluded=False, truncated=False, confidence=None, image_id=None, task=None):
         """Receives and stores low-level input detection metadata for later access."""
         self.class_id = class_id  # should be string or int to allow batching in data loaders
-        # note: the input bbox is expected to be a 4 element array (xmin,xmax,ymin,ymax)
+        # note: the input bbox is expected to be a 4 element array (xmin,ymin,xmax,ymax)
         self.bbox = bbox
         self.difficult = difficult
         self.occluded = occluded
@@ -65,16 +65,16 @@ class BoundingBox:
 
     @property
     def bbox(self):
-        """Returns the bounding box tuple (xmin,xmax,ymin,ymax)."""
+        """Returns the bounding box tuple (xmin,ymin,xmax,ymax)."""
         return self._bbox
 
     @bbox.setter
     def bbox(self, value):
-        """Sets the bounding box tuple (xmin,xmax,ymin,ymax)."""
+        """Sets the bounding box tuple (xmin,ymin,xmax,ymax)."""
         assert isinstance(value, (list, tuple, np.ndarray, torch.Tensor)) and len(value) == 4, "invalid input type/len"
         assert not isinstance(value, (list, tuple)) or all([isinstance(v, (int, float)) for v in value]), \
             "input bbox values must be integer/float"
-        assert value[0] <= value[1] and value[2] <= value[3], "invalid min/max values for bbox coordinates"
+        assert value[0] <= value[2] and value[1] <= value[3], "invalid min/max values for bbox coordinates"
         self._bbox = value
 
     @property
@@ -196,7 +196,8 @@ class BoundingBox:
                     self.difficult, self.occluded, self.truncated]
         else:
             assert format is None, "unrecognized/unknown encoding format"
-            vec = [self.class_id, *self.bbox, self.difficult, self.occluded, self.truncated, self.image_id]
+            vec = [*self.top_left, *self.bottom_right, self.class_id, self.difficult,
+                   self.occluded, self.truncated, self.iscrowd, self.area, self.image_id]
             if self.confidence is not None:
                 vec += [self.confidence] if isinstance(self.confidence, float) else [*self.confidence]
             return vec
@@ -204,20 +205,21 @@ class BoundingBox:
     @staticmethod
     def decode(vec, format=None):
         """Returns a BoundingBox object from a vectorized representation in a specified format."""
-        # note: the input bbox is expected to be a 4 element array (xmin,xmax,ymin,ymax)
+        # note: the input bbox is expected to be a 4 element array (xmin,ymin,xmax,ymax)
         if format == "coco":
             assert len(vec) == 5, "unexpected vector length (should contain 5 values)"
-            return BoundingBox(class_id=vec[4], bbox=[vec[0], vec[0] + vec[2], vec[1], vec[1] + vec[3]])
+            return BoundingBox(class_id=vec[4], bbox=[vec[0], vec[1], vec[0] + vec[2], vec[1] + vec[3]])
         elif format == "pascal_voc":
             assert len(vec) == 8, "unexpected vector length (should contain 8 values)"
-            return BoundingBox(class_id=vec[4], bbox=[vec[0], vec[2], vec[1], vec[3]],
+            return BoundingBox(class_id=vec[4], bbox=[vec[0], vec[1], vec[2], vec[3]],
                                difficult=vec[5], occluded=vec[6], truncated=vec[7])
         else:
             assert format is None, "unrecognized/unknown encoding format"
-            assert len(vec) >= 9, "unexpected vector length (should contain 9 values or more)"
-            return BoundingBox(class_id=vec[0], bbox=vec[1:5], difficult=vec[5], occluded=vec[6],
-                               truncated=vec[7], confidence=(None if len(vec) == 9 else vec[9:]),
-                               image_id=vec[8], task=None)
+            assert len(vec) >= 11, "unexpected vector length (should contain 9 values or more)"
+            return BoundingBox(class_id=vec[4], bbox=[vec[0], vec[1], vec[2], vec[3]], difficult=vec[5],
+                               occluded=vec[6], truncated=vec[7], iscrowd=vec[8], area=vec[9],
+                               confidence=(None if len(vec) == 11 else vec[11:]),
+                               image_id=vec[10], task=None)
 
     def __repr__(self):
         """Creates a print-friendly representation of the object detection bbox instance."""
@@ -244,8 +246,8 @@ class Detection(Regression):
         meta_keys: the list of extra keys provided by the data parser inside each sample.
         input_shape: a numpy-compatible shape to expect input images to possess.
         target_shape: a numpy-compatible shape to expect the predictions to be in.
-        target_min: a 2-dim tensor containing minimum bounding box corner values.
-        target_max: a 2-dim tensor containing maximum bounding box corner values.
+        target_min: a 2-dim tensor containing minimum (x,y) bounding box corner values.
+        target_max: a 2-dim tensor containing maximum (x,y) bounding box corner values.
         background: value of the 'background' label (if any) used in the class map.
         color_map: map of class name-color pairs to use when displaying results.
 
