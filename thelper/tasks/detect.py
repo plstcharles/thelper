@@ -31,6 +31,8 @@ class BoundingBox:
         difficult: defines whether this instance is considered "difficult" (false by default).
         occluded: defines whether this instance is considered "occluded" (false by default).
         truncated: defines whether this instance is considered "truncated" (false by default).
+        iscrowd: defines whether this instance covers a "crowd" of objects or not (false by default).
+        area: scalar indicating the total surface of the annotation (will be computed automatically if None).
         confidence: scalar or array of prediction confidence values tied to class types (empty by default).
         image_id: string used to identify the image containing this bounding box (i.e. file path or uuid).
         task: reference to the task object that holds extra metadata regarding the content of the bbox (None by default).
@@ -40,7 +42,8 @@ class BoundingBox:
         | :class:`thelper.tasks.detect.Detection`
     """
 
-    def __init__(self, class_id, bbox, difficult=False, occluded=False, truncated=False, confidence=None, image_id=None, task=None):
+    def __init__(self, class_id, bbox, difficult=False, occluded=False, truncated=False,
+                 iscrowd=False, area=None, confidence=None, image_id=None, task=None):
         """Receives and stores low-level input detection metadata for later access."""
         self.class_id = class_id  # should be string or int to allow batching in data loaders
         # note: the input bbox is expected to be a 4 element array (xmin,ymin,xmax,ymax)
@@ -48,6 +51,8 @@ class BoundingBox:
         self.difficult = difficult
         self.occluded = occluded
         self.truncated = truncated
+        self.iscrowd = iscrowd
+        self.area = area
         self.confidence = confidence
         self.image_id = image_id  # should be string that identifies the associated image (file path or uuid)
         self.task = task
@@ -151,6 +156,31 @@ class BoundingBox:
         self._truncated = value
 
     @property
+    def iscrowd(self):
+        """Returns whether this instance covers a "crowd" of objects or not (false by default)."""
+        return self._iscrowd
+
+    @iscrowd.setter
+    def iscrowd(self, value):
+        """Sets whether this instance covers a "crowd" of objects or not."""
+        assert isinstance(value, (int, bool)), "flag type must be integer or boolean"
+        self._iscrowd = value
+
+    @property
+    def area(self):
+        """Returns a scalar indicating the total surface of the annotation (may be None if unknown/unspecified)."""
+        return self._area
+
+    @area.setter
+    def area(self, value):
+        if value is None:
+            value = (self.bottom_right[0] - self.top_left[0]) * (self.bottom_right[1] - self.top_left[1])
+        else:
+            # may be assigned if for example we are using relative coords but want to keep track of the original surface
+            assert (isinstance(value, (int, float)) and value > 0), "invalid annotation surface area value"
+        self._area = value
+
+    @property
     def confidence(self):
         """Returns the confidence value (or array of confidence values) associated to the predicted class types."""
         return self._confidence
@@ -226,8 +256,8 @@ class BoundingBox:
         # note: we do not export the task reference here (it might be too heavy for logs)
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
             f"(class_id={repr(self.class_id)}, bbox={repr(self.bbox)}, difficult={repr(self.difficult)}, " + \
-            f"occluded={repr(self.occluded)}, truncated={repr(self.truncated)}, " + \
-            f"confidence={repr(self.confidence)}, image_id={repr(self.image_id)})"
+            f"occluded={repr(self.occluded)}, truncated={repr(self.truncated)}, iscrowd={repr(self.iscrowd)}, " + \
+            f"area={repr(self.area)}, confidence={repr(self.confidence)}, image_id={repr(self.image_id)})"
 
 
 class Detection(Regression):
