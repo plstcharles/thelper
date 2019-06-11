@@ -17,7 +17,6 @@ import torch
 import torch.utils.data
 import torch.utils.data.sampler
 import tqdm
-from torch._six import container_abcs
 
 import thelper.tasks
 import thelper.transforms
@@ -34,28 +33,65 @@ def default_collate(batch):
 
     See ``torch.utils.data.DataLoader`` for more information.
     """
-    error_msg = "batch must contain tensors, numbers, dicts or lists; found {}"
+    import torchvision
+    from torch._six import container_abcs, string_classes, int_classes
+    error_msg_fmt = "batch must contain tensors, numbers, dicts or lists; found {}"
+    torchvision_ver = [int(v) for v in torchvision.__version__.split(".")]
     elem_type = type(batch[0])
     if isinstance(batch[0], torch.Tensor):
-        return torch.utils.data.dataloader.default_collate(batch)
-    elif elem_type.__module__ == 'numpy' and elem_type.__name__ != 'str_' and elem_type.__name__ != 'string_':
-        return torch.utils.data.dataloader.default_collate(batch)
-    elif isinstance(batch[0], int):
-        return torch.LongTensor(batch)
+        out = None
+        if torchvision_ver[0] > 0 or torchvision_ver[1] >= 3:  # ver >= 0.3
+            if torch.utils.data._utils.collate._use_shared_memory:
+                # If we're in a background process, concatenate directly into a
+                # shared memory tensor to avoid an extra copy
+                numel = sum([x.numel() for x in batch])
+                storage = batch[0].storage()._new_shared(numel)
+                out = batch[0].new(storage)
+            return torch.stack(batch, 0, out=out)
+        else:  # ver < 0.3
+            if torch.utils.data.dataloader._use_shared_memory:
+                # If we're in a background process, concatenate directly into a
+                # shared memory tensor to avoid an extra copy
+                numel = sum([x.numel() for x in batch])
+                storage = batch[0].storage()._new_shared(numel)
+                out = batch[0].new(storage)
+            return torch.stack(batch, 0, out=out)
+    elif elem_type.__module__ == 'numpy' and elem_type.__name__ != 'str_' and \
+            elem_type.__name__ != 'string_':
+        elem = batch[0]
+        if elem_type.__name__ == 'ndarray':
+            # array of string classes and object
+            if torchvision_ver[0] > 0 or torchvision_ver[1] >= 3:  # ver >= 0.3
+                if torch.utils.data._utils.collate.np_str_obj_array_pattern.search(elem.dtype.str) is not None:
+                    raise TypeError(error_msg_fmt.format(elem.dtype))
+            else:  # ver < 0.3
+                import re
+                if re.search('[SaUO]', elem.dtype.str) is not None:
+                    raise TypeError(error_msg_fmt.format(elem.dtype))
+            return default_collate([torch.from_numpy(b) for b in batch])
+        if elem.shape == ():  # scalars
+            py_type = float if elem.dtype.name.startswith('float') else int
+            if torchvision_ver[0] > 0 or torchvision_ver[1] >= 3:  # ver >= 0.3
+                return torch.utils.data._utils.numpy_type_map[elem.dtype.name](list(map(py_type, batch)))
+            else:  # ver < 0.3
+                return torch.utils.data.dataloader.numpy_type_map[elem.dtype.name](list(map(py_type, batch)))
     elif isinstance(batch[0], float):
-        return torch.DoubleTensor(batch)
-    elif isinstance(batch[0], (str, bytes)):
+        return torch.tensor(batch, dtype=torch.float64)
+    elif isinstance(batch[0], int_classes):
+        return torch.tensor(batch)
+    elif isinstance(batch[0], string_classes):
         return batch
     elif isinstance(batch[0], container_abcs.Mapping):
         return {key: default_collate([d[key] for d in batch]) for key in batch[0]}
+    elif isinstance(batch[0], tuple) and hasattr(batch[0], '_fields'):  # namedtuple
+        return type(batch[0])(*(default_collate(samples) for samples in zip(*batch)))
     elif isinstance(batch[0], container_abcs.Sequence):
         if isinstance(batch, list) and all([isinstance(l, list) for l in batch]) and \
                 all([isinstance(b, thelper.data.BoundingBox) for l in batch for b in l]):
             return batch
         transposed = zip(*batch)
         return [default_collate(samples) for samples in transposed]
-    raise TypeError((error_msg.format(type(batch[0]))))
-
+    raise TypeError((error_msg_fmt.format(type(batch[0]))))
 
 class DataLoader(torch.utils.data.DataLoader):
     """Specialized data loader used to load minibatches from a dataset parser.
