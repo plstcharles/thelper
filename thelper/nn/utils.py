@@ -252,9 +252,9 @@ class ExternalModule(Module):
         """Returns the state dict of the external model."""
         return self.model.state_dict(destination=destination, prefix=prefix, keep_vars=keep_vars)
 
-    def forward(self, *input):
+    def forward(self, *input, **kwargs):
         """Transforms an input tensor in order to generate a prediction."""
-        return self.model(*input)
+        return self.model(*input, **kwargs)
 
     def set_task(self, task):
         """Stores the new task internally.
@@ -289,7 +289,7 @@ class ExternalClassifModule(ExternalModule):
         | :class:`thelper.nn.utils.Module`
         | :class:`thelper.nn.utils.ExternalModule`
         | :func:`thelper.nn.utils.create_model`
-        | :class:`thelper.tasks.utils.Task`
+        | :class:`thelper.tasks.classif.Classification`
     """
 
     def __init__(self, model_type, task, config=None):
