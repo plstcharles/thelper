@@ -152,7 +152,9 @@ def create_model(config, task, save_dir=None, ckptdata=None):
         if inspect.isclass(model_type) and issubclass(model_type, thelper.nn.utils.Module):
             model = model_type(task=task, **model_params)
         else:
-            if type(task) == thelper.tasks.Classification:
+            if type(task) == thelper.tasks.Detection:
+                model = ExternalDetectModule(model_type, task=task, config=model_params)
+            elif type(task) == thelper.tasks.Classification:
                 model = ExternalClassifModule(model_type, task=task, config=model_params)
             else:
                 model = ExternalModule(model_type, task=task, config=model_params)
@@ -323,5 +325,52 @@ class ExternalClassifModule(ExternalModule):
                     torch.nn.AvgPool2d(13, stride=1)
                 )
                 self.model.num_classes = self.nb_classes
+        else:
+            logger.warning("could not reconnect fully connected layer for new classes; hope your model is already compatible...")
+
+
+class ExternalDetectModule(ExternalModule):
+    """External model interface specialization for object detection tasks.
+
+    This interface will try to 'rewire' the last fully connected layer of the models it instantiates to match
+    the number of classes to predict defined in the task object.
+
+    .. seealso::
+        | :class:`thelper.nn.utils.Module`
+        | :class:`thelper.nn.utils.ExternalModule`
+        | :func:`thelper.nn.utils.create_model`
+        | :class:`thelper.tasks.detect.Detection`
+    """
+
+    def __init__(self, model_type, task, config=None):
+        """Receives a task object to hold internally for model specialization, and tries to rewire the last 'fc' layer."""
+        super().__init__(model_type, task, config=config)
+        self.nb_classes = None
+        self.set_task(task)
+
+    def set_task(self, task):
+        """Rewires the last fully connected layer of the wrapped network to fit the given number of classification targets."""
+        if type(task) != thelper.tasks.Detection:
+            raise AssertionError("task passed to ExternalClassifModule should be 'thelper.tasks.Detection'")
+        self.nb_classes = len(self.task.class_names)
+        import torchvision
+        if hasattr(self.model, "fc") and isinstance(self.model.fc, torch.nn.Linear):
+            if self.model.fc.out_features != self.nb_classes:
+                logger.info("reconnecting fc layer for outputting %d classes..." % self.nb_classes)
+                nb_features = self.model.fc.in_features
+                self.model.fc = torch.nn.Linear(nb_features, self.nb_classes)
+        elif hasattr(self.model, "classifier") and isinstance(self.model.classifier, torch.nn.Linear):
+            if self.model.classifier.out_features != self.nb_classes:
+                logger.info("reconnecting classifier layer for outputting %d classes..." % self.nb_classes)
+                nb_features = self.model.classifier.in_features
+                self.model.classifier = torch.nn.Linear(nb_features, self.nb_classes)
+        elif hasattr(self.model, "roi_heads") and hasattr(self.model.roi_heads, "box_predictor"):
+            # note: this part requires torchvision version >= 0.3
+            if isinstance(self.model.roi_heads.box_predictor, torchvision.models.detection.faster_rcnn.FastRCNNPredictor):
+                if self.model.roi_heads.box_predictor.cls_score.out_features != self.nb_classes:
+                    self.model.roi_heads.box_predictor = torchvision.models.detection.faster_rcnn.FastRCNNPredictor(
+                        self.model.roi_heads.box_predictor.cls_score.in_features, self.nb_classes)
+            else:
+                logger.warning("unexpected box predictor type (missing impl)")  # @@@@@@ TODO
         else:
             logger.warning("could not reconnect fully connected layer for new classes; hope your model is already compatible...")

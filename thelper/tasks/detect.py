@@ -283,7 +283,7 @@ class Detection(Regression):
     .. seealso::
         | :class:`thelper.tasks.utils.Task`
         | :class:`thelper.tasks.regr.Regression`
-        | :class:`thelper.train.regr.RegressionTrainer`
+        | :class:`thelper.train.detect.ObjDetectTrainer`
     """
 
     def __init__(self, class_names, input_key, bboxes_key, meta_keys=None, input_shape=None,

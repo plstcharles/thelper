@@ -49,6 +49,8 @@ def create_trainer(session_name,    # type: AnyStr
     if "type" not in trainer_config:
         if isinstance(task, thelper.tasks.Classification):
             trainer_type = thelper.train.ImageClassifTrainer
+        elif isinstance(task, thelper.tasks.Detection):
+            trainer_type = thelper.train.ObjDetectTrainer
         elif isinstance(task, thelper.tasks.Regression):
             trainer_type = thelper.train.RegressionTrainer
         elif isinstance(task, thelper.tasks.Segmentation):

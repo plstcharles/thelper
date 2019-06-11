@@ -116,6 +116,7 @@ class Trainer:
     .. seealso::
         | :class:`thelper.train.classif.ImageClassifTrainer`
         | :class:`thelper.train.segm.ImageSegmTrainer`
+        | :class:`thelper.train.detect.ObjDetectTrainer`
         | :class:`thelper.train.regr.RegressionTrainer`
         | :func:`thelper.train.utils.create_trainer`
     """
