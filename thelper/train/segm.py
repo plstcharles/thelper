@@ -90,9 +90,9 @@ class ImageSegmTrainer(Trainer):
         self.logger.debug("fetching data loader samples...")
         for idx, sample in enumerate(loader):
             input_val, label_map = self._to_tensor(sample)
-            optimizer.zero_grad()
             if label_map is None:
                 raise AssertionError("groundtruth required when training a model")
+            optimizer.zero_grad()
             if isinstance(input_val, list):
                 # training samples got augmented, we need to backprop in multiple steps
                 if not input_val:
@@ -107,7 +107,7 @@ class ImageSegmTrainer(Trainer):
                 iter_pred = None
                 augs_count = len(input_val)
                 for aug_idx in range(augs_count):
-                    aug_pred = model(self._upload_tensor(input_val[aug_idx], dev))
+                    aug_pred = model(self._move_tensor(input_val[aug_idx], dev))
                     if self.scale_preds:
                         aug_pred = torch.nn.functional.interpolate(aug_pred, size=input_val[aug_idx].shape[-2:], mode="bilinear")
                     aug_loss = loss(aug_pred, label_map[aug_idx].long())
@@ -121,23 +121,26 @@ class ImageSegmTrainer(Trainer):
                 iter_loss /= augs_count
                 label_map = torch.cat(label_map, dim=0)
             else:
-                iter_pred = model(self._upload_tensor(input_val, dev))
+                iter_pred = model(self._move_tensor(input_val, dev))
                 if self.scale_preds:
                     iter_pred = torch.nn.functional.interpolate(iter_pred, size=input_val.shape[-2:], mode="bilinear")
                 # todo: find a more efficient way to compute loss w/ byte vals directly?
-                iter_loss = loss(iter_pred, self._upload_tensor(label_map, dev).long())
+                iter_loss = loss(iter_pred, self._move_tensor(label_map, dev).long())
                 iter_loss.backward()
+            optimizer.step()
             if metrics:
-                meta = {key: sample[key] if key in sample else None for key in self.task.meta_keys} if self.task.meta_keys else None
+                meta = {key: sample[key] if key in sample else None
+                        for key in self.task.meta_keys} if self.task.meta_keys else None
+                iter_pred_cpu = self._move_tensor(iter_pred, dev="cpu", detach=True)
+                label_map_cpu = self._move_tensor(label_map, dev="cpu", detach=True)
                 for metric in metrics.values():
-                    metric.accumulate(iter_pred.detach().cpu(), label_map.detach().cpu(), meta=meta)
+                    metric.accumulate(iter_pred_cpu, label_map_cpu, meta=meta)
             if self.train_iter_callback is not None:
                 self.train_iter_callback(sample=sample, task=self.task, pred=iter_pred,
                                          iter_idx=iter, max_iters=epoch_size,
                                          epoch_idx=epoch, max_epochs=self.epochs,
                                          **self.callback_kwargs)
             epoch_loss += iter_loss.item()
-            optimizer.step()
             monitor_output = ""
             if monitor is not None and monitor in metrics:
                 monitor_output = "   {}: {:.2f}".format(monitor, metrics[monitor].eval())
@@ -194,20 +197,23 @@ class ImageSegmTrainer(Trainer):
                     label_map = label_map[0]  # since all identical, just pick the first one and pretend its the only one
                     preds = None
                     for input_idx in range(len(input_val)):
-                        pred = model(self._upload_tensor(input_val[input_idx], dev))
+                        pred = model(self._move_tensor(input_val[input_idx], dev))
                         if preds is None:
                             preds = torch.unsqueeze(pred.clone(), 0)
                         else:
                             preds = torch.cat((preds, torch.unsqueeze(pred, 0)), 0)
                     pred = torch.mean(preds, dim=0)
                 else:
-                    pred = model(self._upload_tensor(input_val, dev))
+                    pred = model(self._move_tensor(input_val, dev))
                 if self.scale_preds:
                     pred = torch.nn.functional.interpolate(pred, size=input_val.shape[-2:], mode="bilinear")
                 if metrics:
-                    meta = {key: sample[key] if key in sample else None for key in self.task.meta_keys} if self.task.meta_keys else None
+                    meta = {key: sample[key] if key in sample else None
+                            for key in self.task.meta_keys} if self.task.meta_keys else None
+                    pred_cpu = self._move_tensor(pred, dev="cpu", detach=True)
+                    label_map_cpu = self._move_tensor(label_map, dev="cpu", detach=True)
                     for metric in metrics.values():
-                        metric.accumulate(pred.cpu(), label_map.cpu() if label_map is not None else None, meta=meta)
+                        metric.accumulate(pred_cpu, label_map_cpu if label_map is not None else None, meta=meta)
                 if self.eval_iter_callback is not None:
                     self.eval_iter_callback(sample=sample, task=self.task, pred=pred,
                                             iter_idx=idx, max_iters=epoch_size,

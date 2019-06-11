@@ -28,12 +28,7 @@ class RegressionTrainer(Trainer):
         super().__init__(session_name, save_dir, model, task, loaders, config, ckptdata=ckptdata)
         if not isinstance(self.task, thelper.tasks.Regression):
             raise AssertionError("expected task to be regression")
-        self.target_min = self.task.target_min
-        if isinstance(self.target_min, np.ndarray):
-            self.target_min = torch.from_numpy(self.target_min)
-        self.target_max = self.task.target_max
-        if isinstance(self.target_max, np.ndarray):
-            self.target_max = torch.from_numpy(self.target_max)
+        # @@@@@ todo: use target_min/target_max and other props from task?
 
     def _to_tensor(self, sample):
         """Fetches and returns tensors of inputs and targets from a batched sample dictionary."""
@@ -97,27 +92,29 @@ class RegressionTrainer(Trainer):
             input_val, target = self._to_tensor(sample)
             # todo: add support to fraction samples that are too big for a single iteration
             # (e.g. when batching non-image data that would be too inefficient one sample at a time)
-            optimizer.zero_grad()
             if target is None:
                 raise AssertionError("groundtruth required when training a model")
             if isinstance(input_val, list):
-                raise AssertionError("missing regr trainer support for augmented minibatches")  # todo
-            target = self._upload_tensor(target, dev)
-            iter_pred = model(self._upload_tensor(input_val, dev))
+                raise AssertionError("missing regr trainer support for duped minibatches")  # todo
+            optimizer.zero_grad()
+            target = self._move_tensor(target, dev)
+            iter_pred = model(self._move_tensor(input_val, dev))
             iter_loss = loss(iter_pred, target.float())
             iter_loss.backward()
+            optimizer.step()
             if metrics:
                 meta = {key: sample[key] if key in sample else None
                         for key in self.task.meta_keys} if self.task.meta_keys else None
+                iter_pred_cpu = self._move_tensor(iter_pred, dev="cpu", detach=True)
+                target_cpu = self._move_tensor(target, dev="cpu", detach=True)
                 for metric in metrics.values():
-                    metric.accumulate(iter_pred.detach().cpu(), target.detach().cpu(), meta=meta)
+                    metric.accumulate(iter_pred_cpu, target_cpu, meta=meta)
             if self.train_iter_callback is not None:
                 self.train_iter_callback(sample=sample, task=self.task, pred=iter_pred,
                                          iter_idx=iter, max_iters=epoch_size,
                                          epoch_idx=epoch, max_epochs=self.epochs,
                                          **self.callback_kwargs)
             epoch_loss += iter_loss.item()
-            optimizer.step()
             monitor_output = ""
             if monitor is not None and monitor in metrics:
                 monitor_output = "   {}: {:.2f}".format(monitor, metrics[monitor].eval())
@@ -163,12 +160,15 @@ class RegressionTrainer(Trainer):
                     continue  # skip until previous iter count (if set externally; no effect otherwise)
                 input_val, target = self._to_tensor(sample)
                 if isinstance(input_val, list):
-                    raise AssertionError("missing regr trainer support for augmented minibatches")  # todo
-                pred = model(self._upload_tensor(input_val, dev))
+                    raise AssertionError("missing regr trainer support for duped minibatches")  # todo
+                pred = model(self._move_tensor(input_val, dev))
                 if metrics:
-                    meta = {key: sample[key] if key in sample else None for key in self.task.meta_keys} if self.task.meta_keys else None
+                    meta = {key: sample[key] if key in sample else None
+                            for key in self.task.meta_keys} if self.task.meta_keys else None
+                    pred_cpu = self._move_tensor(pred, dev="cpu", detach=True)
+                    target_cpu = self._move_tensor(target, dev="cpu", detach=True)
                     for metric in metrics.values():
-                        metric.accumulate(pred.cpu(), target.cpu() if target is not None else None, meta=meta)
+                        metric.accumulate(pred_cpu, target_cpu if target is not None else None, meta=meta)
                 if self.eval_iter_callback is not None:
                     self.eval_iter_callback(sample=sample, task=self.task, pred=pred,
                                             iter_idx=idx, max_iters=epoch_size,

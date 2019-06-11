@@ -316,20 +316,23 @@ class Trainer:
             return model.to(dev)
 
     @staticmethod
-    def _upload_tensor(tensor, dev):
+    def _move_tensor(tensor, dev, detach=False):
         """Uploads a tensor to a specific device."""
-        if isinstance(tensor, list):
-            out_tensor = []
-            for t in tensor:
-                out_tensor.append(Trainer._upload_tensor(t, dev))
-            return out_tensor
-        elif isinstance(dev, list):
+        if isinstance(tensor, (list, tuple)):
+            return [Trainer._move_tensor(t, dev) for t in tensor]
+        if isinstance(tensor, dict):
+            return {k: Trainer._move_tensor(t, dev) for k, t in tensor.items()}
+        if not isinstance(tensor, torch.Tensor):
+            return tensor  # ignored (cannot upload)
+        if isinstance(dev, list):
             if len(dev) == 0:
-                return tensor.cpu()
+                out = tensor.cpu()
             else:
-                return tensor.cuda(dev[0])
+                # no reason to have multiple devices if not cuda-enabled GPUs
+                out = tensor.cuda(dev[0])
         else:
-            return tensor.to(dev)
+            out = tensor.to(dev)
+        return out.detach() if detach else out
 
     def _load_optimization(self, model, dev):
         """Instantiates and returns all optimization objects required for training the model."""
@@ -340,7 +343,7 @@ class Trainer:
             raise AssertionError("optimization only useful if training data is available")
         loss = None  # can now be omitted if using custom trainer
         if "loss" in config:
-            uploader = functools.partial(self._upload_tensor, dev=dev)
+            uploader = functools.partial(self._move_tensor, dev=dev)
             loss = thelper.optim.create_loss_fn(config["loss"], model, self.train_loader, uploader)
         if "optimizer" not in config or not config["optimizer"]:
             raise AssertionError("optimization config missing 'optimizer' field")

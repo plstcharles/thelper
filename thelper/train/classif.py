@@ -106,9 +106,9 @@ class ImageClassifTrainer(Trainer):
         self.logger.debug("fetching data loader samples...")
         for idx, sample in enumerate(loader):
             input_val, label = self._to_tensor(sample)
-            optimizer.zero_grad()
             if label is None:
                 raise AssertionError("groundtruth required when training a model")
+            optimizer.zero_grad()
             if isinstance(input_val, list):  # training samples got augmented, we need to backprop in multiple steps
                 if not input_val:
                     raise AssertionError("cannot train with empty post-augment sample lists")
@@ -123,8 +123,8 @@ class ImageClassifTrainer(Trainer):
                 iter_pred = None
                 augs_count = len(input_val)
                 for input_idx in range(augs_count):
-                    aug_pred = model(self._upload_tensor(input_val[input_idx], dev))
-                    aug_loss = loss(aug_pred, self._upload_tensor(label[input_idx], dev))
+                    aug_pred = model(self._move_tensor(input_val[input_idx], dev))
+                    aug_loss = loss(aug_pred, self._move_tensor(label[input_idx], dev))
                     aug_loss.backward()  # test backprop all at once? might not fit in memory...
                     if iter_pred is None:
                         iter_loss = aug_loss.clone().detach()
@@ -135,21 +135,23 @@ class ImageClassifTrainer(Trainer):
                 iter_loss /= augs_count
                 label = torch.cat(label, dim=0)
             else:
-                iter_pred = model(self._upload_tensor(input_val, dev))
-                iter_loss = loss(iter_pred, self._upload_tensor(label, dev))
+                iter_pred = model(self._move_tensor(input_val, dev))
+                iter_loss = loss(iter_pred, self._move_tensor(label, dev))
                 iter_loss.backward()
+            optimizer.step()
             if metrics:
                 meta = {key: sample[key] if key in sample else None
                         for key in self.task.meta_keys} if self.task.meta_keys else None
+                iter_pred_cpu = self._move_tensor(iter_pred, dev="cpu", detach=True)
+                label_cpu = self._move_tensor(label, dev="cpu", detach=True)
                 for metric in metrics.values():
-                    metric.accumulate(iter_pred.detach().cpu(), label.detach().cpu(), meta=meta)
+                    metric.accumulate(iter_pred_cpu, label_cpu, meta=meta)
             if self.train_iter_callback is not None:
                 self.train_iter_callback(sample=sample, task=self.task, pred=iter_pred,
                                          iter_idx=iter, max_iters=epoch_size,
                                          epoch_idx=epoch, max_epochs=self.epochs,
                                          **self.callback_kwargs)
             epoch_loss += iter_loss.item()
-            optimizer.step()
             monitor_output = ""
             if monitor is not None and monitor in metrics:
                 monitor_output = "   {}: {:.2f}".format(monitor, metrics[monitor].eval())
@@ -205,19 +207,21 @@ class ImageClassifTrainer(Trainer):
                     label = label[0]  # since all identical, just pick the first one and pretend its the only one
                     preds = None
                     for input_idx in range(len(input_val)):
-                        pred = model(self._upload_tensor(input_val[input_idx], dev))
+                        pred = model(self._move_tensor(input_val[input_idx], dev))
                         if preds is None:
                             preds = torch.unsqueeze(pred.clone(), 0)
                         else:
                             preds = torch.cat((preds, torch.unsqueeze(pred, 0)), 0)
                     pred = torch.mean(preds, dim=0)
                 else:
-                    pred = model(self._upload_tensor(input_val, dev))
+                    pred = model(self._move_tensor(input_val, dev))
                 if metrics:
                     meta = {key: sample[key] if key in sample else None
                             for key in self.task.meta_keys} if self.task.meta_keys else None
+                    pred_cpu = self._move_tensor(pred, dev="cpu", detach=True)
+                    label_cpu = self._move_tensor(label, dev="cpu", detach=True)
                     for metric in metrics.values():
-                        metric.accumulate(pred.cpu(), label.cpu() if label is not None else None, meta=meta)
+                        metric.accumulate(pred_cpu, label_cpu, meta=meta)
                 if self.eval_iter_callback is not None:
                     self.eval_iter_callback(sample=sample, task=self.task, pred=pred,
                                             iter_idx=idx, max_iters=epoch_size,
