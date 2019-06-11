@@ -641,6 +641,7 @@ class Trainer:
         """Saves a session checkpoint containing all the information required to resume training."""
         # logically, this should only be called during training (i.e. with a valid optimizer)
         log_stamp = thelper.utils.get_log_stamp()
+        # the saved state below should be kept compatible with the one in thelper.cli.export_model
         curr_state = {
             "name": self.name,
             "epoch": epoch,

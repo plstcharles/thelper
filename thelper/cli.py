@@ -332,6 +332,7 @@ def export_model(config, save_dir):
     log_stamp = thelper.utils.get_log_stamp()
     model_type = model.get_name()
     model_params = model.config if model.config else {}
+    # the saved state below should be kept compatible with the one in thelper.train.base._save
     export_state = {
         "name": session_name,
         "source": log_stamp,
