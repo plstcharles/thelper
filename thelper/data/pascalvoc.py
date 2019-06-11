@@ -207,13 +207,14 @@ class PASCALVOC(Dataset):
                     label = obj.find("name").text
                     if label not in self.label_name_map:
                         continue  # user is skipping some labels from the complete set
+                    image_id = int(os.path.splitext(filename)[0])
                     gt.append(thelper.data.BoundingBox(class_id=self.label_name_map[label],
-                                                       bbox=(int(bbox.find("xmin").text), int(bbox.find("xmax").text),
-                                                             int(bbox.find("ymin").text), int(bbox.find("ymax").text)),
+                                                       bbox=(int(bbox.find("xmin").text), int(bbox.find("ymin").text),
+                                                             int(bbox.find("xmax").text), int(bbox.find("ymax").text)),
                                                        difficult=thelper.utils.str2bool(obj.find("difficult").text),
                                                        occluded=thelper.utils.str2bool(obj.find("occluded").text),
                                                        truncated=thelper.utils.str2bool(obj.find("truncated").text),
-                                                       confidence=None, image_id=filename, task=self.task))
+                                                       confidence=None, image_id=image_id, task=self.task))
                 if not gt:
                     continue
             self.samples.append({

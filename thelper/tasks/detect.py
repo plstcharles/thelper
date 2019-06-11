@@ -85,42 +85,42 @@ class BoundingBox:
     @property
     def top_left(self):
         """Returns the top left bounding box corner coordinates (x,y)."""
-        return self._bbox[0], self._bbox[2]
+        return self._bbox[0], self._bbox[1]
 
     @top_left.setter
     def top_left(self, value):
         """Sets the top left bounding box corner coordinates (x,y)."""
         assert isinstance(value, (list, tuple, np.ndarray, torch.Tensor)) and len(value) == 2, "invalid input type/len"
-        self._bbox[0], self._bbox[2] = value[0], value[1]
+        self._bbox[0], self._bbox[1] = value[0], value[1]
 
     @property
     def bottom_right(self):
         """Returns the bottom right bounding box corner coordinates (x,y)."""
-        return self._bbox[1], self._bbox[3]
+        return self._bbox[2], self._bbox[3]
 
     @bottom_right.setter
     def bottom_right(self, value):
         """Sets the bottom right bounding box corner coordinates (x,y)."""
         assert isinstance(value, (list, tuple, np.ndarray, torch.Tensor)) and len(value) == 2, "invalid input type/len"
-        assert value[0] >= self._bbox[0] and value[1] >= self._bbox[2]
-        self._bbox[1], self._bbox[3] = value[0], value[1]
+        assert value[0] >= self._bbox[0] and value[1] >= self._bbox[1]
+        self._bbox[2], self._bbox[3] = value[0], value[1]
 
     @property
     def width(self):
         """Returns the width of the bounding box."""
-        return self._bbox[1] - self._bbox[0]
+        return self._bbox[2] - self._bbox[0]
 
     @property
     def height(self):
         """Returns the height of the bounding box."""
-        return self._bbox[3] - self._bbox[2]
+        return self._bbox[3] - self._bbox[1]
 
     @property
     def centroid(self, floor=False):
         """Returns the bounding box centroid coordinates (x,y)."""
         if floor:
-            return (self._bbox[0] + self._bbox[1]) // 2, (self._bbox[2] + self._bbox[3]) // 2
-        return (self._bbox[0] + self._bbox[1]) / 2, (self._bbox[2] + self._bbox[3]) / 2
+            return (self._bbox[0] + self._bbox[2]) // 2, (self._bbox[1] + self._bbox[3]) // 2
+        return (self._bbox[0] + self._bbox[2]) / 2, (self._bbox[1] + self._bbox[3]) / 2
 
     @property
     def difficult(self):
@@ -174,7 +174,7 @@ class BoundingBox:
     @area.setter
     def area(self, value):
         if value is None:
-            value = (self.bottom_right[0] - self.top_left[0]) * (self.bottom_right[1] - self.top_left[1])
+            value = self.width * self.height
         else:
             # may be assigned if for example we are using relative coords but want to keep track of the original surface
             assert (isinstance(value, (int, float)) and value > 0), "invalid annotation surface area value"
@@ -199,7 +199,7 @@ class BoundingBox:
     @image_id.setter
     def image_id(self, value):
         """Sets the image string identifier."""
-        assert value is None or isinstance(value, str), "image should be identifier with a string (file path or uuid)"
+        assert value is None or isinstance(value, (str, int)), "image identifier should be a string/int (file path or uuid)"
         self._image_id = value
 
     @property
@@ -226,8 +226,8 @@ class BoundingBox:
                     self.difficult, self.occluded, self.truncated]
         else:
             assert format is None, "unrecognized/unknown encoding format"
-            vec = [*self.top_left, *self.bottom_right, self.class_id, self.difficult,
-                   self.occluded, self.truncated, self.iscrowd, self.area, self.image_id]
+            vec = [*self.bbox, self.class_id, self.difficult, self.occluded,
+                   self.truncated, self.iscrowd, self.area, self.image_id]
             if self.confidence is not None:
                 vec += [self.confidence] if isinstance(self.confidence, float) else [*self.confidence]
             return vec
@@ -241,13 +241,12 @@ class BoundingBox:
             return BoundingBox(class_id=vec[4], bbox=[vec[0], vec[1], vec[0] + vec[2], vec[1] + vec[3]])
         elif format == "pascal_voc":
             assert len(vec) == 8, "unexpected vector length (should contain 8 values)"
-            return BoundingBox(class_id=vec[4], bbox=[vec[0], vec[1], vec[2], vec[3]],
-                               difficult=vec[5], occluded=vec[6], truncated=vec[7])
+            return BoundingBox(class_id=vec[4], bbox=vec[0:4], difficult=vec[5], occluded=vec[6], truncated=vec[7])
         else:
             assert format is None, "unrecognized/unknown encoding format"
             assert len(vec) >= 11, "unexpected vector length (should contain 9 values or more)"
-            return BoundingBox(class_id=vec[4], bbox=[vec[0], vec[1], vec[2], vec[3]], difficult=vec[5],
-                               occluded=vec[6], truncated=vec[7], iscrowd=vec[8], area=vec[9],
+            return BoundingBox(class_id=vec[4], bbox=vec[0:4], difficult=vec[5], occluded=vec[6],
+                               truncated=vec[7], iscrowd=vec[8], area=vec[9],
                                confidence=(None if len(vec) == 11 else vec[11:]),
                                image_id=vec[10], task=None)
 
