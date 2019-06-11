@@ -256,11 +256,11 @@ class PASCALVOC(Dataset):
             self.gt_key: gt,
             self.idx_key: idx
         }
+        if isinstance(sample[self.image_key], np.ndarray) and any([s < 0 for s in sample[self.image_key].strides]):
+            # fix unsupported negative strides in PyTorch <= 1.1.0
+            sample[self.image_key] = sample[self.image_key].copy()
         if self.transforms:
             sample = self.transforms(sample)
-        if isinstance(sample[self.image_key], np.ndarray) and any([s < 0 for s in sample[self.image_key].strides]):
-            # fix unsupported negative strides in PyTorch <= 0.4.0
-            sample[self.image_key] = sample[self.image_key].copy()
         return sample
 
     def decode_label_map(self, label_map):
