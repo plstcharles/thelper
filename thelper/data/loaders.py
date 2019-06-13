@@ -93,6 +93,7 @@ def default_collate(batch):
         return [default_collate(samples) for samples in transposed]
     raise TypeError((error_msg_fmt.format(type(batch[0]))))
 
+
 class DataLoader(torch.utils.data.DataLoader):
     """Specialized data loader used to load minibatches from a dataset parser.
 
