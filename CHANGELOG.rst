@@ -2,6 +2,17 @@
 Changelog
 =========
 
+0.3.0 (2019/06/12)
+--------------------------
+
+* Added dockerfile for containerized builds
+* Added object detection task & trainer implementations
+* Added CLI model/checkpoint export support
+* Added CLI dataset splitting/HDF5 support
+* Added baseline superresolution implementations
+* Added lots of new unit tests & docstrings
+* Cleaned up transform & display operations
+
 0.2.8 (2019/03/17)
 --------------------------
 
