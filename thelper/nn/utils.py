@@ -190,13 +190,12 @@ class Module(torch.nn.Module):
         | :class:`thelper.tasks.utils.Task`
     """
 
-    def __init__(self, task, config=None):
+    def __init__(self, task):
         """Receives a task object to hold internally for model specialization."""
         super().__init__()
         if task is None or not isinstance(task, thelper.tasks.Task):
             raise AssertionError("task must derive from thelper.tasks.Task")
         self.task = task
-        self.config = config
 
     @abstractmethod
     def forward(self, *input):
@@ -239,7 +238,7 @@ class ExternalModule(Module):
 
     def __init__(self, model_type, task, config=None):
         """Receives a task object to hold internally for model specialization."""
-        super().__init__(task=task, config=config)
+        super().__init__(task=task)
         logger.info("instantiating external module '%s'..." % str(model_type))
         self.model_type = model_type
         self.model = model_type(**config)
