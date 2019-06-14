@@ -175,12 +175,14 @@ def load_checkpoint(ckpt,                      # type: thelper.typedefs.Checkpoi
                     ckpt, latest_epoch, latest_day, latest_time = ckpt_path, epoch_stamp, day_stamp, time_stamp
         if not os.path.isfile(ckpt):
             raise AssertionError("could not find valid checkpoint at '%s'" % ckpt)
+    basepath = None
     if isinstance(ckpt, str):
         logger.debug("parsing checkpoint at '%s'" % ckpt)
         basepath = os.path.dirname(os.path.abspath(ckpt))
     else:
-        logger.debug("parsing checkpoint provided via file object")
-        basepath = os.path.dirname(os.path.abspath(ckpt.name))
+        if hasattr(ckpt, "name"):
+            logger.debug("parsing checkpoint provided via file object")
+            basepath = os.path.dirname(os.path.abspath(ckpt.name))
     ckptdata = torch.load(ckpt, map_location=map_location)
     if not isinstance(ckptdata, dict):
         raise AssertionError("unexpected checkpoint data type")
@@ -217,7 +219,7 @@ def load_checkpoint(ckpt,                      # type: thelper.typedefs.Checkpoi
         trace_path = None
         if os.path.isfile(ckptdata["model"]):
             trace_path = ckptdata["model"]
-        elif os.path.isfile(os.path.join(basepath, ckptdata["model"])):
+        elif basepath is not None and os.path.isfile(os.path.join(basepath, ckptdata["model"])):
             trace_path = os.path.join(basepath, ckptdata["model"])
         if trace_path is not None:
             if trace_path.endswith(".pth"):
