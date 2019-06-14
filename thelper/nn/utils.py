@@ -105,9 +105,9 @@ def create_model(config, task, save_dir=None, ckptdata=None):
         elif isinstance(ckptdata["model"], dict):
             logger.debug("loading model type/params from session '%s'" % ckptdata["name"])
             model_state = ckptdata["model"]
-            if "task" not in ckptdata or not isinstance(ckptdata["task"], (thelper.tasks.Task, str)):
+            if "task" not in ckptdata or not isinstance(ckptdata["task"], (thelper.tasks.Task, dict, str)):
                 raise AssertionError("invalid checkpoint, cannot reload previous model task")
-            task = thelper.tasks.create_task(ckptdata["task"]) if isinstance(ckptdata["task"], str) else ckptdata["task"]
+            task = thelper.tasks.create_task(ckptdata["task"]) if isinstance(ckptdata["task"], (dict, str)) else ckptdata["task"]
             if "model_type" not in ckptdata or not isinstance(ckptdata["model_type"], str):
                 raise AssertionError("invalid checkpoint, cannot reload previous model type")
             model_type = ckptdata["model_type"]
