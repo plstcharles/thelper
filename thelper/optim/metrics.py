@@ -150,7 +150,7 @@ class CategoryAccuracy(Metric):
                 # these parameters are passed to the wrapper's constructor
                 "params": {
                     # the top prediction count to check for a match with the groundtruth
-                    "top_k" 5
+                    "top_k": 5
                 }
             },
             # ...
