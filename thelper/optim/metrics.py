@@ -1691,8 +1691,11 @@ class RawPredictions(Metric):
         self.__init__(callback=self.callback)
 
     def eval(self):
-        """Returns ``None``, as this class only preserves raw prediction results."""
-        return None
+        """
+        Returns the raw predictions as received and accumulated through batch iterations.
+        Indices of predictions match the order in which samples where received during ``accumulate`` calls.
+        """
+        return self.predictions
 
     def goal(self):
         """Returns ``None``, as this class should not be used to directly monitor the training progress."""
