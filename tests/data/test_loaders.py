@@ -107,9 +107,6 @@ class DummyClassifDataset(thelper.data.Dataset):
     def __getitem__(self, idx):
         return self.samples[idx]
 
-    def get_task(self):
-        return self.task
-
 
 @pytest.fixture
 def class_split_config():
@@ -139,9 +136,9 @@ def class_split_config():
 
 def test_classif_split(class_split_config):
     task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(class_split_config)
-    assert task.check_compat(class_split_config["datasets"]["dataset_A"].get_task(), exact=True)
-    assert task.check_compat(class_split_config["datasets"]["dataset_B"].get_task(), exact=True)
-    assert task.check_compat(class_split_config["datasets"]["dataset_C"].get_task(), exact=True)
+    assert task.check_compat(class_split_config["datasets"]["dataset_A"].task, exact=True)
+    assert task.check_compat(class_split_config["datasets"]["dataset_B"].task, exact=True)
+    assert task.check_compat(class_split_config["datasets"]["dataset_C"].task, exact=True)
     train_samples, valid_samples, test_samples = {}, {}, {}
     train_class_counts, valid_class_counts, test_class_counts = [0] * 10, [0] * 10, [0] * 10
     for loader, samples, class_counts in [(train_loader, train_samples, train_class_counts),
@@ -165,9 +162,9 @@ def test_classif_split(class_split_config):
 def test_classif_split_no_balancing(class_split_config):
     class_split_config["loaders"]["skip_class_balancing"] = True
     task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(class_split_config)
-    assert task.check_compat(class_split_config["datasets"]["dataset_A"].get_task(), exact=True)
-    assert task.check_compat(class_split_config["datasets"]["dataset_B"].get_task(), exact=True)
-    assert task.check_compat(class_split_config["datasets"]["dataset_C"].get_task(), exact=True)
+    assert task.check_compat(class_split_config["datasets"]["dataset_A"].task, exact=True)
+    assert task.check_compat(class_split_config["datasets"]["dataset_B"].task, exact=True)
+    assert task.check_compat(class_split_config["datasets"]["dataset_C"].task, exact=True)
     train_samples, valid_samples, test_samples = {}, {}, {}
     for loader, samples in [(train_loader, train_samples), (valid_loader, valid_samples), (test_loader, test_samples)]:
         for batch in loader:
@@ -189,20 +186,20 @@ def test_loader_factory(class_split_config, mocker):
     fake_loaders_config = copy.deepcopy(class_split_config["loaders"])
     fake_loaders_config["train_batch_size"] = 16
     with pytest.raises(AssertionError):
-        _ = thelper.data.loaders._LoaderFactory(fake_loaders_config)
-    factory = thelper.data.loaders._LoaderFactory(class_split_config["loaders"])
+        _ = thelper.data.loaders.LoaderFactory(fake_loaders_config)
+    factory = thelper.data.loaders.LoaderFactory(class_split_config["loaders"])
     assert factory.train_split["dataset_A"] == 0.5 and factory.valid_split["dataset_A"] == 0.4 and factory.test_split["dataset_A"] == 0.1
     assert factory.train_split["dataset_B"] == 0.7 and factory.valid_split["dataset_B"] == 0.3
     assert factory.test_split["dataset_C"] == 1.0
     loaders_config_drop = copy.deepcopy(class_split_config["loaders"])
     loaders_config_drop["drop_last"] = True
-    factory = thelper.data.loaders._LoaderFactory(loaders_config_drop)
+    factory = thelper.data.loaders.LoaderFactory(loaders_config_drop)
     assert factory.drop_last
     loaders_config_sampler = copy.deepcopy(class_split_config["loaders"])
     loaders_config_sampler["sampler"] = {
         "type": "torch.utils.data.sampler.RandomSampler"
     }
-    factory = thelper.data.loaders._LoaderFactory(loaders_config_sampler)
+    factory = thelper.data.loaders.LoaderFactory(loaders_config_sampler)
     assert factory.sampler_type == torch.utils.data.sampler.RandomSampler
     assert factory.train_sampler
     _ = mocker.patch("thelper.transforms.load_transforms", return_value="dummy")
@@ -221,7 +218,7 @@ def test_loader_factory(class_split_config, mocker):
             }
         }
     ]
-    factory = thelper.data.loaders._LoaderFactory(loaders_config_transfs)
+    factory = thelper.data.loaders.LoaderFactory(loaders_config_transfs)
     assert factory.base_transforms is not None
     assert factory.get_base_transforms() == factory.base_transforms
     loaders_config_transfs["train_augments"] = {"append": True, "transforms": [
@@ -238,41 +235,41 @@ def test_loader_factory(class_split_config, mocker):
             }
         }
     ]}
-    factory = thelper.data.loaders._LoaderFactory(loaders_config_transfs)
+    factory = thelper.data.loaders.LoaderFactory(loaders_config_transfs)
     assert factory.train_augments is not None and factory.train_augments_append
     fake_loaders_split_config = copy.deepcopy(class_split_config["loaders"])
     del fake_loaders_split_config["train_split"]
     del fake_loaders_split_config["valid_split"]
     del fake_loaders_split_config["test_split"]
     with pytest.raises(AssertionError):
-        _ = thelper.data.loaders._LoaderFactory(fake_loaders_split_config)
+        _ = thelper.data.loaders.LoaderFactory(fake_loaders_split_config)
     normalize_query = mocker.patch("thelper.utils.query_yes_no", return_value=True)
     denormalized_loaders_config = copy.deepcopy(class_split_config["loaders"])
     denormalized_loaders_config["train_split"]["dataset_A"] = 1.5
-    factory = thelper.data.loaders._LoaderFactory(denormalized_loaders_config)
+    factory = thelper.data.loaders.LoaderFactory(denormalized_loaders_config)
     assert math.isclose(factory.train_split["dataset_A"] + factory.valid_split["dataset_A"] + factory.test_split["dataset_A"], 1)
     denormalized_loaders_config["train_split"]["dataset_A"] = 0.1
-    factory = thelper.data.loaders._LoaderFactory(denormalized_loaders_config)
+    factory = thelper.data.loaders.LoaderFactory(denormalized_loaders_config)
     assert math.isclose(factory.train_split["dataset_A"] + factory.valid_split["dataset_A"] + factory.test_split["dataset_A"], 1)
     assert normalize_query.call_count == 1
     loaders_collate_config = copy.deepcopy(class_split_config["loaders"])
     loaders_collate_config["collate_fn"] = 0
     with pytest.raises(AssertionError):
-        _ = thelper.data.loaders._LoaderFactory(loaders_collate_config)
+        _ = thelper.data.loaders.LoaderFactory(loaders_collate_config)
     loaders_collate_config["collate_fn"] = collate_fn
-    factory = thelper.data.loaders._LoaderFactory(loaders_collate_config)
+    factory = thelper.data.loaders.LoaderFactory(loaders_collate_config)
     assert factory.train_collate_fn == collate_fn
     loaders_collate_config["collate_fn"] = {
         "type": "torch.utils.data.dataloader.default_collate"
     }
-    factory = thelper.data.loaders._LoaderFactory(loaders_collate_config)
+    factory = thelper.data.loaders.LoaderFactory(loaders_collate_config)
     assert factory.train_collate_fn == torch.utils.data.dataloader.default_collate
     loaders_collate_config["collate_fn"] = "torch.utils.data.dataloader.default_collate"
-    factory = thelper.data.loaders._LoaderFactory(loaders_collate_config)
+    factory = thelper.data.loaders.LoaderFactory(loaders_collate_config)
     assert factory.train_collate_fn == torch.utils.data.dataloader.default_collate
     loaders_collate_config["train_collate_fn"] = "torch.utils.data.dataloader.default_collate"
     with pytest.raises(AssertionError):
-        _ = thelper.data.loaders._LoaderFactory(loaders_collate_config)
+        _ = thelper.data.loaders.LoaderFactory(loaders_collate_config)
     loaders_seed_config = copy.deepcopy(class_split_config["loaders"])
     loaders_seed_config["test_seed"] = 0
     loaders_seed_config["valid_seed"] = 1
@@ -280,9 +277,9 @@ def test_loader_factory(class_split_config, mocker):
     loaders_seed_config["numpy_seed"] = 3
     loaders_seed_config["random_seed"] = "4"
     with pytest.raises(AssertionError):
-        _ = thelper.data.loaders._LoaderFactory(loaders_seed_config)
+        _ = thelper.data.loaders.LoaderFactory(loaders_seed_config)
     loaders_seed_config["random_seed"] = 4
-    factory = thelper.data.loaders._LoaderFactory(loaders_seed_config)
+    factory = thelper.data.loaders.LoaderFactory(loaders_seed_config)
     assert factory.seeds["test"] == 0
     assert factory.seeds["valid"] == 1
     assert factory.seeds["torch"] == 2

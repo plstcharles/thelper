@@ -115,8 +115,8 @@ def test_resume_session(simple_config, mocker):
         thelper.cli.resume_session({"dummy": None}, test_save_path)
     with pytest.raises(AssertionError):
         thelper.cli.resume_session({"config": {}}, test_save_path)
-    fake_train = mocker.patch.object(thelper.train.classif.ImageClassifTrainer, "_train_epoch", return_value=[0, 0])
-    fake_eval = mocker.patch.object(thelper.train.classif.ImageClassifTrainer, "_eval_epoch")
+    fake_train = mocker.patch.object(thelper.train.classif.ImageClassifTrainer, "train_epoch", return_value=[0, 0])
+    fake_eval = mocker.patch.object(thelper.train.classif.ImageClassifTrainer, "eval_epoch")
     with pytest.raises((FileNotFoundError, AssertionError)):
         _ = thelper.utils.load_checkpoint(test_create_simple_path)
     thelper.cli.create_session(simple_config, test_save_path)

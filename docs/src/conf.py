@@ -22,10 +22,23 @@ sys.path.insert(0, os.path.abspath('../'))
 project = 'thelper'
 copyright = '2018, Pierre-Luc St-Charles'
 author = 'Pierre-Luc St-Charles'
-version = release = '0.2.8'
+version = release = '0.3.1'
 
 
 # -- General configuration ---------------------------------------------------
+
+nitpicky = False  # caused too many dummy warnings as of 2019/05 due to attribs
+nitpick_ignore = [
+    ("py:class", "object"),
+    ("py:class", "abc.ABC"),
+    ("py:class", "torch.optim.lr_scheduler._LRScheduler"),
+    ("py:class", "torch.utils.data.dataset.Dataset"),
+    ("py:class", "torch.utils.data.dataloader.DataLoader"),
+    ("py:class", "torch.utils.data.sampler.Sampler"),
+    ("py:class", "torch.nn.modules.module.Module"),
+    ("py:class", "torch.nn.Module"),
+    ("py:class", "torchvision.transforms.transforms.Compose")
+]
 
 # If your documentation needs a minimal Sphinx version, state it here.
 #
@@ -246,6 +259,7 @@ def skip(app, what, name, obj, skip, options):
         return False
     return skip
 
+
 def run_apidoc(_):
     if on_rtd:
         argv = ["-M", "-o", ".", "../../thelper"]
@@ -260,6 +274,7 @@ def run_apidoc(_):
         from sphinx import apidoc
         argv.insert(0, apidoc.__file__)
         apidoc.main(argv)
+
 
 def setup(app):
     app.connect("autodoc-skip-member", skip)

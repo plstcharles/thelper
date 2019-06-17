@@ -4,6 +4,7 @@ This module contains utility functions used to instantiate tasks and check their
 and the base interface used to define new tasks.
 """
 
+import collections
 import logging
 
 import thelper.utils
@@ -24,10 +25,9 @@ def create_task(config):
 
     .. seealso::
         | :class:`thelper.tasks.utils.Task`
-        | :func:`thelper.tasks.utils.Task.__repr__`
     """
-    if config is None or not isinstance(config, (str, dict)):
-        raise AssertionError("unexpected config type (should be str or dict)")
+    assert config is not None and isinstance(config, (str, dict)), \
+        "unexpected config type (should be str or dict)"
     if isinstance(config, dict):
         if "type" not in config or not isinstance(config["type"], str):
             raise AssertionError("invalid field 'type' in task config")
@@ -40,13 +40,16 @@ def create_task(config):
             raise AssertionError("the task must be derived from 'thelper.tasks.Task'")
         return task
     elif isinstance(config, str):
-        task_type_name = config.split(": ")[0]
-        if "." not in task_type_name:
-            # dirty hotfix
-            task_type_name = "thelper.tasks." + task_type_name
-        task_type = thelper.utils.import_class(task_type_name)
-        task_params = eval(": ".join(config.split(": ")[1:]))
-        task = task_type(**task_params)
+        if ": " in config:  # for backwards compat (pre v0.3.0)
+            task_type_name = config.split(": ")[0]
+            if "." not in task_type_name:
+                # dirty hotfix
+                task_type_name = "thelper.tasks." + task_type_name
+            task_type = thelper.utils.import_class(task_type_name)
+            task_params = eval(": ".join(config.split(": ")[1:]))
+            task = task_type(**task_params)
+        else:
+            task = eval(config)
         if not isinstance(task, thelper.tasks.Task):
             raise AssertionError("the task must be derived from 'thelper.tasks.Task'")
         return task
@@ -89,7 +92,7 @@ def create_global_task(tasks):
     return ref_task
 
 
-class Task(object):
+class Task:
     """Basic task interface that defines a training objective and that holds sample i/o keys.
 
     Since the framework's data loaders expect samples to be passed in as dictionaries, keys
@@ -98,7 +101,7 @@ class Task(object):
     kept by this interface for reference (these are considered meta keys).
 
     Note that while this interface can be instantiated directly, trainers and models might
-    not be provided enough information about their goal to be corectly instantiated. Thus,
+    not be provided enough information about their goal to be correctly instantiated. Thus,
     specialized task objects derived from this base class should be used if possible.
 
     Attributes:
@@ -110,85 +113,91 @@ class Task(object):
         | :class:`thelper.tasks.classif.Classification`
         | :class:`thelper.tasks.segm.Segmentation`
         | :class:`thelper.tasks.regr.Regression`
+        | :class:`thelper.tasks.detect.Detection`
     """
 
     def __init__(self, input_key, gt_key=None, meta_keys=None):
-        """Receives and stores the input tensor key, the groundtruth tensor key, and the extra
-        (meta) keys produced by the dataset parser(s).
-        """
-        if input_key is None:
-            raise AssertionError("task input key cannot be None (input tensors must always be available)")
+        """Receives and stores the keys used to index dataset sample contents."""
         self.input_key = input_key
         self.gt_key = gt_key
-        self.meta_keys = []
-        if meta_keys is not None:
-            if not isinstance(meta_keys, list):
-                raise AssertionError("meta keys should be provided as a list")
-            self.meta_keys = meta_keys
+        self.meta_keys = meta_keys
 
-    def get_input_key(self):
-        """Returns the key used to fetch input data tensors from a sample dictionary.
+    @property
+    def input_key(self):
+        """Returns the key used to fetch input data tensors from a sample dictionary."""
+        return self._input_key
+
+    @input_key.setter
+    def input_key(self, value):
+        """Sets the input key used to fetch input data tensors from a sample dictionary.
 
         The key can be of any type, as long as it can be used to index a dictionary. Print-
         friendly types (e.g. string) are recommended for debugging. This key can never be
         ``None``, as input tensors should always be available in loaded samples.
         """
-        return self.input_key
+        assert value is not None, "input key cannot be `None` (input data should always be available)"
+        assert isinstance(value, collections.abc.Hashable), "key type must be hashable"
+        self._input_key = value
 
-    def get_gt_key(self):
-        """Returns the key used to fetch groundtruth data tensors from a sample dictionary.
+    @property
+    def gt_key(self):
+        """Returns the key used to fetch groundtruth data tensors from a sample dictionary."""
+        return self._gt_key
+
+    @gt_key.setter
+    def gt_key(self, value):
+        """Sets the key used to fetch groundtruth data tensors from a sample dictionary.
 
         The key can be of any type, as long as it can be used to index a dictionary. Print-
         friendly types (e.g. string) are recommended for debugging. If groundtruth is not
-        available through the dataset parsers, this function should teturn ``None``.
+        available through the dataset parsers, this key can be set to ``None``.
         """
-        return self.gt_key
+        assert isinstance(value, collections.Hashable), "key type must be hashable"
+        self._gt_key = value
 
-    def get_meta_keys(self):
-        """Returns a list of keys used to carry metadata and auxiliary info in samples.
+    @property
+    def meta_keys(self):
+        """Returns the list of keys used to carry meta/auxiliary data in samples."""
+        return self._meta_keys
+
+    @meta_keys.setter
+    def meta_keys(self, value):
+        """Sets the list of keys used to carry meta/auxiliary data in samples.
 
         The keys can be of any type, as long as they can be used to index a dictionary.
         Print-friendly types (e.g. string) are recommended for debugging. This list can
-        be empty if the dataset/model does not provide/require any extra inputs.
+        be empty if no extra data is available.
         """
-        return self.meta_keys
+        assert value is None or isinstance(value, (list, tuple)), "meta keys should be provided as an array"
+        value = [] if value is None else value
+        assert all([v is not None and isinstance(v, collections.Hashable) for v in value]), \
+            "all meta key types must be hashable"
+        self._meta_keys = value
 
-    def get_keys(self):
-        """Returns a list of all keys used to carry tensors and metadata in samples.
+    @property
+    def keys(self):
+        """Returns a list of all keys used to carry tensors and metadata in samples."""
+        return list(set([k for k in [self.input_key, self.gt_key, *self.meta_keys] if k is not None]))
 
-        The keys can be of any type, as long as they can be used to index a dictionary.
-        Print-friendly types (e.g. string) are recommended for debugging. This list
-        should always contain at least one key (i.e. the input key).
-        """
-        keys = [self.get_input_key()]
-        if self.get_gt_key() is not None:
-            keys.append(self.get_gt_key())
-        keys += self.get_meta_keys()
-        return list(set(keys))
-
-    def check_compat(self, other, exact=False):
+    def check_compat(self, task, exact=False):
         """Returns whether the current task is compatible with the provided one or not.
 
         This is useful for sanity-checking, and to see if the inputs/outputs of two models
         are compatible. It should be overridden in derived classes to specialize the
         compatibility verification. If ``exact = True``, all fields will be checked for
-        exact (perfect) compatibility.
+        exact compatibility.
         """
-        if type(other) == Task:
-            return (self.get_input_key() == other.get_input_key() and
-                    self.get_gt_key() == other.get_gt_key())
-        return False
+        return type(task) == Task and \
+            (self.input_key == task.input_key and
+             (self.gt_key is None or task.gt_key is None or self.gt_key == task.gt_key) and
+             (not exact or (set(self.meta_keys) == set(task.meta_keys) and
+                            self.gt_key == task.gt_key)))
 
-    def get_compat(self, other):
+    def get_compat(self, task):
         """Returns a task instance compatible with the current task and the given one."""
-        if type(other) == Task:
-            if not self.check_compat(other):
-                raise AssertionError("cannot create compatible task instance between:\n"
-                                     "\tself: %s\n\tother: %s" % (str(self), str(other)))
-            meta_keys = list(set(self.get_meta_keys() + other.get_meta_keys()))
-            return Task(self.get_input_key(), self.get_gt_key(), meta_keys)
-        else:
-            raise AssertionError("cannot combine task type '%s' with '%s'" % (str(other.__class__), str(self.__class__)))
+        assert type(task) == Task, f"cannot create compatible task from types '{type(task)}' and '{type(self)}'"
+        assert self.check_compat(task), f"cannot create compatible task between:\n\t{str(self)}\n\t{str(task)}"
+        return Task(input_key=self.input_key, gt_key=self.gt_key, meta_keys=list(set(self.meta_keys + task.meta_keys)))
 
     def __repr__(self):
         """Creates a print-friendly representation of an abstract task.
@@ -199,8 +208,5 @@ class Task(object):
         argument names given to the constructor in case we need to recreate a task object from
         this string.
         """
-        return self.__class__.__module__ + "." + self.__class__.__qualname__ + ": " + str({
-            "input_key": self.get_input_key(),
-            "gt_key": self.get_gt_key(),
-            "meta_keys": self.get_meta_keys()
-        })
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
+            f"(input_key={repr(self.input_key)}, gt_key={repr(self.gt_key)}, meta_keys={repr(self.meta_keys)})"

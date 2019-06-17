@@ -13,7 +13,7 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-def load_transforms(stages):
+def load_transforms(stages, avoid_transform_wrapper=False):
     """Loads a transformation pipeline from a list of stages.
 
     Each entry in the provided list will be considered a stage in the pipeline. The ordering of the stages
@@ -85,31 +85,27 @@ def load_transforms(stages):
         | :func:`thelper.transforms.utils.load_augments`
         | :func:`thelper.data.utils.create_loaders`
     """
-    if not isinstance(stages, list):
-        raise AssertionError("expected stages to be provided as a list")
+    assert isinstance(stages, list), "expected stages to be provided as a list"
     if not stages:
         return None, True  # no-op transform, and dont-care append
-    if not all([isinstance(stage, dict) for stage in stages]):
-        raise AssertionError("expected all stages to be provided as dictionaries")
+    assert all([isinstance(stage, dict) for stage in stages]), "expected all stages to be provided as dictionaries"
     operations = []
     for stage_idx, stage in enumerate(stages):
-        if "operation" not in stage or not stage["operation"]:
-            raise AssertionError("stage #%d is missing its operation field" % stage_idx)
+        assert "operation" in stage and stage["operation"], f"stage #{stage_idx} is missing its operation field"
         operation_name = stage["operation"]
         operation_params = thelper.utils.get_key_def(["params", "parameters"], stage, {})
-        if not isinstance(operation_params, dict):
-            raise AssertionError("stage #%d parameters are not provided as a dictionary" % stage_idx)
+        assert isinstance(operation_params, dict), f"stage #{stage_idx} parameters are not provided as a dictionary"
         operation_targets = None
         if "target_key" in stage:
-            if not isinstance(stage["target_key"], (list, str, int)):
-                raise AssertionError("stage #%d target keys are not provided as a list or string/int" % stage_idx)
+            assert isinstance(stage["target_key"], (list, str, int)), \
+                f"stage #{stage_idx} target keys are not provided as a list or string/int"
             operation_targets = stage["target_key"] if isinstance(stage["target_key"], list) else [stage["target_key"]]
         linked_fate = thelper.utils.str2bool(stage["linked_fate"]) if "linked_fate" in stage else True
         if operation_name == "Augmentor.Pipeline":
             import Augmentor
             pipeline = Augmentor.Pipeline()
-            if not isinstance(operation_params, dict) or not operation_params:
-                raise AssertionError("augmentor pipeline 'params' field should contain dictionary of suboperations")
+            assert isinstance(operation_params, dict) and operation_params, \
+                "augmentor pipeline 'params' field should contain dictionary of suboperations"
             for pipeline_op_name, pipeline_op_params in operation_params.items():
                 getattr(pipeline, pipeline_op_name)(**pipeline_op_params)
             if "input_tensor" in stage and thelper.utils.str2bool(stage["input_tensor"]):
@@ -118,8 +114,8 @@ def load_transforms(stages):
             if "output_tensor" in stage and thelper.utils.str2bool(stage["output_tensor"]):
                 operations.append(torchvision.transforms.ToTensor())
         elif operation_name == "albumentations.Compose":
-            if not isinstance(operation_params, dict) or not operation_params:
-                raise AssertionError("albumentations pipeline 'params' field should contain dictionary of suboperations")
+            assert isinstance(operation_params, dict) and operation_params, \
+                "albumentations pipeline 'params' field should contain dictionary of suboperations"
             suboperations = []
             for op_name, op_params in operation_params.items():
                 if not op_name.startswith("albumentations."):
@@ -141,9 +137,9 @@ def load_transforms(stages):
         else:
             operation_type = thelper.utils.import_class(operation_name)
             operation = operation_type(**operation_params)
-            if not isinstance(operation, (thelper.transforms.wrappers.TransformWrapper,
-                                          thelper.transforms.operations.NoTransform,
-                                          torchvision.transforms.Compose)):
+            if not avoid_transform_wrapper and not isinstance(operation, (thelper.transforms.wrappers.TransformWrapper,
+                                                                          thelper.transforms.operations.NoTransform,
+                                                                          torchvision.transforms.Compose)):
                 operations.append(thelper.transforms.wrappers.TransformWrapper(operation,
                                                                                target_keys=operation_targets,
                                                                                linked_fate=linked_fate))
@@ -207,8 +203,7 @@ def load_augments(config):
         | :func:`thelper.transforms.utils.load_transforms`
         | :func:`thelper.data.utils.create_loaders`
     """
-    if not isinstance(config, dict):
-        raise AssertionError("augmentation config should be provided as dictionary")
+    assert isinstance(config, dict), "augmentation config should be provided as dictionary"
     augments = None
     augments_append = False
     if "append" in config:

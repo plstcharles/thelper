@@ -2,6 +2,7 @@
 
 This module contains a class that defines the objectives of models/trainers for classification tasks.
 """
+import copy
 import json
 import logging
 import os
@@ -45,33 +46,43 @@ class Classification(Task):
         """
         super(Classification, self).__init__(input_key, label_key, meta_keys)
         self.class_names = class_names
+
+    @property
+    def class_names(self):
+        """Returns the list of class names to be predicted."""
+        return self._class_names
+
+    @class_names.setter
+    def class_names(self, class_names):
+        """Sets the list of class names to be predicted."""
         if isinstance(class_names, str) and os.path.exists(class_names):
             with open(class_names, "r") as fd:
-                self.class_names = json.load(fd)
-        if isinstance(self.class_names, dict):
-            assert all([idx in self.class_names or str(idx) in self.class_names for idx in range(len(self.class_names))])
-            self.class_names = [thelper.utils.get_key([idx, str(idx)], self.class_names) for idx in range(len(self.class_names))]
-        if not isinstance(self.class_names, list):
-            raise AssertionError("expected class names to be provided as a list")
-        if len(self.class_names) < 1:
-            raise AssertionError("should have at least one class!")
-        if len(self.class_names) != len(set(self.class_names)):
-            # no longer throwing here, image net possesses such a case ('crane#134' and 'crane#517')
+                class_names = json.load(fd)
+        if isinstance(class_names, dict):
+            assert all([idx in class_names or str(idx) in class_names for idx in range(len(class_names))]), \
+                "missing class indices (all integers must be consecutive)"
+            class_names = [thelper.utils.get_key([idx, str(idx)], class_names) for idx in range(len(class_names))]
+        assert isinstance(class_names, list), "expected class names to be provided as an array"
+        assert all([isinstance(name, str) for name in class_names]), "all classes must be named with strings"
+        assert len(class_names) >= 1, "should have at least one class!"
+        if len(class_names) != len(set(class_names)):
+            # no longer throwing here, imagenet possesses such a case ('crane#134' and 'crane#517')
             logger.warning("found duplicated name in class list, might be a data entry problem...")
-            self.class_names = [name if self.class_names.count(name) == 1 else name + "#" + str(idx)
-                                for idx, name in enumerate(self.class_names)]
+            class_names = [name if class_names.count(name) == 1 else name + "#" + str(idx)
+                           for idx, name in enumerate(class_names)]
+        self._class_names = copy.deepcopy(class_names)
+        self._class_indices = {class_name: idx for idx, class_name in enumerate(class_names)}
 
-    def get_class_names(self):
-        """Returns the list of class names to be predicted by the model."""
-        return self.class_names
+    @property
+    def class_indices(self):
+        """Returns the class-name-to-index map used for encoding labels as integers."""
+        return self._class_indices
 
-    def get_nb_classes(self):
-        """Returns the number of classes (or labels) to be predicted by the model."""
-        return len(self.class_names)
-
-    def get_class_idxs_map(self):
-        """Returns the class-label-to-index map used for encoding class labels as integers."""
-        return {class_name: idx for idx, class_name in enumerate(self.class_names)}
+    @class_indices.setter
+    def class_indices(self, class_indices):
+        """Sets the class-name-to-index map used for encoding labels as integers."""
+        assert isinstance(class_indices, dict), "class indices must be provided as dictionary"
+        self.class_names = class_indices
 
     def get_class_sizes(self, samples):
         """Given a list of samples, returns a map of sample counts for each class label."""
@@ -94,43 +105,36 @@ class Classification(Task):
         Returns:
             A dictionary that maps each class label to its corresponding list of samples.
         """
-        if samples is None or not samples:
-            raise AssertionError("provided invalid sample list")
+        assert samples is not None and isinstance(samples, list), "invalid sample list "
         sample_idxs = {class_name: [] for class_name in self.class_names}
-        if unset_key is not None and not isinstance(unset_key, str):
-            raise AssertionError("unset class name key should be string, just like other class names")
-        elif unset_key in sample_idxs:
-            raise AssertionError("unset class name key already in class names list")
-        else:
+        import collections
+        if unset_key is not None:
+            assert isinstance(unset_key, collections.Hashable), "unset class name key should be hashable"
+            assert unset_key not in sample_idxs, "unset class name key cannot already be in class names list"
             sample_idxs[unset_key] = []
-        label_key = self.get_gt_key()
         for sample_idx, sample in enumerate(samples):
-            if label_key is None or label_key not in sample:
+            if self.gt_key is None or self.gt_key not in sample:
                 if unset_key is not None:
                     class_name = unset_key
                 else:
                     continue
             else:
-                class_name = sample[label_key]
+                class_name = sample[self.gt_key]
+                assert isinstance(class_name, (str, int, np.ndarray, torch.Tensor)) and thelper.utils.is_scalar(class_name), \
+                    "unexpected sample label type (need scalar, string or int)"
                 if isinstance(class_name, str):
-                    if class_name not in self.class_names:
-                        raise AssertionError("label '%s' not found in class names provided earlier" % class_name)
-                elif isinstance(class_name, (int, np.ndarray, torch.Tensor)):
-                    if not thelper.utils.is_scalar(class_name):
-                        raise AssertionError("class name should be string or scalar (int)")
+                    assert class_name in self.class_names, f"label '{class_name}' not found in original task class names list"
+                else:
                     if isinstance(class_name, torch.Tensor):
                         class_name = class_name.item()
                     # dataset must already be using indices, we will forgive this...
                     # (this is pretty much always the case for torchvision datasets)
-                    if class_name < 0 or class_name >= len(self.class_names):
-                        raise AssertionError("class name given as out-of-range index (%d) for class list" % class_name)
+                    assert 0 <= class_name < len(self.class_names), "class name given as out-of-range index"
                     class_name = self.class_names[class_name]
-                else:
-                    raise AssertionError("unexpected sample label type (need string!)")
             sample_idxs[class_name].append(sample_idx)
         return sample_idxs
 
-    def check_compat(self, other, exact=False):
+    def check_compat(self, task, exact=False):
         # type: (Classification, Optional[bool]) -> bool
         """Returns whether the current task is compatible with the provided one or not.
 
@@ -138,48 +142,40 @@ class Classification(Task):
         are compatible. If ``exact = True``, all fields will be checked for exact (perfect)
         compatibility (in this case, matching meta keys and class name order).
         """
-        if isinstance(other, Classification):
+        if isinstance(task, Classification):
             # if both tasks are related to classification, gt keys and class names must match
-            return (self.get_input_key() == other.get_input_key() and
-                    (self.get_gt_key() is None or other.get_gt_key() is None or
-                     self.get_gt_key() == other.get_gt_key()) and
-                    all([cls in self.get_class_names() for cls in other.get_class_names()]) and
-                    (not exact or (self.get_class_names() == other.get_class_names() and
-                                   set(self.get_meta_keys()) == set(other.get_meta_keys()))))
-        elif type(other) == Task:
-            # if 'other' simply has no gt, compatibility rests on input key only
-            return not exact and self.get_input_key() == other.get_input_key() and other.get_gt_key() is None
+            return self.input_key == task.input_key and \
+                (self.gt_key is None or task.gt_key is None or self.gt_key == task.gt_key) and \
+                all([cls in self.class_names for cls in task.class_names]) and \
+                (not exact or (self.class_names == task.class_names and
+                               set(self.meta_keys) == set(task.meta_keys) and
+                               self.gt_key == task.gt_key))
+        elif type(task) == Task:
+            # if 'task' simply has no gt, compatibility rests on input key only
+            return not exact and self.input_key == task.input_key and task.gt_key is None
         return False
 
-    def get_compat(self, other):
+    def get_compat(self, task):
         """Returns a task instance compatible with the current task and the given one."""
-        if isinstance(other, Classification):
-            if self.get_input_key() != other.get_input_key():
-                raise AssertionError("input key mismatch, cannot create compatible task")
-            if self.get_gt_key() is not None \
-                    and other.get_gt_key() is not None \
-                    and self.get_gt_key() != other.get_gt_key():
-                raise AssertionError("gt key mismatch, cannot create compatible task")
-            meta_keys = list(set(self.get_meta_keys() + other.get_meta_keys()))
+        assert isinstance(task, Classification) or type(task) == Task, \
+            f"cannot create compatible task from types '{type(task)}' and '{type(self)}'"
+        if isinstance(task, Classification):
+            assert self.input_key == task.input_key, "input key mismatch, cannot create compatible task"
+            assert self.gt_key is None or task.gt_key is None or self.gt_key == task.gt_key, \
+                "gt key mismatch, cannot create compatible task"
+            meta_keys = list(set(self.meta_keys + task.meta_keys))
             # cannot use set for class names, order needs to stay intact!
-            other_names = [name for name in other.get_class_names() if name not in self.get_class_names()]
-            class_names = self.get_class_names() + other_names
-            return Classification(class_names, self.get_input_key(), self.get_gt_key(), meta_keys=meta_keys)
-        elif type(other) == Task:
-            if not self.check_compat(other):
-                raise AssertionError("cannot create compatible task instance between:\n"
-                                     "\tself: %s\n\tother: %s" % (str(self), str(other)))
-            meta_keys = list(set(self.get_meta_keys() + other.get_meta_keys()))
-            return Classification(self.get_class_names(), self.get_input_key(), self.get_gt_key(), meta_keys=meta_keys)
-        else:
-            raise AssertionError("cannot combine task type '%s' with '%s'"
-                                 % (str(other.__class__), str(self.__class__)))
+            class_names = self.class_names + [name for name in task.class_names if name not in self.class_names]
+            return Classification(class_names=class_names, input_key=self.input_key,
+                                  label_key=self.gt_key, meta_keys=meta_keys)
+        elif type(task) == Task:
+            assert self.check_compat(task), f"cannot create compatible task between:\n\t{str(self)}\n\t{str(task)}"
+            meta_keys = list(set(self.meta_keys + task.meta_keys))
+            return Classification(class_names=self.class_names, input_key=self.input_key,
+                                  label_key=self.gt_key, meta_keys=meta_keys)
 
     def __repr__(self):
         """Creates a print-friendly representation of a classification task."""
-        return self.__class__.__module__ + "." + self.__class__.__qualname__ + ": " + str({
-            "class_names": self.get_class_names(),
-            "input_key": self.get_input_key(),
-            "label_key": self.get_gt_key(),
-            "meta_keys": self.get_meta_keys(),
-        })
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
+            f"(class_names={repr(self.class_names)}, input_key={repr(self.input_key)}, " + \
+            f"label_key={repr(self.gt_key)}, meta_keys={repr(self.meta_keys)})"

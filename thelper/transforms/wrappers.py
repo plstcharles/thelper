@@ -4,6 +4,7 @@ The wrapper classes herein are used to either support inline operations on odd s
 of images) or for external libraries (e.g. Augmentor).
 """
 
+import functools
 import logging
 import random
 
@@ -11,12 +12,13 @@ import numpy as np
 import PIL.Image
 import torch
 
+import thelper.data
 import thelper.utils
 
 logger = logging.getLogger(__name__)
 
 
-class AlbumentationsWrapper(object):
+class AlbumentationsWrapper:
     """Albumentations pipeline wrapper that allows dictionary unpacking.
 
     See https://github.com/albu/albumentations for more information.
@@ -46,21 +48,26 @@ class AlbumentationsWrapper(object):
         if add_targets is None:
             add_targets = {}
         if isinstance(image_key, (list, tuple)):
-            if len(image_key) > 1:
-                raise AssertionError("current implementation cannot handle more than one input image key per packet")
+            assert len(image_key) <= 1, "current implementation cannot handle more than one input image key per packet"
             image_key = image_key[0]
         self.image_key = image_key
-        if isinstance(bboxes_key, (list, tuple)) or isinstance(keypoints_key, (list, tuple)) or isinstance(mask_key, (list, tuple)):
-            raise AssertionError("bboxes/keypoints/masks keys should never be passed as lists")
+        assert not (isinstance(bboxes_key, (list, tuple)) or
+                    isinstance(keypoints_key, (list, tuple)) or
+                    isinstance(mask_key, (list, tuple))), \
+            "bboxes/keypoints/masks keys should never be passed as lists"
         self.bboxes_key = bboxes_key
         self.mask_key = mask_key
         self.keypoints_key = keypoints_key
         self.cvt_kpts_to_bboxes = cvt_kpts_to_bboxes
-        if cvt_kpts_to_bboxes and "format" not in bbox_params or bbox_params["format"] != "coco":
-            raise AssertionError("if converting kpts to bboxes, must use coco format")
+        assert not (cvt_kpts_to_bboxes and "format" not in bbox_params or bbox_params["format"] != "coco"), \
+            "if converting kpts to bboxes, must use coco format"
+        self.bbox_params = bbox_params
         self.linked_fate = linked_fate
         import albumentations
-        self.pipeline = albumentations.Compose(transforms, to_tensor=to_tensor, bbox_params=bbox_params,
+        self.transforms = transforms
+        self.to_tensor = to_tensor
+        self.add_targets = add_targets
+        self.pipeline = albumentations.Compose(transforms, to_tensor=to_tensor, bbox_params=self.bbox_params,
                                                additional_targets=add_targets, p=probability)
 
     def __call__(self, sample, force_linked_fate=False, op_seed=None):
@@ -76,9 +83,10 @@ class AlbumentationsWrapper(object):
         """
         # todo: add list unwrapping/interlacing support like in other wrappers?
         params = {}
+        unpack_bboxes, decode_bboxes = False, False
         if isinstance(sample, dict):
-            if self.image_key not in sample:
-                raise AssertionError("image is missing from sample (key=%s) but it is mandatory" % self.image_key)
+            assert self.image_key in sample, \
+                f"image is missing from sample (key={self.image_key}) but it is mandatory"
             image = sample[self.image_key]
             if isinstance(image, (list, tuple)):
                 raise NotImplementedError
@@ -87,8 +95,8 @@ class AlbumentationsWrapper(object):
             if self.keypoints_key in sample and sample[self.keypoints_key] is not None:
                 keypoints = sample[self.keypoints_key]
                 if self.cvt_kpts_to_bboxes:
-                    if self.bboxes_key in sample:
-                        raise AssertionError("trying to override bboxes w/ keypoints while bboxes already exist")
+                    assert self.bboxes_key not in sample, \
+                        "trying to override bboxes w/ keypoints while bboxes already exist"
                     # fake x,y,w,h,c format (w/ labels)
                     msize = params["image"].shape
                     params["bboxes"] = [[min(max(kp[0], 0), msize[1] - 1),
@@ -96,7 +104,15 @@ class AlbumentationsWrapper(object):
                 else:
                     params["keypoints"] = keypoints
             if self.bboxes_key in sample and sample[self.bboxes_key] is not None:
-                params["bboxes"] = sample[self.bboxes_key]
+                bboxes = sample[self.bboxes_key]
+                if isinstance(bboxes, thelper.data.BoundingBox):
+                    bboxes = [bboxes]
+                    unpack_bboxes = True
+                if isinstance(bboxes, list) and all([isinstance(bbox, thelper.data.BoundingBox) for bbox in bboxes]):
+                    assert self.bbox_params["format"] in ["coco", "pascal_voc"], "unsupported/unknown bbox format"
+                    bboxes = [bbox.encode(format=self.bbox_params["format"]) for bbox in bboxes]
+                    decode_bboxes = True
+                params["bboxes"] = bboxes
             else:
                 params["bboxes"] = []
             if self.mask_key in sample and sample[self.mask_key] is not None:
@@ -109,7 +125,10 @@ class AlbumentationsWrapper(object):
                 if self.cvt_kpts_to_bboxes:
                     sample[self.keypoints_key] = [[kp[0], kp[1]] for kp in output["bboxes"]]
                 else:
-                    sample[self.bboxes_key] = output["bboxes"]
+                    bboxes = output["bboxes"]
+                    if decode_bboxes:
+                        bboxes = [thelper.data.BoundingBox.decode(bbox, self.bbox_params["format"]) for bbox in bboxes]
+                    sample[self.bboxes_key] = bboxes[0] if unpack_bboxes else bboxes
             if "mask" in output:
                 sample[self.mask_key] = output["mask"]
             return sample
@@ -117,20 +136,23 @@ class AlbumentationsWrapper(object):
             raise NotImplementedError
             # impl should use linked_fate and force_linked_fate
         else:
+            assert sample is None or isinstance(sample, np.ndarray)
             if sample is None:
                 return None
-            elif not isinstance(sample, np.ndarray):
-                raise AssertionError("unexpected input image type")
             params["image"] = sample
         output = self.pipeline(**params)
         return output["image"]
 
     def __repr__(self):
         """Create a print-friendly representation of inner augmentation stages."""
-        return self.__class__.__name__ + (": {{image_key: {}, bboxes_key: {}, mask_key: {}, keypoints_key: {}, "
-                                          .format(self.image_key, self.bboxes_key, self.mask_key, self.keypoints_key) +
-                                          "cvt_kpts_to_bboxes: {}, linked_fate: {}, pipeline: {}"
-                                          .format(self.cvt_kpts_to_bboxes, self.linked_fate, self.pipeline) + "}")
+        # for debug purposes only, transforms probably cannot be expressed as a string
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
+            f"(transforms={repr(self.transforms)}, to_tensor={repr(self.to_tensor)}, " + \
+            f"bbox_params={repr(self.bbox_params)}, add_targets={repr(self.add_targets)}, " + \
+            f"image_key={repr(self.image_key)}, bboxes_key={repr(self.bboxes_key)}, " + \
+            f"mask_key={repr(self.mask_key)}, keypoints_key={repr(self.keypoints_key)}, " + \
+            f"probability={repr(self.probability)}, cvt_kpts_to_bboxes={repr(self.cvt_kpts_to_bboxes)}, " + \
+            f"linked_fate={repr(self.linked_fate)})"
 
     # noinspection PyMethodMayBeStatic
     def set_seed(self, seed):
@@ -144,15 +166,14 @@ class AlbumentationsWrapper(object):
 
     def set_epoch(self, epoch=0):
         """Sets the current epoch number in order to change the behavior of some suboperations."""
-        if not isinstance(epoch, int) or epoch < 0:
-            raise AssertionError("invalid epoch value")
+        assert isinstance(epoch, int) and epoch >= 0, "invalid epoch value"
         if self.pipeline.transforms is not None:
             for t in self.pipeline.transforms:
                 if hasattr(t, "set_epoch") and callable(t.set_epoch):
                     t.set_epoch(epoch)
 
 
-class AugmentorWrapper(object):
+class AugmentorWrapper:
     """Augmentor pipeline wrapper that allows pickling and multi-threading.
 
     See https://github.com/mdbloice/Augmentor for more information. This wrapper was last updated to work
@@ -193,8 +214,7 @@ class AugmentorWrapper(object):
         """
         if isinstance(sample, dict):
             # recursive call for unpacking sample content w/ target keys
-            if in_cvts is not None:
-                raise AssertionError("top-level call should never provide in_cvts")
+            assert in_cvts is None, "top-level call should never provide in_cvts"
             # capture non-scalar objects (according to numpy) if no keys are provided
             key_vals = [(k, v) for k, v in sample.items() if (
                 (self.target_keys is None and not np.isscalar(v)) or
@@ -206,8 +226,7 @@ class AugmentorWrapper(object):
                 vals = [[v[idx] if isinstance(v, (list, tuple)) else
                          v[idx, ...] for v in vals] for idx in range(lengths[0])]
                 vals = self(vals, force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
-                if not isinstance(vals, list) or len(vals) != lengths[0]:
-                    raise AssertionError("messed up something internally")
+                assert isinstance(vals, list) and len(vals) == lengths[0], "messed up something internally"
                 out_vals = [[v] for v in vals[0]] if isinstance(vals[0], list) else [[vals[0]]]
                 for idx1 in range(1, lengths[0]):
                     for idx2 in range(len(out_vals)):
@@ -223,8 +242,8 @@ class AugmentorWrapper(object):
             return ([], []) if out_cvts else []
         elif not out_list:
             sample = [sample]
-        if any([isinstance(v, dict) for v in sample]):
-            raise AssertionError("augmentor wrapper cannot handle sample-in-sample (or dict-in-list) inputs")
+        assert not any([isinstance(v, dict) for v in sample]), \
+            "augmentor wrapper cannot handle sample-in-sample (or dict-in-list) inputs"
         skip_unpack = in_cvts is not None and isinstance(in_cvts, bool) and in_cvts
         if self.linked_fate or force_linked_fate:  # process all content with the same operations below
             if not skip_unpack:
@@ -268,8 +287,7 @@ class AugmentorWrapper(object):
                                 sample[idx] = operation.perform_operation([sample[idx]])[0]
         # noinspection PyProtectedMember
         sample, cvts = TransformWrapper._pack(sample, cvts, convert_pil=True)
-        if len(sample) != len(cvts):
-            raise AssertionError("messed up packing/unpacking logic")
+        assert len(sample) == len(cvts), "messed up packing/unpacking logic"
         if (skip_unpack or not out_list) and len(sample) == 1:
             sample = sample[0]
             cvts = cvts[0]
@@ -277,9 +295,9 @@ class AugmentorWrapper(object):
 
     def __repr__(self):
         """Create a print-friendly representation of inner augmentation stages."""
-        return self.__class__.__name__ + (": {{target_keys: {}, linked_fate: {}, "
-                                          .format(self.target_keys, self.linked_fate) +
-                                          ", ".join([str(t) for t in self.pipeline.operations]) + "}")
+        # for debug purposes only, pipeline probably cannot be expressed as a string
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
+            f"(pipeline={repr(self.pipeline)}, target_keys={repr(self.target_keys)}, linked_fate={repr(self.linked_fate)})"
 
     # noinspection PyMethodMayBeStatic
     def set_seed(self, seed):
@@ -288,15 +306,14 @@ class AugmentorWrapper(object):
 
     def set_epoch(self, epoch=0):
         """Sets the current epoch number in order to change the behavior of some suboperations."""
-        if not isinstance(epoch, int) or epoch < 0:
-            raise AssertionError("invalid epoch value")
+        assert isinstance(epoch, int) and epoch >= 0, "invalid epoch value"
         if self.pipeline.operations is not None:
             for op in self.pipeline.operations:
                 if hasattr(op, "set_epoch") and callable(op.set_epoch):
                     op.set_epoch(epoch)
 
 
-class TransformWrapper(object):
+class TransformWrapper:
     """Transform wrapper that allows operations on samples, lists, tuples, and single elements.
 
     Can be used to wrap the operations in ``thelper.transforms`` or in ``torchvision.transforms``
@@ -337,17 +354,15 @@ class TransformWrapper(object):
             target_keys: the sample keys to apply the pipeline to (when dictionaries are passed in).
             linked_fate: specifies whether images given in a list/tuple should have the same fate or not.
         """
-        if params is not None and not isinstance(params, dict):
-            raise AssertionError("expected params to be passed in as a dictionary")
-        if isinstance(operation, str):
+        assert params is None or isinstance(params, dict), "expected params to be passed in as a dictionary"
+        assert 0 <= probability <= 1, "invalid probability value (range is [0,1]"
+        self.params = {} if params is None else params
+        self.operation = operation
+        if isinstance(self.operation, str):
             operation_type = thelper.utils.import_class(operation)
-            self.operation = operation_type(**params) if params is not None else operation_type()
-            self.params = {}
+            self.opcall = operation_type(**self.params)
         else:
-            self.operation = operation
-            self.params = params if params is not None else {}
-        if probability < 0 or probability > 1:
-            raise AssertionError("invalid probability value (range is [0,1]")
+            self.opcall = functools.partial(operation, **self.params)
         self.probability = probability
         self.convert_pil = convert_pil
         self.target_keys = target_keys
@@ -364,8 +379,7 @@ class TransformWrapper(object):
                 for s in sample:
                     out, cvt = TransformWrapper._unpack(s, force_flatten=force_flatten)
                     if isinstance(cvt, (list, tuple)):
-                        if not isinstance(out, (list, tuple)):
-                            raise AssertionError("unexpected out/cvt types")
+                        assert isinstance(out, (list, tuple)), "unexpected out/cvt types"
                         flat_samples += list(out)
                         cvts += list(cvt)
                     else:
@@ -392,22 +406,18 @@ class TransformWrapper(object):
     @staticmethod
     def _pack(samples, cvts, convert_pil=False):
         if not isinstance(samples, (list, tuple)) or not isinstance(cvts, (list, tuple)) or len(samples) != len(cvts):
-            if not convert_pil or not isinstance(cvts, bool) or not cvts:
-                raise AssertionError("unexpected cvts len w/ pil conversion (bad logic somewhere)")
-            if not all([isinstance(s, PIL.Image.Image) for s in samples]):
-                raise AssertionError("unexpected packed list sample types")
+            assert convert_pil and isinstance(cvts, bool) and cvts, \
+                "unexpected cvts len w/ pil conversion (bad logic somewhere)"
+            assert all([isinstance(s, PIL.Image.Image) for s in samples]), "unexpected packed list sample types"
             samples = [np.asarray(s) for s in samples]
-            if not all([s.ndim == 2 for s in samples]):
-                raise AssertionError("unexpected packed list sample depths")
+            assert all([s.ndim == 2 for s in samples]), "unexpected packed list sample depths"
             samples = [np.expand_dims(s, axis=2) for s in samples]
             return [np.concatenate(samples, axis=2)], [False]
         for idx, cvt in enumerate(cvts):
             if not isinstance(cvt, (list, tuple)):
-                if not isinstance(cvt, bool):
-                    raise AssertionError("unexpected cvt type")
+                assert isinstance(cvt, bool), "unexpected cvt type"
                 if cvt:
-                    if isinstance(samples[idx], (list, tuple)):
-                        raise AssertionError("unexpected packed sample type")
+                    assert not isinstance(samples[idx], (list, tuple)), "unexpected packed sample type"
                     samples[idx] = np.asarray(samples[idx])
                     cvts[idx] = False
         return samples, cvts
@@ -426,8 +436,7 @@ class TransformWrapper(object):
         """
         if isinstance(sample, dict):
             # recursive call for unpacking sample content w/ target keys
-            if in_cvts is not None:
-                raise AssertionError("top-level call should never provide in_cvts")
+            assert in_cvts is None, "top-level call should never provide in_cvts"
             # capture non-scalar objects (according to numpy) if no keys are provided
             key_vals = [(k, v) for k, v in sample.items() if (
                 (self.target_keys is None and not thelper.utils.is_scalar(v)) or
@@ -439,8 +448,7 @@ class TransformWrapper(object):
                 vals = [[v[idx] if isinstance(v, (list, tuple)) else
                          v[idx, ...] for v in vals] for idx in range(lengths[0])]
                 vals = self(vals, force_linked_fate=force_linked_fate, op_seed=op_seed, in_cvts=in_cvts)
-                if not isinstance(vals, list) or len(vals) != lengths[0]:
-                    raise AssertionError("messed up something internally")
+                assert isinstance(vals, list) and len(vals) == lengths[0], "messed up something internally"
                 out_vals = [[v] for v in vals[0]] if isinstance(vals[0], list) else [[vals[0]]]
                 for idx1 in range(1, lengths[0]):
                     for idx2 in range(len(out_vals)):
@@ -456,8 +464,8 @@ class TransformWrapper(object):
             return ([], []) if out_cvts else []
         elif not out_list:
             sample = [sample]
-        if any([isinstance(v, dict) for v in sample]):
-            raise AssertionError("sample transform wrapper cannot handle sample-in-sample (or dict-in-list) inputs")
+        assert not any([isinstance(v, dict) for v in sample]), \
+            "sample transform wrapper cannot handle sample-in-sample (or dict-in-list) inputs"
         skip_unpack = in_cvts is not None and isinstance(in_cvts, bool) and in_cvts
         if self.linked_fate or force_linked_fate:  # process all content with the same operations below
             if not skip_unpack:
@@ -475,12 +483,12 @@ class TransformWrapper(object):
                         sample[idx], cvts[idx] = self(sample[idx], force_linked_fate=True,
                                                       op_seed=op_seed, in_cvts=cvts[idx])
                     else:
-                        if hasattr(self.operation, "set_seed") and callable(self.operation.set_seed):
-                            self.operation.set_seed(op_seed)
+                        if hasattr(self.opcall, "set_seed") and callable(self.opcall.set_seed):
+                            self.opcall.set_seed(op_seed)
                         # watch out: if operation is stochastic and we cannot seed above, then there is no
                         # guarantee that the content will truly have a 'linked fate' (this might cause issues!)
                         if sample[idx] is not None:
-                            sample[idx] = self.operation(sample[idx], **self.params)
+                            sample[idx] = self.opcall(sample[idx], **self.params)
         else:  # each element of the top array will be processed independently below (current seeds are kept)
             cvts = [False] * len(sample)
             for idx, _ in enumerate(sample):
@@ -492,10 +500,9 @@ class TransformWrapper(object):
                                                       op_seed=op_seed, in_cvts=cvts[idx])
                     else:
                         if sample[idx] is not None:
-                            sample[idx] = self.operation(sample[idx], **self.params)
+                            sample[idx] = self.opcall(sample[idx], **self.params)
         sample, cvts = TransformWrapper._pack(sample, cvts, convert_pil=self.convert_pil)
-        if len(sample) != len(cvts):
-            raise AssertionError("messed up packing/unpacking logic")
+        assert len(sample) == len(cvts), "messed up packing/unpacking logic"
         if (skip_unpack or not out_list) and len(sample) == 1:
             sample = sample[0]
             cvts = cvts[0]
@@ -503,8 +510,9 @@ class TransformWrapper(object):
 
     def __repr__(self):
         """Create a print-friendly representation of inner augmentation stages."""
-        return self.__class__.__name__ + ": {{target_keys: {}, linked_fate: {}, probability: {}. operation: {}".format(
-            self.target_keys, self.linked_fate, self.probability, str(self.operation))
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
+            f"(operation={repr(self.operation)}, params={repr(self.params)}, probability={repr(self.probability)}, " + \
+            f"convert_pil={repr(self.convert_pil)}, target_keys={repr(self.target_keys)}, linked_fate={repr(self.linked_fate)})"
 
     # noinspection PyMethodMayBeStatic
     def set_seed(self, seed):
@@ -513,8 +521,6 @@ class TransformWrapper(object):
 
     def set_epoch(self, epoch=0):
         """Sets the current epoch number in order to change the behavior of some suboperations."""
-        if not isinstance(epoch, int) or epoch < 0:
-            raise AssertionError("invalid epoch value")
-        if self.operation is not None:
-            if hasattr(self.operation, "set_epoch") and callable(self.operation.set_epoch):
-                self.operation.set_epoch(epoch)
+        assert isinstance(epoch, int) and epoch >= 0, "invalid epoch value"
+        if hasattr(self.opcall, "set_epoch") and callable(self.opcall.set_epoch):
+            self.opcall.set_epoch(epoch)

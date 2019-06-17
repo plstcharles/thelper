@@ -41,13 +41,13 @@ class Dataset(torch.utils.data.Dataset):
     for more information).
 
     To properly use this interface, a derived class must thus implement :func:`thelper.data.parsers.Dataset.__getitem__`,
-    :func:`thelper.data.parsers.Dataset.get_task`, and store its samples as dictionaries in ``self.samples``.
+    provide proper ``self.task`` and ``self.samples`` attributes.
 
     Attributes:
         transforms: function or object that should be applied to all loaded samples in order to
             return the data in the requested transformed/augmented state.
         deepcopy: specifies whether this dataset interface should be deep-copied inside
-            :func:`thelper.data.utils._LoaderFactory.create_loaders` so that it may be shared between
+            :class:`thelper.data.loaders.LoaderFactory` so that it may be shared between
             different threads. This is false by default, as we assume datasets do not contain a state
             or buffer that might cause problems in multi-threaded data loaders.
         samples: list of dictionaries containing the data that is ready to be forwarded to the
@@ -57,6 +57,7 @@ class Dataset(torch.utils.data.Dataset):
             Once loaded, these samples should never be modified by another part of the framework. For
             example, transformation and augmentation operations will always be applied to copies
             of these samples.
+        task: object used to define what keys are used to index the loaded data into sample dictionaries.
 
     .. seealso::
         | :class:`thelper.data.parsers.ExternalDataset`
@@ -72,14 +73,15 @@ class Dataset(torch.utils.data.Dataset):
             transforms: function or object that should be applied to all loaded samples in order to
                 return the data in the requested transformed/augmented state.
             deepcopy: specifies whether this dataset interface should be deep-copied inside
-                :func:`thelper.data.utils._LoaderFactory.create_loaders` so that it may be shared between
+                :class:`thelper.data.loaders.LoaderFactory` so that it may be shared between
                 different threads. This is false by default, as we assume datasets do not contain a state
                 or buffer that might cause problems in multi-threaded data loaders.
         """
-        super().__init__()
+        super(Dataset, self).__init__()
         self.transforms = transforms
         self.deepcopy = deepcopy  # will determine if we deepcopy in each loader
-        self.samples = None  # must be filled by the derived class as a list of dictionaries
+        self.samples = None  # must be set by the derived class as a list of dictionaries
+        self.task = None  # must be set by the derived class as a valid task object
 
     def _get_derived_name(self):
         """Returns a pretty-print version of the derived class's name."""
@@ -99,22 +101,63 @@ class Dataset(torch.utils.data.Dataset):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
         raise NotImplementedError
 
+    @property
+    def transforms(self):
+        """Returns the transformation operations to apply to this dataset's loaded samples."""
+        return self._transforms
+
+    @transforms.setter
+    def transforms(self, transforms):
+        """Sets the transformation operations to apply to this dataset's loaded samples."""
+        assert transforms is None or hasattr(transforms, "__call__") or \
+            (isinstance(transforms, list) and all([hasattr(t, "__call__") for t in transforms])), \
+            "transformations should be callable (or list of callables)"
+        self._transforms = transforms
+
+    @property
+    def deepcopy(self):
+        """specifies whether this dataset interface should be deep-copied inside
+        :class:`thelper.data.loaders.LoaderFactory` so that it may be shared between
+        different threads. This is false by default, as we assume datasets do not contain a state
+        or buffer that might cause problems in multi-threaded data loaders."""
+        return self._deepcopy
+
+    @deepcopy.setter
+    def deepcopy(self, deepcopy):
+        assert deepcopy is None or isinstance(deepcopy, bool), "deepcopy flag should be boolean"
+        self._deepcopy = deepcopy
+
+    @property
+    def task(self):
+        """Returns the task object associated with this dataset interface."""
+        return self._task
+
+    @task.setter
+    def task(self, task):
+        """Sets the task object associated with this dataset interface."""
+        assert task is None or isinstance(task, thelper.tasks.Task), "invalid task"
+        self._task = task
+
+    @property
+    def samples(self):
+        """Returns the list of internal samples held by this dataset interface."""
+        return self._samples
+
+    @samples.setter
+    def samples(self, samples):
+        assert samples is None or isinstance(samples, (list, Dataset)) or hasattr(samples, "__getitem__"), \
+            "invalid samples (should be list of dicts, dataset, or it should have '__getitem__' attrib)"
+        self._samples = samples
+
     def _getitems(self, idxs):
         """Returns a list of dictionaries corresponding to the sliced sample indices."""
         if not isinstance(idxs, slice):
             raise AssertionError("unexpected input (should be slice)")
         return [self[idx] for idx in range(*idxs.indices(len(self)))]
 
-    @abstractmethod
-    def get_task(self):
-        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
-        raise NotImplementedError
-
     def __repr__(self):
         """Returns a print-friendly representation of this dataset."""
-        return self._get_derived_name() + ": {{\n\tsize: {},\n\tdeepcopy: {},\n\ttransforms: {}\n}}".format(
-            str(len(self)), str(self.deepcopy), str(self.transforms)
-        )
+        return self._get_derived_name() + f"(transforms={repr(self.transforms)}, deepcopy={repr(self.deepcopy)})"
 
 
 class HDF5Dataset(Dataset):
@@ -131,7 +174,6 @@ class HDF5Dataset(Dataset):
         source: source logstamp of the hdf5 dataset.
         git_sha1: framework git tag of the hdf5 dataset.
         version: version of the framework that saved the hdf5 dataset.
-        task: task object reinstantiated from the hdf5 dataset.
         orig_config: configuration used to originally generate the hdf5 dataset.
 
     .. seealso::
@@ -145,7 +187,7 @@ class HDF5Dataset(Dataset):
         This constructor receives the path to the HDF5 archive as well as a subset indicating which
         section of the archive to load. By default, it loads the training set.
         """
-        super().__init__(transforms=transforms, deepcopy=False)
+        super(HDF5Dataset, self).__init__(transforms=transforms, deepcopy=False)
         if subset not in ["train", "valid", "test"]:
             raise AssertionError(f"unrecognized subset '{subset}'")
         self.archive = h5py.File(root, "r")
@@ -160,9 +202,8 @@ class HDF5Dataset(Dataset):
         self.subset = self.archive[subset]
         sample_count = self.subset.attrs["count"]
         self.samples = [{}] * sample_count
-        target_keys = self.task.get_keys()
         self.target_args = {}
-        for key in target_keys:
+        for key in self.task.keys:
             dset = self.subset[key]
             assert dset.len() == len(self.samples)
             dtype = dset.attrs["orig_dtype"] if "orig_dtype" in dset.attrs else None
@@ -196,10 +237,6 @@ class HDF5Dataset(Dataset):
             sample = self.transforms(sample)
         return sample
 
-    def get_task(self):
-        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
-        return self.task
-
     def close(self):
         """Closes the internal HDF5 file."""
         # note: if we dont do it explicitly, it will be done by the garbage collector on destruction, but it might take time...
@@ -210,12 +247,9 @@ class ClassificationDataset(Dataset):
     """Classification dataset specialization interface.
 
     This specialization receives some extra parameters in its constructor and automatically defines
-    its task (:class:`thelper.tasks.classif.Classification`) based on those. The derived class must still
+    a :class:`thelper.tasks.classif.Classification` task based on those. The derived class must still
     implement :func:`thelper.data.parsers.ClassificationDataset.__getitem__`, and it must still store its
     samples as dictionaries in ``self.samples`` to behave properly.
-
-    Attributes:
-        task: classification task object containing the key information passed in the constructor.
 
     .. seealso::
         | :class:`thelper.data.parsers.Dataset`
@@ -234,21 +268,17 @@ class ClassificationDataset(Dataset):
             transforms: function or object that should be applied to all loaded samples in order to
                 return the data in the requested transformed/augmented state.
             deepcopy: specifies whether this dataset interface should be deep-copied inside
-                :func:`thelper.data.utils._LoaderFactory.create_loaders` so that it may be shared between
+                :class:`thelper.data.loaders.LoaderFactory` so that it may be shared between
                 different threads. This is false by default, as we assume datasets do not contain a state
                 or buffer that might cause problems in multi-threaded data loaders.
         """
-        super().__init__(transforms=transforms, deepcopy=deepcopy)
+        super(ClassificationDataset, self).__init__(transforms=transforms, deepcopy=deepcopy)
         self.task = thelper.tasks.Classification(class_names, input_key, label_key, meta_keys=meta_keys)
 
     @abstractmethod
     def __getitem__(self, idx):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
         raise NotImplementedError
-
-    def get_task(self):
-        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
-        return self.task
 
 
 class SegmentationDataset(Dataset):
@@ -258,9 +288,6 @@ class SegmentationDataset(Dataset):
     its task (:class:`thelper.tasks.segm.Segmentation`) based on those. The derived class must still
     implement :func:`thelper.data.parsers.SegmentationDataset.__getitem__`, and it must still store its
     samples as dictionaries in ``self.samples`` to behave properly.
-
-    Attributes:
-        task: segmentation task object containing the key information passed in the constructor.
 
     .. seealso::
         | :class:`thelper.data.parsers.Dataset`
@@ -279,21 +306,17 @@ class SegmentationDataset(Dataset):
             transforms: function or object that should be applied to all loaded samples in order to
                 return the data in the requested transformed/augmented state.
             deepcopy: specifies whether this dataset interface should be deep-copied inside
-                :func:`thelper.data.utils._LoaderFactory.create_loaders` so that it may be shared between
+                :class:`thelper.data.loaders.LoaderFactory` so that it may be shared between
                 different threads. This is false by default, as we assume datasets do not contain a state
                 or buffer that might cause problems in multi-threaded data loaders.
         """
-        super().__init__(transforms=transforms, deepcopy=deepcopy)
+        super(SegmentationDataset, self).__init__(transforms=transforms, deepcopy=deepcopy)
         self.task = thelper.tasks.Segmentation(class_names, input_key, label_map_key, meta_keys=meta_keys, dontcare=dontcare)
 
     @abstractmethod
     def __getitem__(self, idx):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
         raise NotImplementedError
-
-    def get_task(self):
-        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
-        return self.task
 
 
 class ImageDataset(Dataset):
@@ -314,7 +337,7 @@ class ImageDataset(Dataset):
 
         This constructor exposes some of the configurable keys used to index sample dictionaries.
         """
-        super().__init__(transforms=transforms)
+        super(ImageDataset, self).__init__(transforms=transforms)
         self.root = root
         if self.root is None or not os.path.isdir(self.root):
             raise AssertionError("invalid input data root '%s'" % self.root)
@@ -350,10 +373,6 @@ class ImageDataset(Dataset):
         if self.transforms:
             sample = self.transforms(sample)
         return sample
-
-    def get_task(self):
-        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
-        return self.task
 
 
 class ImageFolderDataset(ClassificationDataset):
@@ -400,8 +419,8 @@ class ImageFolderDataset(ClassificationDataset):
         if not class_map:
             raise AssertionError("could not locate any subdir in '%s' with images to load" % self.root)
         meta_keys = [self.path_key, self.idx_key]
-        super().__init__(class_names=list(class_map.keys()), input_key=self.image_key,
-                         label_key=self.label_key, meta_keys=meta_keys, transforms=transforms)
+        super(ImageFolderDataset, self).__init__(class_names=list(class_map.keys()), input_key=self.image_key,
+                                                 label_key=self.label_key, meta_keys=meta_keys, transforms=transforms)
         self.samples = samples
 
     def __getitem__(self, idx):
@@ -481,7 +500,7 @@ class SuperResFolderDataset(Dataset):
         if not class_map:
             raise AssertionError("could not locate any subdir in '%s' with images to load" % self.root)
         meta_keys = [self.path_key, self.idx_key, self.label_key]
-        super().__init__(transforms=transforms)
+        super(SuperResFolderDataset, self).__init__(transforms=transforms)
         self.task = thelper.tasks.SuperResolution(input_key=self.lowres_image_key, target_key=self.highres_image_key, meta_keys=meta_keys)
         self.samples = samples
 
@@ -517,10 +536,6 @@ class SuperResFolderDataset(Dataset):
             sample = self.transforms(sample)
         return sample
 
-    def get_task(self):
-        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
-        return self.task
-
 
 class ExternalDataset(Dataset):
     """External dataset interface.
@@ -532,13 +547,11 @@ class ExternalDataset(Dataset):
 
     Note that for this interface to be compatible with our runtime instantiation rules, the constructor
     needs to receive a fully constructed task object. This object is currently constructed in
-    :func:`thelper.data.parsers.create_parsers` based on extra parameters; see the code there for more
+    :func:`thelper.data.utils.create_parsers` based on extra parameters; see the code there for more
     information.
 
     Attributes:
         dataset_type: type of the internally instantiated or provided dataset object.
-        task: task object containing the key information passed in the external configuration.
-        samples: instantiation of the dataset object itself, faking the presence of a list of samples.
         warned_dictionary: specifies whether the user was warned about missing keys in the output
             samples dictionaries.
 
@@ -555,11 +568,11 @@ class ExternalDataset(Dataset):
             transforms: function or object that should be applied to all loaded samples in order to
                 return the data in the requested transformed/augmented state.
             deepcopy: specifies whether this dataset interface should be deep-copied inside
-                :func:`thelper.data.utils._LoaderFactory.create_loaders` so that it may be shared between
+                :class:`thelper.data.loaders.LoaderFactory` so that it may be shared between
                 different threads. This is false by default, as we assume datasets do not contain a state
                 or buffer that might cause problems in multi-threaded data loaders.
         """
-        super().__init__(transforms=transforms, deepcopy=deepcopy)
+        super(ExternalDataset, self).__init__(transforms=transforms, deepcopy=deepcopy)
         if isinstance(dataset, str):
             dataset = thelper.utils.import_class(dataset)
         if dataset is None or not hasattr(dataset, "__getitem__") or not hasattr(dataset, "__len__"):
@@ -607,7 +620,3 @@ class ExternalDataset(Dataset):
         if self.transforms:
             sample = self.transforms(sample)
         return sample
-
-    def get_task(self):
-        """Returns the dataset task object that provides the i/o keys for parsing sample dicts."""
-        return self.task

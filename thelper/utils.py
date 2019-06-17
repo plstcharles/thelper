@@ -26,7 +26,6 @@ import cv2 as cv
 import lz4
 import matplotlib.pyplot as plt
 import numpy as np
-import PIL.Image
 import sklearn.metrics
 import torch
 
@@ -36,7 +35,7 @@ logger = logging.getLogger(__name__)
 bypass_queries = False
 
 
-class Struct(object):
+class Struct:
     """Generic runtime-defined C-like data structure (maps constructor elements to fields)."""
 
     def __init__(self, **kwargs):
@@ -44,7 +43,8 @@ class Struct(object):
             setattr(self, key, val)
 
     def __repr__(self):
-        return self.__class__.__name__ + ": " + str(self.__dict__)
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
+            "(" + ", ".join([f"{key}={repr(val)}" for key, val in self.__dict__.items()]) + ")"
 
 
 def get_available_cuda_devices(attempts_per_device=5):
@@ -175,12 +175,14 @@ def load_checkpoint(ckpt,                      # type: thelper.typedefs.Checkpoi
                     ckpt, latest_epoch, latest_day, latest_time = ckpt_path, epoch_stamp, day_stamp, time_stamp
         if not os.path.isfile(ckpt):
             raise AssertionError("could not find valid checkpoint at '%s'" % ckpt)
+    basepath = None
     if isinstance(ckpt, str):
         logger.debug("parsing checkpoint at '%s'" % ckpt)
         basepath = os.path.dirname(os.path.abspath(ckpt))
     else:
-        logger.debug("parsing checkpoint provided via file object")
-        basepath = os.path.dirname(os.path.abspath(ckpt.name))
+        if hasattr(ckpt, "name"):
+            logger.debug("parsing checkpoint provided via file object")
+            basepath = os.path.dirname(os.path.abspath(ckpt.name))
     ckptdata = torch.load(ckpt, map_location=map_location)
     if not isinstance(ckptdata, dict):
         raise AssertionError("unexpected checkpoint data type")
@@ -217,7 +219,7 @@ def load_checkpoint(ckpt,                      # type: thelper.typedefs.Checkpoi
         trace_path = None
         if os.path.isfile(ckptdata["model"]):
             trace_path = ckptdata["model"]
-        elif os.path.isfile(os.path.join(basepath, ckptdata["model"])):
+        elif basepath is not None and os.path.isfile(os.path.join(basepath, ckptdata["model"])):
             trace_path = os.path.join(basepath, ckptdata["model"])
         if trace_path is not None:
             if trace_path.endswith(".pth"):
@@ -538,7 +540,7 @@ def resolve_import(fullname):
     """
     Class name resolver.
 
-    Takes a string corresponding to a module and class fullname to be imported with ``thelper.utils.import_class``
+    Takes a string corresponding to a module and class fullname to be imported with :func:`thelper.utils.import_class`
     and resolves any back compatibility issues related to renamed or moved classes.
 
     Args:
@@ -597,12 +599,9 @@ def import_function(fullname, params=None):
 def check_func_signature(func,      # type: Callable
                          params     # type: List[AnyStr]
                          ):         # type: (...) -> None
-    """
-    Checks whether the signature of a function matches the expected parameter list.
+    """Checks whether the signature of a function matches the expected parameter list.
 
-    .. seealso::
-        | :class:`thelper.typedefs.IterCallbackType`
-        | :class:`thelper.typedefs.IterCallbackParams`
+    See ``thelper.typedefs.IterCallbackType`` and ``thelper.typedefs.IterCallbackParams`` for more info.
     """
     if func is None or not callable(func):
         raise AssertionError("invalid function object")
@@ -723,7 +722,7 @@ def get_caller_name(skip=2):
     return ".".join(name)
 
 
-def get_key(key, config, msg=None):
+def get_key(key, config, msg=None, delete=False):
     """Returns a value given a dictionary key, throwing if not available."""
     if isinstance(key, list):
         if len(key) <= 1:
@@ -733,7 +732,10 @@ def get_key(key, config, msg=None):
                 raise AssertionError("must provide at least two valid keys to test")
         for k in key:
             if k in config:
-                return config[k]
+                val = config[k]
+                if delete:
+                    del config[k]
+                return val
         if msg is not None:
             raise AssertionError(msg)
         else:
@@ -745,10 +747,13 @@ def get_key(key, config, msg=None):
             else:
                 raise AssertionError("config dictionary missing '%s' field" % key)
         else:
-            return config[key]
+            val = config[key]
+            if delete:
+                del config[key]
+            return val
 
 
-def get_key_def(key, config, default=None, msg=None):
+def get_key_def(key, config, default=None, msg=None, delete=False):
     """Returns a value given a dictionary key, or the default value if it cannot be found."""
     if isinstance(key, list):
         if len(key) <= 1:
@@ -758,13 +763,19 @@ def get_key_def(key, config, default=None, msg=None):
                 raise AssertionError("must provide at least two valid keys to test")
         for k in key:
             if k in config:
-                return config[k]
+                val = config[k]
+                if delete:
+                    del config[k]
+                return val
         return default
     else:
         if key not in config:
             return default
         else:
-            return config[key]
+            val = config[key]
+            if delete:
+                del config[key]
+            return val
 
 
 def get_log_stamp():
@@ -979,13 +990,12 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
         if config is not None:
-            config_backup_path = os.path.join(save_dir, "config.latest" + backup_ext)
-            if os.path.exists(config_backup_path):
-                with open(config_backup_path, "r") as fd:
+            backup_path = os.path.join(save_dir, "config.latest" + backup_ext)
+            if os.path.exists(backup_path):
+                with open(backup_path, "r") as fd:
                     config_backup = json.load(fd)
                 if config_backup != config:
-                    query_msg = "Config backup in '%s' differs from config loaded through checkpoint; overwrite?" \
-                                % config_backup_path
+                    query_msg = f"Config backup in '{backup_path}' differs from config loaded through checkpoint; overwrite?"
                     answer = query_yes_no(query_msg, bypass="y")
                     if answer:
                         func_logger.warning("config mismatch with previous run; "
@@ -993,7 +1003,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
                     else:
                         func_logger.error("config mismatch with previous run; user aborted")
                         sys.exit(1)
-            save_config(config, config_backup_path)
+            save_config(config, backup_path)
     logs_dir = os.path.join(save_dir, "logs")
     if not os.path.exists(logs_dir):
         os.mkdir(logs_dir)
@@ -1229,16 +1239,12 @@ def draw_images(images,               # type: thelper.typedefs.OneOrManyArrayTyp
     nb_imgs = len(images) if isinstance(images, list) else images.shape[0]
     if nb_imgs < 1:
         return None
-    if captions is not None and len(captions) != nb_imgs:
-        raise AssertionError("captions count mismatch with image count")
-    if max_img_size is None:
-        max_img_size = (800, 1600)  # for display on typical monitors... (height, width)
-    if grid_size_x is None:
-        grid_size_x = int(math.ceil(math.sqrt(nb_imgs)))
-    if grid_size_y is None:
-        grid_size_y = int(math.ceil(nb_imgs / grid_size_x))
-    if grid_size_x * grid_size_y < nb_imgs:
-        raise AssertionError(f"bad gridding for subplots (need at least {nb_imgs} tiles)")
+    assert captions is None or len(captions) == nb_imgs, "captions count mismatch with image count"
+    # for display on typical monitors... (height, width)
+    max_img_size = (800, 1600) if max_img_size is None else max_img_size
+    grid_size_x = int(math.ceil(math.sqrt(nb_imgs))) if grid_size_x is None else grid_size_x
+    grid_size_y = int(math.ceil(nb_imgs / grid_size_x)) if grid_size_y is None else grid_size_y
+    assert grid_size_x * grid_size_y >= nb_imgs, f"bad gridding for subplots (need at least {nb_imgs} tiles)"
     if use_cv2:
         if caption_opts is None:
             caption_opts = {
@@ -1380,8 +1386,7 @@ def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, b
     nb_imgs = len(image_list)
     grid_size_x, grid_size_y = nb_imgs, 1  # all images on one row, by default (add gt and preds as extra rows)
     if color_map is not None and isinstance(color_map, dict):
-        if len(color_map) > 256:
-            raise AssertionError("too many indices for uint8 map")
+        assert len(color_map) <= 256, "too many indices for uint8 map"
         color_map_new = np.zeros((256, 1, 3), dtype=np.uint8)
         for idx, val in color_map.items():
             color_map_new[idx, ...] = val
@@ -1473,10 +1478,9 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
     import thelper.tasks
     if not isinstance(task, thelper.tasks.Task):
         raise AssertionError("invalid task object")
-    image_key = task.get_input_key()
-    if image_key is None or image_key not in minibatch:
-        raise AssertionError("images not found with key '%s'" % image_key)
-    images = minibatch[image_key]
+    if task.input_key not in minibatch:
+        raise AssertionError("images not found in minibatch with key '%s'" % task.input_key)
+    images = minibatch[task.input_key]
     if isinstance(images, list) and all([isinstance(t, torch.Tensor) for t in images]):
         # if we have a list, it must be due to a augmentation stage
         if not all([image.shape == images[0].shape for image in images]):
@@ -1492,27 +1496,26 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
     if preds is not None:
         preds = preds.cpu().detach()  # avoid latency for preprocessing on gpu
     if isinstance(task, thelper.tasks.Classification):
-        label_key, labels = task.get_gt_key(), None
-        if label_key in minibatch and minibatch[label_key] is not None:
-            labels = minibatch[label_key]
-        class_names_map = {idx: name for name, idx in task.get_class_idxs_map().items()}
-        return draw_classifs(images, preds, labels, class_names_map=class_names_map, redraw=redraw, block=block, **kwargs)
+        labels = thelper.utils.get_key_def(task.gt_key, minibatch, None)
+        class_names_map = {idx: name for name, idx in task.class_indices.items()}
+        return draw_classifs(images=images, preds=preds, labels=labels,
+                             class_names_map=class_names_map, redraw=redraw, block=block, **kwargs)
     elif isinstance(task, thelper.tasks.Segmentation):
-        mask_key, masks = task.get_gt_key(), None
-        if mask_key in minibatch and minibatch[mask_key] is not None:
-            masks = minibatch[mask_key]
-        name_color_map = task.get_color_map()
-        if name_color_map is not None:
-            idx_color_map = {idx: name_color_map[name] for name, idx in task.get_class_idxs_map().items()}
-        else:
-            idx_color_map = {idx: get_label_color_mapping(idx) for idx in task.get_class_idxs_map().values()}
-        return draw_segments(images, preds, masks, color_map=idx_color_map, redraw=redraw, block=block, **kwargs)
+        masks = thelper.utils.get_key_def(task.gt_key, minibatch, None)
+        color_map = task.color_map if task.color_map else {idx: get_label_color_mapping(idx) for idx in task.class_indices.values()}
+        if task.dontcare is not None and task.dontcare not in color_map:
+            color_map[task.dontcare] = np.asarray([0, 0, 0])
+        return draw_segments(images=images, preds=preds, masks=masks, color_map=color_map, redraw=redraw, block=block, **kwargs)
+    elif isinstance(task, thelper.tasks.Detection):
+        bboxes = thelper.utils.get_key_def(task.gt_key, minibatch, None)
+        color_map = task.color_map if task.color_map else {idx: get_label_color_mapping(idx) for idx in task.class_indices.values()}
+        return draw_bboxes(images=images, preds=preds, bboxes=bboxes, color_map=color_map, redraw=redraw, block=block, **kwargs)
     elif isinstance(task, thelper.tasks.Regression):
-        target_key, targets = task.get_gt_key(), None
-        if target_key in minibatch and minibatch[target_key] is not None:
-            targets = minibatch[target_key]
+        targets = thelper.utils.get_key_def(task.gt_key, minibatch, None)
         swap_channels = isinstance(task, thelper.tasks.SuperResolution)  # must update BxCxHxW to BxHxWxC in targets/preds
-        return draw_predicts(images, preds, targets, swap_channels=swap_channels, redraw=redraw, block=block, **kwargs)
+        # @@@ todo: cleanup swap_channels above via flag in superres task?
+        return draw_predicts(images=images, preds=preds, targets=targets,
+                             swap_channels=swap_channels, redraw=redraw, block=block, **kwargs)
     else:
         raise AssertionError("unhandled drawing mode, missing impl")
 
@@ -1638,34 +1641,66 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
     return fig
 
 
-def draw_bboxes(image, rects, labels=None, confidences=None, win_size=None, thickness=1, show=True):
-    """Draws and returns an image with bounding boxes via OpenCV."""
-    if isinstance(image, PIL.Image.Image):
-        # noinspection PyTypeChecker
-        image = np.asarray(image)
-    if not isinstance(image, np.ndarray):
-        raise AssertionError("expected input image to be numpy array")
-    if not isinstance(rects, list) or not all([isinstance(r, (tuple, list)) and len(r) == 4 for r in rects]):
-        raise AssertionError("expected input rectangles to be list of 4-elem tuples/lists (x,y,w,h)")
-    if labels is not None and (not isinstance(labels, list) or len(labels) != len(rects)):
-        raise AssertionError("bad labels list (check type/length)")
-    if confidences is not None and (not isinstance(confidences, list) or len(confidences) != len(confidences)):
-        raise AssertionError("bad confidences list (check type/length)")
-    display_image = np.copy(image)
-    if labels is None and confidences is None:
-        # draw all bboxes with unique colors (shuffled)
-        rects = copy.deepcopy(rects)
-        np.random.shuffle(rects)
-        for idx, rect in enumerate(rects):
-            cv.rectangle(display_image, (rect[0], rect[1]), (rect[0] + rect[2], rect[1] + rect[3]),
-                         get_bgr_from_hsl(idx / len(rects) * 360, 1.0, 0.5), thickness)
-    else:
-        raise NotImplementedError  # TODO
-    if win_size is not None:
-        display_image = cv.resize(display_image, win_size)
-    if show:
-        cv.imshow("bboxes", display_image)
-    return display_image
+def draw_bbox(image, tl, br, text, color, box_thickness=2, font_thickness=1, font_scale=0.4):
+    """Draws a single bounding box on a given image (used in :func:`thelper.utils.draw_bboxes`)."""
+    text_size, baseline = cv.getTextSize(text, fontFace=cv.FONT_HERSHEY_SIMPLEX,
+                                         fontScale=font_scale, thickness=font_thickness)
+    text_bl = (tl[0] + box_thickness + 1, tl[1] + text_size[1] + box_thickness + 1)
+    # note: text will overflow if box is too small
+    text_box_br = (text_bl[0] + text_size[0] + box_thickness, text_bl[1] + box_thickness * 2)
+    cv.rectangle(image, (tl[0] - 1, tl[1] - 1), (text_box_br[0] + 1, text_box_br[1] + 1),
+                 color=(0, 0, 0), thickness=-1)
+    cv.rectangle(image, tl, br, color=(0, 0, 0), thickness=(box_thickness + 1))
+    cv.rectangle(image, tl, br, color=color, thickness=box_thickness)
+    cv.rectangle(image, tl, text_box_br, color=color, thickness=-1)
+    cv.putText(image, text, text_bl, fontFace=cv.FONT_HERSHEY_SIMPLEX, fontScale=font_scale,
+               color=(0, 0, 0), thickness=font_thickness + 1)
+    cv.putText(image, text, text_bl, fontFace=cv.FONT_HERSHEY_SIMPLEX, fontScale=font_scale,
+               color=(255, 255, 255), thickness=font_thickness)
+
+
+def draw_bboxes(images, preds=None, bboxes=None, color_map=None, redraw=None, block=False, **kwargs):
+    """Draws and returns a set of bounding box prediction results."""
+    image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+    if color_map is not None and isinstance(color_map, dict):
+        assert len(color_map) <= 256, "too many indices for uint8 map"
+        color_map_new = np.zeros((256, 3), dtype=np.uint8)
+        for idx, val in color_map.items():
+            color_map_new[idx, ...] = val
+        color_map = color_map_new.tolist()
+    nb_imgs = len(image_list)
+    grid_size_x, grid_size_y = nb_imgs, 1  # all images on one row, by default (add gt and preds as extra rows)
+    box_thickness = thelper.utils.get_key_def("box_thickness", kwargs, default=2, delete=True)
+    font_thickness = thelper.utils.get_key_def("font_thickness", kwargs, default=1, delete=True)
+    font_scale = thelper.utils.get_key_def("font_scale", kwargs, default=0.4, delete=True)
+    if preds is not None:
+        assert len(image_list) == len(bboxes)
+        for bboxes_list, image in zip(bboxes, image_list):
+            for bbox_idx, bbox in enumerate(bboxes_list):
+                assert isinstance(bbox, thelper.data.BoundingBox), "unrecognized bbox type"
+                color = get_bgr_from_hsl(bbox_idx / len(bboxes_list) * 360, 1.0, 0.5) \
+                    if color_map is None else color_map[bbox.class_id]
+                conf = ""
+                if thelper.utils.is_scalar(bbox.confidence):
+                    conf = f" ({bbox.confidence})"
+                elif isinstance(bbox.confidence, (list, tuple, np.ndarray)):
+                    conf = f" ({bbox.confidence[bbox.class_id]})"
+                draw_bbox(image, bbox.top_left, bbox.bottom_right, f"{bbox.task.class_names[bbox.class_id]}{conf}", color,
+                          box_thickness=box_thickness, font_thickness=font_thickness, font_scale=font_scale)
+    if bboxes is not None:
+        assert len(image_list) == len(bboxes), "mismatched bboxes list and image list sizes"
+        clean_image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+        for bboxes_list, image in zip(bboxes, clean_image_list):
+            for bbox_idx, bbox in enumerate(bboxes_list):
+                assert isinstance(bbox, thelper.data.BoundingBox), "unrecognized bbox type"
+                color = get_bgr_from_hsl(bbox_idx / len(bboxes_list) * 360, 1.0, 0.5) \
+                    if color_map is None else color_map[bbox.class_id]
+                draw_bbox(image, bbox.top_left, bbox.bottom_right, f"GT: {bbox.task.class_names[bbox.class_id]}", color,
+                          box_thickness=box_thickness, font_thickness=font_thickness, font_scale=font_scale)
+        grid_size_y += 1
+        image_list += clean_image_list
+    return draw_images(image_list, redraw=redraw, window_name="detections", block=block,
+                       grid_size_x=grid_size_x, grid_size_y=grid_size_y, **kwargs)
 
 
 def get_label_color_mapping(idx):

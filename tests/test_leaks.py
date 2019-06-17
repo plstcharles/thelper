@@ -42,12 +42,10 @@ class DummyDataset(thelper.data.Dataset):
     def __init__(self, nb_samples, transforms=None, deepcopy=None):
         super().__init__(transforms=transforms, deepcopy=deepcopy)
         self.samples = np.arange(nb_samples)
+        self.task = thelper.tasks.Classification([str(idx) for idx in range(1000)], "0", "1")
 
     def __getitem__(self, idx):  # pragma: no cover
         return {"0": torch.randn(3, 224, 224), "1": torch.randint(1000, size=())}
-
-    def get_task(self):
-        return thelper.tasks.Classification([str(idx) for idx in range(1000)], "0", "1")
 
 
 @pytest.fixture

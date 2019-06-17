@@ -42,16 +42,14 @@ class LeNet(thelper.nn.Module):
         return logits
 
     def set_task(self, task):
-        if isinstance(task, thelper.tasks.Classification):
-            num_classes = len(task.get_class_names())
-            if num_classes != self.classifier[4].out_features:
-                self.classifier = torch.nn.Sequential(
-                    torch.nn.Linear(in_features=self.classifier_input_size, out_features=self.classifier[0].out_features),
-                    torch.nn.ReLU(),
-                    torch.nn.Linear(in_features=self.classifier[2].in_features, out_features=self.classifier[2].out_features),
-                    torch.nn.ReLU(),
-                    torch.nn.Linear(in_features=self.classifier[4].in_features, out_features=num_classes),
-                )
-        else:
-            raise AssertionError("missing impl for non-classif task type")
+        assert isinstance(task, thelper.tasks.Classification), "missing impl for non-classif task type"
+        num_classes = len(task.class_names)
+        if num_classes != self.classifier[4].out_features:
+            self.classifier = torch.nn.Sequential(
+                torch.nn.Linear(in_features=self.classifier_input_size, out_features=self.classifier[0].out_features),
+                torch.nn.ReLU(),
+                torch.nn.Linear(in_features=self.classifier[2].in_features, out_features=self.classifier[2].out_features),
+                torch.nn.ReLU(),
+                torch.nn.Linear(in_features=self.classifier[4].in_features, out_features=num_classes),
+            )
         self.task = task

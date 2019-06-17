@@ -20,14 +20,12 @@ class DummyIntegerDataset(thelper.data.Dataset):
     def __init__(self, nb_samples, transforms=None, deepcopy=None):
         super().__init__(transforms=transforms, deepcopy=deepcopy)
         self.samples = np.arange(nb_samples)
+        self.task = thelper.tasks.Task("0")
 
     def __getitem__(self, idx):
         if isinstance(idx, slice):
             return self._getitems(idx)
         return {"0": self.samples[idx]}
-
-    def get_task(self):
-        return thelper.tasks.Task("0")
 
 
 @pytest.fixture
@@ -51,13 +49,11 @@ def test_dataset_inteface():
     assert not dataset.deepcopy
     with pytest.raises(NotImplementedError):
         _ = dataset[0]
-    with pytest.raises(NotImplementedError):
-        _ = dataset.get_task()
 
 
 def test_dummy_dataset_getters(dummy_int):
     assert len(dummy_int) == 1000
-    assert str(dummy_int.get_task()) == str(thelper.tasks.Task("0"))
+    assert str(dummy_int.task) == str(thelper.tasks.Task("0"))
     tot_count = 0
     for idx, sample in enumerate(dummy_int):
         assert sample["0"] == idx
@@ -71,7 +67,7 @@ def test_dummy_dataset_getters(dummy_int):
         assert sample["0"] == 10 + idx
     assert "DummyIntegerDataset" in dummy_int._get_derived_name()
     assert "DummyIntegerDataset" in str(dummy_int)
-    assert "size: 1000" in str(dummy_int)
+    assert "data.test_parsers.DummyIntegerDataset" in str(dummy_int)
 
 
 @mock.patch.object(thelper.transforms.CenterCrop, "__call__")
@@ -100,7 +96,7 @@ def test_external_dataset(fake_op, mnist):
     assert dataset._get_derived_name() == "torchvision.datasets.MNIST" or dataset._get_derived_name() == "torchvision.datasets.mnist.MNIST"
     dataset = thelper.data.ExternalDataset(dataset=mnist, task=thelper.tasks.Task("0", "1"), root=test_mnist_path, train=False)
     assert dataset._get_derived_name() == "torchvision.datasets.MNIST" or dataset._get_derived_name() == "torchvision.datasets.mnist.MNIST"
-    assert str(dataset.get_task()) == str(thelper.tasks.Task("0", "1"))
+    assert str(dataset.task) == str(thelper.tasks.Task("0", "1"))
     with pytest.raises(AssertionError):
         _ = dataset[len(dataset)]
     sliced = dataset[5:8]
@@ -132,16 +128,14 @@ def dummy_hdf5(request):
             self.samples = []
             for idx in range(nb_samples):
                 self.samples.append({"0": np.random.randint(1000), "1": np.random.rand(2, 3, 4), "2": str(idx)})
+            self.task = thelper.tasks.Task(input_key="0", gt_key="1", meta_keys=["2"])
 
         def __getitem__(self, idx):
             return self.samples[idx]
 
-        def get_task(self):
-            return thelper.tasks.Task(input_key="0", gt_key="1", meta_keys=["2"])
-
     dataset = DummyDataset(1000)
     data_loader = thelper.data.DataLoader(dataset, num_workers=0, batch_size=3)
-    thelper.data.create_hdf5(test_hdf5_path, dataset.get_task(), data_loader, None, None)
+    thelper.data.create_hdf5(test_hdf5_path, dataset.task, data_loader, None, None)
     return dataset
 
 
@@ -158,8 +152,8 @@ def test_hdf5_dataset(fake_op, dummy_hdf5):
         _ = thelper.data.HDF5Dataset("something")
     hdf5_dataset = thelper.data.HDF5Dataset(test_hdf5_path, subset="train")
     assert len(dummy_hdf5) == len(hdf5_dataset)
-    assert dummy_hdf5.get_task().check_compat(hdf5_dataset.get_task(), exact=True)
-    keys = dummy_hdf5.get_task().get_keys()
+    assert dummy_hdf5.task.check_compat(hdf5_dataset.task, exact=True)
+    keys = dummy_hdf5.task.keys
     for idx in range(len(dummy_hdf5)):
         for key in keys:
             assert np.array_equal(dummy_hdf5[idx][key], hdf5_dataset[idx][key])
@@ -181,14 +175,12 @@ def test_classif_dataset():
     with pytest.raises(AssertionError):
         _ = thelper.data.ClassificationDataset([], "input", "label")
     dataset = thelper.data.ClassificationDataset(["0", "1"], "input", "label")
-    assert dataset.get_task().check_compat(thelper.tasks.Classification(["0", "1"], "input", "label"), exact=True)
+    assert dataset.task.check_compat(thelper.tasks.Classification(["0", "1"], "input", "label"), exact=True)
     with pytest.raises(NotImplementedError):
         _ = dataset[0]
 
 
 def test_segm_dataset():
-    with pytest.raises(AssertionError):
-        _ = thelper.data.SegmentationDataset(["0", "0"], "input", "label")
     with pytest.raises(AssertionError):
         _ = thelper.data.SegmentationDataset(["0", "1"], None, "label")
     with pytest.raises(AssertionError):
@@ -196,7 +188,7 @@ def test_segm_dataset():
     with pytest.raises(AssertionError):
         _ = thelper.data.SegmentationDataset([], "input", "label")
     dataset = thelper.data.SegmentationDataset(["0", "1"], "input", "label")
-    assert dataset.get_task().check_compat(thelper.tasks.Segmentation(["0", "1"], "input", "label"), exact=True)
+    assert dataset.task.check_compat(thelper.tasks.Segmentation(["0", "1"], "input", "label"), exact=True)
     with pytest.raises(NotImplementedError):
         _ = dataset[0]
 
@@ -223,7 +215,7 @@ def test_image_dataset(fake_op, fake_image_root, mocker):
     with pytest.raises(AssertionError):
         _ = thelper.data.ImageDataset(os.path.join(fake_image_root, "0.jpg"))
     dataset = thelper.data.ImageDataset(fake_image_root, None, "0", "p", "i")
-    assert dataset.get_task().check_compat(thelper.tasks.Task("0", None, ["p", "i"]))
+    assert dataset.task.check_compat(thelper.tasks.Task("0", None, ["p", "i"]))
     assert len(dataset) == 10
     with pytest.raises(AssertionError):
         _ = dataset[len(dataset)]
@@ -272,7 +264,7 @@ def test_image_folder_dataset(fake_op, fake_image_folder_root, mocker):
         _ = thelper.data.ImageFolderDataset(test_images_path)
     dataset = thelper.data.ImageFolderDataset(fake_image_folder_root, None, "0", "1", "p", "i")
     classes = [str(idx) for idx in range(10)]
-    assert dataset.get_task().check_compat(thelper.tasks.Classification(classes, "0", "1", ["p", "i"]))
+    assert dataset.task.check_compat(thelper.tasks.Classification(classes, "0", "1", ["p", "i"]))
     assert len(dataset) == 100
     with pytest.raises(AssertionError):
         _ = dataset[len(dataset)]
@@ -317,7 +309,7 @@ def test_superres_dataset(fake_op, fake_image_folder_root, mocker):
     dataset = thelper.data.SuperResFolderDataset(fake_image_folder_root, downscale_factor=4,
                                                  lowres_image_key="0", highres_image_key="1",
                                                  path_key="p", idx_key="i", label_key="l")
-    assert dataset.get_task().check_compat(thelper.tasks.SuperResolution("0", "1", ["p", "i", "l"]))
+    assert dataset.task.check_compat(thelper.tasks.SuperResolution("0", "1", ["p", "i", "l"]))
     assert len(dataset) == 100
     with pytest.raises(AssertionError):
         _ = dataset[len(dataset)]

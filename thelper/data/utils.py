@@ -191,7 +191,7 @@ def create_loaders(config, save_dir=None):
         logger.warning("using 'data_config' field in configuration dictionary is deprecated; switch it to 'loaders'")
     loaders_config = thelper.utils.get_key(["data_config", "loaders"], config)
     # noinspection PyProtectedMember
-    from thelper.data.loaders import _LoaderFactory as LoaderFactory
+    from thelper.data.loaders import LoaderFactory as LoaderFactory
     loader_factory = LoaderFactory(loaders_config)
     datasets, task = create_parsers(config, loader_factory.get_base_transforms())
     if not datasets or task is None:
@@ -325,7 +325,7 @@ def create_parsers(config, base_transforms=None):
     for dataset_name, dataset_config in config.items():
         if isinstance(dataset_config, thelper.data.Dataset):
             dataset = dataset_config
-            task = dataset.get_task()
+            task = dataset.task
         else:
             logger.debug("loading dataset '%s' configuration..." % dataset_name)
             if "type" not in dataset_config:
@@ -352,7 +352,7 @@ def create_parsers(config, base_transforms=None):
                     logger.warning("'task' field detected in dataset '%s' config; dataset's default task will be ignored" % dataset_name)
                     task = thelper.tasks.create_task(dataset_config["task"])
                 else:
-                    task = dataset.get_task()
+                    task = dataset.task
             else:
                 if "task" not in dataset_config or not dataset_config["task"]:
                     raise AssertionError("external dataset '%s' must define task interface in its configuration dict" % dataset_name)
@@ -431,7 +431,7 @@ def create_hdf5(archive_path, task, train_loader, valid_loader, test_loader, com
         fd.attrs["config"] = str(config_backup)
         fd.attrs["compression"] = str(compression)
         dtype = h5py.special_dtype(vlen=np.uint8)
-        target_keys = task.get_keys()
+        target_keys = task.keys
 
         def create_dataset(name, max_len, array_template, compr_args):
             if array_template.ndim > 1:
@@ -481,7 +481,7 @@ def create_hdf5(archive_path, task, train_loader, valid_loader, test_loader, com
                         fill_dataset(datasets[key], datasets_len[key], idx, tensor, datasets_compr[key][0], **datasets_compr[key][1])
                         datasets_len[key] += 1
             assert len(set(datasets_len.values())) == 1
-            fd[group].attrs["count"] = datasets_len[task.get_input_key()]
+            fd[group].attrs["count"] = datasets_len[task.input_key]
             for key in target_keys:
                 datasets[key].resize(size=(datasets_len[key],))
 

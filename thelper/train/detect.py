@@ -1,9 +1,11 @@
-"""Regression trainer/evaluator implementation module."""
+"""Object detection trainer/evaluator implementation module."""
+import collections
 import logging
 
 import numpy as np
 import torch
 import torch.optim
+import torchvision
 
 import thelper.utils
 from thelper.train.base import Trainer
@@ -11,13 +13,13 @@ from thelper.train.base import Trainer
 logger = logging.getLogger(__name__)
 
 
-class RegressionTrainer(Trainer):
-    """Trainer interface specialized for generic (n-dim) regression.
+class ObjDetectTrainer(Trainer):
+    """Trainer interface specialized for object detection.
 
     This class implements the abstract functions of :class:`thelper.train.base.Trainer` required to train/evaluate
-    a model for generic regression (i.e. n-dim target value prediction). It also provides a utility function
-    for fetching i/o packets (input tensors, target values) from a sample, and that converts those into tensors for
-    forwarding and loss estimation.
+    a model for object detection (i.e. 2D bounding box regression). It also provides a utility function for fetching
+    i/o packets (input images, bounding boxes) from a sample, and that converts those into tensors for forwarding
+    and loss estimation.
 
     .. seealso::
         | :class:`thelper.train.base.Trainer`
@@ -26,9 +28,8 @@ class RegressionTrainer(Trainer):
     def __init__(self, session_name, save_dir, model, task, loaders, config, ckptdata=None):
         """Receives session parameters, parses tensor/target keys from task object, and sets up metrics."""
         super().__init__(session_name, save_dir, model, task, loaders, config, ckptdata=ckptdata)
-        if not isinstance(self.task, thelper.tasks.Regression):
-            raise AssertionError("expected task to be regression")
-        # @@@@@ todo: use target_min/target_max and other props from task?
+        if not isinstance(self.task, thelper.tasks.Detection):
+            raise AssertionError("expected task to be object detection")
 
     def _to_tensor(self, sample):
         """Fetches and returns tensors of inputs and targets from a batched sample dictionary."""
@@ -46,23 +47,31 @@ class RegressionTrainer(Trainer):
                 raise AssertionError("expected input as Nx[shape] where N = batch size")
             if self.task.input_shape != input_val.shape[1:]:
                 raise AssertionError("invalid input shape; got '%s', expected '%s'" % (input_val.shape[1:], self.task.input_shape))
-        target = None
+        assert input_val.dim() == 4, "input image stack should be 4-dim to be decomposed into list of images"
+        # unpack input images into list (as required by torchvision preproc)
+        input_val = [input_val[i] for i in range(input_val.shape[0])]
+        bboxes = None
         if self.task.gt_key in sample:
-            target = sample[self.task.gt_key]
-            if isinstance(target, np.ndarray):
-                if self.task.target_type is not None and target.dtype != self.task.target_type:
-                    raise AssertionError("unexpected target type, should be %s" % str(self.task.target_type))
-                target = torch.from_numpy(target)
-            if not isinstance(target, torch.Tensor):
-                raise AssertionError("unexpected target type; should be torch.Tensor")
-            if self.task.target_shape is not None:
-                if target.dim() != len(self.task.target_shape) + 1:
-                    raise AssertionError("expected target as Nx[shape] where N = batch size")
-                if self.task.target_shape != target.shape[1:]:
-                    raise AssertionError("invalid target shape; got '%s', expected '%s'" % (target.shape[1:], self.task.target_shape))
-        return input_val, target
+            bboxes = sample[self.task.gt_key]
+            if not isinstance(bboxes, list) or not all([isinstance(bset, list) for bset in bboxes]):
+                raise AssertionError("bboxes should be provided as a list of lists (dims = batch x bboxes-per-image)")
+            if not all([all([isinstance(box, thelper.data.BoundingBox) for box in bset]) for bset in bboxes]):
+                raise AssertionError("bboxes should be provided as a thelper.data.BoundingBox-compat object")
+            assert all([len(np.unique([b.image_id for b in bset if b.image_id is not None])) <= 1 for bset in bboxes]), \
+                "some bboxes tied to a single image have different reference ids"
+            # here, we follow the format used in torchvision (>=0.3) for forwarding targets to detection models
+            # (see https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html for more info)
+            bboxes = [{
+                "boxes": torch.as_tensor([[*b.bbox] for b in bset], dtype=torch.float32),
+                "labels": torch.as_tensor([b.class_id for b in bset], dtype=torch.int64),
+                "image_id": torch.as_tensor([b.image_id for b in bset]),
+                "area": torch.as_tensor([b.area for b in bset], dtype=torch.float32),
+                "iscrowd": torch.as_tensor([b.iscrowd for b in bset], dtype=torch.int64),
+                "refs": bset
+            } for bset in bboxes]
+        return input_val, bboxes
 
-    def train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
+    def _train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
         """Trains the model for a single epoch using the provided objects.
 
         Args:
@@ -77,8 +86,7 @@ class RegressionTrainer(Trainer):
             monitor: name of the metric to update/monitor for improvements.
             writer: the writer used to store tbx events/messages/metrics.
         """
-        if not loss:
-            raise AssertionError("missing loss function")
+        assert loss is None, "current implementation assumes that loss is computed inside the model"
         if not optimizer:
             raise AssertionError("missing optimizer")
         if not loader:
@@ -89,26 +97,37 @@ class RegressionTrainer(Trainer):
         epoch_size = len(loader)
         self.logger.debug("fetching data loader samples...")
         for idx, sample in enumerate(loader):
-            input_val, target = self._to_tensor(sample)
-            # todo: add support to fraction samples that are too big for a single iteration
-            # (e.g. when batching non-image data that would be too inefficient one sample at a time)
-            if target is None:
+            images, targets = self._to_tensor(sample)
+            if targets is None or any([not bset for bset in targets]):
                 raise AssertionError("groundtruth required when training a model")
-            if isinstance(input_val, list):
-                raise AssertionError("missing regr trainer support for duped minibatches")  # todo
             optimizer.zero_grad()
-            target = self._move_tensor(target, dev)
-            iter_pred = model(self._move_tensor(input_val, dev))
-            iter_loss = loss(iter_pred, target.float())
-            iter_loss.backward()
+            targets = self._move_tensor(targets, dev)
+            images = self._move_tensor(images, dev)
+            if isinstance(model, thelper.nn.utils.ExternalModule):
+                model = model.model  # temporarily unwrap to simplify code below
+            if isinstance(model, torchvision.models.detection.generalized_rcnn.GeneralizedRCNN):
+                # unfortunately, the default generalized RCNN model forward does not return predictions while training...
+                # loss_dict = model(images=images, targets=targets)  # we basically reimplement this call below
+                original_image_sizes = [img.shape[-2:] for img in images]
+                images, targets = model.transform(images, targets)
+                features = model.backbone(images.tensors)
+                if isinstance(features, torch.Tensor):
+                    features = collections.OrderedDict([(0, features)])
+                proposals, proposal_losses = model.rpn(images, features, targets)
+                iter_pred, detector_losses = model.roi_heads(features, proposals, images.image_sizes, targets)
+                iter_pred = model.transform.postprocess(iter_pred, images.image_sizes, original_image_sizes)
+                iter_loss = sum(loss for loss in {**detector_losses, **proposal_losses}.values())
+                iter_loss.backward()
+            else:
+                raise AssertionError("unknown/unhandled detection model type")
             optimizer.step()
             if metrics:
                 meta = {key: sample[key] if key in sample else None
                         for key in self.task.meta_keys} if self.task.meta_keys else None
                 iter_pred_cpu = self._move_tensor(iter_pred, dev="cpu", detach=True)
-                target_cpu = self._move_tensor(target, dev="cpu", detach=True)
+                targets_cpu = self._move_tensor(targets, dev="cpu", detach=True)
                 for metric in metrics.values():
-                    metric.accumulate(iter_pred_cpu, target_cpu, meta=meta)
+                    metric.accumulate(iter_pred_cpu, targets_cpu, meta=meta)
             if self.train_iter_callback is not None:
                 self.train_iter_callback(sample=sample, task=self.task, pred=iter_pred,
                                          iter_idx=iter, max_iters=epoch_size,
@@ -138,7 +157,7 @@ class RegressionTrainer(Trainer):
         epoch_loss /= epoch_size
         return epoch_loss, iter
 
-    def eval_epoch(self, model, epoch, dev, loader, metrics, monitor=None, writer=None):
+    def _eval_epoch(self, model, epoch, dev, loader, metrics, monitor=None, writer=None):
         """Evaluates the model using the provided objects.
 
         Args:
@@ -158,17 +177,15 @@ class RegressionTrainer(Trainer):
             for idx, sample in enumerate(loader):
                 if idx < self.skip_eval_iter:
                     continue  # skip until previous iter count (if set externally; no effect otherwise)
-                input_val, target = self._to_tensor(sample)
-                if isinstance(input_val, list):
-                    raise AssertionError("missing regr trainer support for duped minibatches")  # todo
-                pred = model(self._move_tensor(input_val, dev))
+                images, targets = self._to_tensor(sample)
+                pred = model(self._move_tensor(images, dev))
                 if metrics:
                     meta = {key: sample[key] if key in sample else None
                             for key in self.task.meta_keys} if self.task.meta_keys else None
                     pred_cpu = self._move_tensor(pred, dev="cpu", detach=True)
-                    target_cpu = self._move_tensor(target, dev="cpu", detach=True)
+                    targets_cpu = self._move_tensor(targets, dev="cpu", detach=True)
                     for metric in metrics.values():
-                        metric.accumulate(pred_cpu, target_cpu if target is not None else None, meta=meta)
+                        metric.accumulate(pred_cpu, targets_cpu, meta=meta)
                 if self.eval_iter_callback is not None:
                     self.eval_iter_callback(sample=sample, task=self.task, pred=pred,
                                             iter_idx=idx, max_iters=epoch_size,

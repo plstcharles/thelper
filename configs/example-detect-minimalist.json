@@ -1,0 +1,52 @@
+{
+    "name": "example-detect-minimalist",
+    "datasets": {
+        "pascalvoc": {
+            "type": "thelper.data.PASCALVOC",
+            "params": {
+                "root": "data/pascalvoc",
+                "task": "detect",
+                "subset": "trainval",
+                "download": true,
+                "preload": false,
+                "target_labels": ["person"]
+            }
+        }
+    },
+    "loaders": {
+        "batch_size": 1,
+        "base_transforms": [
+            {
+                "operation": "torchvision.transforms.ToTensor",
+                "target_key": "image"
+            }
+        ],
+        "train_split": {
+            "pascalvoc": 0.9
+        },
+        "valid_split": {
+            "pascalvoc": 0.1
+        }
+    },
+    "model": {
+        "type" : "torchvision.models.detection.fasterrcnn_resnet50_fpn",
+        "params": {"pretrained": true}
+    },
+    "trainer": {
+        "epochs": 100,
+        "save_freq": 10,
+        "optimization": {
+            "optimizer": {
+                "type": "torch.optim.SGD",
+                "params": {
+                    "lr": 0.005,
+                    "momentum": 0.9,
+                    "weight_decay": 0.0005
+                }
+            }
+        },
+        "metrics": {
+
+        }
+    }
+}

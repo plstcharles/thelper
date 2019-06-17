@@ -25,6 +25,75 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
+def default_collate(batch):
+    """Puts each data field into a tensor with outer dimension batch size.
+
+    This function is copied from PyTorch's `torch.utils.data.dataloader.default_collate`, but additionally
+    supports custom objects from the framework (such as bounding boxes).
+
+    See ``torch.utils.data.DataLoader`` for more information.
+    """
+    import torchvision
+    from torch._six import container_abcs, string_classes, int_classes
+    error_msg_fmt = "batch must contain tensors, numbers, dicts or lists; found {}"
+    torchvision_ver = [int(v) for v in torchvision.__version__.split(".")]
+    elem_type = type(batch[0])
+    if isinstance(batch[0], torch.Tensor):
+        out = None
+        if torchvision_ver[0] > 0 or torchvision_ver[1] >= 3:  # ver >= 0.3
+            if torch.utils.data._utils.collate._use_shared_memory:
+                # If we're in a background process, concatenate directly into a
+                # shared memory tensor to avoid an extra copy
+                numel = sum([x.numel() for x in batch])
+                storage = batch[0].storage()._new_shared(numel)
+                out = batch[0].new(storage)
+            return torch.stack(batch, 0, out=out)
+        else:  # ver < 0.3
+            if torch.utils.data.dataloader._use_shared_memory:
+                # If we're in a background process, concatenate directly into a
+                # shared memory tensor to avoid an extra copy
+                numel = sum([x.numel() for x in batch])
+                storage = batch[0].storage()._new_shared(numel)
+                out = batch[0].new(storage)
+            return torch.stack(batch, 0, out=out)
+    elif elem_type.__module__ == 'numpy' and elem_type.__name__ != 'str_' and \
+            elem_type.__name__ != 'string_':
+        elem = batch[0]
+        if elem_type.__name__ == 'ndarray':
+            # array of string classes and object
+            if torchvision_ver[0] > 0 or torchvision_ver[1] >= 3:  # ver >= 0.3
+                if torch.utils.data._utils.collate.np_str_obj_array_pattern.search(elem.dtype.str) is not None:
+                    raise TypeError(error_msg_fmt.format(elem.dtype))
+            else:  # ver < 0.3
+                import re
+                if re.search('[SaUO]', elem.dtype.str) is not None:
+                    raise TypeError(error_msg_fmt.format(elem.dtype))
+            return default_collate([torch.from_numpy(b) for b in batch])
+        if elem.shape == ():  # scalars
+            py_type = float if elem.dtype.name.startswith('float') else int
+            if torchvision_ver[0] > 0 or torchvision_ver[1] >= 3:  # ver >= 0.3
+                return torch.utils.data._utils.numpy_type_map[elem.dtype.name](list(map(py_type, batch)))
+            else:  # ver < 0.3
+                return torch.utils.data.dataloader.numpy_type_map[elem.dtype.name](list(map(py_type, batch)))
+    elif isinstance(batch[0], float):
+        return torch.tensor(batch, dtype=torch.float64)
+    elif isinstance(batch[0], int_classes):
+        return torch.tensor(batch)
+    elif isinstance(batch[0], string_classes):
+        return batch
+    elif isinstance(batch[0], container_abcs.Mapping):
+        return {key: default_collate([d[key] for d in batch]) for key in batch[0]}
+    elif isinstance(batch[0], tuple) and hasattr(batch[0], '_fields'):  # namedtuple
+        return type(batch[0])(*(default_collate(samples) for samples in zip(*batch)))
+    elif isinstance(batch[0], container_abcs.Sequence):
+        if isinstance(batch, list) and all([isinstance(l, list) for l in batch]) and \
+                all([isinstance(b, thelper.data.BoundingBox) for l in batch for b in l]):
+            return batch
+        transposed = zip(*batch)
+        return [default_collate(samples) for samples in transposed]
+    raise TypeError((error_msg_fmt.format(type(batch[0]))))
+
+
 class DataLoader(torch.utils.data.DataLoader):
     """Specialized data loader used to load minibatches from a dataset parser.
 
@@ -32,8 +101,8 @@ class DataLoader(torch.utils.data.DataLoader):
 
     See ``torch.utils.data.DataLoader`` for more information on attributes/methods.
     """
-    def __init__(self, *args, seeds=None, epoch=0, **kwargs):
-        super().__init__(*args, worker_init_fn=self._worker_init_fn, **kwargs)
+    def __init__(self, *args, seeds=None, epoch=0, collate_fn=default_collate, **kwargs):
+        super().__init__(*args, collate_fn=collate_fn, worker_init_fn=self._worker_init_fn, **kwargs)
         self.seeds = {}
         if seeds is not None:
             if not isinstance(seeds, dict):
@@ -90,7 +159,7 @@ class DataLoader(torch.utils.data.DataLoader):
         return len(self.sampler) if self.sampler is not None else len(self.dataset)
 
 
-class _LoaderFactory(object):
+class LoaderFactory:
     """Factory used for preparing and splitting dataset parsers into usable data loader objects.
 
     This class is responsible for parsing the parameters contained in the 'loaders' field of a
@@ -121,7 +190,7 @@ class _LoaderFactory(object):
         self.test_scale = thelper.utils.get_key_def("test_scale", config, 1.0)
         logger.debug("samplers will use scaling factors:\n  train = %f\n  valid = %f\n  test = %f" %
                      (self.train_scale, self.valid_scale, self.test_scale))
-        default_collate_fn = torch.utils.data.dataloader.default_collate
+        default_collate_fn = default_collate
         if "collate_fn" in config:
             if any([v in config for v in ["train_collate_fn", "valid_collate_fn", "test_collate_fn"]]):
                 raise AssertionError("specifying 'collate_fn' overrides all other (loader-specific) values")
@@ -211,7 +280,7 @@ class _LoaderFactory(object):
 
     @staticmethod
     def _get_collate_fn(val):
-        if val is torch.utils.data.dataloader.default_collate or callable(val):
+        if val is torch.utils.data.dataloader.default_collate or val is default_collate or callable(val):
             return val
         if isinstance(val, dict):
             collate_fn_type = thelper.utils.get_key("type", val)
@@ -348,9 +417,9 @@ class _LoaderFactory(object):
         must_split = any(must_split.values())
         if task is not None and isinstance(task, thelper.tasks.Classification) and not self.skip_class_balancing and must_split:
             # note: with current impl, all class sets will be shuffled the same way... (shouldnt matter, right?)
-            logger.debug("will split evenly over %d classes..." % len(task.get_class_names()))
+            logger.debug("will split evenly over %d classes..." % len(task.class_names))
             unset_class_key = "<unset>"
-            global_class_names = task.get_class_names() + [unset_class_key]  # extra name added for unlabeled samples (if needed!)
+            global_class_names = task.class_names + [unset_class_key]  # extra name added for unlabeled samples (if needed!)
             sample_maps = {}
             for dataset_name, dataset in datasets.items():
                 if isinstance(dataset, thelper.data.ExternalDataset):
@@ -360,7 +429,7 @@ class _LoaderFactory(object):
                         logger.warning(("must fully parse the external dataset '%s' for intra-class shuffling;" % dataset_name) +
                                        " this might take a while!\n(consider making a dataset interface that can return labels" +
                                        " only, it would greatly speed up the analysis of class distributions)")
-                        label_key = task.get_gt_key()
+                        label_key = task.gt_key
                         # to allow glitch-less tqdm printing after latest logger output
                         sys.stdout.flush()
                         sys.stderr.flush()

@@ -86,23 +86,21 @@ class FCN32s(thelper.nn.Module):
         return out
 
     def set_task(self, task):
-        if isinstance(task, thelper.tasks.Segmentation):
-            num_classes = len(task.get_class_names())
-            if self.classifier is None or list(self.classifier.modules())[-1].out_channels != num_classes:
-                self.classifier = torch.nn.Sequential(
-                    torch.nn.Conv2d(512, 4096, kernel_size=7, stride=1, padding=0),
-                    torch.nn.ReLU(inplace=True),
-                    torch.nn.Dropout2d(),
-                    torch.nn.Conv2d(4096, 4096, kernel_size=1, stride=1, padding=0),
-                    torch.nn.ReLU(inplace=True),
-                    torch.nn.Dropout2d(),
-                    torch.nn.Conv2d(4096, num_classes, kernel_size=1, stride=1, padding=0),
-                )
-                self.upscaler = torch.nn.ConvTranspose2d(num_classes, num_classes,
-                                                         kernel_size=64, stride=32, bias=False)
-                self.upscaler.weight.data.copy_(get_upsampling_weight(num_classes, num_classes, 64))
-        else:
-            raise AssertionError("missing impl for non-segm task type")
+        assert isinstance(task, thelper.tasks.Segmentation), "missing impl for non-segm task type"
+        num_classes = len(task.class_names)
+        if self.classifier is None or list(self.classifier.modules())[-1].out_channels != num_classes:
+            self.classifier = torch.nn.Sequential(
+                torch.nn.Conv2d(512, 4096, kernel_size=7, stride=1, padding=0),
+                torch.nn.ReLU(inplace=True),
+                torch.nn.Dropout2d(),
+                torch.nn.Conv2d(4096, 4096, kernel_size=1, stride=1, padding=0),
+                torch.nn.ReLU(inplace=True),
+                torch.nn.Dropout2d(),
+                torch.nn.Conv2d(4096, num_classes, kernel_size=1, stride=1, padding=0),
+            )
+            self.upscaler = torch.nn.ConvTranspose2d(num_classes, num_classes,
+                                                     kernel_size=64, stride=32, bias=False)
+            self.upscaler.weight.data.copy_(get_upsampling_weight(num_classes, num_classes, 64))
         self.task = task
 
     def init_vgg16_params(self, vgg16, copy_fc8=True):

@@ -26,14 +26,14 @@ def create_session(config, save_dir):
 
     Args:
         config: a dictionary that provides all required data configuration and trainer parameters; see
-            :class:`thelper.train.trainers.Trainer` and :func:`thelper.data.utils.create_loaders` for more information.
+            :class:`thelper.train.base.Trainer` and :func:`thelper.data.utils.create_loaders` for more information.
             Here, it is only expected to contain a ``name`` field that specifies the name of the session.
         save_dir: the path to the root directory where the session directory should be saved. Note that
             this is not the path to the session directory itself, but its parent, which may also contain
             other session directories.
 
     .. seealso::
-        | :class:`thelper.train.trainers.Trainer`
+        | :class:`thelper.train.base.Trainer`
     """
     logger = thelper.utils.get_func_logger()
     if "name" not in config or not config["name"]:
@@ -82,12 +82,12 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
             this is not the path to the session directory itself, but its parent, which may also contain
             other session directories.
         config: a dictionary that provides all required data configuration and trainer parameters; see
-            :class:`thelper.train.trainers.Trainer` and :func:`thelper.data.utils.create_loaders` for more information.
+            :class:`thelper.train.base.Trainer` and :func:`thelper.data.utils.create_loaders` for more information.
             Here, it is only expected to contain a ``name`` field that specifies the name of the session.
         eval_only: specifies whether training should be resumed or the model should only be evaluated.
 
     .. seealso::
-        | :class:`thelper.train.trainers.Trainer`
+        | :class:`thelper.train.base.Trainer`
     """
     logger = thelper.utils.get_func_logger()
     if ckptdata is None or not ckptdata:
@@ -170,7 +170,7 @@ def visualize_data(config):
         raise AssertionError("unexpected viz kwargs type")
     if thelper.utils.get_key_def(["data_config", "loaders"], config, default=None) is None or ignore_loaders:
         datasets, task = thelper.data.create_parsers(config)
-        loader_map = {dataset_name: torch.utils.data.DataLoader(dataset,) for dataset_name, dataset in datasets.items()}
+        loader_map = {dataset_name: thelper.data.DataLoader(dataset,) for dataset_name, dataset in datasets.items()}
         # we assume no transforms were done in the parser, and images are given as read by opencv
         viz_kwargs["ch_transpose"] = thelper.utils.get_key_def("ch_transpose", viz_kwargs, False)
         viz_kwargs["flip_bgr"] = thelper.utils.get_key_def("flip_bgr", viz_kwargs, False)
@@ -332,6 +332,7 @@ def export_model(config, save_dir):
     log_stamp = thelper.utils.get_log_stamp()
     model_type = model.get_name()
     model_params = model.config if model.config else {}
+    # the saved state below should be kept compatible with the one in thelper.train.base._save
     export_state = {
         "name": session_name,
         "source": log_stamp,
