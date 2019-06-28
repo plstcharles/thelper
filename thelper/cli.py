@@ -292,7 +292,8 @@ def export_model(config, save_dir):
     The configuration dictionary must minimally contain a 'model' section that provides details on the model
     to be exported. A section named 'export' can be used to provide settings regarding the exportation
     approaches to use, and the task interface to save with the model. If a task is not explicitly defined in
-    the 'export' section, the session configuration will be parsed for a 'datasets' section as a last resort.
+    the 'export' section, the session configuration will be parsed for a 'datasets' section that can be used
+    to define it. Otherwise, it must be provided through the model.
 
     The exported checkpoint containing the model will be saved in the session's output directory.
 
@@ -320,8 +321,8 @@ def export_model(config, save_dir):
     task = thelper.utils.get_key_def("task", export_config, default=None)
     if isinstance(task, (str, dict)):
         task = thelper.tasks.create_task(task)
-    if task is None:
-        _, task = thelper.data.create_parsers(config)  # try to load via datasets... (last resort)
+    if task is None and "datasets" in config:
+        _, task = thelper.data.create_parsers(config)  # try to load via datasets...
     if isinstance(trace_input, str):
         trace_input = eval(trace_input)
     logger.info("exporting model '%s'..." % session_name)
@@ -329,6 +330,9 @@ def export_model(config, save_dir):
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
     logger.debug("exported checkpoint will be saved at '%s'" % os.path.abspath(save_dir).replace("\\", "/"))
     model = thelper.nn.create_model(config, task, save_dir=save_dir)
+    if task is None:
+        assert hasattr(model, "task"), "model should have task attrib if not provided already"
+        task = model.task
     log_stamp = thelper.utils.get_log_stamp()
     model_type = model.get_name()
     model_params = model.config if model.config else {}
