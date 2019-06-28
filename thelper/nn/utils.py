@@ -131,7 +131,10 @@ def create_model(config, task, save_dir=None, ckptdata=None):
     else:
         if model_config is None:
             raise AssertionError("must provide model config and/or checkpoint data to create a model")
-        if not isinstance(task, thelper.tasks.Task):
+        if "task" in model_config and isinstance(model_config["task"], (thelper.tasks.Task, dict, str)):
+            new_task = thelper.tasks.create_task(model_config["task"]) \
+                if isinstance(model_config["task"], (dict, str)) else model_config["task"]
+        if not isinstance(task, thelper.tasks.Task) and not isinstance(new_task, thelper.tasks.Task):
             raise AssertionError("bad task type passed to create_model")
         logger.debug("loading model type/params current config")
         if "type" not in model_config or not model_config["type"]:
@@ -162,9 +165,10 @@ def create_model(config, task, save_dir=None, ckptdata=None):
             logger.debug("loading state dictionary from checkpoint into model")
             model.load_state_dict(model_state)
     if new_task is not None:
-        logger.debug("previous model task = %s" % str(model.task))
-        logger.debug("refreshing model for new task = %s" % str(new_task))
+        if hasattr(model, "task"):
+            logger.debug("previous model task = %s" % str(model.task))
         if hasattr(model, "set_task"):
+            logger.debug("refreshing model for new task = %s" % str(new_task))
             model.set_task(new_task)
         else:
             logger.warning("model missing 'set_task' interface function")
