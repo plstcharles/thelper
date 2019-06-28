@@ -3,7 +3,7 @@ torchvision
 matplotlib
 cython
 opencv-python
-numpy<1.16.0,>=1.14.5
+numpy
 Pillow
 pynput
 lz4

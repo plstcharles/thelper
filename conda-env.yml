@@ -23,5 +23,6 @@ dependencies:
     - h5py
     - imgaug==0.2.5
     - augmentor
+    - opencv-python
     - tensorboardX
     - pynput
