@@ -570,6 +570,8 @@ class Trainer:
             else:
                 for subkey, subvalue in value.items():
                     self.logger.debug(" final result =>  {}:{}: {}".format(str(key), str(subkey), subvalue))
+        if self.current_epoch not in self.outputs:
+            self.outputs[self.current_epoch] = {}
         self.outputs[self.current_epoch][output_group] = result
         self.logger.info("evaluation for session '%s' done" % self.name)
         return self.outputs
