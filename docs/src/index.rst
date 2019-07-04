@@ -10,6 +10,7 @@ Contents
    faq
    installation
    user-guide
+   use-cases
    thelper
    contributing
    authors

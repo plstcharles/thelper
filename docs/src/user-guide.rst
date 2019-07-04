@@ -20,14 +20,13 @@ If your problem is related to one of the aforementioned tasks, and if you can so
 a standard model architecture already included in PyTorch or in the framework itself, then you might be
 able to train and export a solution without writing a single line of code. It is however typical to
 work with a custom model, a custom trainer, or even a custom task/objective. This is also supported
-by the framework, as most classes can be either imported as-is, or they can replace the internal
-classes of the framework by inheriting their parent interface.
+by the framework, as most classes can be either imported as-is, or they can derive from and replace the
+internal classes of the framework.
 
-In the sections below, we first introduce the framework's `Command-Line Interface (CLI)
-<#command-line-interface>`_ used to launch jobs, the `session configuration files <#configuration-files>`_
-used to define the settings of these jobs, and the `session directories <#session-directories>`_ that
-contain job outputs. Then, we provide `some use case examples <#use-case-examples>`_ on how to use
-different functionalities of the framework.
+In the sections below, we introduce the framework's `Command-Line Interface (CLI) <#command-line-interface>`_
+used to launch jobs, the `session configuration files <#configuration-files>`_ used to define the settings
+of these jobs, and the `session directories <#session-directories>`_ that contain job outputs. Use cases that
+show how to use different functionalities of the framework are available in :ref:`[a different section] <use-cases>`.
 
 -----
 
@@ -146,7 +145,8 @@ Usage from the terminal::
 The ``export`` CLI operation allows the user to export a trained model for external use as defined in
 a configuration file. The export format is a new checkpoint that may optionally contain an optimized
 version of the model compiled using PyTorch's JIT engine. This is still an experimental feature. See
-the documentation of :meth:`thelper.cli.export_model` for more information.
+the documentation of :meth:`thelper.cli.export_model` or the :ref:`[example here] <use-cases#exporting-a-model>`
+for more information.
 
 `[to top] <#user-guide>`_
 
@@ -318,11 +318,11 @@ module. This is also demonstrated in the example configuration below::
 The example above prepares the CIFAR10 data using a 80%-20% training-validation split, and keeps all
 the original CIFAR10 testing data for actual testing. All loaded samples will be normalized and resized
 to fit the expected input resolution of a typical model, as shown in the next subsection. This example
-however contains no data augmentation pipelines; refer to the `[relevant sections further down]
-<#defining-a-data-augmentation-pipeline>`_ for actual usage examples. Similarly, no sampler is used
-above to rebalance the classes; `[see here] <#using-a-data-sampler-to-rebalance-a-dataset>`_ for
-a use case. Finally, for more information on other parameters that are not discussed here, refer to
-the documentation of :meth:`thelper.data.utils.create_loaders`.
+however contains no data augmentation pipelines; refer to the :ref:`[relevant sections here]
+<use-cases#defining-a-data-augmentation-pipeline>` for actual usage examples. Similarly, no sampler is
+used above to rebalance the classes; :ref:`[see here] <use-cases#rebalancing-a-dataset>` for a use case.
+Finally, for more information on other parameters that are not discussed here, refer to the documentation
+of :meth:`thelper.data.utils.create_loaders`.
 
 
 Model section
@@ -603,8 +603,8 @@ fields:
 By default, these fields do not contain pickled objects directly tied to the framework, meaning any
 PyTorch installation should be able to open a checkpoint without crashing. This also means that a model
 trained with this framework can be opened and reused in any other framework, as long as you are willing
-to extract its weights from the checkpoint yourself. An example of this procedure is given `further
-down <#manually-reloading-a-model>`_.
+to extract its weights from the checkpoint yourself. An example of this procedure is given
+:ref:`[here] <use-cases#manually-reloading-a-model>`.
 
 Experimental support for checkpoint creation outside a training session is available through the CLI's
 ``export`` operation. `See the section above for more information <#export-model>`_.
@@ -662,77 +662,5 @@ For more information on available metrics, see :mod:`thelper.optim.metrics`. For
 about ``tensorboard``, visit `[the official site]`__.
 
 .. __: https://www.tensorflow.org/guide/summaries_and_tensorboard
-
-`[to top] <#user-guide>`_
-
------
-
-Use Case Examples
-=================
-
-This section is still under construction. Some example configuration files are available in the
-``config`` directory of the repository (`[see them here]`__).
-
-.. __: https://github.com/plstcharles/thelper/tree/master/configs
-
-
-Image classification
---------------------
-
-Section statement here @@@@@@
-
-
-Image segmentation
-------------------
-
-Section statement here @@@@@@
-
-
-Dataset/Loader visualization
-----------------------------
-
-Section statement here @@@@@@
-
-
-Dataset annotation
-------------------
-
-Section statement here @@@@@@
-
-
-Supporting a custom trainer
----------------------------
-
-Section statement here @@@@@@
-
-
-Supporting a custom task
-------------------------
-
-Section statement here @@@@@@
-
-
-Defining a data augmentation pipeline
--------------------------------------
-
-Section statement here @@@@@@
-
-
-Using an external augmentation pipeline
----------------------------------------
-
-Section statement here @@@@@@
-
-
-Visualizing metrics using ``tensorboardX``
-------------------------------------------
-
-Section statement here @@@@@@
-
-
-Manually reloading a model
---------------------------
-
-Section statement here @@@@@@
 
 `[to top] <#user-guide>`_
