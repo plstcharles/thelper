@@ -1,90 +1,108 @@
+.. _use-cases:
+
 =========
 Use Cases
 =========
 
 This section is still under construction. Some example configuration files are available in the
-``config`` directory of the repository (`[see them here]`__).
+``config`` directory of the repository (`[see them here]`__). For high-level information on generic
+parts of the framework, refer to the :ref:`[user guide] <user-guide>`.
 
 .. __: https://github.com/plstcharles/thelper/tree/master/configs
 
+
+.. _use-cases-dataset-viz:
 
 Dataset/Loader visualization
 ============================
 
 Section statement here @@@@@@
 
+.. _use-cases-image-classif:
 
 Image classification
 ====================
 
 Section statement here @@@@@@
 
+.. _use-cases-image-segm:
 
 Image segmentation
 ==================
 
 Section statement here @@@@@@
 
+.. _use-cases-obj-detect:
 
 Object Detection
 ================
 
 Section statement here @@@@@@
 
+.. _use-cases-super-res:
 
 Super-resolution
 ================
 
 Section statement here @@@@@@
 
+.. _use-cases-dataset-annot:
 
 Dataset annotation
 ==================
 
 Section statement here @@@@@@
 
+.. _use-cases-dataset-rebalance:
 
 Rebalancing a dataset
 =====================
 
 Section statement here @@@@@@
 
+.. _use-cases-dataset-export:
 
 Exporting a dataset
 ===================
 
 Section statement here @@@@@@
 
+.. _use-cases-dataset-augment:
 
 Defining a data augmentation pipeline
 =====================================
 
 Section statement here @@@@@@
 
+.. _use-cases-custom-trainer:
 
 Supporting a custom trainer
 ===========================
 
 Section statement here @@@@@@
 
+.. _use-cases-custom-task:
 
 Supporting a custom task
 ========================
 
 Section statement here @@@@@@
 
+.. _use-cases-tensorboardx:
 
 Visualizing metrics using ``tensorboardX``
 ==========================================
 
 Section statement here @@@@@@
 
+.. _use-cases-model-reload:
 
 Manually reloading a model
 ==========================
 
 Section statement here @@@@@@
 
+.. _use-cases-model-export:
 
 Exporting a model
 =================
@@ -162,9 +180,9 @@ default settings on CIFAR10 using all 10 classes. You can launch the training pr
 
     $ thelper new <PATH_TO_CLASSIF_CIFAR10_CONFIG>.json <PATH_TO_OUTPUT_DIR>
 
-See the :ref:`[user guide] <user-guide#creating-a-training-session>` for more information on
-creating training sessions. Once that's done, you should obtain a folder named ``classif-cifar10``
-in your output directory that contains training logs as well as checkpoints. To export this model
+See the :ref:`[user guide] <user-guide-cli-new>` for more information on creating training
+sessions. Once that's done, you should obtain a folder named ``classif-cifar10`` in your output
+directory that contains training logs as well as checkpoints. To export this model
 in a new checkpoint, we will use the following session configuration::
 
     {
@@ -182,7 +200,7 @@ in a new checkpoint, we will use the following session configuration::
 
 This configuration essentially specifies where to find the 'best' checkpoint for the model we
 just trained, and how to export a trace of it. For more information on the export operation, refer
-to :ref:`[the user guide] <user-guide#export-model>`. We now provide the configuration as a JSON to
+to :ref:`[the user guide] <user-guide-cli-export>`. We now provide the configuration as a JSON to
 the CLI one more::
 
     $ thelper export <PATH_TO_EXPORT_CONFIG>.json <PATH_TO_OUTPUT_DIR>

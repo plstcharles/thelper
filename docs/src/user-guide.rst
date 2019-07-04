@@ -1,3 +1,5 @@
+.. _user-guide:
+
 ==========
 User Guide
 ==========
@@ -46,6 +48,7 @@ for example :meth:`thelper.data.utils.create_loaders` and :meth:`thelper.nn.util
 those functions directly may also be necessary if you intend on embedding the framework inside another
 application.
 
+.. _user-guide-cli-new:
 
 Creating a training session
 ---------------------------
@@ -66,6 +69,7 @@ later in the process. This CLI entrypoint can therefore be used to start trainin
 Finally, note that since starting a training session produces logs and data, the path to a directory where
 the output can be created must be provided as the second argument.
 
+.. _user-guide-cli-resume:
 
 Resuming a training session
 ---------------------------
@@ -87,6 +91,7 @@ user. A session can also be resumed only to evaluate the (best) trained model pe
 set. This is done by adding the ``--eval-only`` flag at the end of the command line. For more information
 on the parameters, see the documentation of :meth:`thelper.cli.resume_session`.
 
+.. _user-guide-cli-viz:
 
 Visualizing data
 ----------------
@@ -102,6 +107,7 @@ defined in a configuration dictionary that would normally be given to the CLI un
 ``resume`` operation modes. For more information on this mode, see the documentation of
 :meth:`thelper.cli.visualize_data`.
 
+.. _user-guide-cli-annot:
 
 Annotating data
 ---------------
@@ -117,6 +123,7 @@ settings used to create annotations. During an annotation session, all annotatio
 the user will be saved into the session directory. For more information on the parameters, refer to the
 documentation of :meth:`thelper.cli.annotate_data`.
 
+.. _user-guide-cli-split:
 
 Split data
 ----------
@@ -134,6 +141,7 @@ framework to speed up the creation/resuming of training sessions, or simply for 
 :class:`thelper.data.parsers.HDF5Dataset` for more information on the dataset interface, or
 :meth:`thelper.cli.split_data` on the operation itself.
 
+.. _user-guide-cli-export:
 
 Export model
 ------------
@@ -145,7 +153,7 @@ Usage from the terminal::
 The ``export`` CLI operation allows the user to export a trained model for external use as defined in
 a configuration file. The export format is a new checkpoint that may optionally contain an optimized
 version of the model compiled using PyTorch's JIT engine. This is still an experimental feature. See
-the documentation of :meth:`thelper.cli.export_model` or the :ref:`[example here] <use-cases#exporting-a-model>`
+the documentation of :meth:`thelper.cli.export_model` or the :ref:`[example here] <use-cases-model-export>`
 for more information.
 
 `[to top] <#user-guide>`_
@@ -319,8 +327,8 @@ The example above prepares the CIFAR10 data using a 80%-20% training-validation 
 the original CIFAR10 testing data for actual testing. All loaded samples will be normalized and resized
 to fit the expected input resolution of a typical model, as shown in the next subsection. This example
 however contains no data augmentation pipelines; refer to the :ref:`[relevant sections here]
-<use-cases#defining-a-data-augmentation-pipeline>` for actual usage examples. Similarly, no sampler is
-used above to rebalance the classes; :ref:`[see here] <use-cases#rebalancing-a-dataset>` for a use case.
+<use-cases-dataset-augment>` for actual usage examples. Similarly, no sampler is
+used above to rebalance the classes; :ref:`[see here] <use-cases-dataset-rebalance>` for a use case.
 Finally, for more information on other parameters that are not discussed here, refer to the documentation
 of :meth:`thelper.data.utils.create_loaders`.
 
@@ -604,7 +612,7 @@ By default, these fields do not contain pickled objects directly tied to the fra
 PyTorch installation should be able to open a checkpoint without crashing. This also means that a model
 trained with this framework can be opened and reused in any other framework, as long as you are willing
 to extract its weights from the checkpoint yourself. An example of this procedure is given
-:ref:`[here] <use-cases#manually-reloading-a-model>`.
+:ref:`[here] <use-cases-model-reload>`.
 
 Experimental support for checkpoint creation outside a training session is available through the CLI's
 ``export`` operation. `See the section above for more information <#export-model>`_.
