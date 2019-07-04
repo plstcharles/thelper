@@ -156,11 +156,11 @@ def create_model(config, task, save_dir=None, ckptdata=None):
             model = model_type(task=task, **model_params)
         else:
             if type(task) == thelper.tasks.Detection:
-                model = ExternalDetectModule(model_type, task=task, config=model_params)
+                model = ExternalDetectModule(model_type, task=task, **model_params)
             elif type(task) == thelper.tasks.Classification:
-                model = ExternalClassifModule(model_type, task=task, config=model_params)
+                model = ExternalClassifModule(model_type, task=task, **model_params)
             else:
-                model = ExternalModule(model_type, task=task, config=model_params)
+                model = ExternalModule(model_type, task=task, **model_params)
         if model_state is not None:
             logger.debug("loading state dictionary from checkpoint into model")
             model.load_state_dict(model_state)
@@ -194,13 +194,13 @@ class Module(torch.nn.Module):
         | :class:`thelper.tasks.utils.Task`
     """
 
-    def __init__(self, task, config=None):
+    def __init__(self, task, **kwargs):
         """Receives a task object to hold internally for model specialization."""
         super().__init__()
         if task is None or not isinstance(task, thelper.tasks.Task):
             raise AssertionError("task must derive from thelper.tasks.Task")
         self.task = task
-        self.config = config
+        self.config = kwargs
 
     @abstractmethod
     def forward(self, *input):
@@ -241,12 +241,12 @@ class ExternalModule(Module):
         | :class:`thelper.tasks.utils.Task`
     """
 
-    def __init__(self, model_type, task, config=None):
+    def __init__(self, model_type, task, **kwargs):
         """Receives a task object to hold internally for model specialization."""
-        super().__init__(task=task, config=config)
+        super().__init__(task=task, **kwargs)
         logger.info("instantiating external module '%s'..." % str(model_type))
         self.model_type = model_type
-        self.model = model_type(**config)
+        self.model = model_type(**kwargs)
         if not hasattr(self.model, "forward"):
             raise AssertionError("external module must implement 'forward' method")
 
@@ -298,9 +298,9 @@ class ExternalClassifModule(ExternalModule):
         | :class:`thelper.tasks.classif.Classification`
     """
 
-    def __init__(self, model_type, task, config=None):
+    def __init__(self, model_type, task, **kwargs):
         """Receives a task object to hold internally for model specialization, and tries to rewire the last 'fc' layer."""
-        super().__init__(model_type, task, config=config)
+        super().__init__(model_type, task, **kwargs)
         self.nb_classes = None
         self.set_task(task)
 
@@ -346,9 +346,9 @@ class ExternalDetectModule(ExternalModule):
         | :class:`thelper.tasks.detect.Detection`
     """
 
-    def __init__(self, model_type, task, config=None):
+    def __init__(self, model_type, task, **kwargs):
         """Receives a task object to hold internally for model specialization, and tries to rewire the last 'fc' layer."""
-        super().__init__(model_type, task, config=config)
+        super().__init__(model_type, task, **kwargs)
         self.nb_classes = None
         self.set_task(task)
 
