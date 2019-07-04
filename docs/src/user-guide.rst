@@ -5,9 +5,9 @@ User Guide
 This guide provides an overview of the basic functionalities and typical use cases of the thelper
 framework. For installation instructions, refer to the installation guide :ref:`[here] <install-guide>`.
 
-Currently, the framework can be used to tackle image classification, image segmentation, image super-
-resolution, and generic regression tasks out-of-the-box using PyTorch. Direct support for object
-detection is planned in the not-so-distant future, and more tasks will follow. The goal of the framework
+Currently, the framework can be used to tackle image classification, image segmentation, object detection,
+image super-resolution, and generic regression tasks. Models for all of these tasks can be trained
+out-of-the-box using PyTorch. More task types are expected to follow in the future. The goal of the framework
 is not to solve those problems for you; its goal is to facilitate your model exploration and development
 process. This is achieved by providing a centralized interface for the control of all your experiment
 settings, by offering a simple solution for model checkpointing and fine-tuning, and by providing debugging
