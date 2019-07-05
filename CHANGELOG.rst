@@ -3,12 +3,12 @@
 Changelog
 =========
 
-0.3.2 (2019/07/??)
+0.3.2 (2019/07/05)
 ------------------
 
 * Update documentation use cases (model export) & faq
 * Cleanup module base class config backup
-* ...TODO @@@
+* Fixed docker build and automated it via travis
 
 0.3.0 - 0.3.1 (2019/06/12)
 --------------------------
