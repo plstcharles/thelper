@@ -23,6 +23,19 @@ This should install the latest stable version of the framework on Windows and Li
 .. __: https://github.com/plstcharles/thelper/blob/master/CHANGELOG.rst
 
 
+Docker
+======
+
+Starting with v0.3.2, the latest stable version of the framework is pre-built and available from the
+docker hub. To get a copy, simply pull it via::
+
+  $ docker pull plstcharles/thelper
+
+You should then be able to launch sessions in containers as such::
+
+  $ docker run -it plstcharles/thelper thelper <CLI_ARGS_HERE>
+
+
 Installing from source
 ======================
 
