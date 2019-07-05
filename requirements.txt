@@ -11,8 +11,6 @@ h5py
 scipy
 scikit-learn
 shapely
-augmentor
-albumentations
 tensorboardX
 gitpython
 pip
