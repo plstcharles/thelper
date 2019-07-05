@@ -1,5 +1,7 @@
 dist: xenial
 language: python
+services:
+  - docker
 python:
   - "3.7"
 sudo: false
@@ -50,6 +52,9 @@ jobs:
         - conda update -q conda
         - conda install conda-build conda-verify anaconda-client
         - conda info -a
+        - docker --version
+        - if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then echo "$DOCKER_PASSWORD" | docker login --username="$DOCKER_USERNAME" --password-stdin; fi
+        - echo "ENV GIT_SHA ${TRAVIS_COMMIT}" >> Dockerfile
       deploy:
         provider: pypi
         user: "${PYPI_USERNAME}"
@@ -58,4 +63,7 @@ jobs:
         on:
           tags: true
       after_deploy:
+        - docker build -t ${DOCKER_REPO}:${TRAVIS_TAG} -t ${DOCKER_REPO}:latest .
+        - docker run -t ${DOCKER_REPO}:latest thelper --version
+        - if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then docker push ${DOCKER_REPO}; fi
         - conda build --token $CONDA_TOKEN --user $CONDA_USERNAME ci/
