@@ -13,6 +13,7 @@ dependencies:
   - scikit-learn
   - gitpython
   - mock
+  - pip
   - pytest
   - pytest-cov
   - pytest-mock
