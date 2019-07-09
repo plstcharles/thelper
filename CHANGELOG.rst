@@ -3,6 +3,11 @@
 Changelog
 =========
 
+0.3.3 (2019/07/09)
+------------------
+
+* Fixed travis conda build dependencies & channels
+
 0.3.2 (2019/07/05)
 ------------------
 
