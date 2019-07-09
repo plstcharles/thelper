@@ -20,7 +20,9 @@ requirements:
     - cython
     - gitpython
     - matplotlib
-    - numpy <1.16.0,>=1.11.1
+    - lz4
+    - h5py
+    - numpy
     - opencv
     - pillow
     - pip
@@ -38,7 +40,9 @@ requirements:
     - cython
     - gitpython
     - matplotlib
-    - numpy <1.16.0,>=1.11.1
+    - lz4
+    - h5py
+    - numpy
     - opencv
     - pillow
     - pip
