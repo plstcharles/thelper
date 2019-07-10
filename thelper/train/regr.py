@@ -1,10 +1,12 @@
 """Regression trainer/evaluator implementation module."""
 import logging
+from typing import AnyStr  # noqa: F401
 
 import numpy as np
 import torch
 import torch.optim
 
+import thelper.typedefs as typ  # noqa: F401
 import thelper.utils
 from thelper.train.base import Trainer
 
@@ -23,7 +25,15 @@ class RegressionTrainer(Trainer):
         | :class:`thelper.train.base.Trainer`
     """
 
-    def __init__(self, session_name, save_dir, model, task, loaders, config, ckptdata=None):
+    def __init__(self,
+                 session_name,    # type: AnyStr
+                 save_dir,        # type: AnyStr
+                 model,           # type: thelper.typedefs.ModelType
+                 task,            # type: thelper.tasks.Task
+                 loaders,         # type: thelper.typedefs.MultiLoaderType
+                 config,          # type: thelper.typedefs.ConfigDict
+                 ckptdata=None    # type: typ.Optional[thelper.typedefs.CheckpointContentType]
+                 ):
         """Receives session parameters, parses tensor/target keys from task object, and sets up metrics."""
         super().__init__(session_name, save_dir, model, task, loaders, config, ckptdata=ckptdata)
         if not isinstance(self.task, thelper.tasks.Regression):
