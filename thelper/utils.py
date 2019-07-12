@@ -1659,7 +1659,7 @@ def draw_bbox(image, tl, br, text, color, box_thickness=2, font_thickness=1, fon
                color=(255, 255, 255), thickness=font_thickness)
 
 
-def draw_bboxes(images, preds=None, bboxes=None, color_map=None, redraw=None, block=False, **kwargs):
+def draw_bboxes(images, preds=None, bboxes=None, color_map=None, redraw=None, block=False, min_confidence=0.5, **kwargs):
     """Draws and returns a set of bounding box prediction results."""
     image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
     if color_map is not None and isinstance(color_map, dict):
@@ -1674,17 +1674,19 @@ def draw_bboxes(images, preds=None, bboxes=None, color_map=None, redraw=None, bl
     font_thickness = thelper.utils.get_key_def("font_thickness", kwargs, default=1, delete=True)
     font_scale = thelper.utils.get_key_def("font_scale", kwargs, default=0.4, delete=True)
     if preds is not None:
-        assert len(image_list) == len(bboxes)
-        for bboxes_list, image in zip(bboxes, image_list):
-            for bbox_idx, bbox in enumerate(bboxes_list):
+        assert len(image_list) == len(preds)
+        for preds_list, image in zip(preds, image_list):
+            for bbox_idx, bbox in enumerate(preds_list):
                 assert isinstance(bbox, thelper.data.BoundingBox), "unrecognized bbox type"
-                color = get_bgr_from_hsl(bbox_idx / len(bboxes_list) * 360, 1.0, 0.5) \
+                if bbox.confidence is not None and bbox.confidence < min_confidence:
+                    continue
+                color = get_bgr_from_hsl(bbox_idx / len(preds_list) * 360, 1.0, 0.5) \
                     if color_map is None else color_map[bbox.class_id]
                 conf = ""
                 if thelper.utils.is_scalar(bbox.confidence):
-                    conf = f" ({bbox.confidence})"
+                    conf = f" ({bbox.confidence:.3f})"
                 elif isinstance(bbox.confidence, (list, tuple, np.ndarray)):
-                    conf = f" ({bbox.confidence[bbox.class_id]})"
+                    conf = f" ({bbox.confidence[bbox.class_id]:.3f})"
                 draw_bbox(image, bbox.top_left, bbox.bottom_right, f"{bbox.task.class_names[bbox.class_id]}{conf}", color,
                           box_thickness=box_thickness, font_thickness=font_thickness, font_scale=font_scale)
     if bboxes is not None:
