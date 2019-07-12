@@ -3,6 +3,14 @@
 Changelog
 =========
 
+0.3.4 (2019/07/12)
+------------------
+
+* Fixed issues when reloading objdet model checkpoints
+* Fixed issues when trying to use missing color maps
+* Fixed backward compat issues when reloading old tasks
+* Cleaned up object detection drawing utilities
+
 0.3.3 (2019/07/09)
 ------------------
 
