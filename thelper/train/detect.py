@@ -81,6 +81,36 @@ class ObjDetectTrainer(Trainer):
             } for bset in bboxes]
         return input_val, bboxes
 
+    def _from_tensor(self, bboxes, sample=None):
+        """Fetches and returns a list of bbox objects from a model-specific representation."""
+        # for now, we can only unpack torchvision-format bbox dictionary lists (everything else will throw)
+        assert isinstance(bboxes, list), "input should be list since we do batch predictions"
+        if all([isinstance(d, dict) and len(d) == 3 and
+                all([k in ["boxes", "labels", "scores"] for k in d]) for d in bboxes]):
+            outputs = []
+            for batch_idx, d in enumerate(bboxes):
+                boxes = d["boxes"].detach().cpu()
+                labels = d["labels"].detach().cpu()
+                scores = d["scores"].detach().cpu()
+                assert boxes.shape[0] == labels.shape[0] and boxes.shape[0] == scores.shape[0], "mismatched tensor dims"
+                curr_output = []
+                for box_idx, box in enumerate(boxes):
+                    if sample is not None and self.task.gt_key in sample and sample[self.task.gt_key][batch_idx]:
+                        gt_box = sample[self.task.gt_key][batch_idx][0]  # use first gt box to get image-level props
+                        out = thelper.data.BoundingBox(labels[box_idx].item(), box, confidence=scores[box_idx].item(),
+                                                       image_id=gt_box.image_id, task=self.task)
+
+                    elif sample is not None and "idx" in sample:
+                        out = thelper.data.BoundingBox(labels[box_idx].item(), box, confidence=scores[box_idx].item(),
+                                                       image_id=sample["idx"][batch_idx], task=self.task)
+                    else:
+                        out = thelper.data.BoundingBox(labels[box_idx].item(), box, confidence=scores[box_idx].item(),
+                                                       task=self.task)
+                    curr_output.append(out)
+                outputs.append(curr_output)
+            return outputs
+        raise AssertionError("unrecognized packed bboxes vector format")
+
     def train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
         """Trains the model for a single epoch using the provided objects.
 
@@ -131,13 +161,14 @@ class ObjDetectTrainer(Trainer):
             else:
                 raise AssertionError("unknown/unhandled detection model type")
             optimizer.step()
+            if metrics or self.train_iter_callback is not None:
+                iter_pred = self._from_tensor(iter_pred, sample)
             if metrics:
                 meta = {key: sample[key] if key in sample else None
                         for key in self.task.meta_keys} if self.task.meta_keys else None
-                iter_pred_cpu = self._move_tensor(iter_pred, dev="cpu", detach=True)
-                targets_cpu = self._move_tensor(targets, dev="cpu", detach=True)
+                targets = self._move_tensor(targets, dev="cpu", detach=True)
                 for metric in metrics.values():
-                    metric.accumulate(iter_pred_cpu, targets_cpu, meta=meta)
+                    metric.accumulate(iter_pred, targets, meta=meta)
             if self.train_iter_callback is not None:
                 self.train_iter_callback(sample=sample, task=self.task, pred=iter_pred,
                                          iter_idx=iter, max_iters=epoch_size,
@@ -189,13 +220,14 @@ class ObjDetectTrainer(Trainer):
                     continue  # skip until previous iter count (if set externally; no effect otherwise)
                 images, targets = self._to_tensor(sample)
                 pred = model(self._move_tensor(images, dev))
+                if metrics or self.train_iter_callback is not None:
+                    pred = self._from_tensor(pred, sample)
                 if metrics:
                     meta = {key: sample[key] if key in sample else None
                             for key in self.task.meta_keys} if self.task.meta_keys else None
-                    pred_cpu = self._move_tensor(pred, dev="cpu", detach=True)
-                    targets_cpu = self._move_tensor(targets, dev="cpu", detach=True)
+                    targets = self._move_tensor(targets, dev="cpu", detach=True)
                     for metric in metrics.values():
-                        metric.accumulate(pred_cpu, targets_cpu, meta=meta)
+                        metric.accumulate(pred, targets, meta=meta)
                 if self.eval_iter_callback is not None:
                     self.eval_iter_callback(sample=sample, task=self.task, pred=pred,
                                             iter_idx=idx, max_iters=epoch_size,
