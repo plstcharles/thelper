@@ -6,6 +6,7 @@ and the base interface used to define new tasks.
 
 import collections
 import logging
+import re
 
 import thelper.utils
 
@@ -40,7 +41,7 @@ def create_task(config):
             raise AssertionError("the task must be derived from 'thelper.tasks.Task'")
         return task
     elif isinstance(config, str):
-        if ": " in config:  # for backwards compat (pre v0.3.0)
+        if re.search(r"^[\w\.]+: ", config) is not None:  # for backwards compat (pre v0.3.0)
             task_type_name = config.split(": ")[0]
             if "." not in task_type_name:
                 # dirty hotfix
