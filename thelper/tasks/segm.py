@@ -142,7 +142,7 @@ class Segmentation(Task):
             if self.dontcare is not None and self.dontcare not in self._color_map:
                 self._color_map[self.dontcare] = np.asarray([0, 0, 0])  # use black as default 'dontcare' color
         else:
-            self._color_map = None
+            self._color_map = {}
 
     def get_class_sizes(self, samples):
         """Given a list of samples, returns a map of element counts for each class label."""
@@ -188,7 +188,8 @@ class Segmentation(Task):
                 all([cls in self.class_names for cls in task.class_names]) and \
                 (not exact or (self.class_names == task.class_names and
                                set(self.meta_keys) == set(task.meta_keys) and
-                               self.color_map == task.color_map and
+                               self.color_map.keys() == task.color_map.keys() and
+                               all([np.array_equal(self.color_map[k], task.color_map[k]) for k in self.color_map]) and
                                self.gt_key == task.gt_key))
         elif type(task) == Task:
             # if 'task' simply has no gt, compatibility rests on input key only
@@ -220,7 +221,8 @@ class Segmentation(Task):
 
     def __repr__(self):
         """Creates a print-friendly representation of a segmentation task."""
+        color_map = {k: v.tolist() for k, v in self.color_map.items()}
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
             f"(class_names={repr(self.class_indices)}, input_key={repr(self.input_key)}, " + \
             f"label_map_key={repr(self.gt_key)}, meta_keys={repr(self.meta_keys)}, " + \
-            f"dontcare={repr(self.dontcare)}, color_map={repr(self.color_map)})"
+            f"dontcare={repr(self.dontcare)}, color_map={repr(color_map)})"

@@ -388,7 +388,7 @@ class Detection(Regression):
             if self.background is not None and self.background not in self._color_map:
                 self._color_map[self.background] = np.asarray([0, 0, 0])  # use black as default 'background' color
         else:
-            self._color_map = None
+            self._color_map = {}
 
     def get_class_sizes(self, samples, bbox_format=None):
         """Given a list of samples, returns a map of element counts for each object type."""
@@ -425,7 +425,8 @@ class Detection(Regression):
             return self.background == task.background and \
                 all([cls in self.class_names for cls in task.class_names]) and \
                 (not exact or (self.class_names == task.class_names and
-                               self.color_map == task.color_map))
+                               self.color_map.keys() == task.color_map.keys() and
+                               all([np.array_equal(self.color_map[k], task.color_map[k]) for k in self.color_map])))
         elif type(task) == Task:
             # if 'task' simply has no gt, compatibility rests on input key only
             return not exact and self.input_key == task.input_key and task.gt_key is None
@@ -462,9 +463,10 @@ class Detection(Regression):
 
     def __repr__(self):
         """Creates a print-friendly representation of a segmentation task."""
+        color_map = {k: v.tolist() for k, v in self.color_map.items()}
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
             f"(class_names={repr(self.class_indices)}, input_key={repr(self.input_key)}, " + \
             f"bboxes_key={repr(self.gt_key)}, meta_keys={repr(self.meta_keys)}, " + \
             f"input_shape={repr(self.input_shape)}, target_shape={repr(self.target_shape)}, " + \
             f"target_min={repr(self.target_min)}, target_max={repr(self.target_max)}, " + \
-            f"background={repr(self.background)}, color_map={self.color_map})"
+            f"background={repr(self.background)}, color_map={repr(color_map)})"
