@@ -1493,7 +1493,7 @@ def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, 
         images = np.transpose(images, (0, 2, 3, 1))  # BxCxHxW to BxHxWxC
     if flip_bgr:
         images = images[..., ::-1]  # BGR to RGB
-    if preds is not None:
+    if preds is not None and isinstance(preds, torch.Tensor):
         preds = preds.cpu().detach()  # avoid latency for preprocessing on gpu
     if isinstance(task, thelper.tasks.Classification):
         labels = thelper.utils.get_key_def(task.gt_key, minibatch, None)
