@@ -35,6 +35,11 @@ You should then be able to launch sessions in containers as such::
 
   $ docker run -it plstcharles/thelper thelper <CLI_ARGS_HERE>
 
+The image is built from ``nvidia/cuda``, meaning that it is compatible with ``nvidia-docker`` and
+supports CUDA-enabled GPUs. To run a GPU-enabled container, install `the runtime using these
+instructions`__, and add ``--runtime=nvidia`` to the arguments given to ``docker run``.
+
+.. __: https://github.com/NVIDIA/nvidia-docker
 
 Installing from source
 ======================
