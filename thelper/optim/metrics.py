@@ -424,8 +424,6 @@ class MeanAbsoluteError(Metric):
         self.max_accum = max_accum
         self.errors = deque()
         self.warned_eval_bad = False
-        if reduction != "mean":
-            raise NotImplementedError  # will only be supported with PyTorch version > 1.0.0
 
     def accumulate(self, pred, target, meta=None):
         """Receives the latest predictions and target values from the training session.
@@ -443,7 +441,7 @@ class MeanAbsoluteError(Metric):
             return  # only accumulating results when groundtruth available
         if pred.shape != target.shape:
             raise AssertionError("prediction/gt tensors shape mismatch")
-        self.errors.append(torch.nn.functional.l1_loss(pred, target).numpy())  # add reduction here w/ PyTorch v1.0.0
+        self.errors.append(torch.nn.functional.l1_loss(pred, target, reduction=self.reduction).numpy())
         if self.max_accum and len(self.errors) > self.max_accum:
             self.errors.popleft()
 
@@ -543,8 +541,6 @@ class MeanSquaredError(Metric):
         self.max_accum = max_accum
         self.errors = deque()
         self.warned_eval_bad = False
-        if reduction != "mean":
-            raise NotImplementedError  # will only be supported with PyTorch version > 1.0.0
 
     def accumulate(self, pred, target, meta=None):
         """Receives the latest predictions and target values from the training session.
@@ -562,7 +558,7 @@ class MeanSquaredError(Metric):
             return  # only accumulating results when groundtruth available
         if pred.shape != target.shape:
             raise AssertionError("prediction/gt tensors shape mismatch")
-        self.errors.append(torch.nn.functional.mse_loss(pred, target).numpy())  # add reduction here w/ PyTorch v1.0.0
+        self.errors.append(torch.nn.functional.mse_loss(pred, target, reduction=self.reduction).numpy())
         if self.max_accum and len(self.errors) > self.max_accum:
             self.errors.popleft()
 
