@@ -18,16 +18,18 @@ simply enter::
   $ conda install thelper
 
 This should install the latest stable version of the framework on Windows and Linux, for Python
-3.6 or 3.7. You can check the release notes `on GitHub`__.
+3.6 or 3.7. You can check the release notes `on GitHub <github-changelog_>`_, and pre-built packages
+`here <anaconda-hub_>`_.
 
-.. __: https://github.com/plstcharles/thelper/blob/master/CHANGELOG.rst
+.. _github-changelog: https://github.com/plstcharles/thelper/blob/master/CHANGELOG.rst
+.. _anaconda-hub: https://anaconda.org/plstcharles/thelper
 
 
 Docker
 ======
 
 Starting with v0.3.2, the latest stable version of the framework is pre-built and available from the
-docker hub. To get a copy, simply pull it via::
+`docker hub <docker-hub_>`_. To get a copy, simply pull it via::
 
   $ docker pull plstcharles/thelper
 
@@ -37,9 +39,11 @@ You should then be able to launch sessions in containers as such::
 
 The image is built from ``nvidia/cuda``, meaning that it is compatible with ``nvidia-docker`` and
 supports CUDA-enabled GPUs. To run a GPU-enabled container, install `the runtime using these
-instructions`__, and add ``--runtime=nvidia`` to the arguments given to ``docker run``.
+instructions <nvidia-docker_>`_, and add ``--runtime=nvidia`` to the arguments given to ``docker run``.
 
-.. __: https://github.com/NVIDIA/nvidia-docker
+.. _docker-hub: https://hub.docker.com/r/plstcharles/thelper
+.. _nvidia-docker: https://github.com/NVIDIA/nvidia-docker
+
 
 Installing from source
 ======================
