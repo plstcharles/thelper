@@ -1591,15 +1591,17 @@ class ClassifLogger(Metric):
         return None
 
 
-class RawPredictions(Metric):
+class RawLogger(Metric):
     """Raw predictions storage.
 
-    This class provides a simple interface for accumulating and saving the raw predictions of a classifier.
-    Note that since the evaluation result is always ``None``, this metric cannot be used to directly monitor
-    training progression, and thus also returns ``None`` in :func:`thelper.optim.metrics.ClassifLogger.goal`.
+    This class provides a simple interface for accumulating and saving the raw predictions of a model. Note
+    that since the evaluation result is always ``None``, this metric cannot be used to directly monitor
+    training progression, and thus also returns ``None`` in :func:`thelper.optim.metrics.RawLogger.goal`.
 
-    It also optionally offers a callback functionality on each accumulated prediction to execute additional
-    operations (ex: call a function to update external processes from ``thelper`` package).
+    It also optionally offers a callback functionality to execute additional operations through external
+    functions on each accumulated prediction. This callback has now been supplanted by the one in the
+    trainer base class, which can also be configured via the session dictionary. See the constructor of
+    :class:`thelper.trainer.base.Trainer` for more information.
 
     Usage examples inside a session configuration file::
 
@@ -1610,7 +1612,7 @@ class RawPredictions(Metric):
             # this is the name of the example metric; it is used for lookup/printing only
             "predictions": {
                 # this type is used to instantiate the confusion matrix report metric
-                "type": "thelper.optim.metrics.RawPredictions",
+                "type": "thelper.optim.metrics.RawLogger",
                 "params": [
                     # call 'my_function' located within 'external_module' after each added prediction
                     {"name": "callback", "value": "external_module.my_function"},

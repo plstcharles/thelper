@@ -19,7 +19,7 @@ from thelper.optim.metrics import ExternalMetric  # noqa: F401
 from thelper.optim.metrics import MeanAbsoluteError  # noqa: F401
 from thelper.optim.metrics import MeanSquaredError  # noqa: F401
 from thelper.optim.metrics import Metric  # noqa: F401
-from thelper.optim.metrics import RawPredictions  # noqa: F401
+from thelper.optim.metrics import RawLogger  # noqa: F401
 from thelper.optim.metrics import ROCCurve  # noqa: F401
 from thelper.optim.schedulers import CustomStepLR  # noqa: F401
 from thelper.optim.utils import create_loss_fn  # noqa: F401

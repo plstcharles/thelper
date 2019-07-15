@@ -552,6 +552,7 @@ def resolve_import(fullname):
     cases = [
         ('thelper.modules', 'thelper.nn'),
         ('thelper.samplers', 'thelper.data.samplers'),
+        ('thelper.optim.metrics.RawPredictions', 'thelper.optim.metrics.RawLogger'),
         ('thelper.transforms.ImageTransformWrapper', 'thelper.transforms.TransformWrapper'),
         ('thelper.transforms.wrappers.ImageTransformWrapper', 'thelper.transforms.wrappers.TransformWrapper'),
     ]

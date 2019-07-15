@@ -2,7 +2,7 @@ import unittest
 
 from torch.tensor import Tensor
 
-from thelper.optim.metrics import RawPredictions
+from thelper.optim.metrics import RawLogger
 
 
 class TestMetrics(unittest.TestCase):
@@ -13,7 +13,7 @@ class TestMetrics(unittest.TestCase):
             - meta information are transferred accordingly to matching predictions
         """
 
-        metric = RawPredictions()
+        metric = RawLogger()
         list1d = [1., 2., 3., 4., 5., 6.]
         list2d = [[1., 2.], [3., 4.], [5., 6.]]
         list3d = [[[1.], [2.]], [[3.], [4.]], [[5.], [6.]]]
