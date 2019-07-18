@@ -167,18 +167,18 @@
         },
         "metrics": {
             "accuracy": {
-                "type": "thelper.optim.CategoryAccuracy",
+                "type": "thelper.optim.Accuracy",
                 "params": {
                     "top_k": 1
                 }
             },
             "confmat": {
-                "type": "thelper.optim.ConfusionMatrix"
+                "type": "thelper.train.ConfusionMatrix"
             }
         },
         "test_metrics": {
             "logger": {
-                "type": "thelper.optim.ClassifLogger",
+                "type": "thelper.train.ClassifLogger",
                 "params": {
                     "top_k": 3
                 }

@@ -110,7 +110,7 @@ class Accuracy(Metric):
             # this is the name of the example metric; it is used for lookup/printing only
             "top_5_accuracy": {
                 # this type is used to instantiate the accuracy metric
-                "type": "thelper.optim.metrics.CategoryAccuracy",
+                "type": "thelper.optim.metrics.Accuracy",
                 # these parameters are passed to the wrapper's constructor
                 "params": {
                     # the top prediction count to check for a match with the groundtruth

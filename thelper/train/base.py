@@ -88,10 +88,10 @@ class Trainer:
             # (one for monitoring, and one for logging only)
             "metrics": {
                 "accuracy": {
-                    "type": "thelper.optim.CategoryAccuracy"
+                    "type": "thelper.optim.Accuracy"
                 },
                 "fullreport": {
-                    "type": "thelper.optim.ClassifReport"
+                    "type": "thelper.train.ClassifReport"
                 }
             }
         }

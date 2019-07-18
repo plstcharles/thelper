@@ -113,7 +113,7 @@ Finally, we define the ``trainer`` field to provide all remaining training param
             "optimizer": {"type": "torch.optim.Adam"}
         },
         "metrics": {
-            "accuracy": {"type": "thelper.optim.CategoryAccuracy"}
+            "accuracy": {"type": "thelper.optim.Accuracy"}
         }
     }
 
@@ -171,7 +171,7 @@ The complete configuration is shown below::
                 "optimizer": {"type": "torch.optim.Adam"}
             },
             "metrics": {
-                "accuracy": {"type": "thelper.optim.CategoryAccuracy"}
+                "accuracy": {"type": "thelper.optim.Accuracy"}
             }
         }
     }
@@ -352,7 +352,7 @@ So, first off, let's start by training a classification model using the followin
                 "optimizer": {"type": "torch.optim.Adam"}
             },
             "metrics": {
-                "accuracy": {"type": "thelper.optim.CategoryAccuracy"}
+                "accuracy": {"type": "thelper.optim.Accuracy"}
             }
         }
     }

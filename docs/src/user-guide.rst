@@ -452,20 +452,21 @@ A complete example of a trainer configuration is shown below::
         },
         "metrics": {  # this is the list of all metrics we will be evaluating
             "accuracy": {  # the name of each metric should be unique
-                "type": "thelper.optim.CategoryAccuracy",
+                "type": "thelper.optim.Accuracy",
                 "params": {
                     "top_k": 1
                 }
             },
             "confmat": {
-                # this is a special metric used to create confusion matrices
-                # (we can't monitor this one, as it does not return a scalar)
-                "type": "thelper.optim.ConfusionMatrix"
+                # this is a special consumer used to create confusion matrices
+                # (we can't monitor this one, as it is not an actual "metric")
+                "type": "thelper.train.ConfusionMatrix"
             }
         },
         "test_metrics": {  # metrics in this section will only be used for testing
             "logger": {
-                "type": "thelper.optim.ClassifLogger",
+                # (can't monitor this one either, as it is not an actual "metric")
+                "type": "thelper.train.ClassifLogger",
                 "params": {
                     "top_k": 3
                 }

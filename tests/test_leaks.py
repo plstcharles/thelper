@@ -91,7 +91,7 @@ def config(request):
             },
             "metrics": {
                 "accuracy": {
-                    "type": "thelper.optim.CategoryAccuracy",
+                    "type": "thelper.optim.Accuracy",
                     "params": {
                         "top_k": 1
                     }
