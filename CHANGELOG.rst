@@ -3,6 +3,16 @@
 Changelog
 =========
 
+0.3.5 (2019/07/??)
+------------------
+
+* Refactored metrics/consumers into separate interfaces
+* Added unit tests for all metrics/prediction consumers
+* Updated trainer callback signatures to include more data
+* Updated install doc with links to anaconda/docker hubs
+* Cleaned drawing functions and moved them to new module
+* TODO @@@@@@@
+
 0.3.4 (2019/07/12)
 ------------------
 
