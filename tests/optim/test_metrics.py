@@ -45,7 +45,7 @@ def test_accuracy_1d(mocker):
     assert isinstance(metric, thelper.optim.metrics.Accuracy)
     assert metric.goal == thelper.optim.Metric.maximize
     assert metric.top_k == 3
-    with mocker.patch.object(thelper.optim.metrics.logger, "warning") as mock:
+    with mocker.patch.object(thelper.optim.metrics.logger, "warning"):
         assert metric.eval() == 0.0
     assert repr(metric)
     inputs, targets, preds = [], [], []
@@ -57,8 +57,8 @@ def test_accuracy_1d(mocker):
         targets.append(torch.randint(low=0, high=class_count, size=(curr_batch_size,)))
         preds.append(torch.rand((curr_batch_size, class_count)))
         metric.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
-                        {"idx": [tot_idx + idx for idx in range(curr_batch_size)]}, iter_idx,
-                        iter_count, 0, 1)
+                      {"idx": [tot_idx + idx for idx in range(curr_batch_size)]}, iter_idx,
+                      iter_count, 0, 1)
         tot_idx += curr_batch_size
     res = metric.eval()
     assert res is not None and isinstance(res, float) and 0 <= res <= 100
@@ -67,8 +67,8 @@ def test_accuracy_1d(mocker):
     tot_idx = 0
     for iter_idx in range(iter_count):
         metric.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
-                        {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]}, iter_idx,
-                        iter_count, 0, 1)
+                      {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]}, iter_idx,
+                      iter_count, 0, 1)
         tot_idx += targets[iter_idx].shape[0]
     assert metric.eval() == res
 
@@ -90,7 +90,7 @@ def test_accuracy_nd(mocker):
     assert isinstance(metric, thelper.optim.metrics.Accuracy)
     assert metric.goal == thelper.optim.Metric.maximize
     assert metric.top_k == 3
-    with mocker.patch.object(thelper.optim.metrics.logger, "warning") as mock:
+    with mocker.patch.object(thelper.optim.metrics.logger, "warning"):
         assert metric.eval() == 0.0
     assert repr(metric)
     inputs, targets, preds = [], [], []
@@ -102,8 +102,8 @@ def test_accuracy_nd(mocker):
         targets.append(torch.randint(low=0, high=class_count, size=(curr_batch_size, *output_shape)))
         preds.append(torch.rand((curr_batch_size, class_count, *output_shape)))
         metric.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
-                        {"idx": [tot_idx + idx for idx in range(curr_batch_size)]}, iter_idx,
-                        iter_count, 0, 1)
+                      {"idx": [tot_idx + idx for idx in range(curr_batch_size)]}, iter_idx,
+                      iter_count, 0, 1)
         tot_idx += curr_batch_size
     res = metric.eval()
     assert res is not None and isinstance(res, float) and 0 <= res <= 100
@@ -112,8 +112,8 @@ def test_accuracy_nd(mocker):
     tot_idx = 0
     for iter_idx in range(iter_count):
         metric.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
-                        {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]}, iter_idx,
-                        iter_count, 0, 1)
+                      {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]}, iter_idx,
+                      iter_count, 0, 1)
         tot_idx += targets[iter_idx].shape[0]
     assert metric.eval() == res
 
@@ -123,14 +123,14 @@ def test_mae_mse(mocker):
     iter_count = 32
     input_shape = (3, 32, 32)
     metric_config = {"mae": {"type": "thelper.optim.metrics.MeanAbsoluteError"},
-                      "mse": {"type": "thelper.optim.metrics.MeanSquaredError"}}
+                     "mse": {"type": "thelper.optim.metrics.MeanSquaredError"}}
     metrics = thelper.optim.create_metrics(metric_config)
     mae, mse = metrics["mae"], metrics["mse"]
     assert isinstance(mae, thelper.optim.metrics.MeanAbsoluteError)
     assert isinstance(mse, thelper.optim.metrics.MeanSquaredError)
     assert mae.goal == thelper.optim.Metric.minimize
     assert mse.goal == thelper.optim.Metric.minimize
-    with mocker.patch.object(thelper.optim.metrics.logger, "warning") as mock:
+    with mocker.patch.object(thelper.optim.metrics.logger, "warning"):
         assert mae.eval() == 0.0
         assert mse.eval() == 0.0
     assert repr(mae) and repr(mse)
@@ -332,7 +332,7 @@ def test_psnr(mocker):
     metric_psnr = thelper.optim.create_metrics(metric_config)["psnr"]
     assert isinstance(metric_psnr, thelper.optim.metrics.PSNR)
     assert metric_psnr.goal == thelper.optim.Metric.maximize
-    with mocker.patch.object(thelper.optim.metrics.logger, "warning") as mock:
+    with mocker.patch.object(thelper.optim.metrics.logger, "warning"):
         assert metric_psnr.eval() == 0.0
     assert repr(metric_psnr)
     inputs, targets, preds = [], [], []

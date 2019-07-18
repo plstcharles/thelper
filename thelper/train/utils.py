@@ -35,9 +35,9 @@ class PredictionConsumer(ABC):
     @abstractmethod
     def update(self,  # see `thelper.typedefs.IterCallbackParams` for more info
                task,  # type: thelper.tasks.utils.Task
-               input, # type: thelper.typedefs.InputType
+               input,  # type: thelper.typedefs.InputType
                pred,  # type: thelper.typedefs.PredictionType
-               target, # type: thelper.typedefs.TargetType
+               target,  # type: thelper.typedefs.TargetType
                sample,  # type: thelper.typedefs.SampleType
                iter_idx,  # type: int
                max_iters,  # type: int

@@ -557,6 +557,10 @@ def resolve_import(fullname):
     refactor_cases = [
         ('thelper.modules', 'thelper.nn'),
         ('thelper.samplers', 'thelper.data.samplers'),
+        ('thelper.optim.BinaryAccuracy', 'thelper.optim.metrics.Accuracy'),
+        ('thelper.optim.ClassifLogger', 'thelper.train.utils.ClassifLogger'),
+        ('thelper.optim.ClassifReport', 'thelper.train.utils.ClassifReport'),
+        ('thelper.optim.ConfusionMatrix', 'thelper.train.utils.ConfusionMatrix'),
         ('thelper.optim.metrics.BinaryAccuracy', 'thelper.optim.metrics.Accuracy'),
         ('thelper.optim.metrics.ClassifLogger', 'thelper.train.utils.ClassifLogger'),
         ('thelper.optim.metrics.ClassifReport', 'thelper.train.utils.ClassifReport'),
