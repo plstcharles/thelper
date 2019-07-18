@@ -32,6 +32,14 @@ class PredictionConsumer(ABC):
         """Returns a generic print-friendly string containing info about this consumer."""
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + "()"
 
+    def reset(self):
+        """Resets the internal state of the consumer.
+
+        May be called for example by the trainer between two evaluation epochs. The default implementation
+        does nothing, and if a reset behavior is needed, it should be implemented by the derived class.
+        """
+        pass
+
     @abstractmethod
     def update(self,  # see `thelper.typedefs.IterCallbackParams` for more info
                task,  # type: thelper.tasks.utils.Task

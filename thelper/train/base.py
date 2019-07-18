@@ -237,9 +237,9 @@ class Trainer:
                 raise AssertionError("metric with name '%s' should be declared in training and/or validation metrics"
                                      % self.monitor)
             if self.monitor in self.valid_metrics:
-                self.monitor_goal = self.valid_metrics[self.monitor].goal()
+                self.monitor_goal = self.valid_metrics[self.monitor].goal
             elif self.monitor in self.train_metrics:
-                self.monitor_goal = self.train_metrics[self.monitor].goal()
+                self.monitor_goal = self.train_metrics[self.monitor].goal
             if self.monitor_goal == thelper.optim.Metric.minimize:
                 self.monitor_best = thelper.optim.Metric.maximize
             elif self.monitor_goal == thelper.optim.Metric.maximize:
@@ -438,8 +438,7 @@ class Trainer:
                             metric = self.train_metrics[scheduler_step_metric]
                         else:
                             raise AssertionError("cannot find metric '%s' for scheduler step" % scheduler_step_metric)
-                        if not metric.is_scalar():
-                            raise AssertionError("cannot use metric '%s' for scheduler step (not a scalar)" % scheduler_step_metric)
+                        assert isinstance(metric, thelper.optim.metrics.Metric), "monitoring consumer must be metric"
                         metric_anti_goal = thelper.optim.Metric.maximize if metric.goal == thelper.optim.Metric.minimize \
                             else thelper.optim.Metric.minimize
                         metric_val = metric.eval() if self.current_epoch > 0 else metric_anti_goal
@@ -463,11 +462,6 @@ class Trainer:
             self.logger.debug("learning rate at %.8f" % thelper.optim.get_lr(optimizer))
             self._set_rng_state(self.train_loader.seeds, self.current_epoch)
             model.train()
-            for metric in self.train_metrics.values():
-                if hasattr(metric, "set_max_accum") and callable(metric.set_max_accum):
-                    metric.set_max_accum(len(self.train_loader))  # used to make scalar metric evals smoother between epochs
-                if metric.needs_reset():
-                    metric.reset()  # if a metric needs to be reset between two epochs, do it here
             if hasattr(self.train_loader, "set_epoch") and callable(self.train_loader.set_epoch):
                 self.train_loader.set_epoch(self.current_epoch)
             latest_loss, self.current_iter = self.train_epoch(model, self.current_epoch, self.current_iter, self.devices,
@@ -620,9 +614,8 @@ class Trainer:
             tbx_writer.add_scalar("epoch/loss", loss, epoch)
             tbx_writer.add_scalar("epoch/lr", thelper.optim.get_lr(optimizer), epoch)
         for metric_name, metric in metrics.items():
-            if metric.is_scalar():
-                if tbx_writer is not None:
-                    tbx_writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
+            if isinstance(metric, thelper.optim.metrics.Metric) and tbx_writer is not None:
+                tbx_writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
             if hasattr(metric, "render") and callable(metric.render):
                 img = metric.render()
                 if img is not None:
@@ -631,8 +624,8 @@ class Trainer:
                     raw_filename = "%s-%04d.png" % (metric_name, epoch)
                     raw_filepath = os.path.join(output_path, raw_filename)
                     cv.imwrite(raw_filepath, img[..., [2, 1, 0]])
-            txt = metric.print() if hasattr(metric, "print") and callable(metric.print) else None
-            if not txt:
+            txt = metric.report() if hasattr(metric, "report") and callable(metric.report) else None
+            if not txt and isinstance(metric, thelper.optim.metrics.Metric):
                 eval_res = metric.eval()
                 if eval_res is not None:
                     if isinstance(eval_res, float):
