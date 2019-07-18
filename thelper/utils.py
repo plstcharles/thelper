@@ -549,15 +549,23 @@ def resolve_import(fullname):
     Returns:
         The resolved class fullname.
     """
-    cases = [
+    removed_cases = [
+        'thelper.optim.metrics.RawPredictions',  # removed in 0.3.5
+    ]
+    if fullname in removed_cases:
+        raise AssertionError(f"class {repr(fullname)} was deprecated and removed in a previous version")
+    refactor_cases = [
         ('thelper.modules', 'thelper.nn'),
         ('thelper.samplers', 'thelper.data.samplers'),
-        ('thelper.optim.metrics.RawPredictions', 'thelper.optim.metrics.RawLogger'),
+        ('thelper.optim.metrics.BinaryAccuracy', 'thelper.optim.metrics.Accuracy'),
+        ('thelper.optim.metrics.ClassifLogger', 'thelper.train.utils.ClassifLogger'),
+        ('thelper.optim.metrics.ClassifReport', 'thelper.train.utils.ClassifReport'),
+        ('thelper.optim.metrics.ConfusionMatrix', 'thelper.train.utils.ConfusionMatrix'),
         ('thelper.transforms.ImageTransformWrapper', 'thelper.transforms.TransformWrapper'),
         ('thelper.transforms.wrappers.ImageTransformWrapper', 'thelper.transforms.wrappers.TransformWrapper'),
     ]
     old_name = fullname
-    for old, new in cases:
+    for old, new in refactor_cases:
         fullname = fullname.replace(old, new)
     if old_name != fullname:
         logger.warning("class fullname '{!s}' was resolved to '{!s}'.".format(old_name, fullname))

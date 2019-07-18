@@ -42,9 +42,9 @@ def create_model(config, task, save_dir=None, ckptdata=None):
             # the type provides the class name to instantiate an object from
             "type": "thelper.nn.mobilenet.MobileNetV2",
             # the parameters listed below are passed to the model's constructor
-            "params": [
+            "params": {
                 # ...
-            ]
+            }
         # ...
 
     Args:

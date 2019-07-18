@@ -209,25 +209,25 @@ class Trainer:
            ("base_metrics" in trainer_config and trainer_config["base_metrics"]):
             if "metrics" in trainer_config:
                 self.logger.debug("loading metrics defined in trainer config")
-                metrics = thelper.optim.create_metrics(trainer_config["metrics"])
+                metrics = thelper.train.create_consumers(trainer_config["metrics"])
             else:
                 self.logger.debug("loading base metrics defined in trainer config")
-                metrics = thelper.optim.create_metrics(trainer_config["base_metrics"])
+                metrics = thelper.train.create_consumers(trainer_config["base_metrics"])
         else:
             metrics = {}
         self.train_metrics = deepcopy(metrics)
         if "train_metrics" in trainer_config and trainer_config["train_metrics"]:
-            self.train_metrics = {**self.train_metrics, **thelper.optim.create_metrics(trainer_config["train_metrics"])}
+            self.train_metrics = {**self.train_metrics, **thelper.train.create_consumers(trainer_config["train_metrics"])}
         for metric_name, metric in self.train_metrics.items():
             self.logger.info("parsed train metric '%s': %s" % (metric_name, str(metric)))
         self.valid_metrics = deepcopy(metrics)
         if "valid_metrics" in trainer_config and trainer_config["valid_metrics"]:
-            self.valid_metrics = {**self.valid_metrics, **thelper.optim.create_metrics(trainer_config["valid_metrics"])}
+            self.valid_metrics = {**self.valid_metrics, **thelper.train.create_consumers(trainer_config["valid_metrics"])}
         for metric_name, metric in self.valid_metrics.items():
             self.logger.info("parsed valid metric '%s': %s" % (metric_name, str(metric)))
         self.test_metrics = deepcopy(metrics)
         if "test_metrics" in trainer_config and trainer_config["test_metrics"]:
-            self.test_metrics = {**self.test_metrics, **thelper.optim.create_metrics(trainer_config["test_metrics"])}
+            self.test_metrics = {**self.test_metrics, **thelper.train.create_consumers(trainer_config["test_metrics"])}
         for metric_name, metric in self.test_metrics.items():
             self.logger.info("parsed test metric '%s': %s" % (metric_name, str(metric)))
         self.monitor, self.monitor_best, self.monitor_best_epoch = None, None, -1
@@ -440,7 +440,9 @@ class Trainer:
                             raise AssertionError("cannot find metric '%s' for scheduler step" % scheduler_step_metric)
                         if not metric.is_scalar():
                             raise AssertionError("cannot use metric '%s' for scheduler step (not a scalar)" % scheduler_step_metric)
-                        metric_val = metric.eval() if self.current_epoch > 0 else metric.anti_goal()
+                        metric_anti_goal = thelper.optim.Metric.maximize if metric.goal == thelper.optim.Metric.minimize \
+                            else thelper.optim.Metric.minimize
+                        metric_val = metric.eval() if self.current_epoch > 0 else metric_anti_goal
                         scheduler.step(metrics=metric_val, epoch=self.current_epoch)
                 else:
                     scheduler.step(epoch=self.current_epoch)
