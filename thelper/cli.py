@@ -194,8 +194,10 @@ def visualize_data(config):
             continue
         batch_count = len(loader)
         logger.info("initializing loader '%s' with %d batches..." % (choice, batch_count))
-        for samples in tqdm.tqdm(loader):
-            redraw = thelper.utils.draw_minibatch(samples, task, redraw=redraw, **viz_kwargs)
+        for sample in tqdm.tqdm(loader):
+            input = sample[task.input_key]
+            target = sample[task.gt_key] if task.gt_key in sample else None
+            redraw = thelper.utils.draw(task=task, input=input, target=target, redraw=redraw, **viz_kwargs)
         logger.info("all done")
 
 

@@ -1472,50 +1472,44 @@ def draw_classifs(images, preds=None, labels=None, class_names_map=None, redraw=
     return draw_images(image_list, captions=caption_list, redraw=redraw, window_name="classifs", block=block, **kwargs)
 
 
-def draw_minibatch(minibatch, task, preds=None, block=False, ch_transpose=True, flip_bgr=False, redraw=None, **kwargs):
-    """Draws and returns a figure of a minibatch using pyplot or OpenCV."""
-    if not isinstance(minibatch, dict):
-        raise AssertionError("expected dict-based sample")
+def draw(task, input, pred=None, target=None, block=False, ch_transpose=True, flip_bgr=False, redraw=None, **kwargs):
+    """Draws and returns a figure of a model input/predictions/targets using pyplot or OpenCV."""
+    # note: this function actually dispatches the drawing procedure using the task interface
     import thelper.tasks
     if not isinstance(task, thelper.tasks.Task):
         raise AssertionError("invalid task object")
-    if task.input_key not in minibatch:
-        raise AssertionError("images not found in minibatch with key '%s'" % task.input_key)
-    images = minibatch[task.input_key]
-    if isinstance(images, list) and all([isinstance(t, torch.Tensor) for t in images]):
+    if isinstance(input, list) and all([isinstance(t, torch.Tensor) for t in input]):
         # if we have a list, it must be due to a augmentation stage
-        if not all([image.shape == images[0].shape for image in images]):
+        if not all([image.shape == input[0].shape for image in input]):
             raise AssertionError("image shape mismatch throughout list")
-        images = torch.cat(images, 0)  # merge all images into a single tensor
-    if not isinstance(images, torch.Tensor) or images.dim() != 4:
+        input = torch.cat(input, 0)  # merge all images into a single tensor
+    if not isinstance(input, torch.Tensor) or input.dim() != 4:
         raise AssertionError("expected input images to be in 4-d tensor format (BxCxHxW or BxHxWxC)")
-    images = images.numpy().copy()
+    input = input.numpy().copy()
     if ch_transpose:
-        images = np.transpose(images, (0, 2, 3, 1))  # BxCxHxW to BxHxWxC
+        input = np.transpose(input, (0, 2, 3, 1))  # BxCxHxW to BxHxWxC
     if flip_bgr:
-        images = images[..., ::-1]  # BGR to RGB
-    if preds is not None and isinstance(preds, torch.Tensor):
-        preds = preds.cpu().detach()  # avoid latency for preprocessing on gpu
+        input = input[..., ::-1]  # BGR to RGB
+    if pred is not None and isinstance(pred, torch.Tensor):
+        pred = pred.cpu().detach()  # avoid latency for preprocessing on gpu
+    if target is not None and isinstance(target, torch.Tensor):
+        target = target.cpu().detach()  # avoid latency for preprocessing on gpu
     if isinstance(task, thelper.tasks.Classification):
-        labels = thelper.utils.get_key_def(task.gt_key, minibatch, None)
         class_names_map = {idx: name for name, idx in task.class_indices.items()}
-        return draw_classifs(images=images, preds=preds, labels=labels,
+        return draw_classifs(images=input, preds=pred, labels=target,
                              class_names_map=class_names_map, redraw=redraw, block=block, **kwargs)
     elif isinstance(task, thelper.tasks.Segmentation):
-        masks = thelper.utils.get_key_def(task.gt_key, minibatch, None)
         color_map = task.color_map if task.color_map else {idx: get_label_color_mapping(idx) for idx in task.class_indices.values()}
         if task.dontcare is not None and task.dontcare not in color_map:
             color_map[task.dontcare] = np.asarray([0, 0, 0])
-        return draw_segments(images=images, preds=preds, masks=masks, color_map=color_map, redraw=redraw, block=block, **kwargs)
+        return draw_segments(images=input, preds=pred, masks=target, color_map=color_map, redraw=redraw, block=block, **kwargs)
     elif isinstance(task, thelper.tasks.Detection):
-        bboxes = thelper.utils.get_key_def(task.gt_key, minibatch, None)
         color_map = task.color_map if task.color_map else {idx: get_label_color_mapping(idx) for idx in task.class_indices.values()}
-        return draw_bboxes(images=images, preds=preds, bboxes=bboxes, color_map=color_map, redraw=redraw, block=block, **kwargs)
+        return draw_bboxes(images=input, preds=pred, bboxes=target, color_map=color_map, redraw=redraw, block=block, **kwargs)
     elif isinstance(task, thelper.tasks.Regression):
-        targets = thelper.utils.get_key_def(task.gt_key, minibatch, None)
         swap_channels = isinstance(task, thelper.tasks.SuperResolution)  # must update BxCxHxW to BxHxWxC in targets/preds
         # @@@ todo: cleanup swap_channels above via flag in superres task?
-        return draw_predicts(images=images, preds=preds, targets=targets,
+        return draw_predicts(images=input, preds=pred, targets=target,
                              swap_channels=swap_channels, redraw=redraw, block=block, **kwargs)
     else:
         raise AssertionError("unhandled drawing mode, missing impl")

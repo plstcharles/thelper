@@ -275,11 +275,11 @@ class Trainer:
         if display_predictions or display_train_predictions:
             if self.train_iter_callback is not None:
                 raise AssertionError("cannot use 'display_preds' while also using an external callback")
-            self.train_iter_callback = thelper.utils.import_function("thelper.train.utils._draw_minibatch_wrapper")
+            self.train_iter_callback = thelper.utils.import_function("thelper.train.utils._draw_wrapper")
         if display_predictions or display_eval_predictions:
             if self.eval_iter_callback is not None:
                 raise AssertionError("cannot use 'display_preds' while also using an external callback")
-            self.eval_iter_callback = thelper.utils.import_function("thelper.train.utils._draw_minibatch_wrapper")
+            self.eval_iter_callback = thelper.utils.import_function("thelper.train.utils._draw_wrapper")
         if self.train_iter_callback is not None:
             thelper.utils.check_func_signature(self.train_iter_callback, typ.IterCallbackParams)
         if self.eval_iter_callback is not None:

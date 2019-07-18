@@ -63,15 +63,15 @@ def create_trainer(session_name,    # type: AnyStr
 
 
 # noinspection PyUnusedLocal
-def _draw_minibatch_wrapper(sample,         # type: thelper.typedefs.SampleType
-                            task,           # type: thelper.tasks.utils.Task
-                            pred,           # type: thelper.typedefs.PredictionType
-                            iter_idx,       # type: int
-                            max_iters,      # type: int
-                            epoch_idx,      # type: int
-                            max_epochs,     # type: int
-                            **kwargs
-                            ):              # type: (...) -> None
-
-    """Wrapper to :func:`thelper.utils.draw_minibatch` used as a callback entrypoint for trainers."""
-    thelper.utils.draw_minibatch(sample, task, preds=pred, **kwargs)
+def _draw_wrapper(task,  # type: thelper.tasks.utils.Task
+                  input,  # type: thelper.typedefs.InputType
+                  pred,  # type: thelper.typedefs.PredictionType
+                  target,  # type: thelper.typedefs.TargetType
+                  sample,  # type: thelper.typedefs.SampleType
+                  iter_idx,  # type: int
+                  max_iters,  # type: int
+                  epoch_idx,  # type: int
+                  max_epochs,  # type: int
+                  **kwargs):  # type: (...) -> None
+    """Wrapper to :func:`thelper.utils.draw` used as a callback entrypoint for trainers."""
+    thelper.utils.draw(task=task, input=input, pred=pred, target=target, **kwargs)
