@@ -1774,7 +1774,7 @@ def fig2array(fig):
     """Transforms a pyplot figure into a numpy-compatible RGB array."""
     fig.canvas.draw()
     w, h = fig.canvas.get_width_height()
-    buf = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
     buf.shape = (w, h, 3)
     return buf
 

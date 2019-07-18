@@ -153,7 +153,7 @@ class Task:
         friendly types (e.g. string) are recommended for debugging. If groundtruth is not
         available through the dataset parsers, this key can be set to ``None``.
         """
-        assert isinstance(value, collections.Hashable), "key type must be hashable"
+        assert isinstance(value, collections.abc.Hashable), "key type must be hashable"
         self._gt_key = value
 
     @property
@@ -171,7 +171,7 @@ class Task:
         """
         assert value is None or isinstance(value, (list, tuple)), "meta keys should be provided as an array"
         value = [] if value is None else value
-        assert all([v is not None and isinstance(v, collections.Hashable) for v in value]), \
+        assert all([v is not None and isinstance(v, collections.abc.Hashable) for v in value]), \
             "all meta key types must be hashable"
         self._meta_keys = value
 
