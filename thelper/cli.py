@@ -359,24 +359,8 @@ def export_model(config, save_dir):
     logger.debug("all done")
 
 
-def main(args=None):
-    """Main entrypoint to use with console applications.
-
-    This function parses command line arguments and dispatches the execution based on the selected
-    operating mode. Run with ``--help`` for information on the available arguments.
-
-    .. warning::
-        If you are trying to resume a session that was previously executed using a now unavailable GPU,
-        you will have to force the checkpoint data to be loaded on CPU using ``--map-location=cpu`` (or
-        using ``-m=cpu``).
-
-    .. seealso::
-        | :func:`thelper.cli.create_session`
-        | :func:`thelper.cli.resume_session`
-        | :func:`thelper.cli.visualize_data`
-        | :func:`thelper.cli.annotate_data`
-        | :func:`thelper.cli.split_data`
-    """
+def make_argparser():
+    # type: () -> argparse.ArgumentParser
     ap = argparse.ArgumentParser(description='thelper model trainer application')
     ap.add_argument("--version", default=False, action="store_true", help="prints the version of the library and exits")
     ap.add_argument("-l", "--log", default=None, type=str, help="path to the top-level log file (default: None)")
@@ -407,6 +391,28 @@ def main(args=None):
     split_ap = subparsers.add_parser("export", help="launches a model exportation session from a config file")
     split_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session save directory)")
     split_ap.add_argument("save_dir", type=str, help="path to the root directory where the exported checkpoint should be saved")
+    return ap
+
+
+def main(args=None, argparser=None):
+    """Main entrypoint to use with console applications.
+
+    This function parses command line arguments and dispatches the execution based on the selected
+    operating mode. Run with ``--help`` for information on the available arguments.
+
+    .. warning::
+        If you are trying to resume a session that was previously executed using a now unavailable GPU,
+        you will have to force the checkpoint data to be loaded on CPU using ``--map-location=cpu`` (or
+        using ``-m=cpu``).
+
+    .. seealso::
+        | :func:`thelper.cli.create_session`
+        | :func:`thelper.cli.resume_session`
+        | :func:`thelper.cli.visualize_data`
+        | :func:`thelper.cli.annotate_data`
+        | :func:`thelper.cli.split_data`
+    """
+    ap = argparser or make_argparser()
     args = ap.parse_args(args=args)
     if args.version:
         print(thelper.__version__)
