@@ -255,18 +255,18 @@ class Trainer:
             display_flag_keys = [f"display_{cname}_preds", f"display_{cname}_predictions", f"display_{cname}",
                                  "display_preds", "display_predictions", "display"]
             display_flag = thelper.utils.get_key_def(display_flag_keys, trainer_config, False)
-            display_callback = thelper.utils.import_function("thelper.train.utils._draw_wrapper")
             display_kwargs_keys = [f"display_{cname}_preds_kwargs", f"display_{cname}_predictions_kwargs",
                                    f"display_{cname}_kwargs", "display_preds_kwargs", "display_predictions_kwargs",
                                    "display_kwargs"]
             display_kwargs = thelper.utils.get_key_def(display_kwargs_keys, trainer_config, {})
             if display_flag:
                 assert "display_callback" not in mset, "metrics set already had a 'display_callback' in it"
-                mset["display_callback"] = thelper.train.utils.PredictionCallback(display_callback, display_kwargs)
+                mset["display_callback"] = thelper.train.utils.PredictionCallback("thelper.train.utils._draw_wrapper",
+                                                                                  display_kwargs)
 
     def _init_writer(self, writer, path):
         if self.use_tbx and not writer:
-            writer = self.tbx.SummaryWriter(log_dir=path, comment=self.name)
+            writer = self.tbx.SummaryWriter(path, comment=self.name)
             writer.add_text("config", json.dumps(self.config, indent=4, sort_keys=False, default=lambda x: str(x)))
             thelper.utils.save_config(self.config, os.path.join(path, "config.json"))
         return writer
@@ -435,7 +435,8 @@ class Trainer:
                                                               self.monitor, train_writer)
             self._write_epoch_output(self.current_epoch, self.train_metrics, train_writer, self.train_output_path,
                                      loss=latest_loss, optimizer=optimizer)
-            train_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.train_metrics.items()}
+            train_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.train_metrics.items()
+                                 if isinstance(metric, thelper.optim.metrics.Metric)}
             result = {"train/loss": latest_loss, "train/metrics": train_metric_vals}
             monitor_type_key = "train/metrics"  # if we cannot run validation, will monitor progression on training metrics
             if self.valid_loader:
@@ -449,7 +450,8 @@ class Trainer:
                 self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
                                 self.eval_metrics, self.monitor, valid_writer)
                 self._write_epoch_output(self.current_epoch, self.eval_metrics, valid_writer, self.valid_output_path)
-                valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.eval_metrics.items()}
+                valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.eval_metrics.items()
+                                     if isinstance(metric, thelper.optim.metrics.Metric)}
                 result = {**result, "valid/metrics": valid_metric_vals}
                 monitor_type_key = "valid/metrics"  # since validation is available, use that to monitor progression
             new_best = False
@@ -506,7 +508,8 @@ class Trainer:
             self.eval_epoch(model, self.current_epoch, self.devices, self.test_loader,
                             self.eval_metrics, self.monitor, test_writer)
             self._write_epoch_output(self.current_epoch, self.eval_metrics, test_writer, self.test_output_path)
-            test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.eval_metrics.items()}
+            test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.eval_metrics.items()
+                                if isinstance(metric, thelper.optim.metrics.Metric)}
             result = {**result, **test_metric_vals}
             output_group = "test/metrics"
         elif self.valid_loader:
@@ -520,7 +523,8 @@ class Trainer:
             self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
                             self.eval_metrics, self.monitor, valid_writer)
             self._write_epoch_output(self.current_epoch, self.eval_metrics, valid_writer, self.valid_output_path)
-            valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.eval_metrics.items()}
+            valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.eval_metrics.items()
+                                 if isinstance(metric, thelper.optim.metrics.Metric)}
             result = {**result, **valid_metric_vals}
             output_group = "valid/metrics"
         for key, value in result.items():

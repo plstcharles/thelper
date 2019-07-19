@@ -88,7 +88,7 @@ class PredictionCallback(PredictionConsumer):
         thelper.utils.check_func_signature(callback_func, thelper.typedefs.IterCallbackParams)
         assert callback_kwargs is None or \
             (isinstance(callback_kwargs, dict) and
-             not any([p in callback_kwargs] for p in thelper.typedefs.IterCallbackParams)), \
+             not any([p in callback_kwargs for p in thelper.typedefs.IterCallbackParams])), \
             "invalid callback kwargs (must be dict, and not contain overlap with default args)"
         self.callback_func = callback_func
         self.callback_kwargs = callback_kwargs
@@ -98,7 +98,6 @@ class PredictionCallback(PredictionConsumer):
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
             f"(callback_func={repr(self.callback_func)}, callback_kwargs={repr(self.callback_kwargs)})"
 
-    @abstractmethod
     def update(self, *args, **kwargs):
         """Forwards the latest prediction data from the training session to the user callback."""
         return self.callback_func(*args, **kwargs, **self.callback_kwargs)
