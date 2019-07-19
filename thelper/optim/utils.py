@@ -205,7 +205,8 @@ def create_scheduler(config, optimizer):
 
 def get_lr(optimizer):
     """Returns the optimizer's learning rate, or 0 if not found."""
-    for param_group in optimizer.param_groups:
-        if "lr" in param_group:
-            return param_group["lr"]
+    if optimizer is not None:
+        for param_group in optimizer.param_groups:
+            if "lr" in param_group:
+                return param_group["lr"]
     return 0

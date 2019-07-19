@@ -585,6 +585,7 @@ def import_class(fullname):
     Returns:
         The imported class.
     """
+    assert isinstance(fullname, str)
     fullname = resolve_import(fullname)
     module_name, class_name = fullname.rsplit('.', 1)
     module = importlib.import_module(module_name)

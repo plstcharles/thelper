@@ -109,7 +109,7 @@ class Classification(Task):
         sample_idxs = {class_name: [] for class_name in self.class_names}
         import collections
         if unset_key is not None:
-            assert isinstance(unset_key, collections.Hashable), "unset class name key should be hashable"
+            assert isinstance(unset_key, collections.abc.Hashable), "unset class name key should be hashable"
             assert unset_key not in sample_idxs, "unset class name key cannot already be in class names list"
             sample_idxs[unset_key] = []
         for sample_idx, sample in enumerate(samples):
