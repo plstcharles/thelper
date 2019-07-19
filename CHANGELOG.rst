@@ -10,7 +10,7 @@ Changelog
 * Added unit tests for all metrics/prediction consumers
 * Updated trainer callback signatures to include more data
 * Updated install doc with links to anaconda/docker hubs
-* Cleaned drawing functions and moved them to new module
+* Cleaned drawing functions args wrt callback refactoring
 * TODO @@@@@@@
 
 0.3.4 (2019/07/12)
