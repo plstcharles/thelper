@@ -48,8 +48,8 @@ class ImageSegmTrainer(Trainer):
         if isinstance(input_val, list):
             if self.task.gt_key in sample and sample[self.task.gt_key] is not None:
                 label_map = sample[self.task.gt_key]
-                if not isinstance(label_map, list) or len(label_map) != len(input_val):
-                    raise AssertionError("label_map should also be a list of the same length as input")
+                assert isinstance(label_map, list) and len(label_map) == len(input_val), \
+                    "label_map should also be a list of the same length as input"
                 for idx in range(len(input_val)):
                     input_val[idx], label_map[idx] = self._to_tensor({self.task.input_key: input_val[idx],
                                                                       self.task.gt_key: label_map[idx]})
@@ -60,8 +60,7 @@ class ImageSegmTrainer(Trainer):
             input_val = torch.FloatTensor(input_val)
             if self.task.gt_key in sample and sample[self.task.gt_key] is not None:
                 label_map = sample[self.task.gt_key]
-                if isinstance(label_map, list):
-                    raise AssertionError("unexpected label map type")
+                assert not isinstance(label_map, list), "unexpected label map type"
                 label_map = torch.ByteTensor(label_map)
         return input_val, label_map
 
@@ -80,28 +79,22 @@ class ImageSegmTrainer(Trainer):
             monitor: name of the metric to update/monitor for improvements.
             writer: the writer used to store tbx events/messages/metrics.
         """
-        if not loss:
-            raise AssertionError("missing loss function")
-        if not optimizer:
-            raise AssertionError("missing optimizer")
-        if not loader:
-            raise AssertionError("no available data to load")
-        if not isinstance(metrics, dict):
-            raise AssertionError("expect metrics as dict object")
+        assert loss is not None, "missing loss function"
+        assert optimizer is not None, "missing optimizer"
+        assert loader, "no available data to load"
+        assert isinstance(metrics, dict), "expect metrics as dict object"
         epoch_loss = 0
         epoch_size = len(loader)
         self.logger.debug("fetching data loader samples...")
         for idx, sample in enumerate(loader):
             input_val, label_map = self._to_tensor(sample)
-            if label_map is None:
-                raise AssertionError("groundtruth required when training a model")
+            assert label_map is not None, "groundtruth required when training a model"
             optimizer.zero_grad()
             if isinstance(input_val, list):
                 # training samples got augmented, we need to backprop in multiple steps
-                if not input_val:
-                    raise AssertionError("cannot train with empty post-augment sample lists")
-                if not isinstance(label_map, list) or len(label_map) != len(input_val):
-                    raise AssertionError("label maps should also be provided via a list of the same length as the input_val")
+                assert input_val, "cannot train with empty post-augment sample lists"
+                assert isinstance(label_map, list) and len(label_map) == len(input_val), \
+                    "label maps should also be provided via a list of the same length as the input_val"
                 if not self.warned_no_shuffling_augments:
                     self.logger.warning("using training augmentation without global shuffling, gradient steps might be affected")
                     # see the docstring of thelper.transforms.operations.Duplicator for more information
@@ -177,8 +170,8 @@ class ImageSegmTrainer(Trainer):
             monitor: name of the metric to update/monitor for improvements.
             writer: the writer used to store tbx events/messages/metrics.
         """
-        if not loader:
-            raise AssertionError("no available data to load")
+        assert loader, "no available data to load"
+        assert isinstance(metrics, dict), "expect metrics as dict object"
         with torch.no_grad():
             epoch_size = len(loader)
             self.logger.debug("fetching data loader samples...")
@@ -188,13 +181,12 @@ class ImageSegmTrainer(Trainer):
                 input_val, label_map = self._to_tensor(sample)
                 if isinstance(input_val, list):
                     # evaluation samples got augmented, we need to get the mean prediction
-                    if not input_val:
-                        raise AssertionError("cannot eval with empty post-augment sample lists")
-                    if not isinstance(label_map, list) or len(label_map) != len(input_val):
-                        raise AssertionError("label maps should also be provided via a list of the same length as the input_val")
+                    assert input_val, "cannot eval with empty post-augment sample lists"
+                    assert isinstance(label_map, list) and len(label_map) == len(input_val), \
+                        "label maps should also be provided via a list of the same length as the input_val"
                     # this might be costly for nothing, we could remove the check and assume user is not dumb
-                    if any([not torch.eq(l, label_map[0]).all() for l in label_map]):
-                        raise AssertionError("all label maps should be identical! (why do eval-time augment otherwise?)")
+                    assert not any([not torch.eq(l, label_map[0]).all() for l in label_map]), \
+                        "all label maps should be identical! (why do eval-time augment otherwise?)"
                     label_map = label_map[0]  # since all identical, just pick the first one and pretend its the only one
                     preds = None
                     for input_idx in range(len(input_val)):

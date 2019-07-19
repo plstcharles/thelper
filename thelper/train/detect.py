@@ -47,23 +47,22 @@ class ObjDetectTrainer(Trainer):
         input_val = sample[self.task.input_key]
         if isinstance(input_val, np.ndarray):
             input_val = torch.from_numpy(input_val)
-        if not isinstance(input_val, torch.Tensor):
-            raise AssertionError("unexpected input type; should be torch.Tensor")
+        assert isinstance(input_val, torch.Tensor), "unexpected input type; should be torch.Tensor"
         if self.task.input_shape is not None:
-            if input_val.dim() != len(self.task.input_shape) + 1:
-                raise AssertionError("expected input as Nx[shape] where N = batch size")
-            if self.task.input_shape != input_val.shape[1:]:
-                raise AssertionError("invalid input shape; got '%s', expected '%s'" % (input_val.shape[1:], self.task.input_shape))
+            assert input_val.dim() == len(self.task.input_shape) + 1, \
+                "expected input as Nx[shape] where N = batch size"
+            assert self.task.input_shape == input_val.shape[1:], \
+                f"invalid input shape; got '{input_val.shape[1:]}', expected '{self.task.input_shape}'"
         assert input_val.dim() == 4, "input image stack should be 4-dim to be decomposed into list of images"
         # unpack input images into list (as required by torchvision preproc)
         input_val = [input_val[i] for i in range(input_val.shape[0])]
         bboxes = None
         if self.task.gt_key in sample:
             bboxes = sample[self.task.gt_key]
-            if not isinstance(bboxes, list) or not all([isinstance(bset, list) for bset in bboxes]):
-                raise AssertionError("bboxes should be provided as a list of lists (dims = batch x bboxes-per-image)")
-            if not all([all([isinstance(box, thelper.data.BoundingBox) for box in bset]) for bset in bboxes]):
-                raise AssertionError("bboxes should be provided as a thelper.data.BoundingBox-compat object")
+            assert isinstance(bboxes, list) and all([isinstance(bset, list) for bset in bboxes]), \
+                "bboxes should be provided as a list of lists (dims = batch x bboxes-per-image)"
+            assert all([all([isinstance(box, thelper.data.BoundingBox) for box in bset]) for bset in bboxes]), \
+                "bboxes should be provided as a thelper.data.BoundingBox-compat object"
             assert all([len(np.unique([b.image_id for b in bset if b.image_id is not None])) <= 1 for bset in bboxes]), \
                 "some bboxes tied to a single image have different reference ids"
             # here, we follow the format used in torchvision (>=0.3) for forwarding targets to detection models
@@ -124,39 +123,35 @@ class ObjDetectTrainer(Trainer):
             writer: the writer used to store tbx events/messages/metrics.
         """
         assert loss is None, "current implementation assumes that loss is computed inside the model"
-        if not optimizer:
-            raise AssertionError("missing optimizer")
-        if not loader:
-            raise AssertionError("no available data to load")
-        if not isinstance(metrics, dict):
-            raise AssertionError("expect metrics as dict object")
+        assert optimizer is not None, "missing optimizer"
+        assert loader, "no available data to load"
+        assert isinstance(metrics, dict), "expect metrics as dict object"
         epoch_loss = 0
         epoch_size = len(loader)
         self.logger.debug("fetching data loader samples...")
         for idx, sample in enumerate(loader):
             images, targets = self._to_tensor(sample)
-            if targets is None or any([not bset for bset in targets]):
-                raise AssertionError("groundtruth required when training a model")
+            assert targets is not None and not any([not bset for bset in targets]), \
+                "groundtruth required when training a model"
             optimizer.zero_grad()
             targets = self._move_tensor(targets, dev)
             images_dev = self._move_tensor(images, dev)
             if isinstance(model, thelper.nn.utils.ExternalModule):
                 model = model.model  # temporarily unwrap to simplify code below
-            if isinstance(model, torchvision.models.detection.generalized_rcnn.GeneralizedRCNN):
-                # unfortunately, the default generalized RCNN model forward does not return predictions while training...
-                # loss_dict = model(images=images_dev, targets=targets)  # we basically reimplement this call below
-                original_image_sizes = [img.shape[-2:] for img in images_dev]
-                images_dev, targets = model.transform(images_dev, targets)
-                features = model.backbone(images_dev.tensors)
-                if isinstance(features, torch.Tensor):
-                    features = collections.OrderedDict([(0, features)])
-                proposals, proposal_losses = model.rpn(images_dev, features, targets)
-                iter_pred, detector_losses = model.roi_heads(features, proposals, images_dev.image_sizes, targets)
-                iter_pred = model.transform.postprocess(iter_pred, images_dev.image_sizes, original_image_sizes)
-                iter_loss = sum(loss for loss in {**detector_losses, **proposal_losses}.values())
-                iter_loss.backward()
-            else:
-                raise AssertionError("unknown/unhandled detection model type")
+            assert isinstance(model, torchvision.models.detection.generalized_rcnn.GeneralizedRCNN), \
+                "unknown/unhandled detection model type"  # user should probably implement their own trainer
+            # unfortunately, the default generalized RCNN model forward does not return predictions while training...
+            # loss_dict = model(images=images_dev, targets=targets)  # we basically reimplement this call below
+            original_image_sizes = [img.shape[-2:] for img in images_dev]
+            images_dev, targets = model.transform(images_dev, targets)
+            features = model.backbone(images_dev.tensors)
+            if isinstance(features, torch.Tensor):
+                features = collections.OrderedDict([(0, features)])
+            proposals, proposal_losses = model.rpn(images_dev, features, targets)
+            iter_pred, detector_losses = model.roi_heads(features, proposals, images_dev.image_sizes, targets)
+            iter_pred = model.transform.postprocess(iter_pred, images_dev.image_sizes, original_image_sizes)
+            iter_loss = sum(loss for loss in {**detector_losses, **proposal_losses}.values())
+            iter_loss.backward()
             optimizer.step()
             iter_pred = self._from_tensor(iter_pred, sample)
             targets = self._move_tensor(targets, dev="cpu", detach=True)
@@ -204,8 +199,8 @@ class ObjDetectTrainer(Trainer):
             monitor: name of the metric to update/monitor for improvements.
             writer: the writer used to store tbx events/messages/metrics.
         """
-        if not loader:
-            raise AssertionError("no available data to load")
+        assert loader, "no available data to load"
+        assert isinstance(metrics, dict), "expect metrics as dict object"
         with torch.no_grad():
             epoch_size = len(loader)
             self.logger.debug("fetching data loader samples...")

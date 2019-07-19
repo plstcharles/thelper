@@ -46,27 +46,25 @@ class RegressionTrainer(Trainer):
         input_val = sample[self.task.input_key]
         if isinstance(input_val, np.ndarray):
             input_val = torch.from_numpy(input_val)
-        if not isinstance(input_val, torch.Tensor):
-            raise AssertionError("unexpected input type; should be torch.Tensor")
+        assert isinstance(input_val, torch.Tensor), "unexpected input type; should be torch.Tensor"
         if self.task.input_shape is not None:
-            if input_val.dim() != len(self.task.input_shape) + 1:
-                raise AssertionError("expected input as Nx[shape] where N = batch size")
-            if self.task.input_shape != input_val.shape[1:]:
-                raise AssertionError("invalid input shape; got '%s', expected '%s'" % (input_val.shape[1:], self.task.input_shape))
+            assert input_val.dim() == len(self.task.input_shape) + 1, \
+                "expected input as Nx[shape] where N = batch size"
+            assert self.task.input_shape == input_val.shape[1:], \
+                f"invalid input shape; got '{input_val.shape[1:]}', expected '{self.task.input_shape}'"
         target = None
         if self.task.gt_key in sample:
             target = sample[self.task.gt_key]
             if isinstance(target, np.ndarray):
-                if self.task.target_type is not None and target.dtype != self.task.target_type:
-                    raise AssertionError("unexpected target type, should be %s" % str(self.task.target_type))
+                assert self.task.target_type is None or target.dtype == self.task.target_type, \
+                    f"unexpected target type, should be '{str(self.task.target_type)}'"
                 target = torch.from_numpy(target)
-            if not isinstance(target, torch.Tensor):
-                raise AssertionError("unexpected target type; should be torch.Tensor")
+            assert isinstance(target, torch.Tensor), "unexpected target type; should be torch.Tensor"
             if self.task.target_shape is not None:
-                if target.dim() != len(self.task.target_shape) + 1:
-                    raise AssertionError("expected target as Nx[shape] where N = batch size")
-                if self.task.target_shape != target.shape[1:]:
-                    raise AssertionError("invalid target shape; got '%s', expected '%s'" % (target.shape[1:], self.task.target_shape))
+                assert target.dim() == len(self.task.target_shape) + 1, \
+                    "expected target as Nx[shape] where N = batch size"
+                assert self.task.target_shape == target.shape[1:], \
+                    f"invalid target shape; got '{target.shape[1:]}', expected '{self.task.target_shape}'"
         return input_val, target
 
     def train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
@@ -84,14 +82,10 @@ class RegressionTrainer(Trainer):
             monitor: name of the metric to update/monitor for improvements.
             writer: the writer used to store tbx events/messages/metrics.
         """
-        if not loss:
-            raise AssertionError("missing loss function")
-        if not optimizer:
-            raise AssertionError("missing optimizer")
-        if not loader:
-            raise AssertionError("no available data to load")
-        if not isinstance(metrics, dict):
-            raise AssertionError("expect metrics as dict object")
+        assert loss is not None, "missing loss function"
+        assert optimizer is not None, "missing optimizer"
+        assert loader, "no available data to load"
+        assert isinstance(metrics, dict), "expect metrics as dict object"
         epoch_loss = 0
         epoch_size = len(loader)
         self.logger.debug("fetching data loader samples...")
@@ -99,10 +93,8 @@ class RegressionTrainer(Trainer):
             input_val, target = self._to_tensor(sample)
             # todo: add support to fraction samples that are too big for a single iteration
             # (e.g. when batching non-image data that would be too inefficient one sample at a time)
-            if target is None:
-                raise AssertionError("groundtruth required when training a model")
-            if isinstance(input_val, list):
-                raise AssertionError("missing regr trainer support for duped minibatches")  # todo
+            assert target is not None, "groundtruth required when training a model"
+            assert not isinstance(input_val, list), "missing regr trainer support for duped minibatches"
             optimizer.zero_grad()
             target = self._move_tensor(target, dev)
             iter_pred = model(self._move_tensor(input_val, dev))
@@ -155,8 +147,8 @@ class RegressionTrainer(Trainer):
             monitor: name of the metric to update/monitor for improvements.
             writer: the writer used to store tbx events/messages/metrics.
         """
-        if not loader:
-            raise AssertionError("no available data to load")
+        assert loader, "no available data to load"
+        assert isinstance(metrics, dict), "expect metrics as dict object"
         with torch.no_grad():
             epoch_size = len(loader)
             self.logger.debug("fetching data loader samples...")
@@ -164,8 +156,7 @@ class RegressionTrainer(Trainer):
                 if idx < self.skip_eval_iter:
                     continue  # skip until previous iter count (if set externally; no effect otherwise)
                 input_val, target = self._to_tensor(sample)
-                if isinstance(input_val, list):
-                    raise AssertionError("missing regr trainer support for duped minibatches")  # todo
+                assert not isinstance(input_val, list), "missing regr trainer support for duped minibatches"
                 pred = model(self._move_tensor(input_val, dev))
                 pred_cpu = self._move_tensor(pred, dev="cpu", detach=True)
                 target_cpu = self._move_tensor(target, dev="cpu", detach=True)
