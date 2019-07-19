@@ -463,7 +463,7 @@ A complete example of a trainer configuration is shown below::
                 "type": "thelper.train.ConfusionMatrix"
             }
         },
-        "test_metrics": {  # metrics in this section will only be used for testing
+        "eval_metrics": {  # metrics in this section will only be used for evaluation
             "logger": {
                 # (can't monitor this one either, as it is not an actual "metric")
                 "type": "thelper.train.ClassifLogger",

@@ -75,7 +75,7 @@ class ImageSegmTrainer(Trainer):
             loss: the loss function used to evaluate model fidelity.
             optimizer: the optimizer used for back propagation.
             loader: the data loader used to get transformed training samples.
-            metrics: the list of metrics to update every iteration.
+            metrics: the dictionary of metrics to update every iteration.
             monitor: name of the metric to update/monitor for improvements.
             writer: the writer used to store tbx events/messages/metrics.
         """
@@ -130,10 +130,6 @@ class ImageSegmTrainer(Trainer):
                 metric.update(task=self.task, input=input_val, pred=iter_pred_cpu,
                               target=label_map_cpu, sample=sample, iter_idx=idx, max_iters=epoch_size,
                               epoch_idx=epoch, max_epochs=self.epochs)
-            if self.train_iter_callback is not None:
-                self.train_iter_callback(task=self.task, input=input_val, pred=iter_pred_cpu,
-                                         target=label_map_cpu, sample=sample, iter_idx=idx, max_iters=epoch_size,
-                                         epoch_idx=epoch, max_epochs=self.epochs, **self.callback_kwargs)
             epoch_loss += iter_loss.item()
             monitor_output = ""
             if monitor is not None and monitor in metrics:
@@ -206,10 +202,6 @@ class ImageSegmTrainer(Trainer):
                     metric.update(task=self.task, input=input_val, pred=pred_cpu,
                                   target=label_map_cpu, sample=sample, iter_idx=idx, max_iters=epoch_size,
                                   epoch_idx=epoch, max_epochs=self.epochs)
-                if self.eval_iter_callback is not None:
-                    self.eval_iter_callback(task=self.task, input=input_val, pred=pred_cpu,
-                                            target=label_map_cpu, sample=sample, iter_idx=idx, max_iters=epoch_size,
-                                            epoch_idx=epoch, max_epochs=self.epochs, **self.callback_kwargs)
                 self.logger.info(
                     "eval epoch#{}   batch: {}/{} ({:.0f}%){}".format(
                         epoch,

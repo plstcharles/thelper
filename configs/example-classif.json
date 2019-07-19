@@ -138,8 +138,7 @@
         "save_freq": 1,
         "monitor": "accuracy",
         "use_tbx": true,
-        "display_train_predictions": false,
-        "callback_kwargs": {},
+        "display_train": false,
         "optimization": {
             "loss": {
                 "type": "torch.nn.CrossEntropyLoss",
@@ -176,7 +175,7 @@
                 "type": "thelper.train.ConfusionMatrix"
             }
         },
-        "test_metrics": {
+        "eval_metrics": {
             "logger": {
                 "type": "thelper.train.ClassifLogger",
                 "params": {

@@ -78,8 +78,7 @@
         "save_freq": 5,
         "monitor": "accuracy",
         "use_tbx": true,
-        "display_train_predictions": false,
-        "callback_kwargs": {},
+        "display_train": false,
         "optimization": {
             "loss": {
                 "type": "torch.nn.CrossEntropyLoss",

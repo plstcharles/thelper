@@ -66,6 +66,44 @@ class PredictionConsumer(ABC):
         raise NotImplementedError
 
 
+class PredictionCallback(PredictionConsumer):
+    """Callback function wrapper compatible with the consumer interface.
+
+    This interface is used to hide user-defined callbacks into the list of prediction consumers given
+    to trainer implementations. The callbacks must always be compatible with the list of arguments
+    defined by `thelper.typedefs.IterCallbackParams`, but may also receive extra arguments defined in
+    advance and passed to the constructor of this class.
+
+    Attributes:
+        callback_func: user-defined function to call on every update from the trainer.
+        callback_kwargs: user-defined extra arguments to provide to the callback function.
+    """
+
+    def __init__(self, callback_func, callback_kwargs=None):
+        assert callback_func is not None and \
+            (isinstance(callback_func, str) or callable(callback_func)), \
+            "invalid callback function, must be importable string or callable object"
+        if isinstance(callback_func, str):
+            callback_func = thelper.utils.import_function(callback_func)
+        thelper.utils.check_func_signature(callback_func, thelper.typedefs.IterCallbackParams)
+        assert callback_kwargs is None or \
+            (isinstance(callback_kwargs, dict) and
+             not any([p in callback_kwargs] for p in thelper.typedefs.IterCallbackParams)), \
+            "invalid callback kwargs (must be dict, and not contain overlap with default args)"
+        self.callback_func = callback_func
+        self.callback_kwargs = callback_kwargs
+
+    def __repr__(self):
+        """Returns a generic print-friendly string containing info about this consumer."""
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
+            f"(callback_func={repr(self.callback_func)}, callback_kwargs={repr(self.callback_kwargs)})"
+
+    @abstractmethod
+    def update(self, *args, **kwargs):
+        """Forwards the latest prediction data from the training session to the user callback."""
+        return self.callback_func(*args, **kwargs, **self.callback_kwargs)
+
+
 class ClassifLogger(PredictionConsumer):
     """Classification output logger.
 

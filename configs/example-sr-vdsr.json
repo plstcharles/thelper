@@ -55,8 +55,7 @@
         "save_freq": 1,
         "monitor": "psnr",
         "use_tbx": true,
-        "display_train_predictions": true,
-        "callback_kwargs": {},
+        "display_train": true,
         "optimization": {
             "loss": {
                 "type": "torch.nn.MSELoss",
