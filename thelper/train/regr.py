@@ -36,16 +36,13 @@ class RegressionTrainer(Trainer):
                  ):
         """Receives session parameters, parses tensor/target keys from task object, and sets up metrics."""
         super().__init__(session_name, save_dir, model, task, loaders, config, ckptdata=ckptdata)
-        if not isinstance(self.task, thelper.tasks.Regression):
-            raise AssertionError("expected task to be regression")
+        assert isinstance(self.task, thelper.tasks.Regression), "expected task to be regression"
         # @@@@@ todo: use target_min/target_max and other props from task?
 
     def _to_tensor(self, sample):
         """Fetches and returns tensors of inputs and targets from a batched sample dictionary."""
-        if not isinstance(sample, dict):
-            raise AssertionError("trainer expects samples to come in dicts for key-based usage")
-        if self.task.input_key not in sample:
-            raise AssertionError("could not find input key '%s' in sample dict" % self.task.input_key)
+        assert isinstance(sample, dict), "trainer expects samples to come in dicts for key-based usage"
+        assert self.task.input_key in sample, f"could not find input key '{self.task.input_key}' in sample dict"
         input_val = sample[self.task.input_key]
         if isinstance(input_val, np.ndarray):
             input_val = torch.from_numpy(input_val)
@@ -83,7 +80,7 @@ class RegressionTrainer(Trainer):
             loss: the loss function used to evaluate model fidelity.
             optimizer: the optimizer used for back propagation.
             loader: the data loader used to get transformed training samples.
-            metrics: the list of metrics to evaluate after every iteration.
+            metrics: the list of metrics to update every iteration.
             monitor: name of the metric to update/monitor for improvements.
             writer: the writer used to store tbx events/messages/metrics.
         """
@@ -112,18 +109,16 @@ class RegressionTrainer(Trainer):
             iter_loss = loss(iter_pred, target.float())
             iter_loss.backward()
             optimizer.step()
-            if metrics:
-                meta = {key: sample[key] if key in sample else None
-                        for key in self.task.meta_keys} if self.task.meta_keys else None
-                iter_pred_cpu = self._move_tensor(iter_pred, dev="cpu", detach=True)
-                target_cpu = self._move_tensor(target, dev="cpu", detach=True)
-                for metric in metrics.values():
-                    metric.accumulate(iter_pred_cpu, target_cpu, meta=meta)
+            iter_pred_cpu = self._move_tensor(iter_pred, dev="cpu", detach=True)
+            target_cpu = self._move_tensor(target, dev="cpu", detach=True)
+            for metric in metrics.values():
+                metric.update(task=self.task, input=input_val, pred=iter_pred_cpu,
+                              target=target_cpu, sample=sample, iter_idx=idx, max_iters=epoch_size,
+                              epoch_idx=epoch, max_epochs=self.epochs)
             if self.train_iter_callback is not None:
-                self.train_iter_callback(sample=sample, task=self.task, pred=iter_pred,
-                                         iter_idx=iter, max_iters=epoch_size,
-                                         epoch_idx=epoch, max_epochs=self.epochs,
-                                         **self.callback_kwargs)
+                self.train_iter_callback(task=self.task, input=input_val, pred=iter_pred_cpu,
+                                         target=target_cpu, sample=sample, iter_idx=idx, max_iters=epoch_size,
+                                         epoch_idx=epoch, max_epochs=self.epochs, **self.callback_kwargs)
             epoch_loss += iter_loss.item()
             monitor_output = ""
             if monitor is not None and monitor in metrics:
@@ -142,7 +137,7 @@ class RegressionTrainer(Trainer):
             if writer:
                 writer.add_scalar("iter/loss", iter_loss.item(), iter)
                 for metric_name, metric in metrics.items():
-                    if metric.is_scalar():  # only useful assuming that scalar metrics are smoothed...
+                    if isinstance(metric, thelper.optim.metrics.Metric):
                         writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
             iter += 1
         epoch_loss /= epoch_size
@@ -172,18 +167,16 @@ class RegressionTrainer(Trainer):
                 if isinstance(input_val, list):
                     raise AssertionError("missing regr trainer support for duped minibatches")  # todo
                 pred = model(self._move_tensor(input_val, dev))
-                if metrics:
-                    meta = {key: sample[key] if key in sample else None
-                            for key in self.task.meta_keys} if self.task.meta_keys else None
-                    pred_cpu = self._move_tensor(pred, dev="cpu", detach=True)
-                    target_cpu = self._move_tensor(target, dev="cpu", detach=True)
-                    for metric in metrics.values():
-                        metric.accumulate(pred_cpu, target_cpu if target is not None else None, meta=meta)
+                pred_cpu = self._move_tensor(pred, dev="cpu", detach=True)
+                target_cpu = self._move_tensor(target, dev="cpu", detach=True)
+                for metric in metrics.values():
+                    metric.update(task=self.task, input=input_val, pred=pred_cpu,
+                                  target=target_cpu, sample=sample, iter_idx=idx, max_iters=epoch_size,
+                                  epoch_idx=epoch, max_epochs=self.epochs)
                 if self.eval_iter_callback is not None:
-                    self.eval_iter_callback(sample=sample, task=self.task, pred=pred,
-                                            iter_idx=idx, max_iters=epoch_size,
-                                            epoch_idx=epoch, max_epochs=self.epochs,
-                                            **self.callback_kwargs)
+                    self.eval_iter_callback(task=self.task, input=input_val, pred=pred_cpu,
+                                            target=target_cpu, sample=sample, iter_idx=idx, max_iters=epoch_size,
+                                            epoch_idx=epoch, max_epochs=self.epochs, **self.callback_kwargs)
                 self.logger.info(
                     "eval epoch#{}   batch: {}/{} ({:.0f}%){}".format(
                         epoch,

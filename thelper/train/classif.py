@@ -34,20 +34,13 @@ class ImageClassifTrainer(Trainer):
                  ):
         """Receives session parameters, parses image/label keys from task object, and sets up metrics."""
         super().__init__(session_name, save_dir, model, task, loaders, config, ckptdata=ckptdata)
-        if not isinstance(self.task, thelper.tasks.Classification):
-            raise AssertionError("expected task to be classification")
-        metrics = list(self.train_metrics.values()) + list(self.valid_metrics.values()) + list(self.test_metrics.values())
-        for metric in metrics:  # check all metrics for classification-specific attributes, and set them
-            if hasattr(metric, "set_class_names") and callable(metric.set_class_names):
-                metric.set_class_names(self.task.class_names)
+        assert isinstance(self.task, thelper.tasks.Classification), "expected task to be classification"
         self.warned_no_shuffling_augments = False
 
     def _to_tensor(self, sample):
         """Fetches and returns tensors of input images and class labels from a batched sample dictionary."""
-        if not isinstance(sample, dict):
-            raise AssertionError("trainer expects samples to come in dicts for key-based usage")
-        if self.task.input_key not in sample:
-            raise AssertionError("could not find input key '%s' in sample dict" % self.task.input_key)
+        assert isinstance(sample, dict), "trainer expects samples to come in dicts for key-based usage"
+        assert self.task.input_key in sample, f"could not find input key '{self.task.input_key}' in sample dict"
         input_val, label_idx = sample[self.task.input_key], None
         if isinstance(input_val, list):
             if self.task.gt_key in sample and sample[self.task.gt_key] is not None:
@@ -99,7 +92,7 @@ class ImageClassifTrainer(Trainer):
             loss: the loss function used to evaluate model fidelity.
             optimizer: the optimizer used for back propagation.
             loader: the data loader used to get transformed training samples.
-            metrics: the list of metrics to evaluate after every iteration.
+            metrics: the list of metrics to update every iteration.
             monitor: name of the metric to update/monitor for improvements.
             writer: the writer used to store tbx events/messages/metrics.
         """
@@ -149,18 +142,16 @@ class ImageClassifTrainer(Trainer):
                 iter_loss = loss(iter_pred, self._move_tensor(label, dev))
                 iter_loss.backward()
             optimizer.step()
-            if metrics:
-                meta = {key: sample[key] if key in sample else None
-                        for key in self.task.meta_keys} if self.task.meta_keys else None
-                iter_pred_cpu = self._move_tensor(iter_pred, dev="cpu", detach=True)
-                label_cpu = self._move_tensor(label, dev="cpu", detach=True)
-                for metric in metrics.values():
-                    metric.accumulate(iter_pred_cpu, label_cpu, meta=meta)
+            iter_pred_cpu = self._move_tensor(iter_pred, dev="cpu", detach=True)
+            label_cpu = self._move_tensor(label, dev="cpu", detach=True)
+            for metric in metrics.values():
+                metric.update(task=self.task, input=input_val, pred=iter_pred_cpu,
+                              target=label_cpu, sample=sample, iter_idx=idx, max_iters=epoch_size,
+                              epoch_idx=epoch, max_epochs=self.epochs)
             if self.train_iter_callback is not None:
-                self.train_iter_callback(sample=sample, task=self.task, pred=iter_pred,
-                                         iter_idx=iter, max_iters=epoch_size,
-                                         epoch_idx=epoch, max_epochs=self.epochs,
-                                         **self.callback_kwargs)
+                self.train_iter_callback(task=self.task, input=input_val, pred=iter_pred_cpu,
+                                         target=label_cpu, sample=sample, iter_idx=idx, max_iters=epoch_size,
+                                         epoch_idx=epoch, max_epochs=self.epochs, **self.callback_kwargs)
             epoch_loss += iter_loss.item()
             monitor_output = ""
             if monitor is not None and monitor in metrics:
@@ -179,7 +170,7 @@ class ImageClassifTrainer(Trainer):
             if writer:
                 writer.add_scalar("iter/loss", iter_loss.item(), iter)
                 for metric_name, metric in metrics.items():
-                    if metric.is_scalar():  # only useful assuming that scalar metrics are smoothed...
+                    if isinstance(metric, thelper.optim.metrics.Metric):
                         writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
             iter += 1
         epoch_loss /= epoch_size
@@ -225,18 +216,16 @@ class ImageClassifTrainer(Trainer):
                     pred = torch.mean(preds, dim=0)
                 else:
                     pred = model(self._move_tensor(input_val, dev))
-                if metrics:
-                    meta = {key: sample[key] if key in sample else None
-                            for key in self.task.meta_keys} if self.task.meta_keys else None
-                    pred_cpu = self._move_tensor(pred, dev="cpu", detach=True)
-                    label_cpu = self._move_tensor(label, dev="cpu", detach=True)
-                    for metric in metrics.values():
-                        metric.accumulate(pred_cpu, label_cpu, meta=meta)
+                pred_cpu = self._move_tensor(pred, dev="cpu", detach=True)
+                label_cpu = self._move_tensor(label, dev="cpu", detach=True)
+                for metric in metrics.values():
+                    metric.update(task=self.task, input=input_val, pred=pred_cpu,
+                                  target=label_cpu, sample=sample, iter_idx=idx, max_iters=epoch_size,
+                                  epoch_idx=epoch, max_epochs=self.epochs)
                 if self.eval_iter_callback is not None:
-                    self.eval_iter_callback(sample=sample, task=self.task, pred=pred,
-                                            iter_idx=idx, max_iters=epoch_size,
-                                            epoch_idx=epoch, max_epochs=self.epochs,
-                                            **self.callback_kwargs)
+                    self.eval_iter_callback(task=self.task, input=input_val, pred=pred_cpu,
+                                            target=label_cpu, sample=sample, iter_idx=idx, max_iters=epoch_size,
+                                            epoch_idx=epoch, max_epochs=self.epochs, **self.callback_kwargs)
                 self.logger.info(
                     "eval epoch#{}   batch: {}/{} ({:.0f}%){}".format(
                         epoch,

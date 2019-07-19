@@ -38,15 +38,12 @@ class ObjDetectTrainer(Trainer):
                  ):
         """Receives session parameters, parses tensor/target keys from task object, and sets up metrics."""
         super().__init__(session_name, save_dir, model, task, loaders, config, ckptdata=ckptdata)
-        if not isinstance(self.task, thelper.tasks.Detection):
-            raise AssertionError("expected task to be object detection")
+        assert isinstance(self.task, thelper.tasks.Detection), "expected task to be object detection"
 
     def _to_tensor(self, sample):
         """Fetches and returns tensors of inputs and targets from a batched sample dictionary."""
-        if not isinstance(sample, dict):
-            raise AssertionError("trainer expects samples to come in dicts for key-based usage")
-        if self.task.input_key not in sample:
-            raise AssertionError("could not find input key '%s' in sample dict" % self.task.input_key)
+        assert isinstance(sample, dict), "trainer expects samples to come in dicts for key-based usage"
+        assert self.task.input_key in sample, f"could not find input key '{self.task.input_key}' in sample dict"
         input_val = sample[self.task.input_key]
         if isinstance(input_val, np.ndarray):
             input_val = torch.from_numpy(input_val)
@@ -122,7 +119,7 @@ class ObjDetectTrainer(Trainer):
             loss: the loss function used to evaluate model fidelity.
             optimizer: the optimizer used for back propagation.
             loader: the data loader used to get transformed training samples.
-            metrics: the list of metrics to evaluate after every iteration.
+            metrics: the list of metrics to update every iteration.
             monitor: name of the metric to update/monitor for improvements.
             writer: the writer used to store tbx events/messages/metrics.
         """
@@ -142,38 +139,35 @@ class ObjDetectTrainer(Trainer):
                 raise AssertionError("groundtruth required when training a model")
             optimizer.zero_grad()
             targets = self._move_tensor(targets, dev)
-            images = self._move_tensor(images, dev)
+            images_dev = self._move_tensor(images, dev)
             if isinstance(model, thelper.nn.utils.ExternalModule):
                 model = model.model  # temporarily unwrap to simplify code below
             if isinstance(model, torchvision.models.detection.generalized_rcnn.GeneralizedRCNN):
                 # unfortunately, the default generalized RCNN model forward does not return predictions while training...
-                # loss_dict = model(images=images, targets=targets)  # we basically reimplement this call below
-                original_image_sizes = [img.shape[-2:] for img in images]
-                images, targets = model.transform(images, targets)
-                features = model.backbone(images.tensors)
+                # loss_dict = model(images=images_dev, targets=targets)  # we basically reimplement this call below
+                original_image_sizes = [img.shape[-2:] for img in images_dev]
+                images_dev, targets = model.transform(images_dev, targets)
+                features = model.backbone(images_dev.tensors)
                 if isinstance(features, torch.Tensor):
                     features = collections.OrderedDict([(0, features)])
-                proposals, proposal_losses = model.rpn(images, features, targets)
-                iter_pred, detector_losses = model.roi_heads(features, proposals, images.image_sizes, targets)
-                iter_pred = model.transform.postprocess(iter_pred, images.image_sizes, original_image_sizes)
+                proposals, proposal_losses = model.rpn(images_dev, features, targets)
+                iter_pred, detector_losses = model.roi_heads(features, proposals, images_dev.image_sizes, targets)
+                iter_pred = model.transform.postprocess(iter_pred, images_dev.image_sizes, original_image_sizes)
                 iter_loss = sum(loss for loss in {**detector_losses, **proposal_losses}.values())
                 iter_loss.backward()
             else:
                 raise AssertionError("unknown/unhandled detection model type")
             optimizer.step()
-            if metrics or self.train_iter_callback is not None:
-                iter_pred = self._from_tensor(iter_pred, sample)
-            if metrics:
-                meta = {key: sample[key] if key in sample else None
-                        for key in self.task.meta_keys} if self.task.meta_keys else None
-                targets = self._move_tensor(targets, dev="cpu", detach=True)
-                for metric in metrics.values():
-                    metric.accumulate(iter_pred, targets, meta=meta)
+            iter_pred = self._from_tensor(iter_pred, sample)
+            targets = self._move_tensor(targets, dev="cpu", detach=True)
+            for metric in metrics.values():
+                metric.update(task=self.task, input=images, pred=iter_pred,
+                              target=targets, sample=sample, iter_idx=idx, max_iters=epoch_size,
+                              epoch_idx=epoch, max_epochs=self.epochs)
             if self.train_iter_callback is not None:
-                self.train_iter_callback(sample=sample, task=self.task, pred=iter_pred,
-                                         iter_idx=iter, max_iters=epoch_size,
-                                         epoch_idx=epoch, max_epochs=self.epochs,
-                                         **self.callback_kwargs)
+                self.train_iter_callback(task=self.task, input=images, pred=iter_pred,
+                                         target=targets, sample=sample, iter_idx=idx, max_iters=epoch_size,
+                                         epoch_idx=epoch, max_epochs=self.epochs, **self.callback_kwargs)
             epoch_loss += iter_loss.item()
             monitor_output = ""
             if monitor is not None and monitor in metrics:
@@ -192,7 +186,7 @@ class ObjDetectTrainer(Trainer):
             if writer:
                 writer.add_scalar("iter/loss", iter_loss.item(), iter)
                 for metric_name, metric in metrics.items():
-                    if metric.is_scalar():  # only useful assuming that scalar metrics are smoothed...
+                    if isinstance(metric, thelper.optim.metrics.Metric):
                         writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
             iter += 1
         epoch_loss /= epoch_size
@@ -220,19 +214,15 @@ class ObjDetectTrainer(Trainer):
                     continue  # skip until previous iter count (if set externally; no effect otherwise)
                 images, targets = self._to_tensor(sample)
                 pred = model(self._move_tensor(images, dev))
-                if metrics or self.train_iter_callback is not None:
-                    pred = self._from_tensor(pred, sample)
-                if metrics:
-                    meta = {key: sample[key] if key in sample else None
-                            for key in self.task.meta_keys} if self.task.meta_keys else None
-                    targets = self._move_tensor(targets, dev="cpu", detach=True)
-                    for metric in metrics.values():
-                        metric.accumulate(pred, targets, meta=meta)
+                pred = self._from_tensor(pred, sample)
+                for metric in metrics.values():
+                    metric.accumulate(task=self.task, input=images, pred=pred,
+                                      target=targets, sample=sample, iter_idx=idx, max_iters=epoch_size,
+                                      epoch_idx=epoch, max_epochs=self.epochs)
                 if self.eval_iter_callback is not None:
-                    self.eval_iter_callback(sample=sample, task=self.task, pred=pred,
-                                            iter_idx=idx, max_iters=epoch_size,
-                                            epoch_idx=epoch, max_epochs=self.epochs,
-                                            **self.callback_kwargs)
+                    self.eval_iter_callback(task=self.task, input=images, pred=pred,
+                                            target=targets, sample=sample, iter_idx=idx, max_iters=epoch_size,
+                                            epoch_idx=epoch, max_epochs=self.epochs, **self.callback_kwargs)
                 self.logger.info(
                     "eval epoch#{}   batch: {}/{} ({:.0f}%){}".format(
                         epoch,
