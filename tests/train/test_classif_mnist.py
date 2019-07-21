@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 
+import numpy as np
 import pytest
 import torch
 
@@ -176,7 +177,7 @@ def test_outputs(config):
             if filename.startswith("accuracy-"):
                 epoch = int(filename.split("-")[1].split(".")[0])
                 with open(os.path.join(epoch_out_path, filename), "r") as fd:
-                    assert float(fd.readline()) == train_outputs[epoch][ltype + "/metrics"]["accuracy"]
+                    assert np.isclose(float(fd.readline()), train_outputs[epoch][ltype + "/metrics"]["accuracy"])
             elif filename == "config.json":
                 with open(os.path.join(epoch_out_path, filename), "r") as fd:
                     backup_config = json.load(fd)
