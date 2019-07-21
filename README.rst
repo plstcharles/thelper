@@ -54,7 +54,7 @@ from the Centre de Recherche Informatique de Montréal / Computer Research Insti
 
 To get a general idea of what this framework can be used for, visit the `FAQ page
 <https://thelper.readthedocs.io/en/latest/faq.html>`_. For installation instructions, refer to the
-`installation guide <https://github.com/plstcharles/thelper/blob/master/INSTALL.rst>`_. For usage instructions,
+`installation guide <https://thelper.readthedocs.io/en/latest/installation.html>`_. For usage instructions,
 refer to the `user guide <https://thelper.readthedocs.io/en/latest/user-guide.html>`_. The auto-generated
 documentation is available via `readthedocs.io <https://thelper.readthedocs.io/en/latest/>`_.
 
