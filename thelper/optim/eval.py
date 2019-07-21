@@ -65,8 +65,8 @@ def compute_pascalvoc_metrics(pred_bboxes, gt_bboxes, task, iou_threshold=0.5, m
     image_ids = list(set([bbox.image_id for bbox in pred_bboxes]) | set([bbox.image_id for bbox in gt_bboxes]))
     image_ids = {k: idx for idx, k in enumerate(image_ids)}
     gt_used_flags = [[[[bbox, False] for bbox in gt_bboxes
-                       if (((isinstance(bbox.class_id, int) and bbox.class_id == ci) or bbox.class_id == cn)
-                           and bbox.image_id == iid)] for iid in image_ids] for ci, cn in enumerate(task.class_names)]
+                       if (((isinstance(bbox.class_id, int) and bbox.class_id == ci) or bbox.class_id == cn) and
+                           bbox.image_id == iid)] for iid in image_ids] for ci, cn in enumerate(task.class_names)]
     ret = {}
     for class_idx, class_name in enumerate(task.class_names):
         curr_pred_bboxes = [bbox for bbox in pred_bboxes if (isinstance(bbox.class_id, int) and bbox.class_id == class_idx) or
