@@ -1236,6 +1236,36 @@ def draw_popbars(labels,                # type: thelper.typedefs.LabelList
     return fig
 
 
+def draw_pascalvoc_curve(metrics, size_inch=(5, 5), dpi=320, show=False, block=False):
+    """Draws and returns a precision-recall curve according to pascalvoc metrics."""
+    # note: the 'metrics' must correspond to a single class output produced by pascalvoc evaluator
+    assert isinstance(metrics, dict), "unexpected metrics format"
+    class_name = metrics["class_name"]
+    assert isinstance(class_name, str), "unexpected class name type"
+    iou_threshold = metrics["iou_threshold"]
+    assert 0 < iou_threshold <= 1, "invalid intersection over union value (should be in ]0,1])"
+    method = metrics["eval_method"]
+    assert method in ["all-points", "11-points"], "invalid method (should be 'all-points' or '11-points')"
+    fig = plt.figure(num="pr", figsize=size_inch, dpi=dpi, facecolor="w", edgecolor="k")
+    fig.clf()
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot(metrics["recall"], metrics["precision"],
+            label=f"{class_name} (AP={metrics['AP'] * 100:.2f}%)")
+    ax.set_xlabel("recall")
+    ax.set_ylabel("precision")
+    ax.set_title(f"PascalVOC PR Curve @ {iou_threshold} IoU")
+    ax.legend(loc="upper right")
+    ax.grid()
+    fig.set_tight_layout(True)
+    if show:
+        fig.show()
+        if block:
+            plt.show(block=block)
+            return fig
+        plt.pause(0.5)
+    return fig
+
+
 def draw_images(images,               # type: thelper.typedefs.OneOrManyArrayType
                 captions=None,        # type: Optional[List[str]]
                 redraw=None,          # type: Optional[thelper.typedefs.DrawingType]
