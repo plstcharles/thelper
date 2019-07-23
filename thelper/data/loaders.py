@@ -28,19 +28,23 @@ logger = logging.getLogger(__name__)
 def default_collate(batch):
     """Puts each data field into a tensor with outer dimension batch size.
 
-    This function is copied from PyTorch's `torch.utils.data.dataloader.default_collate`, but additionally
-    supports custom objects from the framework (such as bounding boxes).
+    This function is copied from PyTorch's `torch.utils.data._utils.collate.default_collate`, but
+    additionally supports custom objects from the framework (such as bounding boxes).
 
     See ``torch.utils.data.DataLoader`` for more information.
     """
-    import torchvision
     from torch._six import container_abcs, string_classes, int_classes
     error_msg_fmt = "batch must contain tensors, numbers, dicts or lists; found {}"
-    torchvision_ver = [int(v) for v in torchvision.__version__.split(".")]
+    torch_ver = [int(v) for v in torch.__version__.split(".")]
     elem_type = type(batch[0])
     if isinstance(batch[0], torch.Tensor):
         out = None
-        if torchvision_ver[0] > 0 or torchvision_ver[1] >= 3:  # ver >= 0.3
+        if torch_ver[0] > 1 or torch_ver[1] > 1:  # ver > 1.1
+            if torch.utils.data.get_worker_info() is not None:
+                numel = sum([x.numel() for x in batch])
+                storage = batch[0].storage()._new_shared(numel)
+                out = batch[0].new(storage)
+        elif torch_ver[0] == 1 and torch_ver[1] == 1:  # ver == 1.1
             if torch.utils.data._utils.collate._use_shared_memory:
                 # If we're in a background process, concatenate directly into a
                 # shared memory tensor to avoid an extra copy
@@ -48,7 +52,7 @@ def default_collate(batch):
                 storage = batch[0].storage()._new_shared(numel)
                 out = batch[0].new(storage)
             return torch.stack(batch, 0, out=out)
-        else:  # ver < 0.3
+        else:  # ver < 1.1
             if torch.utils.data.dataloader._use_shared_memory:
                 # If we're in a background process, concatenate directly into a
                 # shared memory tensor to avoid an extra copy
@@ -61,20 +65,23 @@ def default_collate(batch):
         elem = batch[0]
         if elem_type.__name__ == 'ndarray':
             # array of string classes and object
-            if torchvision_ver[0] > 0 or torchvision_ver[1] >= 3:  # ver >= 0.3
+            if torch_ver[0] > 1 or torch_ver[1] > 0:  # ver > 1.0
                 if torch.utils.data._utils.collate.np_str_obj_array_pattern.search(elem.dtype.str) is not None:
                     raise TypeError(error_msg_fmt.format(elem.dtype))
-            else:  # ver < 0.3
+            else:  # ver <= 1.0
                 import re
                 if re.search('[SaUO]', elem.dtype.str) is not None:
                     raise TypeError(error_msg_fmt.format(elem.dtype))
             return default_collate([torch.from_numpy(b) for b in batch])
         if elem.shape == ():  # scalars
-            py_type = float if elem.dtype.name.startswith('float') else int
-            if torchvision_ver[0] > 0 or torchvision_ver[1] >= 3:  # ver >= 0.3
-                return torch.utils.data._utils.numpy_type_map[elem.dtype.name](list(map(py_type, batch)))
-            else:  # ver < 0.3
-                return torch.utils.data.dataloader.numpy_type_map[elem.dtype.name](list(map(py_type, batch)))
+            if torch_ver[0] > 1 or torch_ver[1] > 1:  # ver > 1.1
+                py_type = float if elem.dtype.name.startswith('float') else int
+                if torch_ver[0] > 1 or torch_ver[1] > 0:  # ver > 1.0
+                    return torch.utils.data._utils.collate.numpy_type_map[elem.dtype.name](list(map(py_type, batch)))
+                else:  # ver <= 1.0
+                    return torch.utils.data.dataloader.numpy_type_map[elem.dtype.name](list(map(py_type, batch)))
+            else:  # ver <= 1.1
+                return torch.as_tensor(batch)
     elif isinstance(batch[0], float):
         return torch.tensor(batch, dtype=torch.float64)
     elif isinstance(batch[0], int_classes):
