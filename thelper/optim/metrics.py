@@ -1176,6 +1176,8 @@ class AveragePrecision(Metric):
                              if targets is not None for pred, target in zip(preds, targets)])
         # maybe need to concat?
         pred, target = np.concatenate(pred), np.concatenate(target)  # possible due to image ids
+        if not pred:  # no predictions made by model
+            return 0.0
         metrics = thelper.optim.eval.compute_pascalvoc_metrics(pred, target, self.task,
                                                                self.iou_threshold, self.method)
         if self.target_class is None:
