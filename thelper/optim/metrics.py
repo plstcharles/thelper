@@ -1065,3 +1065,130 @@ class PSNR(Metric):
     def goal(self):
         """Returns the scalar optimization goal of this metric (maximization)."""
         return Metric.maximize
+
+
+class AveragePrecision(Metric):
+    r"""Object detection average precision score from PascalVOC.
+
+    This metric is computed based on the evaluator function implemented in :mod:`thelper.optim.eval`.
+    It can target a single class at a time, or produce the mean average precision for all classes.
+
+    Usage example inside a session configuration file::
+
+        # ...
+        # lists all metrics to instantiate as a dictionary
+        "metrics": {
+            # ...
+            # this is the name of the example metric; it is used for lookup/printing only
+            "mAP": {
+                # this type is used to instantiate the AP metric
+                "type": "thelper.optim.metrics.AveragePrecision",
+                # these parameters are passed to the wrapper's constructor
+                "params": {
+                    # no parameters means we will compute the mAP
+                }
+            },
+            # ...
+        }
+        # ...
+
+    Attributes:
+        target_class: name of the class to target; if 'None', will compute mAP instead of AP.
+        iou_threshold: Intersection Over Union (IOU) threshold for true/false positive classification.
+        method: the evaluation method to use; can be the the latest & official PASCAL VOC toolkit
+            approach ("all-points"), or the 11-point approach ("11-points") described in the original
+            paper ("The PASCAL Visual Object Classes(VOC) Challenge").
+        max_win_size: maximum moving average window size to use (default=None, which equals dataset size).
+        preds: array holding the predicted bounding boxes for all input samples.
+        targets: array holding the target bounding boxes for all input samples.
+    """
+
+    def __init__(self, target_class=None, iou_threshold=0.5, method="all-points", max_win_size=None):
+        """Initializes metric attributes.
+
+        Note that by default, if ``max_win_size`` is not provided here, the value given to ``max_iters`` on
+        the first update call will be used instead to fix the sliding window length. In any case, the
+        smallest of ``max_iters`` and ``max_win_size`` will be used to determine the actual window size.
+        """
+        assert max_win_size is None or (isinstance(max_win_size, int) and max_win_size > 0), \
+            "invalid max sliding window size (should be positive integer)"
+        self.target_class = target_class
+        self.iou_threshold = iou_threshold
+        self.method = method
+        self.max_win_size = max_win_size
+        self.preds = None  # will be instantiated on first iter
+        self.targets = None  # will be instantiated on first iter
+        self.task = None
+
+    def __repr__(self):
+        """Returns a generic print-friendly string containing info about this metric."""
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
+            f"(target_class={repr(self.target_class)}, max_win_size={repr(self.max_win_size)})"
+
+    def update(self,  # see `thelper.typedefs.IterCallbackParams` for more info
+               task,  # type: thelper.tasks.utils.Task
+               input,  # type: thelper.typedefs.InputType
+               pred,  # type: thelper.typedefs.PredictionType
+               target,  # type: thelper.typedefs.TargetType
+               sample,  # type: thelper.typedefs.SampleType
+               iter_idx,  # type: int
+               max_iters,  # type: int
+               epoch_idx,  # type: int
+               max_epochs,  # type: int
+               **kwargs):  # type: (...) -> None
+        """Receives the latest bbox predictions and targets from the training session.
+
+        The exact signature of this function should match the one of the callbacks defined in
+        :class:`thelper.train.base.Trainer` and specified by ``thelper.typedefs.IterCallbackParams``.
+        """
+        assert len(kwargs) == 0, "unexpected extra arguments present in update call"
+        assert iter_idx is not None and max_iters is not None and iter_idx < max_iters, \
+            "bad iteration indices given to metric update function"
+        curr_win_size = max_iters if self.max_win_size is None else min(self.max_win_size, max_iters)
+        if self.preds is None or self.preds.size != curr_win_size:
+            # each 'iteration' will have a corresponding bin with counts for that batch
+            self.preds = np.asarray([None] * curr_win_size)
+            self.targets = np.asarray([None] * curr_win_size)
+        curr_idx = iter_idx % curr_win_size
+        self.task = task  # keep reference for eval only
+        if target is None or len(target) == 0:
+            # only accumulate results when groundtruth is available (should we though? affects false negative count)
+            self.preds[curr_idx] = None
+            self.targets[curr_idx] = None
+            return
+        if not pred:
+            pred = [[]] * len(target)
+        assert isinstance(pred, list) and isinstance(target, list)
+        assert all([isinstance(b, list) and
+                    all([isinstance(p, thelper.tasks.detect.BoundingBox) for p in b]) for b in pred])
+        assert all([isinstance(b, list) and
+                    all([isinstance(t, thelper.tasks.detect.BoundingBox) for t in b]) for b in target])
+        self.preds[curr_idx] = pred
+        self.targets[curr_idx] = target
+
+    def eval(self):
+        """Returns the current accuracy (in percentage) based on the accumulated prediction counts.
+
+        Will issue a warning if no predictions have been accumulated yet.
+        """
+        assert self.targets.size == self.preds.size, "internal window size mismatch"
+        pred, target = zip(*[(pred, target) for preds, targets in zip(self.preds, self.targets)
+                             if targets is not None for pred, target in zip(preds, targets)])
+        # maybe need to concat?
+        pred, target = np.concatenate(pred), np.concatenate(target)  # possible due to image ids
+        metrics = thelper.optim.eval.compute_pascalvoc_metrics(pred, target, self.task,
+                                                               self.iou_threshold, self.method)
+        if self.target_class is None:
+            # compute mAP wrt classes that have at least one positive sample
+            return np.mean([m["AP"] for m in metrics if m["total positives"] > 0])
+        return metrics[self.target_class]["AP"]
+
+    def reset(self):
+        """Toggles a reset of the metric's internal state, deallocating bbox arrays."""
+        self.preds = None
+        self.targets = None
+
+    @property
+    def goal(self):
+        """Returns the scalar optimization goal of this metric (maximization)."""
+        return Metric.maximize

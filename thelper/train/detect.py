@@ -155,9 +155,10 @@ class ObjDetectTrainer(Trainer):
             optimizer.step()
             iter_pred = self._from_tensor(iter_pred, sample)
             targets = self._move_tensor(targets, dev="cpu", detach=True)
+            target_bboxes = [target["refs"] for target in targets]
             for metric in metrics.values():
-                metric.update(task=self.task, input=images, pred=iter_pred,
-                              target=targets, sample=sample, iter_idx=idx, max_iters=epoch_size,
+                metric.update(task=self.task, input=images, pred=iter_pred, target=target_bboxes,
+                              sample=sample, iter_idx=idx, max_iters=epoch_size,
                               epoch_idx=epoch, max_epochs=self.epochs)
             epoch_loss += iter_loss.item()
             monitor_output = ""

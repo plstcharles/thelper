@@ -11,6 +11,7 @@ Changelog
 * Updated trainer callback signatures to include more data
 * Updated install doc with links to anaconda/docker hubs
 * Cleaned drawing functions args wrt callback refactoring
+* Added eval module to optim w/ pascalvoc evaluation funcs
 * TODO @@@@@@@
 
 0.3.4 (2019/07/12)
