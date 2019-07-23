@@ -3,7 +3,7 @@
 Changelog
 =========
 
-0.3.5 (2019/07/??)
+0.3.5 (2019/07/23)
 ------------------
 
 * Refactored metrics/consumers into separate interfaces
@@ -12,7 +12,6 @@ Changelog
 * Updated install doc with links to anaconda/docker hubs
 * Cleaned drawing functions args wrt callback refactoring
 * Added eval module to optim w/ pascalvoc evaluation funcs
-* TODO @@@@@@@
 
 0.3.4 (2019/07/12)
 ------------------
