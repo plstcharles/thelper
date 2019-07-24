@@ -34,6 +34,7 @@
     },
     "trainer": {
         "epochs": 100,
+        "monitor": "mAP",
         "save_freq": 10,
         "optimization": {
             "optimizer": {
@@ -46,7 +47,9 @@
             }
         },
         "metrics": {
-
+            "mAP": {
+                "type": "thelper.optim.metrics.AveragePrecision"
+            }
         }
     }
 }
