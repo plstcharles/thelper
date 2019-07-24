@@ -1173,16 +1173,16 @@ class AveragePrecision(Metric):
         """
         assert self.targets.size == self.preds.size, "internal window size mismatch"
         pred, target = zip(*[(pred, target) for preds, targets in zip(self.preds, self.targets)
-                             if targets is not None for pred, target in zip(preds, targets)])
+                             if targets for pred, target in zip(preds, targets)])
         # maybe need to concat?
         pred, target = np.concatenate(pred), np.concatenate(target)  # possible due to image ids
-        if not pred:  # no predictions made by model
-            return 0.0
+        if len(pred) == 0:  # no predictions made by model
+            return float("nan")
         metrics = thelper.optim.eval.compute_pascalvoc_metrics(pred, target, self.task,
                                                                self.iou_threshold, self.method)
         if self.target_class is None:
             # compute mAP wrt classes that have at least one positive sample
-            return np.mean([m["AP"] for m in metrics if m["total positives"] > 0])
+            return np.mean([m["AP"] for m in metrics.values() if m["total positives"] > 0])
         return metrics[self.target_class]["AP"]
 
     def reset(self):

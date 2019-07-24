@@ -134,7 +134,7 @@ class ObjDetectTrainer(Trainer):
             assert targets is not None and not any([not bset for bset in targets]), \
                 "groundtruth required when training a model"
             optimizer.zero_grad()
-            targets = self._move_tensor(targets, dev)
+            targets_dev = self._move_tensor(targets, dev)
             images_dev = self._move_tensor(images, dev)
             if isinstance(model, thelper.nn.utils.ExternalModule):
                 model = model.model  # temporarily unwrap to simplify code below
@@ -143,21 +143,20 @@ class ObjDetectTrainer(Trainer):
             # unfortunately, the default generalized RCNN model forward does not return predictions while training...
             # loss_dict = model(images=images_dev, targets=targets)  # we basically reimplement this call below
             original_image_sizes = [img.shape[-2:] for img in images_dev]
-            images_dev, targets = model.transform(images_dev, targets)
+            images_dev, targets_dev = model.transform(images_dev, targets_dev)
             features = model.backbone(images_dev.tensors)
             if isinstance(features, torch.Tensor):
                 features = collections.OrderedDict([(0, features)])
-            proposals, proposal_losses = model.rpn(images_dev, features, targets)
-            iter_pred, detector_losses = model.roi_heads(features, proposals, images_dev.image_sizes, targets)
-            iter_pred = model.transform.postprocess(iter_pred, images_dev.image_sizes, original_image_sizes)
-            iter_loss = sum(loss for loss in {**detector_losses, **proposal_losses}.values())
+            proposals, proposal_losses = model.rpn(images_dev, features, targets_dev)
+            pred, pred_losses = model.roi_heads(features, proposals, images_dev.image_sizes, targets_dev)
+            pred = model.transform.postprocess(pred, images_dev.image_sizes, original_image_sizes)
+            iter_loss = sum(loss for loss in {**pred_losses, **proposal_losses}.values())
             iter_loss.backward()
             optimizer.step()
-            iter_pred = self._from_tensor(iter_pred, sample)
-            targets = self._move_tensor(targets, dev="cpu", detach=True)
+            pred = self._from_tensor(pred, sample)
             target_bboxes = [target["refs"] for target in targets]
             for metric in metrics.values():
-                metric.update(task=self.task, input=images, pred=iter_pred, target=target_bboxes,
+                metric.update(task=self.task, input=images, pred=pred, target=target_bboxes,
                               sample=sample, iter_idx=idx, max_iters=epoch_size,
                               epoch_idx=epoch, max_epochs=self.epochs)
             epoch_loss += iter_loss.item()
@@ -207,10 +206,11 @@ class ObjDetectTrainer(Trainer):
                 images, targets = self._to_tensor(sample)
                 pred = model(self._move_tensor(images, dev))
                 pred = self._from_tensor(pred, sample)
+                target_bboxes = [target["refs"] for target in targets]
                 for metric in metrics.values():
-                    metric.accumulate(task=self.task, input=images, pred=pred,
-                                      target=targets, sample=sample, iter_idx=idx, max_iters=epoch_size,
-                                      epoch_idx=epoch, max_epochs=self.epochs)
+                    metric.update(task=self.task, input=images, pred=pred, target=target_bboxes,
+                                  sample=sample, iter_idx=idx, max_iters=epoch_size,
+                                  epoch_idx=epoch, max_epochs=self.epochs)
                 self.logger.info(
                     "eval epoch#{}   batch: {}/{} ({:.0f}%){}".format(
                         epoch,

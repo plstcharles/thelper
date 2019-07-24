@@ -51,24 +51,25 @@ def compute_pascalvoc_metrics(pred_bboxes, gt_bboxes, task, iou_threshold=0.5, m
         - ``total TP``: total number of True Positive detections;
         - ``total FP``: total number of False Negative detections.
     """
-    assert isinstance(pred_bboxes, list) and all([isinstance(b, thelper.data.BoundingBox) for b in pred_bboxes]), \
+    assert isinstance(pred_bboxes, (list, np.ndarray)) and all([isinstance(b, thelper.data.BoundingBox) for b in pred_bboxes]), \
         "invalid predictions format (expected list of bounding box objects)"
     assert all([isinstance(bbox.confidence, float) and 0 <= bbox.confidence <= 1 for bbox in pred_bboxes]), \
         "predicted bounding boxes must be provided with confidence values in [0,1]"
     assert all([bbox.image_id is not None for bbox in pred_bboxes]), "predicted bbox image id must be defined"
-    assert isinstance(gt_bboxes, list) and all([isinstance(b, thelper.data.BoundingBox) for b in gt_bboxes]), \
+    assert isinstance(gt_bboxes, (list, np.ndarray)) and all([isinstance(b, thelper.data.BoundingBox) for b in gt_bboxes]), \
         "invalid input groundtruth format (expected list of bounding box objects)"
     assert all([bbox.image_id is not None for bbox in gt_bboxes]), "gt bbox image id must be defined"
     assert isinstance(task, thelper.tasks.Detection) and task.class_names, "invalid task object (should be detection)"
+    class_names = [c for c in task.class_names if task.background is None or c != "background"]
     assert 0 < iou_threshold <= 1, "invalid intersection over union value (should be in ]0,1])"
     assert method in ["all-points", "11-points"], "invalid method (should be 'all-points' or '11-points')"
     image_ids = list(set([bbox.image_id for bbox in pred_bboxes]) | set([bbox.image_id for bbox in gt_bboxes]))
     image_ids = {k: idx for idx, k in enumerate(image_ids)}
     gt_used_flags = [[[[bbox, False] for bbox in gt_bboxes
                        if (((isinstance(bbox.class_id, int) and bbox.class_id == ci) or bbox.class_id == cn) and
-                           bbox.image_id == iid)] for iid in image_ids] for ci, cn in enumerate(task.class_names)]
+                           bbox.image_id == iid)] for iid in image_ids] for ci, cn in enumerate(class_names)]
     ret = {}
-    for class_idx, class_name in enumerate(task.class_names):
+    for class_idx, class_name in enumerate(class_names):
         curr_pred_bboxes = [bbox for bbox in pred_bboxes if (isinstance(bbox.class_id, int) and bbox.class_id == class_idx) or
                             bbox.class_id == class_name]
         curr_pred_bboxes = sorted(curr_pred_bboxes, key=lambda bbox: bbox.confidence, reverse=True)
