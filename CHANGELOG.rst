@@ -3,6 +3,12 @@
 Changelog
 =========
 
+0.3.6 (2019/07/??)
+------------------
+
+* Fixed torch version checks in custom default collate impl
+* Fixed bbox predictions forwarding and evaluation in objdetect
+
 0.3.5 (2019/07/23)
 ------------------
 
