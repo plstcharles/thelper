@@ -84,6 +84,14 @@ class Metric(PredictionConsumer):
         """
         raise NotImplementedError
 
+    @property
+    def live_eval(self):
+        """Returns whether this metric can/should be evaluated at every backprop iteration or not.
+
+        By default, this returns ``True``, but implementations that are quite slow may return ``False``.
+        """
+        return True
+
 
 class Accuracy(Metric):
     r"""Classification accuracy metric interface.
@@ -553,7 +561,7 @@ class ExternalMetric(Metric):
     """
 
     def __init__(self, metric_name, metric_type, metric_goal, metric_params=None, target_name=None,
-                 class_names=None, max_win_size=None, force_softmax=True):
+                 class_names=None, max_win_size=None, force_softmax=True, live_eval=True):
         """Receives all necessary arguments for wrapper initialization and external metric instantiation.
 
         See :class:`thelper.optim.metrics.ExternalMetric` for information on arguments.
@@ -592,6 +600,7 @@ class ExternalMetric(Metric):
         self.max_win_size = max_win_size
         self.pred = None  # will be instantiated on first iter
         self.target = None  # will be instantiated on first iter
+        self._live_eval = live_eval  # could be 'False' for external impls that are pretty slow to eval
 
     def __repr__(self):
         """Returns a generic print-friendly string containing info about this metric."""
@@ -704,6 +713,14 @@ class ExternalMetric(Metric):
     def goal(self):
         """Returns the scalar optimization goal of this metric (user-defined)."""
         return self.metric_goal
+
+    @property
+    def live_eval(self):
+        """Returns whether this metric can/should be evaluated at every backprop iteration or not.
+
+        By default, this returns ``True``, but implementations that are quite slow may return ``False``.
+        """
+        return self._live_eval
 
 
 class ROCCurve(Metric):
@@ -954,6 +971,11 @@ class ROCCurve(Metric):
         else:  # if self.target_fpr is not None:
             return Metric.maximize  # tpr must be maximized
 
+    @property
+    def live_eval(self):
+        """Returns whether this metric can/should be evaluated at every backprop iteration or not."""
+        return False  # some operating modes might be pretty slow, check back impl later
+
 
 class PSNR(Metric):
     r"""Peak Signal-to-Noise Ratio (PSNR) metric interface.
@@ -1194,3 +1216,8 @@ class AveragePrecision(Metric):
     def goal(self):
         """Returns the scalar optimization goal of this metric (maximization)."""
         return Metric.maximize
+
+    @property
+    def live_eval(self):
+        """Returns whether this metric can/should be evaluated at every backprop iteration or not."""
+        return False  # the current PascalVOC implementation is preeetty slow with lots of bboxes
