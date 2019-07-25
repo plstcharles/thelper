@@ -429,7 +429,8 @@ class Resize:
             if slices_dst is None or not isinstance(slices_dst, list) or len(slices_dst) != len(slices):
                 slices_dst = [None] * len(slices)
             for idx in range(len(slices)):
-                cv.resize(slice[idx], self.dsize, dst=slices_dst[idx], fx=self.fx, fy=self.fy, interpolation=self.interp)
+                slices_dst[idx] = cv.resize(slices[idx], self.dsize, dst=slices_dst[idx],
+                                            fx=self.fx, fy=self.fy, interpolation=self.interp)
             if self.buffer:
                 self.dst = slices_dst
             return np.stack(slices_dst, 2)
