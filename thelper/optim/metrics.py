@@ -8,6 +8,7 @@ session. For more information on this, refer to :class:`thelper.train.base.Train
 
 import logging
 from abc import abstractmethod
+from typing import Optional  # noqa: F401
 
 import numpy as np
 import sklearn.metrics
@@ -44,6 +45,7 @@ class Metric(PredictionConsumer):
                pred,  # type: thelper.typedefs.PredictionType
                target,  # type: thelper.typedefs.TargetType
                sample,  # type: thelper.typedefs.SampleType
+               loss,  # type: Optional[float]
                iter_idx,  # type: int
                max_iters,  # type: int
                epoch_idx,  # type: int
@@ -167,6 +169,7 @@ class Accuracy(Metric):
                pred,  # type: thelper.typedefs.PredictionType
                target,  # type: thelper.typedefs.TargetType
                sample,  # type: thelper.typedefs.SampleType
+               loss,  # type: Optional[float]
                iter_idx,  # type: int
                max_iters,  # type: int
                epoch_idx,  # type: int
@@ -299,6 +302,7 @@ class MeanAbsoluteError(Metric):
                pred,  # type: thelper.typedefs.PredictionType
                target,  # type: thelper.typedefs.TargetType
                sample,  # type: thelper.typedefs.SampleType
+               loss,  # type: Optional[float]
                iter_idx,  # type: int
                max_iters,  # type: int
                epoch_idx,  # type: int
@@ -423,6 +427,7 @@ class MeanSquaredError(Metric):
                pred,  # type: thelper.typedefs.PredictionType
                target,  # type: thelper.typedefs.TargetType
                sample,  # type: thelper.typedefs.SampleType
+               loss,  # type: Optional[float]
                iter_idx,  # type: int
                max_iters,  # type: int
                epoch_idx,  # type: int
@@ -634,6 +639,7 @@ class ExternalMetric(Metric):
                pred,  # type: thelper.typedefs.PredictionType
                target,  # type: thelper.typedefs.TargetType
                sample,  # type: thelper.typedefs.SampleType
+               loss,  # type: Optional[float]
                iter_idx,  # type: int
                max_iters,  # type: int
                epoch_idx,  # type: int
@@ -874,6 +880,7 @@ class ROCCurve(Metric):
                pred,  # type: thelper.typedefs.PredictionType
                target,  # type: thelper.typedefs.TargetType
                sample,  # type: thelper.typedefs.SampleType
+               loss,  # type: Optional[float]
                iter_idx,  # type: int
                max_iters,  # type: int
                epoch_idx,  # type: int
@@ -1041,6 +1048,7 @@ class PSNR(Metric):
                pred,  # type: thelper.typedefs.PredictionType
                target,  # type: thelper.typedefs.TargetType
                sample,  # type: thelper.typedefs.SampleType
+               loss,  # type: Optional[float]
                iter_idx,  # type: int
                max_iters,  # type: int
                epoch_idx,  # type: int
@@ -1153,6 +1161,7 @@ class AveragePrecision(Metric):
                pred,  # type: thelper.typedefs.PredictionType
                target,  # type: thelper.typedefs.TargetType
                sample,  # type: thelper.typedefs.SampleType
+               loss,  # type: Optional[float]
                iter_idx,  # type: int
                max_iters,  # type: int
                epoch_idx,  # type: int

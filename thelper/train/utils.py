@@ -47,6 +47,7 @@ class PredictionConsumer(ABC):
                pred,  # type: thelper.typedefs.PredictionType
                target,  # type: thelper.typedefs.TargetType
                sample,  # type: thelper.typedefs.SampleType
+               loss,  # type: Optional[float]
                iter_idx,  # type: int
                max_iters,  # type: int
                epoch_idx,  # type: int
@@ -197,6 +198,7 @@ class ClassifLogger(PredictionConsumer):
                pred,  # type: thelper.typedefs.PredictionType
                target,  # type: thelper.typedefs.TargetType
                sample,  # type: thelper.typedefs.SampleType
+               loss,  # type: Optional[float]
                iter_idx,  # type: int
                max_iters,  # type: int
                epoch_idx,  # type: int
@@ -361,6 +363,7 @@ class ClassifReport(PredictionConsumer):
                pred,  # type: thelper.typedefs.PredictionType
                target,  # type: thelper.typedefs.TargetType
                sample,  # type: thelper.typedefs.SampleType
+               loss,  # type: Optional[float]
                iter_idx,  # type: int
                max_iters,  # type: int
                epoch_idx,  # type: int
@@ -478,6 +481,7 @@ class ConfusionMatrix(PredictionConsumer):
                pred,  # type: thelper.typedefs.PredictionType
                target,  # type: thelper.typedefs.TargetType
                sample,  # type: thelper.typedefs.SampleType
+               loss,  # type: Optional[float]
                iter_idx,  # type: int
                max_iters,  # type: int
                epoch_idx,  # type: int
@@ -614,6 +618,7 @@ def _draw_wrapper(task,  # type: thelper.tasks.utils.Task
                   pred,  # type: thelper.typedefs.PredictionType
                   target,  # type: thelper.typedefs.TargetType
                   sample,  # type: thelper.typedefs.SampleType
+                  loss,  # type: Optional[float]
                   iter_idx,  # type: int
                   max_iters,  # type: int
                   epoch_idx,  # type: int

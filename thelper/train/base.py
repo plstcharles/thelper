@@ -13,7 +13,7 @@ import random
 import time
 from abc import abstractmethod
 from copy import deepcopy
-from typing import AnyStr  # noqa: F401
+from typing import AnyStr, Optional  # noqa: F401
 
 import cv2 as cv
 import numpy as np
