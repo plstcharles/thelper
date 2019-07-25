@@ -212,7 +212,7 @@ class Trainer:
                 for mkey, mval in thelper.train.create_consumers(trainer_config[skey]).items():
                     assert mkey not in sval, f"metric name '{mkey}' duplicated in set '{skey}'"
                     sval[mkey] = mval
-                for mkey, mval in sval:
+                for mkey, mval in sval.items():
                     self.logger.info("parsed metric '%s': %s" % (mkey, str(mval)))
 
         # check for monitored metric
