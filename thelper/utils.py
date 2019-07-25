@@ -613,10 +613,7 @@ def import_function(fullname, params=None):
 def check_func_signature(func,      # type: Callable
                          params     # type: List[AnyStr]
                          ):         # type: (...) -> None
-    """Checks whether the signature of a function matches the expected parameter list.
-
-    See ``thelper.typedefs.IterCallbackType`` and ``thelper.typedefs.IterCallbackParams`` for more info.
-    """
+    """Checks whether the signature of a function matches the expected parameter list."""
     if func is None or not callable(func):
         raise AssertionError("invalid function object")
     if params is not None:
