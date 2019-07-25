@@ -155,6 +155,8 @@ class ObjDetectTrainer(Trainer):
             optimizer.step()
             pred = self._from_tensor(pred, sample)
             target_bboxes = [target["refs"] for target in targets]
+            # pack image list back into 4d tensor
+            images = torch.cat(images) if len(images) > 1 else torch.unsqueeze(images[0], 0)
             for metric in metrics.values():
                 metric.update(task=self.task, input=images, pred=pred, target=target_bboxes,
                               sample=sample, iter_idx=idx, max_iters=epoch_size,
@@ -207,6 +209,8 @@ class ObjDetectTrainer(Trainer):
                 pred = model(self._move_tensor(images, dev))
                 pred = self._from_tensor(pred, sample)
                 target_bboxes = [target["refs"] for target in targets]
+                # pack image list back into 4d tensor
+                images = torch.cat(images) if len(images) > 1 else torch.unsqueeze(images[0], 0)
                 for metric in metrics.values():
                     metric.update(task=self.task, input=images, pred=pred, target=target_bboxes,
                                   sample=sample, iter_idx=idx, max_iters=epoch_size,
