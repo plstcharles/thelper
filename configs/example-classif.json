@@ -175,7 +175,7 @@
                 "type": "thelper.train.ConfusionMatrix"
             }
         },
-        "eval_metrics": {
+        "test_metrics": {
             "logger": {
                 "type": "thelper.train.ClassifLogger",
                 "params": {

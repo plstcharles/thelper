@@ -46,7 +46,7 @@
                 }
             }
         },
-        "metrics": {
+        "valid_metrics": {
             "mAP": {
                 "type": "thelper.optim.metrics.AveragePrecision"
             }

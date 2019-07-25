@@ -81,20 +81,17 @@ class ImageClassifTrainer(Trainer):
                     label_idx = torch.LongTensor(label_idx)
         return input_val, label_idx
 
-    def train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
+    def train_epoch(self, model, epoch, dev, loss, optimizer, loader, metrics):
         """Trains the model for a single epoch using the provided objects.
 
         Args:
             model: the model to train that is already uploaded to the target device(s).
             epoch: the epoch index we are training for (0-based).
-            iter: the iteration count at the start of the current epoch.
             dev: the target device that tensors should be uploaded to.
             loss: the loss function used to evaluate model fidelity.
             optimizer: the optimizer used for back propagation.
             loader: the data loader used to get transformed training samples.
-            metrics: the dictionary of metrics to update every iteration.
-            monitor: name of the metric to update/monitor for improvements.
-            writer: the writer used to store tbx events/messages/metrics.
+            metrics: the dictionary of metrics/consumers to update every iteration.
         """
         assert loss is not None, "missing loss function"
         assert optimizer is not None, "missing optimizer"
@@ -138,45 +135,24 @@ class ImageClassifTrainer(Trainer):
             optimizer.step()
             iter_pred_cpu = self._move_tensor(iter_pred, dev="cpu", detach=True)
             label_cpu = self._move_tensor(label, dev="cpu", detach=True)
+            iter_loss = iter_loss.item()
             for metric in metrics.values():
                 metric.update(task=self.task, input=input_val, pred=iter_pred_cpu,
-                              target=label_cpu, sample=sample, iter_idx=idx, max_iters=epoch_size,
-                              epoch_idx=epoch, max_epochs=self.epochs)
-            epoch_loss += iter_loss.item()
-            monitor_output = ""
-            if monitor is not None and monitor in metrics:
-                monitor_output = "   {}: {:.2f}".format(monitor, metrics[monitor].eval())
-            self.logger.info(
-                "train epoch#{}  (iter#{})   batch: {}/{} ({:.0f}%)   loss: {:.6f}{}".format(
-                    epoch,
-                    iter,
-                    idx + 1,
-                    epoch_size,
-                    ((idx + 1) / epoch_size) * 100.0,
-                    iter_loss.item(),
-                    monitor_output
-                )
-            )
-            if writer:
-                writer.add_scalar("iter/loss", iter_loss.item(), iter)
-                for metric_name, metric in metrics.items():
-                    if isinstance(metric, thelper.optim.metrics.Metric):
-                        writer.add_scalar("iter/%s" % metric_name, metric.eval(), iter)
-            iter += 1
+                              target=label_cpu, sample=sample, loss=iter_loss, iter_idx=idx,
+                              max_iters=epoch_size, epoch_idx=epoch, max_epochs=self.epochs)
+            epoch_loss += iter_loss
         epoch_loss /= epoch_size
-        return epoch_loss, iter
+        return epoch_loss
 
-    def eval_epoch(self, model, epoch, dev, loader, metrics, monitor=None, writer=None):
+    def eval_epoch(self, model, epoch, dev, loader, metrics):
         """Evaluates the model using the provided objects.
 
         Args:
             model: the model to evaluate that is already uploaded to the target device(s).
-            epoch: the epoch number we are evaluating for (0-based).
+            epoch: the epoch index we are training for (0-based).
             dev: the target device that tensors should be uploaded to.
             loader: the data loader used to get transformed valid/test samples.
-            metrics: the dictionary of metrics to update every iteration.
-            monitor: name of the metric to update/monitor for improvements.
-            writer: the writer used to store tbx events/messages/metrics.
+            metrics: the dictionary of metrics/consumers to update every iteration.
         """
         assert loader, "no available data to load"
         assert isinstance(metrics, dict), "expect metrics as dict object"
@@ -209,14 +185,5 @@ class ImageClassifTrainer(Trainer):
                 label_cpu = self._move_tensor(label, dev="cpu", detach=True)
                 for metric in metrics.values():
                     metric.update(task=self.task, input=input_val, pred=pred_cpu,
-                                  target=label_cpu, sample=sample, iter_idx=idx, max_iters=epoch_size,
-                                  epoch_idx=epoch, max_epochs=self.epochs)
-                self.logger.info(
-                    "eval epoch#{}   batch: {}/{} ({:.0f}%){}".format(
-                        epoch,
-                        idx + 1,
-                        epoch_size,
-                        ((idx + 1) / epoch_size) * 100.0,
-                        "   {}: {:.2f}".format(monitor, metrics[monitor].eval()) if monitor is not None else ""
-                    )
-                )
+                                  target=label_cpu, sample=sample, loss=None, iter_idx=idx,
+                                  max_iters=epoch_size, epoch_idx=epoch, max_epochs=self.epochs)

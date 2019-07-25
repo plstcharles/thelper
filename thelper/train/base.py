@@ -109,7 +109,7 @@ class Trainer:
         model: model to train; will be uploaded to target device(s) at runtime.
         config: full configuration dictionary of the session; will be incorporated into all saved checkpoints.
         devices: list of (cuda) device IDs to upload the model/tensors to; can be empty if only the CPU is available.
-        monitor: specifies the name of the metric that should be monitored on the validation set for model improvement.
+        monitor: name of the training/validation metric that should be monitored for model improvement.
 
     TODO: move static utils to their related modules
 
@@ -206,10 +206,13 @@ class Trainer:
         elif "base_metrics" in trainer_config:
             self.logger.debug("loading base metrics defined in trainer config")
             metrics = thelper.train.create_consumers(trainer_config["base_metrics"])
-        self.train_metrics, self.eval_metrics = deepcopy(metrics), deepcopy(metrics)
-        for skey, sval in zip(["train_metrics", "eval_metrics"], [self.train_metrics, self.eval_metrics]):
+        self.train_metrics, self.valid_metrics, self.test_metrics = \
+            deepcopy(metrics), deepcopy(metrics), deepcopy(metrics)
+        for skey, sval in zip(["train_metrics", "valid_metrics", "test_metrics"],
+                              [self.train_metrics, self.valid_metrics, self.test_metrics]):
             if skey in trainer_config:
-                for mkey, mval in thelper.train.create_consumers(trainer_config[skey]).items():
+                new_metrics = thelper.train.create_consumers(trainer_config[skey])
+                for mkey, mval in new_metrics.items():
                     assert mkey not in sval, f"metric name '{mkey}' duplicated in set '{skey}'"
                     sval[mkey] = mval
                 for mkey, mval in sval.items():
@@ -219,10 +222,10 @@ class Trainer:
         self.monitor, self.monitor_best, self.monitor_best_epoch = None, None, -1
         if "monitor" in trainer_config and trainer_config["monitor"]:
             self.monitor = trainer_config["monitor"]
-            assert self.monitor in self.train_metrics or self.monitor in self.eval_metrics, \
-                f"metric with name '{self.monitor}' could not be found in training/eval metrics"
-            metric = self.eval_metrics[self.monitor] if self.monitor in self.eval_metrics \
-                else self.train_metrics[self.monitor]
+            assert any([self.monitor in mset for mset in [self.train_metrics, self.valid_metrics]]), \
+                f"metric with name '{self.monitor}' could not be found in training/validation metrics"
+            metric = self.valid_metrics[self.monitor] if self.monitor in self.valid_metrics \
+                else self.train_metrics[self.monitor]  # makes no sense to search for it in test metrics...
             assert isinstance(metric, thelper.optim.metrics.Metric), \
                 "monitoring target should be an actual 'metric' class that returns a scalar!"
             assert metric.goal in [thelper.optim.Metric.minimize, thelper.optim.Metric.maximize], \
@@ -242,7 +245,8 @@ class Trainer:
         self.outputs = thelper.utils.get_key_def("outputs", ckptdata, {})
 
         # parse callbacks (see ``thelper.typedefs.IterCallbackType`` and ``thelper.typedefs.IterCallbackParams`` definitions)
-        for cname, mset in zip(["train", "eval"], [self.train_metrics, self.eval_metrics]):
+        self.writers = {}
+        for cname, mset in zip(["train", "valid", "test"], [self.train_metrics, self.valid_metrics, self.test_metrics]):
             # parse user (custom) callback
             user_callback_keys = [f"{cname}_iter_callback", f"{cname}_callback", "callback"]
             user_callback = thelper.utils.get_key_def(user_callback_keys, trainer_config)  # type: typ.IterCallbackType
@@ -263,6 +267,13 @@ class Trainer:
                 assert "display_callback" not in mset, "metrics set already had a 'display_callback' in it"
                 mset["display_callback"] = thelper.train.utils.PredictionCallback("thelper.train.utils._draw_wrapper",
                                                                                   display_kwargs)
+            # add logging callback (will print to console and update iter metric evals)
+            self.writers[cname] = None
+            logging_kwargs = thelper.utils.get_key_def("logging_kwargs", trainer_config, {})
+            logging_kwargs["set_name"] = cname
+            logging_kwargs["writers"] = self.writers
+            mset["logging_callback"] = thelper.train.utils.PredictionCallback(self._iter_logger_callback,
+                                                                              **logging_kwargs)
 
     def _init_writer(self, writer, path):
         if self.use_tbx and not writer:
@@ -388,9 +399,8 @@ class Trainer:
         self.logger.debug(f"loss: {str(loss)}")
         self.logger.debug(f"optimizer: {str(optimizer)}")
         latest_loss = math.inf
-        train_writer, valid_writer = None, None
         while self.current_epoch < self.epochs:
-            train_writer = self._init_writer(train_writer, self.train_output_path)
+            self.writers["train"] = self._init_writer(self.writers["train"], self.train_output_path)
             self.logger.info("at epoch#%d for '%s' (dev=%s)" % (self.current_epoch, self.name, str(self.devices)))
             if scheduler:
                 if scheduler_step_metric:
@@ -399,10 +409,11 @@ class Trainer:
                         scheduler.step(metrics=latest_loss, epoch=self.current_epoch)
                     else:
                         metric = None
-                        if self.valid_loader and scheduler_step_metric in self.eval_metrics:
-                            metric = self.eval_metrics[scheduler_step_metric]
+                        if self.valid_loader and scheduler_step_metric in self.valid_metrics:
+                            metric = self.valid_metrics[scheduler_step_metric]
                         elif self.train_loader and scheduler_step_metric in self.train_metrics:
                             metric = self.train_metrics[scheduler_step_metric]
+                        # note: makes no sense to look for it in test metrics
                         assert metric is not None, f"cannot find metric '{scheduler_step_metric}' for scheduler step"
                         assert isinstance(metric, thelper.optim.metrics.Metric), "monitoring consumer must be metric"
                         metric_anti_goal = thelper.optim.Metric.maximize if metric.goal == thelper.optim.Metric.minimize \
@@ -411,7 +422,8 @@ class Trainer:
                         scheduler.step(metrics=metric_val, epoch=self.current_epoch)
                 else:
                     scheduler.step(epoch=self.current_epoch)
-            if train_writer and not self.skip_tbx_histograms and (self.current_epoch % self.tbx_histogram_freq) == 0:
+            if self.writers["train"] and not self.skip_tbx_histograms and \
+                    (self.current_epoch % self.tbx_histogram_freq) == 0:
                 for pname, param in model.named_parameters():
                     if "bn" in pname:
                         continue  # skip batch norm modules
@@ -421,19 +433,18 @@ class Trainer:
                     if pname.startswith("model/"):
                         pname = pname.replace("model/", "", 1)
                     data = param.data.cpu().numpy().flatten()
-                    train_writer.add_histogram(pname, data, self.current_epoch)
+                    self.writers["train"].add_histogram(pname, data, self.current_epoch)
                     if param.grad is not None:
                         grad = param.grad.data.cpu().numpy().flatten()
-                        train_writer.add_histogram(pname + '/grad', grad, self.current_epoch)
+                        self.writers["train"].add_histogram(pname + '/grad', grad, self.current_epoch)
             self.logger.debug("learning rate at %.8f" % thelper.optim.get_lr(optimizer))
             self._set_rng_state(self.train_loader.seeds, self.current_epoch)
             model.train()
             if hasattr(self.train_loader, "set_epoch") and callable(self.train_loader.set_epoch):
                 self.train_loader.set_epoch(self.current_epoch)
-            latest_loss, self.current_iter = self.train_epoch(model, self.current_epoch, self.current_iter, self.devices,
-                                                              loss, optimizer, self.train_loader, self.train_metrics,
-                                                              self.monitor, train_writer)
-            self._write_epoch_output(self.current_epoch, self.train_metrics, train_writer, self.train_output_path,
+            latest_loss = self.train_epoch(model, self.current_epoch, self.devices,
+                                           loss, optimizer, self.train_loader, self.train_metrics)
+            self._write_epoch_output(self.current_epoch, self.train_metrics, self.writers["train"], self.train_output_path,
                                      loss=latest_loss, optimizer=optimizer)
             train_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.train_metrics.items()
                                  if isinstance(metric, thelper.optim.metrics.Metric)}
@@ -442,15 +453,14 @@ class Trainer:
             if self.valid_loader:
                 self._set_rng_state(self.valid_loader.seeds, self.current_epoch)
                 model.eval()
-                valid_writer = self._init_writer(valid_writer, self.valid_output_path)
-                for metric in self.eval_metrics.values():
+                self.writers["valid"] = self._init_writer(self.writers["valid"], self.valid_output_path)
+                for metric in self.valid_metrics.values():
                     metric.reset()  # force reset here, we always evaluate from a clean state
                 if hasattr(self.valid_loader, "set_epoch") and callable(self.valid_loader.set_epoch):
                     self.valid_loader.set_epoch(self.current_epoch)
-                self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
-                                self.eval_metrics, self.monitor, valid_writer)
-                self._write_epoch_output(self.current_epoch, self.eval_metrics, valid_writer, self.valid_output_path)
-                valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.eval_metrics.items()
+                self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader, self.valid_metrics)
+                self._write_epoch_output(self.current_epoch, self.valid_metrics, self.writers["valid"], self.valid_output_path)
+                valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()
                                      if isinstance(metric, thelper.optim.metrics.Metric)}
                 result = {**result, "valid/metrics": valid_metric_vals}
                 monitor_type_key = "valid/metrics"  # since validation is available, use that to monitor progression
@@ -496,34 +506,32 @@ class Trainer:
         self.logger.debug("uploading model to '%s'..." % str(self.devices))
         model = self._upload_model(self.model, self.devices)
         result = {}
-        valid_writer, test_writer, output_group = None, None, None
+        output_group = None, None
         if self.test_loader:
             self._set_rng_state(self.test_loader.seeds, self.current_epoch)
             model.eval()
-            test_writer = self._init_writer(test_writer, self.test_output_path)
-            for metric in self.eval_metrics.values():
+            self.writers["test"] = self._init_writer(self.writers["test"], self.test_output_path)
+            for metric in self.test_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
             if hasattr(self.test_loader, "set_epoch") and callable(self.test_loader.set_epoch):
                 self.test_loader.set_epoch(self.current_epoch)
-            self.eval_epoch(model, self.current_epoch, self.devices, self.test_loader,
-                            self.eval_metrics, self.monitor, test_writer)
-            self._write_epoch_output(self.current_epoch, self.eval_metrics, test_writer, self.test_output_path)
-            test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.eval_metrics.items()
+            self.eval_epoch(model, self.current_epoch, self.devices, self.test_loader, self.test_metrics)
+            self._write_epoch_output(self.current_epoch, self.test_metrics, self.writers["test"], self.test_output_path)
+            test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()
                                 if isinstance(metric, thelper.optim.metrics.Metric)}
             result = {**result, **test_metric_vals}
             output_group = "test/metrics"
         elif self.valid_loader:
             self._set_rng_state(self.valid_loader.seeds, self.current_epoch)
             model.eval()
-            valid_writer = self._init_writer(valid_writer, self.valid_output_path)
-            for metric in self.eval_metrics.values():
+            self.writers["valid"] = self._init_writer(self.writers["valid"], self.valid_output_path)
+            for metric in self.valid_metrics.values():
                 metric.reset()  # force reset here, we always evaluate from a clean state
             if hasattr(self.valid_loader, "set_epoch") and callable(self.valid_loader.set_epoch):
                 self.valid_loader.set_epoch(self.current_epoch)
-            self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
-                            self.eval_metrics, self.monitor, valid_writer)
-            self._write_epoch_output(self.current_epoch, self.eval_metrics, valid_writer, self.valid_output_path)
-            valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.eval_metrics.items()
+            self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader, self.valid_metrics)
+            self._write_epoch_output(self.current_epoch, self.valid_metrics, self.writers["valid"], self.valid_output_path)
+            valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()
                                  if isinstance(metric, thelper.optim.metrics.Metric)}
             result = {**result, **valid_metric_vals}
             output_group = "valid/metrics"
@@ -540,25 +548,22 @@ class Trainer:
         return self.outputs
 
     @abstractmethod
-    def train_epoch(self, model, epoch, iter, dev, loss, optimizer, loader, metrics, monitor=None, writer=None):
+    def train_epoch(self, model, epoch, dev, loss, optimizer, loader, metrics):
         """Trains the model for a single epoch using the provided objects.
 
         Args:
             model: the model to train that is already uploaded to the target device(s).
             epoch: the epoch index we are training for (0-based).
-            iter: the iteration count at the start of the current epoch.
             dev: the target device that tensors should be uploaded to.
             loss: the loss function used to evaluate model fidelity.
             optimizer: the optimizer used for back propagation.
             loader: the data loader used to get transformed training samples.
-            metrics: the dictionary of metrics to update every iteration.
-            monitor: name of the metric to update/monitor for improvements.
-            writer: the writer used to store tbx events/messages/metrics.
+            metrics: the dictionary of metrics/consumers to update every iteration.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def eval_epoch(self, model, epoch, dev, loader, metrics, monitor=None, writer=None):
+    def eval_epoch(self, model, epoch, dev, loader, metrics):
         """Evaluates the model using the provided objects.
 
         Args:
@@ -566,11 +571,59 @@ class Trainer:
             epoch: the epoch index we are training for (0-based).
             dev: the target device that tensors should be uploaded to.
             loader: the data loader used to get transformed valid/test samples.
-            metrics: the dictionary of metrics to update every iteration.
-            monitor: name of the metric to update/monitor for improvements.
-            writer: the writer used to store tbx events/messages/metrics.
+            metrics: the dictionary of metrics/consumers to update every iteration.
         """
         raise NotImplementedError
+
+    def _iter_logger_callback(self,  # see `thelper.typedefs.IterCallbackParams` for more info
+                              task,  # type: thelper.tasks.utils.Task
+                              input,  # type: thelper.typedefs.InputType
+                              pred,  # type: thelper.typedefs.PredictionType
+                              target,  # type: thelper.typedefs.TargetType
+                              sample,  # type: thelper.typedefs.SampleType
+                              loss,  # type: Optional[float]
+                              iter_idx,  # type: int
+                              max_iters,  # type: int
+                              epoch_idx,  # type: int
+                              max_epochs,  # type: int
+                              **kwargs):  # type: (...) -> None
+        """Receives callback data for logging loss/monitored metric values each training/eval iteration."""
+        kwargs = deepcopy(kwargs)
+        set_name = thelper.utils.get_key("set_name", kwargs, "missing set name in iter logger args", True)
+        assert set_name in ["train", "valid", "test"], "unrecognized iter logger set name"
+        metrics = self.train_metrics if set_name == "train" else self.valid_metrics if set_name == "valid" \
+            else self.test_metrics
+        writers = thelper.utils.get_key("writers", kwargs, "missing writers dict in iter logger args", True)
+        assert set_name in writers, "expected set name writer match in kwargs"
+        writer = writers[set_name]
+        assert not kwargs, "should be empty now, got unexpected/unhandled arguments"
+        monitor_val = None
+        monitor_str = ""
+        if self.monitor is not None and self.monitor in metrics:
+            assert isinstance(metrics[self.monitor], thelper.optim.metrics.Metric), "unexpected metric type"
+            if metrics[self.monitor].live_eval:
+                monitor_val = metrics[self.monitor.eval()]
+                monitor_str = f"   {self.monitor}: {monitor_val:.2f}"
+        loss_str = ""
+        if loss is not None:
+            loss_str = f"   loss: {loss:.6f}"
+        assert self.current_epoch == epoch_idx, "something's messed up"
+        self.logger.info(
+            f"{set_name} epoch#{epoch_idx}  (iter#{self.current_iter})" +
+            f"   batch: {iter_idx + 1}/{max_iters} ({((iter_idx + 1) / max_iters) * 100.0:.0f}%)" +
+            f"{loss_str}{monitor_str}"
+        )
+        if writer:
+            if loss is not None:
+                writer.add_scalar("iter/loss", loss, self.current_iter)
+            for metric_name, metric in metrics.items():
+                if isinstance(metric, thelper.optim.metrics.Metric):
+                    if metric_name == self.monitor and monitor_val is not None:
+                        writer.add_scalar("iter/%s" % self.monitor, monitor_val, self.current_iter)
+                    elif metric.live_eval:
+                        writer.add_scalar("iter/%s" % metric_name, metric.eval(), self.current_iter)
+        if set_name == "train":
+            self.current_iter += 1
 
     def _write_epoch_output(self, epoch, metrics, tbx_writer, output_path, loss=None, optimizer=None):
         """Writes the cumulative evaluation result of all metrics using a specific writer."""

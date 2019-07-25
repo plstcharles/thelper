@@ -420,8 +420,14 @@ def migrate_config(config,        # type: thelper.typedefs.ConfigDict
         cfg_ver = [0, 2, 0]  # set ver for next update step
     if cfg_ver[0] <= 0 and cfg_ver[1] <= 2 and cfg_ver[2] < 5:
         # TODO: add scheduler 0-based step fix here? (unlikely to cause serious issues)
-        # cfg_ver = [0, 2, 5]  # set ver for next update step
-        pass
+        cfg_ver = [0, 2, 5]  # set ver for next update step
+    if cfg_ver[0] <= 0 and cfg_ver[1] <= 3 and cfg_ver[2] < 6:
+        if "trainer" in config:
+            if "eval_metrics" in config["trainer"]:
+                assert "valid_metrics" not in config["trainer"]
+                config["trainer"]["valid_metrics"] = config["trainer"]["eval_metrics"]
+                del config["trainer"]["eval_metrics"]
+        cfg_ver = [0, 3, 6]  # set ver for next update step
     # if cfg_ver[0] <= x and cfg_ver[1] <= y and cfg_ver[2] <= z:
     #     ... add more compatibility fixes here
     return config
