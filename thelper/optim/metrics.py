@@ -957,8 +957,8 @@ class ROCCurve(Metric):
             fig = thelper.utils.draw_roc_curve(fpr, tpr)
             array = thelper.utils.fig2array(fig)
             return array
-        except AttributeError:
-            logger.warning("failed to render confusion matrix figure (caught exception)")
+        except AttributeError as e:
+            logger.warning(f"failed to render roc curve; caught exception:\n{str(e)}")
             # return None if rendering fails (probably due to matplotlib on displayless server)
             return None
 

@@ -532,8 +532,8 @@ class ConfusionMatrix(PredictionConsumer):
             fig = thelper.utils.draw_confmat(confmat, self.class_names, normalize=self.draw_normalized)
             array = thelper.utils.fig2array(fig)
             return array
-        except AttributeError:
-            logger.warning("failed to render confusion matrix figure (caught exception)")
+        except AttributeError as e:
+            logger.warning(f"failed to render confusion matrix; caught exception:\n{str(e)}")
             # return None if rendering fails (probably due to matplotlib on displayless server)
             return None
 
