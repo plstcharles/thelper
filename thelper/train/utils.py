@@ -6,9 +6,11 @@ training. See :mod:`thelper.optim.metrics` for more information on metrics.
 """
 
 import logging
+import os
 from abc import ABC, abstractmethod
 from typing import AnyStr, Optional  # noqa: F401
 
+import cv2 as cv
 import numpy as np
 import sklearn.metrics
 import torch
@@ -623,6 +625,21 @@ def _draw_wrapper(task,  # type: thelper.tasks.utils.Task
                   max_iters,  # type: int
                   epoch_idx,  # type: int
                   max_epochs,  # type: int
+                  # extra params added by callback interface below
+                  output_path,  # type: str
+                  save,  # type: bool
+                  # all extra params will be forwarded to the display call
                   **kwargs):  # type: (...) -> None
     """Wrapper to :func:`thelper.utils.draw` used as a callback entrypoint for trainers."""
-    thelper.utils.draw(task=task, input=input, pred=pred, target=target, **kwargs)
+    res = thelper.utils.draw(task=task, input=input, pred=pred, target=target, **kwargs)
+    if save:
+        assert isinstance(res, tuple) and len(res) == 2, "unexpected redraw output (should be 2-elem tuple)"
+        if isinstance(res[1], np.ndarray):
+            assert "path" in sample and isinstance(sample["path"], list) and len(sample["path"]) == 1, \
+                "unexpected draw format (current implementation needs batch size = 1, and path metadata)"
+            os.makedirs(output_path, exist_ok=True)
+            filepath = os.path.join(output_path, os.path.basename(sample["path"][0]))
+            cv.imwrite(filepath, res[1])
+        else:
+            # we're displaying with matplotlib, and have no clue on how to save the output
+            raise NotImplementedError
