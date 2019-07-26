@@ -232,6 +232,58 @@ class ResNet(thelper.nn.Module):
         self.task = task
 
 
+class ConvTailNet(torch.nn.Module):
+
+    def __init__(self, n_inputs, num_classes):
+        super(ConvTailNet, self).__init__()
+        self.conv1 = torch.nn.Conv2d(n_inputs, n_inputs, kernel_size=1, bias=False)
+        self.relu = torch.nn.ReLU(True)
+        self.conv2 = torch.nn.Conv2d(n_inputs, n_inputs, kernel_size=1, bias=False)
+        self.conv3 = torch.nn.Conv2d(n_inputs, num_classes, kernel_size=1, bias=False)
+
+    def forward(self, x):
+        x0 = x
+        x = self.conv1(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+        x = self.relu(x)
+        x = torch.add(x0, x)
+        x = self.conv3(x)
+        return x
+
+
+class ResNetFullyConv(ResNet):
+
+    def __init__(self, task, block=BasicBlock, layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
+                 flexible_input_res=False, pool_size=7, coordconv=False, radius_channel=True, pretrained=False):
+        super().__init__(task=task, block=block, layers=layers, strides=strides, input_channels=input_channels,
+                         flexible_input_res=flexible_input_res, pool_size=pool_size, coordconv=coordconv,
+                         radius_channel=radius_channel, pretrained=pretrained)
+        self.set_task(task)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        if self.layer5 is not None:
+            x = self.layer5(x)
+        x = self.avgpool(x)
+        x = self.fc(x)
+        x = torch.squeeze(x)
+        return x
+
+    def set_task(self, task):
+        assert isinstance(task, thelper.tasks.Classification), "missing impl for non-classif task type"
+        num_classes = len(task.class_names)
+        self.fc = ConvTailNet(self.out_features, num_classes)
+        self.task = task
+
+
 class FCResNet(ResNet):
 
     def __init__(self, task, ckptdata, map_location="cpu", avgpool_size=0):
