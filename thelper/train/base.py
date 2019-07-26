@@ -178,8 +178,9 @@ class Trainer:
         assert self.tbx_histogram_freq >= 1, "histogram output frequency should be strictly positive integer"
         timestr = time.strftime("%Y%m%d-%H%M%S")
         self.writers, self.output_paths = {}, {}
-        for cname, loader, foldername in zip(["train", "valid", "test"], loaders):
-            self.output_paths[cname] = f"{cname}-{str(platform.node())}-{timestr}" if loader else None
+        for cname, loader in zip(["train", "valid", "test"], loaders):
+            folder_name = f"{cname}-{str(platform.node())}-{timestr}"
+            self.output_paths[cname] = os.path.join(output_root_dir, folder_name) if loader else None
             self.writers[cname] = None  # will be instantiated only when needed based on above path
 
         # split loaders
