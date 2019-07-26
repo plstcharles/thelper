@@ -273,7 +273,7 @@ class Trainer:
             logging_kwargs["set_name"] = cname
             logging_kwargs["writers"] = self.writers
             mset["logging_callback"] = thelper.train.utils.PredictionCallback(self._iter_logger_callback,
-                                                                              **logging_kwargs)
+                                                                              logging_kwargs)
 
     def _init_writer(self, writer, path):
         if self.use_tbx and not writer:
@@ -588,21 +588,19 @@ class Trainer:
                               max_epochs,  # type: int
                               **kwargs):  # type: (...) -> None
         """Receives callback data for logging loss/monitored metric values each training/eval iteration."""
-        kwargs = deepcopy(kwargs)
-        set_name = thelper.utils.get_key("set_name", kwargs, "missing set name in iter logger args", True)
+        set_name = thelper.utils.get_key("set_name", kwargs, "missing set name in iter logger args")
         assert set_name in ["train", "valid", "test"], "unrecognized iter logger set name"
         metrics = self.train_metrics if set_name == "train" else self.valid_metrics if set_name == "valid" \
             else self.test_metrics
-        writers = thelper.utils.get_key("writers", kwargs, "missing writers dict in iter logger args", True)
+        writers = thelper.utils.get_key("writers", kwargs, "missing writers dict in iter logger args")
         assert set_name in writers, "expected set name writer match in kwargs"
         writer = writers[set_name]
-        assert not kwargs, "should be empty now, got unexpected/unhandled arguments"
         monitor_val = None
         monitor_str = ""
         if self.monitor is not None and self.monitor in metrics:
             assert isinstance(metrics[self.monitor], thelper.optim.metrics.Metric), "unexpected metric type"
             if metrics[self.monitor].live_eval:
-                monitor_val = metrics[self.monitor.eval()]
+                monitor_val = metrics[self.monitor].eval()
                 monitor_str = f"   {self.monitor}: {monitor_val:.2f}"
         loss_str = ""
         if loss is not None:
