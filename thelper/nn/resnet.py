@@ -130,7 +130,6 @@ class ResNet(thelper.nn.Module):
                  flexible_input_res=False, pool_size=7, coordconv=False, radius_channel=True, pretrained=False):
         # TODO: add pretrained param to toggle loading weights from imagenet before applying task?
         super().__init__(task)
-
         if isinstance(block, str):
             block = thelper.utils.import_class(block)
         if not issubclass(block, Module):
@@ -172,7 +171,6 @@ class ResNet(thelper.nn.Module):
             elif isinstance(m, torch.nn.BatchNorm2d):
                 torch.nn.init.constant_(m.weight, 1)
                 torch.nn.init.constant_(m.bias, 0)
-
         if pretrained:
             # note: if using a non-default setup in the constructor, loading the pre-trained weights will most
             # likely fail as the weights are downloaded from the pytorch model zoo for the regular resnet impls
@@ -189,7 +187,6 @@ class ResNet(thelper.nn.Module):
             weights_url = torchvision.models.resnet.model_urls[default_weights_mapping[tag]]
             state_dict = torchvision.models.utils.load_state_dict_from_url(weights_url)
             self.load_state_dict(state_dict)
-
         self.set_task(task)
 
     def _make_conv2d(self, *args, **kwargs):
@@ -245,14 +242,13 @@ class ConvTailNet(torch.nn.Module):
         self.conv3 = torch.nn.Conv2d(n_inputs, num_classes, kernel_size=1, bias=False)
 
     def forward(self, x):
-        x0 =  x
+        x0 = x
         x = self.conv1(x)
         x = self.relu(x)
         x = self.conv2(x)
         x = self.relu(x)
         x = torch.add(x0, x)
         x = self.conv3(x)
-
         return x
 
 
@@ -260,10 +256,9 @@ class ResNetFullyConv(ResNet):
 
     def __init__(self, task, block=BasicBlock, layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
                  flexible_input_res=False, pool_size=7, coordconv=False, radius_channel=True, pretrained=False):
-        # TODO: add pretrained param to toggle loading weights from imagenet before applying task?
         super().__init__(task=task, block=block, layers=layers, strides=strides, input_channels=input_channels,
-                 flexible_input_res=flexible_input_res, pool_size=pool_size, coordconv=coordconv, radius_channel=radius_channel, pretrained=pretrained)
-
+                         flexible_input_res=flexible_input_res, pool_size=pool_size, coordconv=coordconv,
+                         radius_channel=radius_channel, pretrained=pretrained)
         self.set_task(task)
 
     def forward(self, x):
