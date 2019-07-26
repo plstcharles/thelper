@@ -2,6 +2,7 @@ import copy
 import json
 import os
 import shutil
+from typing import Optional  # noqa: F401
 
 import numpy as np
 import pytest
@@ -189,6 +190,7 @@ def callback(task,  # type: thelper.tasks.utils.Task
              pred,  # type: thelper.typedefs.PredictionType
              target,  # type: thelper.typedefs.TargetType
              sample,  # type: thelper.typedefs.SampleType
+             loss,  # type: Optional[float]
              iter_idx,  # type: int
              max_iters,  # type: int
              epoch_idx,  # type: int

@@ -189,5 +189,5 @@ class ObjDetectTrainer(Trainer):
                 images = torch.cat(images) if len(images) > 1 else torch.unsqueeze(images[0], 0)
                 for metric in metrics.values():
                     metric.update(task=self.task, input=images, pred=pred, target=target_bboxes,
-                                  sample=sample, iter_idx=idx, max_iters=epoch_size,
+                                  sample=sample, loss=None, iter_idx=idx, max_iters=epoch_size,
                                   epoch_idx=epoch, max_epochs=self.epochs)

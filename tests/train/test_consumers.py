@@ -34,8 +34,8 @@ def test_classif_logger():
         targets.append(torch.randint(low=0, high=class_count, size=(curr_batch_size, )))
         preds.append(torch.rand((curr_batch_size, class_count)))
         consumer.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
-                        {"idx": [tot_idx + idx for idx in range(curr_batch_size)]}, iter_idx,
-                        iter_count, 0, 1)
+                        {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
+                        None, iter_idx, iter_count, 0, 1)
         tot_idx += curr_batch_size
     report = consumer.report()
     assert report is not None and isinstance(report, str)
@@ -48,8 +48,8 @@ def test_classif_logger():
     tot_idx = 0
     for iter_idx in range(iter_count):
         consumer.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
-                        {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]}, iter_idx,
-                        iter_count, 0, 1)
+                        {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]},
+                        None, iter_idx, iter_count, 0, 1)
         tot_idx += targets[iter_idx].shape[0]
     assert consumer.report() == report
 
@@ -81,8 +81,8 @@ def test_classif_report():
         targets.append(torch.randint(low=0, high=class_count, size=(curr_batch_size, )))
         preds.append(torch.rand((curr_batch_size, class_count)))
         consumer.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
-                        {"idx": [tot_idx + idx for idx in range(curr_batch_size)]}, iter_idx,
-                        iter_count, 0, 1)
+                        {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
+                        None, iter_idx, iter_count, 0, 1)
         tot_idx += curr_batch_size
     report = consumer.report()
     assert report is not None and isinstance(report, str)
@@ -93,8 +93,8 @@ def test_classif_report():
     tot_idx = 0
     for iter_idx in range(iter_count):
         consumer.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
-                        {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]}, iter_idx,
-                        iter_count, 0, 1)
+                        {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]},
+                        None, iter_idx, iter_count, 0, 1)
         tot_idx += targets[iter_idx].shape[0]
     assert consumer.report() == report
 
@@ -126,8 +126,8 @@ def test_confmat():
         targets.append(torch.randint(low=0, high=class_count, size=(curr_batch_size, )))
         preds.append(torch.rand((curr_batch_size, class_count)))
         consumer.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
-                        {"idx": [tot_idx + idx for idx in range(curr_batch_size)]}, iter_idx,
-                        iter_count, 0, 1)
+                        {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
+                        None, iter_idx, iter_count, 0, 1)
         tot_idx += curr_batch_size
     report = consumer.report()
     assert report is not None and isinstance(report, str)
@@ -140,7 +140,7 @@ def test_confmat():
     tot_idx = 0
     for iter_idx in range(iter_count):
         consumer.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
-                        {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]}, iter_idx,
-                        iter_count, 0, 1)
+                        {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]},
+                        None, iter_idx, iter_count, 0, 1)
         tot_idx += targets[iter_idx].shape[0]
     assert consumer.report() == report
