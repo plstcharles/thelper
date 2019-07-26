@@ -3,11 +3,14 @@
 Changelog
 =========
 
-0.3.6 (2019/07/??)
+0.3.6 (2019/07/26)
 ------------------
 
 * Fixed torch version checks in custom default collate impl
 * Fixed bbox predictions forwarding and evaluation in objdetect
+* Refactored metrics/callbacks to clean up trainer impls
+* Added pretrained opt to default resnet impl
+* Fixed objdetect trainer display and prediction callbacks
 
 0.3.5 (2019/07/23)
 ------------------
