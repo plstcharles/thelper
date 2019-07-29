@@ -16,7 +16,7 @@ develop-eggs
 .installed.cfg
 lib
 lib64
-/data/
+/data
 venv*/
 pyvenv*/
 pip-log.txt
