@@ -3,6 +3,16 @@
 Changelog
 =========
 
+0.3.7 (2019/07/31)
+------------------
+
+* Fixed travis timeouts on long deploy operations
+* Added output path to trainer callback impls
+* Added new draw-and-save display callback
+* Added togray/tocolor transformation operations
+* Cleaned up matplotlib use and show/block across draw functions
+* Fixed various dependency and logging issues
+
 0.3.6 (2019/07/26)
 ------------------
 
