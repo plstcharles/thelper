@@ -531,7 +531,7 @@ class ConfusionMatrix(PredictionConsumer):
                              if targets is not None for pred, target in zip(preds, targets)])
         confmat = self.matrix(np.asarray(target), np.asarray(pred), self.class_names)
         try:
-            fig = thelper.utils.draw_confmat(confmat, self.class_names, normalize=self.draw_normalized)
+            fig, ax = thelper.utils.draw_confmat(confmat, self.class_names, normalize=self.draw_normalized)
             array = thelper.utils.fig2array(fig)
             return array
         except AttributeError as e:

@@ -1230,11 +1230,13 @@ def to_numpy(array):
         raise AssertionError(f"unexpected input type ({type(array)})")
 
 
-def draw_histogram(data,                # type: thelper.typedefs.ArrayType
-                   bins=50,             # type: Optional[int]
-                   xlabel="",           # type: Optional[thelper.typedefs.LabelType]
-                   ylabel="Proportion"  # type: Optional[thelper.typedefs.LabelType]
-                   ):                   # type: (...) -> thelper.typedefs.DrawingType
+def draw_histogram(data,                 # type: thelper.typedefs.ArrayType
+                   bins=50,              # type: Optional[int]
+                   xlabel="",            # type: Optional[thelper.typedefs.LabelType]
+                   ylabel="Proportion",  # type: Optional[thelper.typedefs.LabelType]
+                   show=False,           # type: Optional[bool]
+                   block=False,          # type: Optional[bool]
+                   ):                    # type: (...) -> thelper.typedefs.DrawingType
     """Draws and returns a histogram figure using pyplot."""
     fig, ax = plt.subplots()
     ax.hist(data, density=True, bins=bins)
@@ -1243,14 +1245,21 @@ def draw_histogram(data,                # type: thelper.typedefs.ArrayType
     if len(xlabel) > 0:
         ax.set_xlabel(xlabel)
     ax.set_xlim(xmin=0)
-    fig.show()
-    return fig
+    if show:
+        fig.show()
+        if block:
+            plt.show(block=block)
+            return fig
+        plt.pause(0.5)
+    return fig, ax
 
 
 def draw_popbars(labels,                # type: thelper.typedefs.LabelList
                  counts,                # type: int
                  xlabel="",             # type: Optional[thelper.typedefs.LabelType]
                  ylabel="Pop. Count",   # type: Optional[thelper.typedefs.LabelType]
+                 show=False,            # type: Optional[bool]
+                 block=False,           # type: Optional[bool]
                  ):                     # type: (...) -> thelper.typedefs.DrawingType
     """Draws and returns a bar histogram figure using pyplot."""
     fig, ax = plt.subplots()
@@ -1263,8 +1272,13 @@ def draw_popbars(labels,                # type: thelper.typedefs.LabelList
     ax.set_xticks(xrange)
     ax.set_xticklabels(labels)
     ax.tick_params(axis="x", labelsize="8", labelrotation=45)
-    fig.show()
-    return fig
+    if show:
+        fig.show()
+        if block:
+            plt.show(block=block)
+            return fig
+        plt.pause(0.5)
+    return fig, ax
 
 
 def draw_pascalvoc_curve(metrics, size_inch=(5, 5), dpi=320, show=False, block=False):
@@ -1294,12 +1308,13 @@ def draw_pascalvoc_curve(metrics, size_inch=(5, 5), dpi=320, show=False, block=F
             plt.show(block=block)
             return fig
         plt.pause(0.5)
-    return fig
+    return fig, ax
 
 
 def draw_images(images,               # type: thelper.typedefs.OneOrManyArrayType
                 captions=None,        # type: Optional[List[str]]
                 redraw=None,          # type: Optional[thelper.typedefs.DrawingType]
+                show=True,            # type: Optional[bool]
                 block=False,          # type: Optional[bool]
                 use_cv2=True,         # type: Optional[bool]
                 cv2_flip_bgr=True,    # type: Optional[bool]
@@ -1359,12 +1374,12 @@ def draw_images(images,               # type: thelper.typedefs.OneOrManyArrayTyp
                 else:
                     dsize = (int(round(display.shape[0] / (display.shape[1] / max_img_size[1]))), max_img_size[1])
                 display = cv.resize(display, (dsize[1], dsize[0]))
-            cv.imshow(win_name, display)
-            cv.waitKey(0 if block else 1)
+            if show:
+                cv.imshow(win_name, display)
+                cv.waitKey(0 if block else 1)
         return win_name, img_grid
     else:
         fig, axes = redraw if redraw is not None else plt.subplots(grid_size_y, grid_size_x)
-        plt.tight_layout()
         if nb_imgs == 1:
             axes = np.array(axes)
         for ax_idx, ax in enumerate(axes.reshape(-1)):
@@ -1377,11 +1392,13 @@ def draw_images(images,               # type: thelper.typedefs.OneOrManyArrayTyp
                     ax.set_xlabel(str(captions[ax_idx]))
             ax.set_xticks([])
             ax.set_yticks([])
-        fig.show()
-        if block:
-            plt.show(block=block)
-            return None
-        plt.pause(0.5)
+        fig.set_tight_layout(True)
+        if show:
+            fig.show()
+            if block:
+                plt.show(block=block)
+                return None
+            plt.pause(0.5)
         return fig, axes
 
 
@@ -1602,7 +1619,9 @@ def draw_errbars(labels,                # type: thelper.typedefs.LabelList
                  stddev_values,         # type: thelper.typedefs.ArrayType
                  mean_values,           # type: thelper.typedefs.ArrayType
                  xlabel="",             # type: thelper.typedefs.LabelType
-                 ylabel="Raw Value"     # type: thelper.typedefs.LabelType
+                 ylabel="Raw Value",    # type: thelper.typedefs.LabelType
+                 show=False,            # type: Optional[bool]
+                 block=False,           # type: Optional[bool]
                  ):                     # type: (...) -> thelper.typedefs.DrawingType
     """Draws and returns an error bar histogram figure using pyplot."""
     if min_values.shape != max_values.shape \
@@ -1630,12 +1649,17 @@ def draw_errbars(labels,                # type: thelper.typedefs.LabelList
         ax.set_xticklabels(labels, visible=(ax_idx == nb_subplots - 1))
         ax.set_title("Band %d" % (ax_idx + 1))
         ax.tick_params(axis="x", labelsize="6", labelrotation=45)
-    plt.tight_layout()
-    fig.show()
-    return fig
+    fig.set_tight_layout(True)
+    if show:
+        fig.show()
+        if block:
+            plt.show(block=block)
+            return fig
+        plt.pause(0.5)
+    return fig, axs
 
 
-def draw_roc_curve(fpr, tpr, labels=None, size_inch=(5, 5), dpi=320):
+def draw_roc_curve(fpr, tpr, labels=None, size_inch=(5, 5), dpi=320, show=False, block=False):
     """Draws and returns an ROC curve figure using pyplot."""
     if not isinstance(fpr, np.ndarray) or not isinstance(tpr, np.ndarray):
         raise AssertionError("invalid inputs")
@@ -1668,10 +1692,17 @@ def draw_roc_curve(fpr, tpr, labels=None, size_inch=(5, 5), dpi=320):
     ax.set_ylabel("True Positive Rate")
     ax.set_xlabel("False Positive Rate")
     fig.set_tight_layout(True)
-    return fig
+    if show:
+        fig.show()
+        if block:
+            plt.show(block=block)
+            return fig
+        plt.pause(0.5)
+    return fig, ax
 
 
-def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False, keep_unset=False):
+def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False,
+                 keep_unset=False, show=False, block=False):
     """Draws and returns an a confusion matrix figure using pyplot."""
     if not isinstance(confmat, np.ndarray) or not isinstance(class_list, list):
         raise AssertionError("invalid inputs")
@@ -1714,10 +1745,17 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
         color = "white" if confmat[i, j] > thresh else "black"
         ax.text(j, i, txt, horizontalalignment="center", fontsize=4, verticalalignment="center", color=color)
     fig.set_tight_layout(True)
-    return fig
+    if show:
+        fig.show()
+        if block:
+            plt.show(block=block)
+            return fig
+        plt.pause(0.5)
+    return fig, ax
 
 
-def draw_bbox(image, tl, br, text, color, box_thickness=2, font_thickness=1, font_scale=0.4):
+def draw_bbox(image, tl, br, text, color, box_thickness=2, font_thickness=1,
+              font_scale=0.4, show=False, block=False, win_name="bbox"):
     """Draws a single bounding box on a given image (used in :func:`thelper.utils.draw_bboxes`)."""
     text_size, baseline = cv.getTextSize(text, fontFace=cv.FONT_HERSHEY_SIMPLEX,
                                          fontScale=font_scale, thickness=font_thickness)
@@ -1733,6 +1771,10 @@ def draw_bbox(image, tl, br, text, color, box_thickness=2, font_thickness=1, fon
                color=(0, 0, 0), thickness=font_thickness + 1)
     cv.putText(image, text, text_bl, fontFace=cv.FONT_HERSHEY_SIMPLEX, fontScale=font_scale,
                color=(255, 255, 255), thickness=font_thickness)
+    if show:
+        cv.imshow(win_name, image)
+        cv.waitKey(0 if block else 1)
+    return win_name, image
 
 
 def draw_bboxes(images, preds=None, bboxes=None, color_map=None, redraw=None, block=False, min_confidence=0.5, **kwargs):
