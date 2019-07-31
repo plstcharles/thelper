@@ -80,6 +80,15 @@ def get_available_cuda_devices(attempts_per_device=5):
     return [device_id for device_id, available in enumerate(devices_available) if available]
 
 
+def setup_plt(config):
+    """Parses the provided config for matplotlib flags and sets up its global state accordingly."""
+    config = get_key_def(["plt", "pyplot", "matplotlib"], config, {})
+    if "backend" in config:
+        import matplotlib
+        matplotlib.use(get_key("backend", config))
+    plt.interactive(get_key_def("interactive", config, False))
+
+
 # noinspection PyUnusedLocal
 def setup_cv2(config):
     """Parses the provided config for OpenCV flags and sets up its global state accordingly."""
@@ -117,6 +126,7 @@ def setup_globals(config):
     if "bypass_queries" in config and config["bypass_queries"]:
         global bypass_queries
         bypass_queries = True
+    setup_plt(config)
     setup_cv2(config)
     setup_cudnn(config)
 
