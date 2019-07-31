@@ -427,6 +427,15 @@ def migrate_config(config,        # type: thelper.typedefs.ConfigDict
                 assert "valid_metrics" not in config["trainer"]
                 config["trainer"]["valid_metrics"] = config["trainer"]["eval_metrics"]
                 del config["trainer"]["eval_metrics"]
+            for mset in ["train_metrics", "valid_metrics", "test_metrics", "metrics"]:
+                if mset in config["trainer"]:
+                    metrics_config = config["trainer"][mset]
+                    for mname, mcfg in metrics_config.items():
+                        if "type" in mcfg and mcfg["type"].endswith("ExternalMetric"):
+                            assert "params" in mcfg
+                            assert "goal" in mcfg["params"]
+                            mcfg["params"]["metric_goal"] = mcfg["params"]["goal"]
+                            del mcfg["params"]["goal"]
         cfg_ver = [0, 3, 6]  # set ver for next update step
     # if cfg_ver[0] <= x and cfg_ver[1] <= y and cfg_ver[2] <= z:
     #     ... add more compatibility fixes here
