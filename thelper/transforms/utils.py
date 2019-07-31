@@ -136,7 +136,11 @@ def load_transforms(stages, avoid_transform_wrapper=False):
                 probability=probability, cvt_kpts_to_bboxes=cvt_kpts_to_bboxes, linked_fate=linked_fate))
         else:
             operation_type = thelper.utils.import_class(operation_name)
-            operation = operation_type(**operation_params)
+            try:
+                operation = operation_type(**operation_params)
+            except Exception:
+                logger.error(f"failed to create transform op {operation_name} with params:\n\t{str(operation_params)}")
+                raise
             if not avoid_transform_wrapper and not isinstance(operation, (thelper.transforms.wrappers.TransformWrapper,
                                                                           thelper.transforms.operations.NoTransform,
                                                                           torchvision.transforms.Compose)):

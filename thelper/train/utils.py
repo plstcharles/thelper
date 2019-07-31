@@ -557,7 +557,11 @@ def create_consumers(config):
         assert "type" in consumer_config and consumer_config["type"], "consumer config missing 'type' field"
         consumer_type = thelper.utils.import_class(consumer_config["type"])
         consumer_params = thelper.utils.get_key_def(["params", "parameters"], consumer_config, {})
-        consumer = consumer_type(**consumer_params)
+        try:
+            consumer = consumer_type(**consumer_params)
+        except Exception:
+            logger.error(f"failed to create consumer {consumer_config['type']} with params:\n\t{str(consumer_params)}")
+            raise
         assert isinstance(consumer, PredictionConsumer), "invalid consumer type, must derive from PredictionConsumer interface"
         consumers[name] = consumer
     return consumers
