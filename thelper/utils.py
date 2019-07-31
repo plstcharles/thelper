@@ -440,6 +440,11 @@ def migrate_config(config,        # type: thelper.typedefs.ConfigDict
                                 if isinstance(mcfg["params"]["metric_params"], list):
                                     assert not mcfg["params"]["metric_params"], "cannot fill in kw names"
                                     mcfg["params"]["metric_params"] = {}
+                        elif "type" in mcfg and mcfg["type"].endswith("ROCCurve"):
+                            assert "params" in mcfg
+                            if "log_params" in mcfg["params"]:
+                                logger.warning("disabling logging via ROCCurve metric")
+                                del mcfg["params"]["log_params"]
         cfg_ver = [0, 3, 6]  # set ver for next update step
     # if cfg_ver[0] <= x and cfg_ver[1] <= y and cfg_ver[2] <= z:
     #     ... add more compatibility fixes here
