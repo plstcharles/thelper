@@ -627,6 +627,79 @@ class RandomShift:
         np.random.seed(seed)
 
 
+class ToGray:
+    """Converts a multi-channel image to grayscale.
+
+    This operation is deterministic, but not reversible. It can be applied to images with
+    more than three channels (RGB) --- in that case, it will compute their per-pixel mean
+    value. Note that in any case, the last dimension (that corresponds to the channels) will
+    remain and be of size 1.
+    """
+
+    def __init__(self):
+        """Does nothing, there's no attribute to store for this operation."""
+        pass
+
+    def __call__(self, sample):
+        assert isinstance(sample, (PIL.Image.Image, np.ndarray)), \
+            "sample type should be np.ndarray or PIL image"
+        if isinstance(sample, PIL.Image.Image):
+            sample = np.asarray(sample)
+        assert 2 <= sample.ndim <= 3, "array should have at least two dimensions + channels"
+        if sample.ndim == 2:
+            return np.expand_dims(sample, 2)
+        elif sample.shape[2] == 1:
+            return sample  # already grayscale, return immediately
+        elif sample.shape[2] == 3:
+            return np.expand_dims(cv.cvtColor(sample, cv.COLOR_BGR2GRAY), 2)
+        return np.mean(sample, axis=2, keepdims=True)
+
+    def invert(self, sample):
+        """Specifies that this operation cannot be inverted, as data loss occurs during transformation."""
+        raise RuntimeError("operation cannot be inverted")
+
+    def __repr__(self):
+        """Provides print-friendly output for class attributes."""
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + "()"
+
+
+class ToColor:
+    """Converts a single-channel image to color (RGB).
+
+    This operation is deterministic and reversible. It CANNOT be applied to images with
+    more than one channel (HxWx1). The byte ordering (BGR or RGB) does not matter.
+    """
+
+    def __init__(self):
+        """Does nothing, there's no attribute to store for this operation."""
+        pass
+
+    def __call__(self, sample):
+        assert isinstance(sample, (PIL.Image.Image, np.ndarray)), \
+            "sample type should be np.ndarray or PIL image"
+        if isinstance(sample, PIL.Image.Image):
+            sample = np.asarray(sample)
+        assert 2 <= sample.ndim <= 3, "array should have at least two dimensions + channels"
+        if sample.ndim == 2:
+            return cv.cvtColor(sample, cv.COLOR_GRAY2BGR)
+        elif sample.shape[2] == 1:
+            return cv.cvtColor(sample[..., 0], cv.COLOR_GRAY2BGR)
+        else:
+            raise AssertionError("unexpected channel count in input sample")
+
+    def invert(self, sample):
+        """Inverts the operation by calling the 'ToGray' operation.
+
+        Note that this operation is probably lossy due to OpenCV's grayscale conversion code
+        which uses "0.21 R + 0.72 G + 0.07 B" to compute the luminosity of a pixel.
+        """
+        return ToGray()(sample)
+
+    def __repr__(self):
+        """Provides print-friendly output for class attributes."""
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + "()"
+
+
 class Transpose:
     """Transposes an image via numpy.
 

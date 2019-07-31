@@ -21,6 +21,8 @@ from thelper.transforms.operations import RandomResizedCrop  # noqa: F401
 from thelper.transforms.operations import RandomShift  # noqa: F401
 from thelper.transforms.operations import Resize  # noqa: F401
 from thelper.transforms.operations import Tile  # noqa: F401
+from thelper.transforms.operations import ToColor  # noqa: F401
+from thelper.transforms.operations import ToGray  # noqa: F401
 from thelper.transforms.operations import ToNumpy  # noqa: F401
 from thelper.transforms.operations import Transpose  # noqa: F401
 from thelper.transforms.operations import Unsqueeze  # noqa: F401
