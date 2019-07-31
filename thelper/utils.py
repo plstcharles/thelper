@@ -1678,7 +1678,7 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
     fig = plt.figure(num="confmat", figsize=size_inch, dpi=dpi, facecolor="w", edgecolor="k")
     fig.clf()
     ax = fig.add_subplot(1, 1, 1)
-    ax.imshow(confmat, cmap=plt.cm.Blues)
+    ax.imshow(confmat, cmap=plt.cm.Blues, aspect="equal", interpolation="none")
     labels = [clipstr(label, 9) for label in class_list]
     tick_marks = np.arange(len(labels))
     ax.set_xlabel("Predicted", fontsize=7)
@@ -1689,6 +1689,7 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
     ax.set_ylabel("Real", fontsize=7)
     ax.set_yticks(tick_marks)
     ax.set_yticklabels(labels, fontsize=4, va="center")
+    ax.set_ylim(confmat.shape[0] - 0.5, -0.5)
     ax.yaxis.set_label_position("left")
     ax.yaxis.tick_left()
     thresh = confmat.max() / 2.
