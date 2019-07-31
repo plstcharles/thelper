@@ -436,6 +436,10 @@ def migrate_config(config,        # type: thelper.typedefs.ConfigDict
                             assert "goal" in mcfg["params"]
                             mcfg["params"]["metric_goal"] = mcfg["params"]["goal"]
                             del mcfg["params"]["goal"]
+                            if "metric_params" in mcfg["params"]:
+                                if isinstance(mcfg["params"]["metric_params"], list):
+                                    assert not mcfg["params"]["metric_params"], "cannot fill in kw names"
+                                    mcfg["params"]["metric_params"] = {}
         cfg_ver = [0, 3, 6]  # set ver for next update step
     # if cfg_ver[0] <= x and cfg_ver[1] <= y and cfg_ver[2] <= z:
     #     ... add more compatibility fixes here
