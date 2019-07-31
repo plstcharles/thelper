@@ -547,7 +547,7 @@ class LoaderFactory:
                         sampler_params["scale"] = scale
                     else:
                         assert scale == 1.0, f"could not apply scale factor to sample with type '{str(self.sampler_type)}'"
-                    sampler = self.sampler_type(loader_sample_idxs, **self.sampler_params)
+                    sampler = self.sampler_type(loader_sample_idxs, **sampler_params)
                 else:
                     if shuffle:
                         sampler = thelper.data.SubsetRandomSampler(loader_sample_idxs, seeds=self.seeds, scale=scale)
