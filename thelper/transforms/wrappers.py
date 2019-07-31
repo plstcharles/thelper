@@ -488,7 +488,7 @@ class TransformWrapper:
                         # watch out: if operation is stochastic and we cannot seed above, then there is no
                         # guarantee that the content will truly have a 'linked fate' (this might cause issues!)
                         if sample[idx] is not None:
-                            sample[idx] = self.opcall(sample[idx], **self.params)
+                            sample[idx] = self.opcall(sample[idx])
         else:  # each element of the top array will be processed independently below (current seeds are kept)
             cvts = [False] * len(sample)
             for idx, _ in enumerate(sample):
@@ -500,7 +500,7 @@ class TransformWrapper:
                                                       op_seed=op_seed, in_cvts=cvts[idx])
                     else:
                         if sample[idx] is not None:
-                            sample[idx] = self.opcall(sample[idx], **self.params)
+                            sample[idx] = self.opcall(sample[idx])
         sample, cvts = TransformWrapper._pack(sample, cvts, convert_pil=self.convert_pil)
         assert len(sample) == len(cvts), "messed up packing/unpacking logic"
         if (skip_unpack or not out_list) and len(sample) == 1:
