@@ -7,11 +7,11 @@ by the user to create any kind of session is a configuration dictionary. For ses
 outputs, the path to a directory where to save the data is also needed.
 """
 
-from typing import Optional
 import argparse
 import json
 import logging
 import os
+from typing import Optional
 
 import torch
 import tqdm
