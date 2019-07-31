@@ -7,6 +7,7 @@ by the user to create any kind of session is a configuration dictionary. For ses
 outputs, the path to a directory where to save the data is also needed.
 """
 
+from typing import Optional
 import argparse
 import json
 import logging
@@ -394,6 +395,21 @@ def make_argparser():
     return ap
 
 
+def setup(args):
+    # type: (argparse.Namespace) -> Optional[int]
+    if args.version:
+        print(thelper.__version__)
+        return 0
+    if args.mode is None:
+        ap.print_help()
+        return 1
+    if args.silent and args.verbose > 0:
+        raise AssertionError("contradicting verbose/silent arguments provided")
+    log_level = logging.INFO if args.verbose < 1 else logging.DEBUG if args.verbose < 2 else logging.NOTSET
+    thelper.utils.init_logger(log_level, args.log, args.force_stdout)
+    return None
+
+
 def main(args=None, argparser=None):
     """Main entrypoint to use with console applications.
 
@@ -414,16 +430,9 @@ def main(args=None, argparser=None):
     """
     ap = argparser or make_argparser()
     args = ap.parse_args(args=args)
-    if args.version:
-        print(thelper.__version__)
-        return 0
-    if args.mode is None:
-        ap.print_help()
-        return 1
-    if args.silent and args.verbose > 0:
-        raise AssertionError("contradicting verbose/silent arguments provided")
-    log_level = logging.INFO if args.verbose < 1 else logging.DEBUG if args.verbose < 2 else logging.NOTSET
-    thelper.utils.init_logger(log_level, args.log, args.force_stdout)
+    out = setup(args)
+    if out is not None:
+        return out
     if args.mode == "new" or args.mode == "cl_new":
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
         with open(args.cfg_path) as fd:
