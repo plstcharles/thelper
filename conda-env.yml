@@ -11,6 +11,8 @@ dependencies:
   - opencv
   - lz4
   - scikit-learn
+  - ddt
+  - gitdb
   - gitpython
   - mock
   - pip
