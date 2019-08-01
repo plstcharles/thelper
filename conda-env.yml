@@ -2,6 +2,7 @@ name: thelper
 channels:
   - pytorch
   - albumentations
+  - conda-forge
 dependencies:
   - pytorch
   - torchvision
