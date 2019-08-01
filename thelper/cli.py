@@ -11,7 +11,7 @@ import argparse
 import json
 import logging
 import os
-from typing import Optional
+from typing import Any, Union
 
 import torch
 import tqdm
@@ -362,6 +362,11 @@ def export_model(config, save_dir):
 
 def make_argparser():
     # type: () -> argparse.ArgumentParser
+    """Creates the (default) argument parser to use for the main entrypoint.
+
+    The argument parser will contain different "operating modes" that dictate the high-level behavior of the CLI. This
+    function may be modified in branches of the framework to add project-specific features.
+    """
     ap = argparse.ArgumentParser(description='thelper model trainer application')
     ap.add_argument("--version", default=False, action="store_true", help="prints the version of the library and exits")
     ap.add_argument("-l", "--log", default=None, type=str, help="path to the top-level log file (default: None)")
@@ -395,18 +400,26 @@ def make_argparser():
     return ap
 
 
-def setup(args):
-    # type: (argparse.Namespace) -> Optional[int]
+def setup(args=None, argparser=None):
+    # type: (Any, argparse.Namespace) -> Union[int, argparse.Namespace]
+    """Sets up the argument parser (if not already done externally) and parses the input CLI arguments.
+
+    This function may return an error code (integer) if the program should exit immediately. Otherwise, it will return
+    the parsed arguments to use in order to redirect the execution flow of the entrypoint.
+    """
+    argparser = argparser or make_argparser()
+    args = argparser.parse_args(args=args)
     if args.version:
         print(thelper.__version__)
         return 0
     if args.mode is None:
-        return 1  # will print args outside setup func
+        argparser.print_help()
+        return 1
     if args.silent and args.verbose > 0:
         raise AssertionError("contradicting verbose/silent arguments provided")
     log_level = logging.INFO if args.verbose < 1 else logging.DEBUG if args.verbose < 2 else logging.NOTSET
     thelper.utils.init_logger(log_level, args.log, args.force_stdout)
-    return None
+    return args
 
 
 def main(args=None, argparser=None):
@@ -427,13 +440,9 @@ def main(args=None, argparser=None):
         | :func:`thelper.cli.annotate_data`
         | :func:`thelper.cli.split_data`
     """
-    ap = argparser or make_argparser()
-    args = ap.parse_args(args=args)
-    out = setup(args)
-    if out is not None:
-        if out != 0:
-            ap.print_help()
-        return out
+    args = setup(args=args, argparser=argparser)
+    if isinstance(args, int):
+        return args  # CLI must exit immediately with provided error code
     if args.mode == "new" or args.mode == "cl_new":
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
         with open(args.cfg_path) as fd:
