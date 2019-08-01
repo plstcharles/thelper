@@ -186,7 +186,8 @@ class Block8(torch.nn.Module):
 class InceptionResNetV2(thelper.nn.Module):
 
     def __init__(self, task, input_channels=3):
-        super().__init__(task)
+        # note: must always forward args to base class to keep backup
+        super().__init__(task, input_channels=input_channels)
         self.conv2d_1a = BasicConv2d(input_channels, 32, kernel_size=3, stride=2)
         self.conv2d_2a = BasicConv2d(32, 32, kernel_size=3, stride=1)
         self.conv2d_2b = BasicConv2d(32, 64, kernel_size=3, stride=1, padding=1)

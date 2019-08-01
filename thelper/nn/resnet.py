@@ -128,8 +128,8 @@ class ResNet(thelper.nn.Module):
 
     def __init__(self, task, block=BasicBlock, layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
                  flexible_input_res=False, pool_size=7, coordconv=False, radius_channel=True, pretrained=False):
-        # TODO: add pretrained param to toggle loading weights from imagenet before applying task?
-        super().__init__(task)
+        # note: must always forward args to base class to keep backup
+        super().__init__(task, **{k: v for k, v in vars().items() if k not in ["self", "task", "__class__"]})
         if isinstance(block, str):
             block = thelper.utils.import_class(block)
         if not issubclass(block, Module):

@@ -54,7 +54,8 @@ class InvertedResidual(nn.Module):
 class MobileNetV2(thelper.nn.Module):
 
     def __init__(self, task, input_size=224, width_mult=1.):
-        super().__init__(task)
+        # note: must always forward args to base class to keep backup
+        super().__init__(task, input_size=input_size, width_mult=width_mult)
         # setting of inverted residual blocks
         self.interverted_residual_setting = [
             # t, c, n, s

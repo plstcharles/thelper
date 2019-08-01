@@ -10,7 +10,8 @@ class SRCNN(thelper.nn.Module):
     """
 
     def __init__(self, task, num_channels=1, base_filter=64, groups=1):
-        super(SRCNN, self).__init__(task)
+        # note: must always forward args to base class to keep backup
+        super(SRCNN, self).__init__(task, num_channels=num_channels, base_filter=base_filter, groups=groups)
         self.conv1 = thelper.nn.common.ConvBlock(num_channels, base_filter * groups, kernel_size=9,
                                                  stride=1, padding=0, activation="relu", norm=None, groups=groups)
         self.conv2 = thelper.nn.common.ConvBlock(base_filter * groups, base_filter // 2 * groups, kernel_size=5,

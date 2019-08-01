@@ -12,7 +12,8 @@ class VDSR(thelper.nn.Module):
 
     def __init__(self, task, num_channels=1, base_filter=64, kernel_size0=3,
                  num_residuals=18, groups=1, activation='relu', norm='batch'):
-        super(VDSR, self).__init__(task)
+        # note: must always forward args to base class to keep backup
+        super(VDSR, self).__init__(task, **{k: v for k, v in vars().items() if k not in ["self", "task", "__class__"]})
         self.kernel_size0 = kernel_size0
         self.num_channels = num_channels
         self.input_conv = thelper.nn.common.ConvBlock(input_size=num_channels, output_size=base_filter, kernel_size=self.kernel_size0,

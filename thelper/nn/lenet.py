@@ -14,7 +14,8 @@ class LeNet(thelper.nn.Module):
 
     def __init__(self, task, input_shape=(1, 28, 28), conv1_filters=6, conv2_filters=16,
                  hidden1_size=120, hidden2_size=84, output_size=10):
-        super().__init__(task)
+        # note: must always forward args to base class to keep backup
+        super().__init__(task, **{k: v for k, v in vars().items() if k not in ["self", "task", "__class__"]})
         padding = 2 if input_shape[1] == 28 else 0
         self.baseline = torch.nn.Sequential(
             torch.nn.Conv2d(in_channels=input_shape[0], out_channels=conv1_filters, kernel_size=5, stride=1, padding=padding),

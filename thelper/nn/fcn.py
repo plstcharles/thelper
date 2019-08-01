@@ -23,7 +23,8 @@ def get_upsampling_weight(in_channels, out_channels, kernel_size):
 
 class FCN32s(thelper.nn.Module):
     def __init__(self, task, init_vgg16=True):
-        super().__init__(task)
+        # note: must always forward args to base class to keep backup
+        super().__init__(task, init_vgg16=init_vgg16)
         self.conv_block1 = torch.nn.Sequential(
             torch.nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=100),
             torch.nn.ReLU(inplace=True),

@@ -103,6 +103,7 @@ def create_model(config, task, save_dir=None, ckptdata=None):
             if hasattr(model, "get_name") and model.get_name() != ckptdata["model_type"]:
                 raise AssertionError("old model type mismatch with ckptdata type")
         elif isinstance(ckptdata["model"], dict):
+            # assume that 'model' is actually holding the state dictionary (must reinstantiate architecture)
             logger.debug("loading model type/params from session '%s'" % ckptdata["name"])
             model_state = ckptdata["model"]
             if "task" not in ckptdata or not isinstance(ckptdata["task"], (thelper.tasks.Task, dict, str)):
