@@ -8,6 +8,7 @@ import errno
 import functools
 import glob
 import importlib
+import importlib.util
 import inspect
 import io
 import itertools
@@ -20,16 +21,19 @@ import platform
 import re
 import sys
 import time
-from typing import AnyStr, Callable, List, Optional  # noqa: F401
-
 import cv2 as cv
 import lz4
 import matplotlib.pyplot as plt
 import numpy as np
 import sklearn.metrics
 import torch
+import pathlib
 
 import thelper.typedefs  # noqa: F401
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from typing import List, Optional, Type  # noqa: F401
+    from types import FunctionType  # noqa: F401
 
 logger = logging.getLogger(__name__)
 bypass_queries = False
@@ -570,7 +574,7 @@ def init_logger(log_level=logging.NOTSET, filename=None, force_stdout=False):
 
 
 def resolve_import(fullname):
-    # type: (AnyStr) -> AnyStr
+    # type: (str) -> str
     """
     Class name resolver.
 
@@ -613,7 +617,14 @@ def resolve_import(fullname):
 
 
 def import_class(fullname):
+    # type: (str) -> Type
     """General-purpose runtime class importer.
+
+    Supported syntax:
+        1. ``module.package.Class`` will import the fully qualified ``Class`` located
+           in ``package`` from the *installed* ``module``
+        2. ``/some/path/mod.pkg.Cls`` will import ``Cls`` as fully qualified ``mod.pkg.Cls`` from
+           ``/some/path`` directory
 
     Args:
         fullname: the fully qualified class name to be imported.
@@ -622,13 +633,25 @@ def import_class(fullname):
         The imported class.
     """
     assert isinstance(fullname, str)
-    fullname = resolve_import(fullname)
-    module_name, class_name = fullname.rsplit('.', 1)
-    module = importlib.import_module(module_name)
+    fullname = pathlib.Path(fullname).as_posix()
+    if "/" in fullname:
+        mod_path, mod_cls_name = fullname.rsplit("/", 1)
+        pkg_name = mod_cls_name.rsplit(".", 1)[0]
+        pkg_file = os.path.join(mod_path, pkg_name.replace(".", "/")) + ".py"
+        mod_cls_name = resolve_import(mod_cls_name)
+        spec = importlib.util.spec_from_file_location(mod_cls_name, pkg_file)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        class_name = mod_cls_name.rsplit('.', 1)[-1]
+    else:
+        fullname = resolve_import(fullname)
+        module_name, class_name = fullname.rsplit('.', 1)
+        module = importlib.import_module(module_name)
     return getattr(module, class_name)
 
 
 def import_function(fullname, params=None):
+    # type: (str, Optional[thelper.typedefs.ConfigDict]) -> FunctionType
     """General-purpose runtime function importer, with support for param binding.
 
     Args:
@@ -646,8 +669,8 @@ def import_function(fullname, params=None):
     return func
 
 
-def check_func_signature(func,      # type: Callable
-                         params     # type: List[AnyStr]
+def check_func_signature(func,      # type: FunctionType
+                         params     # type: List[str]
                          ):         # type: (...) -> None
     """Checks whether the signature of a function matches the expected parameter list."""
     if func is None or not callable(func):

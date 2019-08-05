@@ -9,11 +9,13 @@ import logging
 import re
 
 import thelper.utils
+import thelper.typedefs
 
 logger = logging.getLogger(__name__)
 
 
 def create_task(config):
+    # type: (Union[thelper.typedefs.ConfigDict, str]) -> Task
     """Parses a configuration dictionary or repr string and instantiates a task from it.
 
     If a string is provided, it will first be parsed to get the task type, and then the object will be
