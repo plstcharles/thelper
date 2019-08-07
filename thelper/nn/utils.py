@@ -69,7 +69,7 @@ def create_model(config, task, save_dir=None, ckptdata=None):
         modules_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         modules_logger_fh = logging.FileHandler(modules_logger_path)
         modules_logger_fh.setFormatter(modules_logger_format)
-        logger.addHandler(modules_logger_fh)
+        thelper.nn.logger.addHandler(modules_logger_fh)
     logger.debug("loading model")
     model_config = None
     if config is not None:

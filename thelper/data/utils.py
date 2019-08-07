@@ -183,8 +183,8 @@ def create_loaders(config, save_dir=None):
         data_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         data_logger_fh = logging.FileHandler(data_logger_path)
         data_logger_fh.setFormatter(data_logger_format)
-        logger.addHandler(data_logger_fh)
-        logger.info("created data log for session '%s'" % session_name)
+        thelper.data.logger.addHandler(data_logger_fh)
+        thelper.data.logger.info("created data log for session '%s'" % session_name)
     logger.debug("loading data usage config")
     # todo: 'data_config' field is deprecated, might be removed later
     if "data_config" in config:
