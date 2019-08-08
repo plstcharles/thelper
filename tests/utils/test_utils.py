@@ -1,8 +1,8 @@
-import mock
 import os
 
-import thelper
+import mock
 
+import thelper
 
 CUR_DIR = os.path.abspath(os.path.dirname(__file__))
 MOD_DIR = os.path.join(CUR_DIR, "mod")

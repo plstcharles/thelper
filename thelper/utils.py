@@ -16,21 +16,23 @@ import json
 import logging
 import math
 import os
+import pathlib
 import pickle
 import platform
 import re
 import sys
 import time
+from typing import TYPE_CHECKING
+
 import cv2 as cv
 import lz4
 import matplotlib.pyplot as plt
 import numpy as np
 import sklearn.metrics
 import torch
-import pathlib
 
 import thelper.typedefs  # noqa: F401
-from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from typing import List, Optional, Type  # noqa: F401
     from types import FunctionType  # noqa: F401

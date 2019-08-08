@@ -7,9 +7,10 @@ and the base interface used to define new tasks.
 import collections
 import logging
 import re
+from typing import Union
 
-import thelper.utils
 import thelper.typedefs
+import thelper.utils
 
 logger = logging.getLogger(__name__)
 
