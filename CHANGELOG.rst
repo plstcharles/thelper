@@ -3,6 +3,14 @@
 Changelog
 =========
 
+0.3.8 (2019/08/08)
+------------------
+
+* Fixed nn modules constructor args forwarding
+* Updated class importer to allow parsing of non-package dirs
+* Fixed file-based logging from submodules (e.g. for all data)
+* Cleaned and API-fied the CLI entrypoints for external use
+
 0.3.7 (2019/07/31)
 ------------------
 
