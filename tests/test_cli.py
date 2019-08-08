@@ -362,7 +362,7 @@ def export_config(request):
             "task": {
                 "type": "thelper.tasks.Classification",
                 "params": {
-                    "class_names": "tests/utils/imagenet_classes.json",
+                    "class_names": "tests/meta/imagenet_classes.json",
                     "input_key": "0",
                     "label_key": "1"
                 }

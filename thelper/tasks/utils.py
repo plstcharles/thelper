@@ -7,13 +7,16 @@ and the base interface used to define new tasks.
 import collections
 import logging
 import re
+from typing import Union
 
+import thelper.typedefs
 import thelper.utils
 
 logger = logging.getLogger(__name__)
 
 
 def create_task(config):
+    # type: (Union[thelper.typedefs.ConfigDict, str]) -> Task
     """Parses a configuration dictionary or repr string and instantiates a task from it.
 
     If a string is provided, it will first be parsed to get the task type, and then the object will be
