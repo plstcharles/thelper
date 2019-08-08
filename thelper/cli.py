@@ -401,7 +401,7 @@ def make_argparser():
 
 
 def setup(args=None, argparser=None):
-    # type: (Any, argparse.Namespace) -> Union[int, argparse.Namespace]
+    # type: (Any, argparse.ArgumentParser) -> Union[int, argparse.Namespace]
     """Sets up the argument parser (if not already done externally) and parses the input CLI arguments.
 
     This function may return an error code (integer) if the program should exit immediately. Otherwise, it will return
