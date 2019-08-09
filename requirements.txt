@@ -16,3 +16,4 @@ gitpython
 pip
 six
 tqdm
+pyyaml

@@ -51,8 +51,8 @@ def test_main_args(dummy_config, mocker):
         nonlocal config
         return config
 
-    mock_json_load = mocker.patch("json.load")
-    mock_json_load.side_effect = config_getter
+    mock_config_load = mocker.patch("thelper.utils.load_config")
+    mock_config_load.side_effect = config_getter
     config = {"oii": "test"}
     assert main(["new", dummy_config_path, dummy_save_path]) == 0
     assert mock_create.called_with(config, dummy_save_path)

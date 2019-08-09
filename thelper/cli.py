@@ -8,7 +8,6 @@ outputs, the path to a directory where to save the data is also needed.
 """
 
 import argparse
-import json
 import logging
 import os
 from typing import Any, Union
@@ -445,8 +444,7 @@ def main(args=None, argparser=None):
         return args  # CLI must exit immediately with provided error code
     if args.mode == "new" or args.mode == "cl_new":
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
-        with open(args.cfg_path) as fd:
-            config = json.load(fd)
+        config = thelper.utils.load_config(args.cfg_path)
         if args.mode == "cl_new":
             trainer_config = thelper.utils.get_key_def("trainer", config, {})
             device = thelper.utils.get_key_def("device", trainer_config, None)
@@ -459,8 +457,7 @@ def main(args=None, argparser=None):
         override_config = None
         if args.override_cfg:
             thelper.logger.debug("parsing override config at '%s'" % args.override_cfg)
-            with open(args.override_cfg) as fd:
-                override_config = json.load(fd)
+            override_config = thelper.utils.load_config(args.override_cfg)
         save_dir = args.save_dir
         if save_dir is None:
             ckpt_dir_path = os.path.dirname(os.path.abspath(args.ckpt_path)) \
@@ -476,8 +473,7 @@ def main(args=None, argparser=None):
         resume_session(ckptdata, save_dir, config=override_config, eval_only=args.eval_only)
     else:
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
-        with open(args.cfg_path) as fd:
-            config = json.load(fd)
+        config = thelper.utils.load_config(args.cfg_path)
         if args.mode == "viz":
             visualize_data(config)
         elif args.mode == "annot":

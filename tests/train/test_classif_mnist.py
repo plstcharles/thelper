@@ -1,5 +1,4 @@
 import copy
-import json
 import os
 import shutil
 from typing import Optional  # noqa: F401
@@ -180,9 +179,8 @@ def test_outputs(config):
                 with open(os.path.join(epoch_out_path, filename), "r") as fd:
                     assert np.isclose(float(fd.readline()), train_outputs[epoch][ltype + "/metrics"]["accuracy"])
             elif filename == "config.json":
-                with open(os.path.join(epoch_out_path, filename), "r") as fd:
-                    backup_config = json.load(fd)
-                    assert compare_dictionaries(backup_config, override_config) == ""
+                backup_config = thelper.utils.load_config(os.path.join(epoch_out_path, filename))
+                assert compare_dictionaries(backup_config, override_config) == ""
 
 
 def callback(task,  # type: thelper.tasks.utils.Task
