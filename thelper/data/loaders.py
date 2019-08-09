@@ -191,6 +191,9 @@ class LoaderFactory:
         self.train_batch_size = thelper.utils.get_key_def("train_batch_size", config, default_batch_size)
         self.valid_batch_size = thelper.utils.get_key_def("valid_batch_size", config, default_batch_size)
         self.test_batch_size = thelper.utils.get_key_def("test_batch_size", config, default_batch_size)
+        assert self.train_batch_size > 0, "batch size should be strictly positive integer"
+        assert self.valid_batch_size > 0, "batch size should be strictly positive integer"
+        assert self.test_batch_size > 0, "batch size should be strictly positive integer"
         logger.debug("loaders will use batch sizes:\n  train = %d\n  valid = %d\n  test = %d" %
                      (self.train_batch_size, self.valid_batch_size, self.test_batch_size))
         self.train_scale = thelper.utils.get_key_def("train_scale", config, 1.0)
