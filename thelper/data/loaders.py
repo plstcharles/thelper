@@ -44,6 +44,7 @@ def default_collate(batch):
                 numel = sum([x.numel() for x in batch])
                 storage = batch[0].storage()._new_shared(numel)
                 out = batch[0].new(storage)
+            return torch.stack(batch, 0, out=out)
         elif torch_ver[0] == 1 and torch_ver[1] == 1:  # ver == 1.1
             if torch.utils.data._utils.collate._use_shared_memory:
                 # If we're in a background process, concatenate directly into a
