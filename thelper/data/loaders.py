@@ -182,7 +182,7 @@ class LoaderFactory:
     def __init__(self, config):
         """Receives and parses the data configuration dictionary."""
         logger.debug("loading data config")
-        default_batch_size = 0
+        default_batch_size = 1
         if "batch_size" in config:
             if any([v in config for v in ["train_batch_size", "valid_batch_size", "test_batch_size"]]):
                 raise AssertionError("specifying 'batch_size' overrides all other (loader-specific) values")
