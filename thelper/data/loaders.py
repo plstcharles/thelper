@@ -37,7 +37,10 @@ def default_collate(batch):
     error_msg_fmt = "batch must contain tensors, numbers, dicts or lists; found {}"
     torch_ver = [int(v) for v in torch.__version__.split(".")]
     elem_type = type(batch[0])
-    if isinstance(batch[0], torch.Tensor):
+    if any([b is None for b in batch]):
+        assert all([b is None for b in batch]), "cannot mix ``None`` and non-``None`` types"
+        return None  # compress and return entire field as unavailable
+    elif isinstance(batch[0], torch.Tensor):
         out = None
         if torch_ver[0] > 1 or torch_ver[1] > 1:  # ver > 1.1
             if torch.utils.data.get_worker_info() is not None:
