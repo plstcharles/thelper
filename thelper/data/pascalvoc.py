@@ -172,11 +172,17 @@ class PASCALVOC(Dataset):
             def tqdm(x):
                 return x
         for sample_name in tqdm(sample_names):
-            annotation_file_path = os.path.join(dataset_path, "Annotations", sample_name + ".xml")
-            assert os.path.isfile(annotation_file_path), "cannot load annotation file for sample '%s'" % sample_name
-            annotation = xml.etree.ElementTree.parse(annotation_file_path).getroot()
-            assert annotation.tag == "annotation", "unexpected xml content"
-            filename = annotation.find("filename").text
+            if subset == "test":
+                # will load all images without caring whether object is present; we do not have any annotations
+                filename = sample_name + ".jpg"
+                annotation_file_path = None
+                annotation = None
+            else:
+                annotation_file_path = os.path.join(dataset_path, "Annotations", sample_name + ".xml")
+                assert os.path.isfile(annotation_file_path), "cannot load annotation file for sample '%s'" % sample_name
+                annotation = xml.etree.ElementTree.parse(annotation_file_path).getroot()
+                assert annotation.tag == "annotation", "unexpected xml content"
+                filename = annotation.find("filename").text
             image_path = os.path.join(image_folder_path, filename)
             assert os.path.isfile(image_path), "cannot locate image for sample '%s'" % sample_name
             image = None
@@ -184,7 +190,7 @@ class PASCALVOC(Dataset):
                 image = cv.imread(image_path)
                 assert image is not None, "could not load image '%s' via opencv" % image_path
             gt, gt_path = None, None
-            if self.task_name == "segm":
+            if self.task_name == "segm" and subset != "test":
                 assert int(annotation.find("segmented").text) == 1, "unexpected segmented flag for sample '%s'" % sample_name
                 gt_path = os.path.join(dataset_path, "SegmentationClass", sample_name + ".png")
                 if self.preload:
@@ -193,7 +199,7 @@ class PASCALVOC(Dataset):
                     gt = self.encode_label_map(gt)
                     #gt_decoded = self.decode_label_map(gt)
                     #assert np.array_equal(cv.imread(gt_path), gt_decoded), "messed up encoding/decoding functions"
-            elif self.task_name == "detect":
+            elif self.task_name == "detect" and subset != "test":
                 gt_path = annotation_file_path
                 gt = []
                 for obj in annotation.iter("object"):
@@ -240,18 +246,20 @@ class PASCALVOC(Dataset):
             image = image[..., ::-1]  # BGR to RGB
             gt = None
             if self.task_name == "segm":
-                gt = cv.imread(sample[self.gt_path_key])
-                assert gt is not None and gt.shape == image.shape, "unexpected gt shape for sample '%s'" % sample[self.sample_name_key]
-                gt = self.encode_label_map(gt)
+                if self.gt_path_key in sample and sample[self.gt_path_key]:
+                    gt = cv.imread(sample[self.gt_path_key])
+                    assert gt is not None and gt.shape == image.shape, \
+                        f"unexpected gt shape for sample '{sample[self.sample_name_key]}'"
+                    gt = self.encode_label_map(gt)
             elif self.task_name == "detect":
-                gt = sample[self.gt_key]
+                gt = thelper.utils.get_key_def(self.gt_key, sample)
         else:
             image = sample[self.image_key]
-            gt = sample[self.gt_key]
+            gt = thelper.utils.get_key_def(self.gt_key, sample)
         sample = {
             self.sample_name_key: sample[self.sample_name_key],
             self.image_path_key: sample[self.image_path_key],
-            self.gt_path_key: sample[self.gt_path_key],
+            self.gt_path_key: thelper.utils.get_key_def(self.gt_path_key, sample),
             self.image_key: image,
             self.gt_key: gt,
             self.idx_key: idx
