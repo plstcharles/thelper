@@ -137,7 +137,7 @@ class CenterCrop:
         Returns:
             The center crop.
         """
-        assert isinstance(sample, np.ndarray), "sample type should be np.ndarray"
+        assert isinstance(sample, np.ndarray), f"sample type should be np.ndarray (got {type(sample)})"
         assert 2 <= sample.ndim <= 3, "bad input dimensions; must be 2-d, or 3-d (with channels)"
         crop_height = int(round(self.size[1] * sample.shape[0])) if self.relative else self.size[1]
         crop_width = int(round(self.size[0] * sample.shape[1])) if self.relative else self.size[0]
@@ -408,7 +408,7 @@ class Resize:
             The resized image. May be allocated on the spot, or be a pointer to a local buffer.
         """
         assert isinstance(sample, (PIL.Image.Image, np.ndarray)), \
-            "sample type should be np.ndarray or PIL image"
+            f"sample type should be np.ndarray or PIL image (got {type(sample)})"
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
         assert 2 <= sample.ndim <= 3, "bad input dimensions; must be 2-d, or 3-d (with channels)"
@@ -508,7 +508,7 @@ class Affine:
             The warped image.
         """
         assert isinstance(sample, (PIL.Image.Image, np.ndarray)), \
-            "sample type should be np.ndarray or PIL image"
+            f"sample type should be np.ndarray or PIL image (got {type(sample)})"
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
         out_size = self.out_size
@@ -520,7 +520,7 @@ class Affine:
     def invert(self, sample):
         """Inverts the warp transformation, but only is the output image has not been cropped before."""
         assert isinstance(sample, (PIL.Image.Image, np.ndarray)), \
-            "sample type should be np.ndarray or PIL image"
+            f"sample type should be np.ndarray or PIL image (got {type(sample)})"
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
         out_size = self.out_size
@@ -601,7 +601,7 @@ class RandomShift:
             The translated image.
         """
         assert isinstance(sample, (PIL.Image.Image, np.ndarray)), \
-            "sample type should be np.ndarray or PIL image"
+            f"sample type should be np.ndarray or PIL image (got {type(sample)})"
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
         if self.probability < 1 and np.random.uniform(0, 1) > self.probability:
@@ -642,7 +642,7 @@ class ToGray:
 
     def __call__(self, sample):
         assert isinstance(sample, (PIL.Image.Image, np.ndarray)), \
-            "sample type should be np.ndarray or PIL image"
+            f"sample type should be np.ndarray or PIL image (got {type(sample)})"
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
         assert 2 <= sample.ndim <= 3, "array should have at least two dimensions + channels"
@@ -676,7 +676,7 @@ class ToColor:
 
     def __call__(self, sample):
         assert isinstance(sample, (PIL.Image.Image, np.ndarray)), \
-            "sample type should be np.ndarray or PIL image"
+            f"sample type should be np.ndarray or PIL image (got {type(sample)})"
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
         assert 2 <= sample.ndim <= 3, "array should have at least two dimensions + channels"
@@ -733,7 +733,7 @@ class Transpose:
         Returns:
             The transposed image.
         """
-        assert isinstance(sample, np.ndarray), "sample type should be np.ndarray"
+        assert isinstance(sample, np.ndarray), f"sample type should be np.ndarray (got {type(sample)})"
         return np.transpose(sample, self.axes)
 
     def invert(self, sample):
@@ -1084,7 +1084,7 @@ class NormalizeZeroMeanUnitVar:
             assert self.out_type != np.float32, "missing impl for non-float torch normalize output"
             return out.float()
         else:
-            raise TypeError("sample type should be np.ndarray or torch.Tensor")
+            raise TypeError(f"sample type should be np.ndarray or torch.Tensor (got {type(sample)})")
 
     def invert(self, sample):
         """Inverts the normalization."""
@@ -1143,7 +1143,7 @@ class NormalizeMinMax:
             The warped sample, in a numpy array of type ``self.out_type``.
         """
         assert isinstance(sample, (PIL.Image.Image, np.ndarray)), \
-            "sample type should be np.ndarray or PIL image"
+            f"sample type should be np.ndarray or PIL image (got {type(sample)})"
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
         return ((sample - self.min) / self.diff).astype(self.out_type)
@@ -1151,7 +1151,7 @@ class NormalizeMinMax:
     def invert(self, sample):
         """Inverts the normalization."""
         assert isinstance(sample, (PIL.Image.Image, np.ndarray)), \
-            "sample type should be np.ndarray or PIL image"
+            f"sample type should be np.ndarray or PIL image (got {type(sample)})"
         if isinstance(sample, PIL.Image.Image):
             sample = np.asarray(sample)
         return (sample * self.diff + self.min).astype(self.out_type)
