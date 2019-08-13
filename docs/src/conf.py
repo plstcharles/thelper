@@ -216,42 +216,43 @@ epub_exclude_files = ['search.html']
 
 
 # -- Extension configuration -------------------------------------------------
-on_rtd = os.environ.get('READTHEDOCS') == 'True'
-
-if on_rtd:
-    autodoc_mock_imports = [
-        'albumentations',
-        'argparse',
-        'augmentor',
-        'cv2',
-        'git',
-        'h5py',
-        'lz4',
-        'matplotlib',
-        'numpy',
-        'PIL',
-        'PIL.Image',
-        'pip',
-        'pynput',
-        'pynput.keyboard',
-        'scipy'
-        'shapely',
-        'sklearn',
-        'sklearn.metrics',
-        'tensorboardX',
-        'torch',
-        'torch.nn',
-        'torch.nn.functional',
-        'torch.optim',
-        'torch.utils',
-        'torch.utils.data',
-        'torch.utils.data.sampler',
-        'torch.utils.model_zoo',
-        'torchvision',
-        'torchvision.transforms',
-        'torchvision.utils',
-        'tqdm',
-    ]
+autodoc_mock_imports = [
+    'affine',  # for geospatial tools
+    'albumentations',
+    'argparse',
+    'augmentor',
+    'cv2',
+    'gdal',  # for geospatial tools
+    'git',
+    'h5py',
+    'lz4',
+    'matplotlib',
+    'numpy',
+    'ogr',  # for geospatial tools
+    'osr',  # for geospatial tools
+    'PIL',
+    'PIL.Image',
+    'pip',
+    'pynput',
+    'pynput.keyboard',
+    'scipy'
+    'shapely',  # for geospatial tools
+    'sklearn',
+    'sklearn.metrics',
+    'tensorboardX',
+    'torch',
+    'torch.nn',
+    'torch.nn.functional',
+    'torch.optim',
+    'torch.utils',
+    'torch.utils.data',
+    'torch.utils.data.sampler',
+    'torch.utils.model_zoo',
+    'torchvision',
+    'torchvision.transforms',
+    'torchvision.utils',
+    'tqdm',
+]
 
 
 def skip(app, what, name, obj, skip, options):
@@ -261,6 +262,7 @@ def skip(app, what, name, obj, skip, options):
 
 
 def run_apidoc(_):
+    on_rtd = os.environ.get('READTHEDOCS') == 'True'
     if on_rtd:
         argv = ["-M", "-o", ".", "../../thelper"]
     else:
