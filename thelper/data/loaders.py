@@ -25,11 +25,12 @@ import thelper.utils
 logger = logging.getLogger(__name__)
 
 
-def default_collate(batch):
+def default_collate(batch, force_tensor=True):
     """Puts each data field into a tensor with outer dimension batch size.
 
     This function is copied from PyTorch's `torch.utils.data._utils.collate.default_collate`, but
-    additionally supports custom objects from the framework (such as bounding boxes).
+    additionally supports custom objects from the framework (such as bounding boxes). These will not
+    be converted to tensors, and it will be up to the trainer to handle them accordingly.
 
     See ``torch.utils.data.DataLoader`` for more information.
     """
@@ -76,7 +77,7 @@ def default_collate(batch):
                 import re
                 if re.search('[SaUO]', elem.dtype.str) is not None:
                     raise TypeError(error_msg_fmt.format(elem.dtype))
-            return default_collate([torch.from_numpy(b) for b in batch])
+            return default_collate([torch.from_numpy(b) for b in batch], force_tensor=force_tensor)
         if elem.shape == ():  # scalars
             if torch_ver[0] > 1 or torch_ver[1] > 1:  # ver > 1.1
                 py_type = float if elem.dtype.name.startswith('float') else int
@@ -93,16 +94,18 @@ def default_collate(batch):
     elif isinstance(batch[0], string_classes):
         return batch
     elif isinstance(batch[0], container_abcs.Mapping):
-        return {key: default_collate([d[key] for d in batch]) for key in batch[0]}
+        return {key: default_collate([d[key] for d in batch], force_tensor=force_tensor) for key in batch[0]}
     elif isinstance(batch[0], tuple) and hasattr(batch[0], '_fields'):  # namedtuple
-        return type(batch[0])(*(default_collate(samples) for samples in zip(*batch)))
+        return type(batch[0])(*(default_collate(samples, force_tensor=force_tensor) for samples in zip(*batch)))
     elif isinstance(batch[0], container_abcs.Sequence):
         if isinstance(batch, list) and all([isinstance(l, list) for l in batch]) and \
                 all([isinstance(b, thelper.data.BoundingBox) for l in batch for b in l]):
             return batch
         transposed = zip(*batch)
-        return [default_collate(samples) for samples in transposed]
-    raise TypeError((error_msg_fmt.format(type(batch[0]))))
+        return [default_collate(samples, force_tensor=force_tensor) for samples in transposed]
+    if force_tensor:
+        raise TypeError((error_msg_fmt.format(type(batch[0]))))
+    return batch
 
 
 class DataLoader(torch.utils.data.DataLoader):
