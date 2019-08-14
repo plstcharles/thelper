@@ -301,7 +301,7 @@ class LoaderFactory:
             return val
         if isinstance(val, dict):
             collate_fn_type = thelper.utils.get_key("type", val)
-            collate_fn_params = thelper.utils.get_key_def("params", val, None)
+            collate_fn_params = thelper.utils.get_key_def(["params", "kwargs"], val, None)
             return thelper.utils.import_function(collate_fn_type, collate_fn_params)
         elif isinstance(val, str):
             return thelper.utils.import_function(val)

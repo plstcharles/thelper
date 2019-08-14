@@ -166,7 +166,7 @@ def visualize_data(config):
     if not isinstance(viz_config, dict):
         raise AssertionError("unexpected viz config type")
     ignore_loaders = thelper.utils.get_key_def("ignore_loaders", viz_config, default=False)
-    viz_kwargs = thelper.utils.get_key_def("kwargs", viz_config, default={})
+    viz_kwargs = thelper.utils.get_key_def(["params", "kwargs"], viz_config, default={})
     if not isinstance(viz_kwargs, dict):
         raise AssertionError("unexpected viz kwargs type")
     if thelper.utils.get_key_def(["data_config", "loaders"], config, default=None) is None or ignore_loaders:

@@ -37,7 +37,9 @@ LabelList = List[LabelType]
 DrawingType = Union[Tuple[plt.Figure, plt.Axes], None]
 
 SampleType = Dict[Union[AnyStr, int], Any]
-InputType, PredictionType, TargetType = torch.Tensor, torch.Tensor, torch.Tensor
+# as of v0.3.8, predictions and targets are usually tensors, but not always
+# (e.g. for object detection, they are handled as 'BoundingBox' objects)
+InputType, PredictionType, TargetType = torch.Tensor, Any, Any
 
 IterCallbackType = Optional[Callable[[Task, InputType, PredictionType, TargetType,
                                       SampleType, Optional[float], int, int, int, int], None]]

@@ -210,7 +210,7 @@ class HDF5Dataset(Dataset):
             shape = dset.attrs["orig_shape"] if "orig_shape" in dset.attrs else None
             compr_config = thelper.utils.get_key_def(key, compr_config, default={})
             compr_type = thelper.utils.get_key_def("type", compr_config, default="none")
-            compr_kwargs = thelper.utils.get_key_def("decode_params", compr_config, default={})
+            compr_kwargs = thelper.utils.get_key_def(["decode_params", "decode_kwargs"], compr_config, default={})
             self.target_args[key] = {"dset": dset, "dtype": dtype, "shape": shape, "compr_type": compr_type, "compr_kwargs": compr_kwargs}
 
     def _unpack(self, dset, idx, dtype=None, shape=None, compr_type="none", **compr_kwargs):
