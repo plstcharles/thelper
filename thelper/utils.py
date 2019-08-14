@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 bypass_queries = False
+warned_generic_draw = False
 
 
 class Struct:
@@ -1638,7 +1639,12 @@ def draw(task, input, pred=None, target=None, block=False, ch_transpose=True, fl
         return draw_predicts(images=input, preds=pred, targets=target,
                              swap_channels=swap_channels, redraw=redraw, block=block, **kwargs)
     else:
-        raise AssertionError("unhandled drawing mode, missing impl")
+        global warned_generic_draw
+        if not warned_generic_draw:
+            logger.warning("unhandled drawing mode, defaulting to input display only")
+            warned_generic_draw = True
+        image_list = [get_displayable_image(input[batch_idx, ...]) for batch_idx in range(input.shape[0])]
+        return draw_images(image_list, redraw=redraw, window_name="inputs", block=block, **kwargs)
 
 
 # noinspection PyUnusedLocal
