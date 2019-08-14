@@ -1,8 +1,10 @@
 """Geospatial data parser & utilities module."""
 
+import hashlib
 import json
 import logging
 import os
+import pickle
 
 import cv2 as cv
 import gdal
@@ -24,7 +26,9 @@ class VectorCropDataset(thelper.data.Dataset):
                  vector_area_min=0.0, vector_area_max=float("inf"),
                  vector_target_prop=None, vector_roi_buffer=None,
                  srs_target="3857", raster_key="raster", mask_key="mask",
-                 feature_key="feature", transforms=None):
+                 feature_key="feature", force_parse=False, transforms=None):
+        # before anything else, create a hash to cache parsed data
+        cache_hash = hashlib.sha1(str({k: v for k, v in vars().items() if not k.startswith("_") and k != "self"}).encode())
         assert isinstance(raster_path, str), f"raster file/folder path should be given as string"
         assert isinstance(vector_path, str), f"vector file/folder path should be given as string"
         self.raster_path = raster_path
@@ -41,8 +45,10 @@ class VectorCropDataset(thelper.data.Dataset):
             if isinstance(px_size, (list, tuple)) else (float(px_size), float(px_size))
         assert isinstance(allow_outlying_vectors, bool), "unexpected flag type"
         assert isinstance(clip_outlying_vectors, bool), "unexpected flag type"
+        assert isinstance(force_parse, bool), "unexpected flag type"
         self.allow_outlying = allow_outlying_vectors
         self.clip_outlying = clip_outlying_vectors
+        self.force_parse =force_parse
         assert isinstance(vector_area_min, float) and vector_area_min >= 0, "min surface filter value must be > 0"
         assert isinstance(vector_area_max, float) and vector_area_max >= vector_area_min,\
             "max surface filter value must be greater than minimum surface value"
@@ -89,10 +95,10 @@ class VectorCropDataset(thelper.data.Dataset):
         logger.info(f"parsing vectors from path '{self.vector_path}'...")
         assert os.path.isfile(self.vector_path) and self.vector_path.endswith("geojson"), \
             "vector file must be provided as geojson (shapefile support still incomplete)"
-        hack_path = "/tmp/features2.pkl"
-        if os.path.exists(hack_path):
-            import pickle
-            with open(hack_path, "rb") as fd:
+        cache_file_path = os.path.join(os.path.dirname(self.vector_path), cache_hash.hexdigest() + ".pkl")
+        if not force_parse and os.path.exists(cache_file_path):
+            logger.debug(f"parsing cached feature data from '{cache_file_path}'...")
+            with open(cache_file_path, "rb") as fd:
                 features = pickle.load(fd)
         else:
             with open(self.vector_path) as vector_fd:
@@ -106,9 +112,10 @@ class VectorCropDataset(thelper.data.Dataset):
             features = [feature for feature in features
                         if self.area_min <= feature["geometry"].area <= self.area_max]
             logger.debug(f"parsed {len(features)} features of interest; preparing rois...")
-            import pickle
-            with open(hack_path, "wb") as fd:
-                pickle.dump(features, fd)
+            if not force_parse:
+                logger.debug(f"caching feature data to '{cache_file_path}'...")
+                with open(cache_file_path, "wb") as fd:
+                    pickle.dump(features, fd)
         self.samples = []  # required attrib name for access via base class funcs
         for feature in features:
             # add ROIs and target crop sizes to pre-parsed features (note: this is in target_srs)
@@ -135,7 +142,7 @@ class VectorCropDataset(thelper.data.Dataset):
         meta_keys = [self.feature_key, "srs", "geo_bbox"]
         # create default task without gt specification (this is a pretty basic parser)
         self.task = thelper.tasks.Task(input_key=self.raster_key, meta_keys=meta_keys)
-        self.display_debug = True  # temporary
+        self.display_debug = True  # temporary @@@@
 
     def _process_feature(self, feature):
         """Returns a crop for a specific (internal) feature object."""
@@ -166,30 +173,25 @@ class VectorCropDataset(thelper.data.Dataset):
         ogr_layer.CreateFeature(ogr_feature)
         gdal.RasterizeLayer(crop_mask_gdal, [1], ogr_layer, burn_values=[1], options=["ALL_TOUCHED=TRUE"])
         np.copyto(dst=mask, src=crop_mask_gdal.GetRasterBand(1).ReadAsArray())
-
         for raster_idx, inters_geom in zip(feature["roi_hits"], feature["roi_geoms"]):
             raster_data = self.rasters_data[raster_idx]
             rasterfile = gdal.Open(raster_data["file_path"], gdal.GA_ReadOnly)
             assert rasterfile is not None, f"could not open raster data file at '{raster_data['file_path']}'"
             assert rasterfile.RasterCount == crop_size[2], "unexpected raster count"
-
             for raster_band_idx in range(rasterfile.RasterCount):
                 curr_band = rasterfile.GetRasterBand(raster_band_idx + 1)
                 nodataval = curr_band.GetNoDataValue()
                 crop_raster_gdal.GetRasterBand(raster_band_idx + 1).WriteArray(
                     np.full(crop_size[0:2], fill_value=nodataval, dtype=crop_datatype))
-
             res = gdal.ReprojectImage(rasterfile, crop_raster_gdal, raster_data["srs"].ExportToWkt(),
                                       self.srs_target.ExportToWkt(), gdal.GRA_Bilinear)
             assert res == 0, "resampling failed"
-
             for raster_band_idx in range(crop_raster_gdal.RasterCount):
                 curr_band = crop_raster_gdal.GetRasterBand(raster_band_idx + 1)
                 curr_band_array = curr_band.ReadAsArray()
                 flag_mask = curr_band_array != curr_band.GetNoDataValue()
                 np.copyto(dst=crop.data[:, :, raster_band_idx], src=curr_band_array, where=flag_mask)
                 np.bitwise_and(crop.mask[:, :, raster_band_idx], np.invert(flag_mask), out=crop.mask[:, :, raster_band_idx])
-
         # ogr_dataset = None # close local fd
         # noinspection PyUnusedLocal
         crop_raster_gdal = None  # close local fd
