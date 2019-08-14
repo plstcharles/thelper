@@ -13,7 +13,7 @@ import random
 import time
 from abc import abstractmethod
 from copy import deepcopy
-from typing import AnyStr, Optional  # noqa: F401
+from typing import Any, AnyStr, Optional  # noqa: F401
 
 import cv2 as cv
 import numpy as np
@@ -128,7 +128,7 @@ class Trainer:
                  task,            # type: thelper.tasks.Task
                  loaders,         # type: thelper.typedefs.MultiLoaderType
                  config,          # type: thelper.typedefs.ConfigDict
-                 ckptdata=None    # type: typ.Optional[thelper.typedefs.CheckpointContentType]
+                 ckptdata=None    # type: Optional[thelper.typedefs.CheckpointContentType]
                  ):
         """Receives the trainer configuration dictionary, parses it, and sets up the session."""
         assert isinstance(model, (thelper.nn.Module, torch.nn.Module)), "unknown model object type"
@@ -247,7 +247,7 @@ class Trainer:
         for cname, mset in zip(["train", "valid", "test"], [self.train_metrics, self.valid_metrics, self.test_metrics]):
             # parse user (custom) callback
             user_callback_keys = [f"{cname}_iter_callback", f"{cname}_callback", "callback"]
-            user_callback = thelper.utils.get_key_def(user_callback_keys, trainer_config)  # type: typ.IterCallbackType
+            user_callback = thelper.utils.get_key_def(user_callback_keys, trainer_config)  # type: Optional[typ.IterCallbackType]
             user_callback_kwargs_keys = [f"{cname}_iter_callback_kwargs", f"{cname}_callback_kwargs", "callback_kwargs"]
             user_callback_kwargs = thelper.utils.get_key_def(user_callback_kwargs_keys, trainer_config, {})
             if user_callback is not None:
@@ -580,18 +580,19 @@ class Trainer:
         """
         raise NotImplementedError
 
-    def _iter_logger_callback(self,  # see `thelper.typedefs.IterCallbackParams` for more info
-                              task,  # type: thelper.tasks.utils.Task
-                              input,  # type: thelper.typedefs.InputType
-                              pred,  # type: thelper.typedefs.PredictionType
-                              target,  # type: thelper.typedefs.TargetType
-                              sample,  # type: thelper.typedefs.SampleType
-                              loss,  # type: Optional[float]
-                              iter_idx,  # type: int
-                              max_iters,  # type: int
-                              epoch_idx,  # type: int
-                              max_epochs,  # type: int
-                              **kwargs):  # type: (...) -> None
+    def _iter_logger_callback(self,         # see `thelper.typedefs.IterCallbackParams` for more info
+                              task,         # type: thelper.tasks.utils.Task
+                              input,        # type: thelper.typedefs.InputType
+                              pred,         # type: thelper.typedefs.PredictionType
+                              target,       # type: thelper.typedefs.TargetType
+                              sample,       # type: thelper.typedefs.SampleType
+                              loss,         # type: Optional[float]
+                              iter_idx,     # type: int
+                              max_iters,    # type: int
+                              epoch_idx,    # type: int
+                              max_epochs,   # type: int
+                              **kwargs,     # type: Any
+                              ):            # type: (...) -> None
         """Receives callback data for logging loss/monitored metric values each training/eval iteration."""
         set_name = thelper.utils.get_key("set_name", kwargs, "missing set name in iter logger args")
         assert set_name in ["train", "valid", "test"], "unrecognized iter logger set name"
