@@ -168,6 +168,7 @@ class FormatHandler(ABC):
         raise NotImplementedError
 
 
+@thelper.utils.supports_classification
 class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
     """Classification output logger.
 
@@ -368,6 +369,7 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         self.meta = None
 
 
+@thelper.utils.supports_classification
 class ClassifReport(PredictionConsumer, ClassNamesHandler, FormatHandler):
     """Classification report interface.
 
@@ -495,6 +497,7 @@ class ClassifReport(PredictionConsumer, ClassNamesHandler, FormatHandler):
         self.target = None
 
 
+@thelper.utils.supports_detection
 class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
     """Detection output logger.
 
@@ -695,6 +698,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         self.meta = None
 
 
+@thelper.utils.supports_classification
 class ConfusionMatrix(PredictionConsumer, ClassNamesHandler):
     """Confusion matrix report interface.
 
@@ -900,21 +904,22 @@ def create_trainer(session_name,    # type: AnyStr
 
 
 # noinspection PyUnusedLocal
-def _draw_wrapper(task,  # type: thelper.tasks.utils.Task
-                  input,  # type: thelper.typedefs.InputType
-                  pred,  # type: thelper.typedefs.PredictionType
-                  target,  # type: thelper.typedefs.TargetType
-                  sample,  # type: thelper.typedefs.SampleType
-                  loss,  # type: Optional[float]
-                  iter_idx,  # type: int
-                  max_iters,  # type: int
-                  epoch_idx,  # type: int
-                  max_epochs,  # type: int
+def _draw_wrapper(task,         # type: thelper.tasks.utils.Task
+                  input,        # type: thelper.typedefs.InputType
+                  pred,         # type: thelper.typedefs.PredictionType
+                  target,       # type: thelper.typedefs.TargetType
+                  sample,       # type: thelper.typedefs.SampleType
+                  loss,         # type: Optional[float]
+                  iter_idx,     # type: int
+                  max_iters,    # type: int
+                  epoch_idx,    # type: int
+                  max_epochs,   # type: int
                   # extra params added by callback interface below
                   output_path,  # type: str
-                  save,  # type: bool
+                  save,         # type: bool
                   # all extra params will be forwarded to the display call
-                  **kwargs):  # type: (...) -> None
+                  **kwargs,     # type: Any
+                  ):            # type: (...) -> None
     """Wrapper to :func:`thelper.utils.draw` used as a callback entrypoint for trainers."""
     res = thelper.utils.draw(task=task, input=input, pred=pred, target=target, **kwargs)
     if save:

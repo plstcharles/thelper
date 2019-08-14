@@ -16,6 +16,7 @@ from thelper.tasks.utils import Task
 logger = logging.getLogger(__name__)
 
 
+@thelper.utils.supports_classification
 class Classification(Task):
     """Interface for input labeling/classification tasks.
 

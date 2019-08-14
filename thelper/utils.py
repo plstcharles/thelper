@@ -2002,9 +2002,10 @@ def apply_support(func_or_cls=None, concept=None):
         validation is accomplished to ensure that further underlying requirements are met for the *concept*.
 
     .. seealso::
-        | :func:`thelper.utils.supports_classif`
-        | :func:`thelper.utils.supports_detect`
-        | :func:`thelper.utils.supports_segment`
+        | :func:`thelper.utils.supports_classification`
+        | :func:`thelper.utils.supports_detection`
+        | :func:`thelper.utils.supports_segmentation`
+        | :func:`thelper.utils.supports_regression`
     """
     def apply_decorator(func):
         @functools.wraps(func)
@@ -2020,61 +2021,80 @@ def apply_support(func_or_cls=None, concept=None):
     return apply_decorator(func_or_cls) if callable(func_or_cls) else apply_decorator
 
 
-def supports_classif(func_or_cls=None):
+def supports_classification(func_or_cls=None):
     """Decorator that allows marking a function or class as *supporting* the image classification task.
 
     Example::
 
-        @supports_classif
+        @supports_classification
         class ClassifObject():
             pass
 
         c = ClassifObject()
-        c.supports_classif
+        c.supports_classification
         > True
 
-        thelper.utils.supports(c, "classif")
+        thelper.utils.supports(c, "classification")
         > True
     """
-    return apply_support(func_or_cls, "classif")
+    return apply_support(func_or_cls, "classification")
 
 
-def supports_detect(func_or_cls=None):
+def supports_detection(func_or_cls=None):
     """Decorator that allows marking a function or class as *supporting* the object detection task.
 
     Example::
 
-        @supports_detect
+        @supports_detection
         class DetectObject():
             pass
 
         d = DetectObject()
-        d.supports_detect
+        d.supports_detection
         > True
 
-        thelper.utils.supports(d, "detect")
+        thelper.utils.supports(d, "detection")
         > True
     """
-    return apply_support(func_or_cls, "detect")
+    return apply_support(func_or_cls, "detection")
 
 
-def supports_segment(func_or_cls=None):
+def supports_segmentation(func_or_cls=None):
     """Decorator that allows marking a function or class as *supporting* the image segmentation task.
 
     Example::
 
-        @supports_segment
+        @supports_segmentation
         class SegmentObject():
             pass
 
         s = SegmentObject()
-        s.supports_segment
+        s.supports_segmentation
         > True
 
-        thelper.utils.supports(d, "segment")
+        thelper.utils.supports(s, "segmentation")
         > True
     """
-    return apply_support(func_or_cls, "segment")
+    return apply_support(func_or_cls, "segmentation")
+
+
+def supports_regression(func_or_cls=None):
+    """Decorator that allows marking a function or class as *supporting* the generic regression task.
+
+    Example::
+
+        @supports_segmentation
+        class RegrObject():
+            pass
+
+        r = RegrObject()
+        r.supports_segmentation
+        > True
+
+        thelper.utils.supports(r, "regression")
+        > True
+    """
+    return apply_support(func_or_cls, "regression")
 
 
 def supports(obj, concept):
@@ -2082,8 +2102,9 @@ def supports(obj, concept):
     """Utility method to evaluate if an object instance *supports* a given ``concept`` as defined by decorators.
 
     .. seealso::
-        | :func:`thelper.utils.supports_classif`
-        | :func:`thelper.utils.supports_detect`
-        | :func:`thelper.utils.supports_segment`
+        | :func:`thelper.utils.supports_classification`
+        | :func:`thelper.utils.supports_detection`
+        | :func:`thelper.utils.supports_segmentation`
+        | :func:`thelper.utils.supports_regression`
     """
     return getattr(obj, "{}{}".format(SUPPORT_PREFIX, concept), False) if isinstance(concept, str) else False

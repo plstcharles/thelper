@@ -13,6 +13,7 @@ from thelper.train.base import Trainer
 logger = logging.getLogger(__name__)
 
 
+@thelper.utils.supports_regression
 class RegressionTrainer(Trainer):
     """Trainer interface specialized for generic (n-dim) regression.
 

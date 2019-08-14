@@ -18,6 +18,7 @@ from thelper.tasks.utils import Task
 logger = logging.getLogger(__name__)
 
 
+@thelper.utils.supports_detection
 class BoundingBox:
     """Interface used to hold instance metadata for object detection tasks.
 
@@ -320,6 +321,7 @@ class BoundingBox:
             f"iscrowd={repr(self.iscrowd)}, confidence={repr(self.confidence)}, image_id={repr(self.image_id)})"
 
 
+@thelper.utils.supports_detection
 class Detection(Regression):
     """Interface for object detection tasks.
 

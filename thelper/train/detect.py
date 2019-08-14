@@ -15,6 +15,7 @@ from thelper.train.base import Trainer
 logger = logging.getLogger(__name__)
 
 
+@thelper.utils.supports_detection
 class ObjDetectTrainer(Trainer):
     """Trainer interface specialized for object detection.
 

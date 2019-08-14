@@ -18,6 +18,7 @@ from thelper.tasks.utils import Task
 logger = logging.getLogger(__name__)
 
 
+@thelper.utils.supports_segmentation
 class Segmentation(Task):
     """Interface for pixel-level labeling/classification (segmentation) tasks.
 

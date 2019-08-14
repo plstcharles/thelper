@@ -12,6 +12,7 @@ from thelper.train.base import Trainer
 logger = logging.getLogger(__name__)
 
 
+@thelper.utils.supports_classification
 class ImageClassifTrainer(Trainer):
     """Trainer interface specialized for image classification.
 

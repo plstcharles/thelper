@@ -96,6 +96,7 @@ class Metric(PredictionConsumer):
         return True
 
 
+@thelper.utils.supports_classification
 class Accuracy(Metric):
     r"""Classification accuracy metric interface.
 
@@ -230,6 +231,7 @@ class Accuracy(Metric):
         return Metric.maximize
 
 
+@thelper.utils.supports_classification
 class MeanAbsoluteError(Metric):
     r"""Mean absolute error metric interface.
 
@@ -356,6 +358,7 @@ class MeanAbsoluteError(Metric):
         return Metric.minimize
 
 
+@thelper.utils.supports_classification
 class MeanSquaredError(Metric):
     r"""Mean squared error metric interface.
 
@@ -734,6 +737,7 @@ class ExternalMetric(Metric):
         return self._live_eval
 
 
+@thelper.utils.supports_classification
 class ROCCurve(Metric):
     """Receiver operating characteristic (ROC) computation interface.
 
@@ -990,6 +994,7 @@ class ROCCurve(Metric):
         return False  # some operating modes might be pretty slow, check back impl later
 
 
+@thelper.utils.supports_classification
 class PSNR(Metric):
     r"""Peak Signal-to-Noise Ratio (PSNR) metric interface.
 
@@ -1104,6 +1109,7 @@ class PSNR(Metric):
         return Metric.maximize
 
 
+@thelper.utils.supports_detection
 class AveragePrecision(Metric):
     r"""Object detection average precision score from PascalVOC.
 
