@@ -4,8 +4,10 @@ channels:
   - conda-forge
 dependencies:
   - albumentations
+  - affine
   - cython
   - ddt
+  - gdal
   - gitdb
   - gitpython
   - lz4
@@ -14,6 +16,7 @@ dependencies:
   - numpy
   - opencv
   - pip
+  - pyproj
   - pytest
   - pytest-cov
   - pytest-mock

@@ -1,0 +1,20 @@
+{
+    "name": "testbed15-viz",
+    "datasets": {
+        "testbed15": {
+            "type": "thelper.data.geo.parsers.VectorCropDataset",
+            "params": {
+                "raster_path": "data/testbed15/*.tif",
+                "vector_path": "data/testbed15/hydro_original.geojson",
+                "srs_target": "3857",
+                "vector_target_prop": {"TYPECE": "21"},
+                "vector_roi_buffer": 10
+            }
+        }
+    },
+    "viz": {
+        "kwargs": {
+            "block": true
+        }
+    }
+}
