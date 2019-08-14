@@ -14,7 +14,6 @@ simply enter::
   $ conda config --env --add channels plstcharles
   $ conda config --env --add channels conda-forge
   $ conda config --env --add channels pytorch
-  $ conda config --env --add channels albumentations
   $ conda install thelper
 
 This should install the latest stable version of the framework on Windows and Linux, for Python
