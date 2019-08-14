@@ -11,6 +11,7 @@ import thelper
 
 
 def compute_iou(bbox1, bbox2):
+    # type: (thelper.tasks.detect.BoundingBox, thelper.tasks.detect.BoundingBox) -> float
     """Computes and returns the Intersection over Union (IoU) of two bounding boxes."""
     assert isinstance(bbox1, thelper.data.BoundingBox) and isinstance(bbox2, thelper.data.BoundingBox), \
         "unexpected input bounding box types"

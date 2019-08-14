@@ -8,7 +8,7 @@ training. See :mod:`thelper.optim.metrics` for more information on metrics.
 import logging
 import os
 from abc import ABC, abstractmethod
-from typing import Any, AnyStr, Iterable, List, Optional, Union  # noqa: F401
+from typing import Any, AnyStr, Dict, List, Optional, Union  # noqa: F401
 
 import cv2 as cv
 import numpy as np
@@ -48,8 +48,8 @@ class PredictionConsumer(ABC):
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
                input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.PredictionType
-               target,      # type: thelper.typedefs.TargetType
+               pred,        # type: thelper.typedefs.AnyPredictionType
+               target,      # type: thelper.typedefs.AnyTargetType
                sample,      # type: thelper.typedefs.SampleType
                loss,        # type: Optional[float]
                iter_idx,    # type: int
@@ -200,7 +200,7 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
 
     Attributes:
         top_k: number of 'best' predictions to keep for each sample (along with the gt label).
-        conf_threshold: threshold used to eliminate all but the most uncertain predictions.
+        conf_threshold: threshold used to eliminate all uncertain predictions.
         class_names: holds the list of class label names provided by the dataset parser. If it is not
             provided when the constructor is called, it will be set by the trainer at runtime.
         target_name: name of the targeted label (may be 'None' if all classes are used).
@@ -232,7 +232,8 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         assert conf_threshold is None or (isinstance(conf_threshold, (float, int)) and 0 < conf_threshold <= 1), \
             "classification confidence threshold should be 'None' or float in ]0, 1]"
         assert isinstance(viz_count, int) and viz_count >= 0, "invalid image count to visualize"
-        assert report_count is None or (isinstance(report_count, int) and report_count >= 0), "invalid report sample count"
+        assert report_count is None or (isinstance(report_count, int) and report_count >= 0), \
+            "invalid report sample count"
         assert log_keys is None or isinstance(log_keys, list), "invalid list of sample keys to log"
         ClassNamesHandler.__init__(self, class_names)
         FormatHandler.__init__(self, format)
@@ -267,8 +268,8 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
                input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.PredictionType
-               target,      # type: thelper.typedefs.TargetType
+               pred,        # type: thelper.typedefs.ClassificationPredictionType
+               target,      # type: thelper.typedefs.ClassificationTargetType
                sample,      # type: thelper.typedefs.SampleType
                loss,        # type: Optional[float]
                iter_idx,    # type: int
@@ -424,14 +425,15 @@ class ClassifReport(PredictionConsumer, ClassNamesHandler, FormatHandler):
 
     def __repr__(self):
         """Returns a generic print-friendly string containing info about this consumer."""
-        return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
-            f"(class_names={repr(self.class_names)}, sample_weight={repr(self.sample_weight)}, digits={repr(self.digits)})"
+        return f"{self.__class__.__module__}.{self.__class__.__qualname__}" + \
+               f"(class_names={repr(self.class_names)}, sample_weight={repr(self.sample_weight)}, " + \
+               f"digits={repr(self.digits)})"
 
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
                input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.PredictionType
-               target,      # type: thelper.typedefs.TargetType
+               pred,        # type: thelper.typedefs.ClassificationPredictionType
+               target,      # type: thelper.typedefs.ClassificationTargetType
                sample,      # type: thelper.typedefs.SampleType
                loss,        # type: Optional[float]
                iter_idx,    # type: int
@@ -501,10 +503,13 @@ class ClassifReport(PredictionConsumer, ClassNamesHandler, FormatHandler):
 class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
     """Detection output logger.
 
-    This class provides a simple logging interface for accumulating and saving the predictions of a detector.
-    By default, all predictions will be logged. However, a confidence threshold can be set to focus on "hard"
-    samples if necessary. It also optionally offers tensorboardX-compatible output images that can be saved
-    locally or posted to tensorboard for browser-based visualization.
+    This class provides a simple logging interface for accumulating and saving the bounding boxes of an
+    object detector. By default, all detections will be logged. However, a confidence threshold can be set
+    to focus on "hard" samples if necessary.
+
+    .. todo::
+        It also optionally offers tensorboardX-compatible output images that can be saved
+        locally or posted to tensorboard for browser-based visualization.
 
     Usage examples inside a session configuration file::
 
@@ -515,9 +520,9 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
             # this is the name of the example consumer; it is used for lookup/printing only
             "logger": {
                 # this type is used to instantiate the confusion matrix report object
-                "type": "thelper.train.utils.ClassifLogger",
+                "type": "thelper.train.utils.DetectLogger",
                 "params": {
-                    # log the three 'best' predictions for each sample
+                    # (optional) log the three 'best' detection for each sample
                     "top_k": 3
                 }
             },
@@ -526,8 +531,9 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         # ...
 
     Attributes:
-        top_k: number of 'best' predictions to keep for each sample (along with the gt label).
-        conf_threshold: threshold used to eliminate all but the most uncertain predictions.
+        top_k: number of 'best' detections to keep for each sample (along with the target label).
+            If not specified, lists all bounding box predictions by the model.
+        conf_threshold: threshold used to eliminate all uncertain predictions (if they support confidence).
         class_names: holds the list of class label names provided by the dataset parser. If it is not
             provided when the constructor is called, it will be set by the trainer at runtime.
         target_name: name of the targeted label (may be 'None' if all classes are used).
@@ -535,27 +541,24 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         viz_count: number of tensorboardX images to generate and update at each epoch.
         report_count: number of samples to print in reports (use 'None' if all samples must be printed).
         log_keys: list of metadata field keys to copy from samples into the log for each prediction.
-        force_softmax: specifies whether a softmax operation should be applied to the prediction scores
-            obtained from the trainer.
-        score: array used to store prediction scores for logging.
+        bbox: array used to store prediction bounding boxes for logging.
         true: array used to store groundtruth labels for logging.
         meta: array used to store metadata pulled from samples for logging.
         format: output format of the produced log (supports: text, CSV)
     """
 
     def __init__(self,
-                 top_k=1,               # type: int
+                 top_k=None,            # type: Optional[int]
                  conf_threshold=None,   # type: Optional[thelper.typedefs.Number]
                  class_names=None,      # type: Optional[List[AnyStr]]
                  target_name=None,      # type: Optional[List[AnyStr]]
                  viz_count=0,           # type: int
                  report_count=None,     # type: Optional[int]
                  log_keys=None,         # type: Optional[List[AnyStr]]
-                 force_softmax=True,    # type: bool
                  format=None,           # type: Optional[AnyStr]
                  ):                     # type: (...) -> None
         """Receives the logging parameters & the optional class label names used to decorate the log."""
-        assert isinstance(top_k, int) and top_k > 0, "invalid top-k value"
+        assert top_k is None or isinstance(top_k, int) and top_k > 0, "invalid top-k value"
         assert conf_threshold is None or (isinstance(conf_threshold, (float, int)) and 0 < conf_threshold <= 1), \
             "classification confidence threshold should be 'None' or float in ]0, 1]"
         assert isinstance(viz_count, int) and viz_count >= 0, "invalid image count to visualize"
@@ -571,18 +574,17 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         self.viz_count = viz_count
         self.report_count = report_count
         self.log_keys = log_keys if log_keys is not None else []
-        self.force_softmax = force_softmax
-        self.score = None
-        self.true = None
-        self.meta = None
+        self.bbox = None    # type: Optional[thelper.typedefs.DetectionPredictionType]
+        self.true = None    # type: Optional[thelper.typedefs.DetectionTargetType]
+        self.meta = None    # type: Optional[Dict[AnyStr, List[Any]]]
 
     def __repr__(self):
         """Returns a generic print-friendly string containing info about this consumer."""
-        return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
+        return f"{self.__class__.__module__}.{self.__class__.__qualname__}" + \
                f"(top_k={repr(self.top_k)}, conf_threshold={repr(self.conf_threshold)}, " + \
                f"class_names={repr(self.class_names)}, target_name={repr(self.target_name)}, " + \
                f"viz_count={repr(self.viz_count)}, report_count={repr(self.report_count)}, " + \
-               f"log_keys={repr(self.log_keys)}, force_softmax={repr(self.force_softmax)})"
+               f"log_keys={repr(self.log_keys)})"
 
     def set_class_names(self, class_names):
         """Sets the class label names that must be predicted by the model."""
@@ -595,8 +597,8 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
                input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.PredictionType
-               target,      # type: thelper.typedefs.TargetType
+               pred,        # type: thelper.typedefs.DetectionPredictionType
+               target,      # type: thelper.typedefs.DetectionTargetType
                sample,      # type: thelper.typedefs.SampleType
                loss,        # type: Optional[float]
                iter_idx,    # type: int
@@ -614,27 +616,28 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         assert isinstance(task, thelper.tasks.Detection), "detect report only impl for detection tasks"
         assert iter_idx is not None and max_iters is not None and iter_idx < max_iters, \
             "bad iteration indices given to update function"
-        if self.score is None or self.score.size != max_iters:
-            self.score = np.asarray([None] * max_iters)
+        if self.bbox is None or self.bbox.size != max_iters:
+            self.bbox = np.asarray([None] * max_iters)
             self.true = np.asarray([None] * max_iters)
             self.meta = {key: np.asarray([None] * max_iters) for key in self.log_keys}
         if task.class_names != self.class_names:
             self.set_class_names(task.class_names)
-        if target is None or target.numel() == 0:
+        if target is None or len(target) == 0 or all(len(t) == 0 for t in target):
             # only accumulate results when groundtruth is available
-            self.score[iter_idx] = None
+            self.bbox[iter_idx] = None
             self.true[iter_idx] = None
             for key, array in self.meta.items():
                 array[iter_idx] = None
             return
-        assert pred.dim() == 2 or target.dim() == 1, "current classif logger impl only supports batched 1D outputs"
-        assert pred.shape[0] == target.shape[0], "prediction/gt tensors batch size mismatch"
-        assert pred.shape[1] == len(self.class_names), "unexpected prediction class dimension size"
-        if self.force_softmax:
-            with torch.no_grad():
-                pred = torch.nn.functional.softmax(pred, dim=1)
-        self.score[iter_idx] = pred.numpy()
-        self.true[iter_idx] = target.numpy()
+        assert len(pred) == len(target), "prediction/target bounding boxes list batch size mismatch"
+        for det in pred:
+            assert all(isinstance(bbox, thelper.tasks.detect.BoundingBox) for bbox in det), \
+                       "detect logger only supports 2D lists of bounding box predictions"
+        for gt in target:
+            assert all(isinstance(bbox, thelper.tasks.detect.BoundingBox) for bbox in gt), \
+                       "detect logger only supports 2D lists of bounding box targets"
+        self.bbox[iter_idx] = pred
+        self.true[iter_idx] = target
         for meta_key in self.log_keys:
             assert meta_key in sample, f"could not extract sample field with key {repr(meta_key)}"
             val = sample[meta_key]
@@ -645,7 +648,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         """Returns an image of predicted outputs as a numpy-compatible RGBA image drawn by pyplot."""
         if self.viz_count == 0:
             return None
-        if self.score is None or self.true is None:
+        if self.bbox is None or self.true is None:
             return None
         raise NotImplementedError  # TODO
 
@@ -663,9 +666,9 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         """
         if self.report_count is not None and self.report_count == 0:
             return None
-        if self.score is None or self.true is None:
+        if self.bbox is None or self.true is None:
             return None
-        pack = list(zip(*[(*pack,) for packs in zip(self.score, self.true, *self.meta.values())
+        pack = list(zip(*[(*pack,) for packs in zip(self.bbox, self.true, *self.meta.values())
                           if packs[1] is not None for pack in zip(*packs)]))
         logdata = {key: np.stack(val, axis=0) for key, val in zip(["pred", "target", *self.meta.keys()], pack)}
         assert all([len(val) == len(logdata["target"]) for val in logdata.values()]), "messed up unpacking"
@@ -693,7 +696,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
 
     def reset(self):
         """Toggles a reset of the internal state, emptying storage arrays."""
-        self.score = None
+        self.bbox = None
         self.true = None
         self.meta = None
 
@@ -733,7 +736,6 @@ class ConfusionMatrix(PredictionConsumer, ClassNamesHandler):
             provided when the constructor is called, it will be set by the trainer at runtime.
         draw_normalized: defines whether rendered confusion matrices should be normalized or not.
         pred: queue used to store the top-1 (best) predicted class indices at each iteration.
-        gt: queue used to store the groundtruth class indices at each iteration.
     """
 
     def __init__(self, class_names=None, draw_normalized=True):
@@ -764,8 +766,8 @@ class ConfusionMatrix(PredictionConsumer, ClassNamesHandler):
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
                input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.PredictionType
-               target,      # type: thelper.typedefs.TargetType
+               pred,        # type: thelper.typedefs.ClassificationPredictionType
+               target,      # type: thelper.typedefs.ClassificationTargetType
                sample,      # type: thelper.typedefs.SampleType
                loss,        # type: Optional[float]
                iter_idx,    # type: int
@@ -821,7 +823,7 @@ class ConfusionMatrix(PredictionConsumer, ClassNamesHandler):
             return array
         except AttributeError as e:
             logger.warning(f"failed to render confusion matrix; caught exception:\n{str(e)}")
-            # return None if rendering fails (probably due to matplotlib on displayless server)
+            # return None if rendering fails (probably due to matplotlib on display-less server)
             return None
 
     def reset(self):
@@ -847,7 +849,8 @@ def create_consumers(config):
         except Exception:
             logger.error(f"failed to create consumer {consumer_config['type']} with params:\n\t{str(consumer_params)}")
             raise
-        assert isinstance(consumer, PredictionConsumer), "invalid consumer type, must derive from PredictionConsumer interface"
+        assert isinstance(consumer, PredictionConsumer), \
+            "invalid consumer type, must derive from PredictionConsumer interface"
         consumers[name] = consumer
     return consumers
 
@@ -906,8 +909,8 @@ def create_trainer(session_name,    # type: AnyStr
 # noinspection PyUnusedLocal
 def _draw_wrapper(task,         # type: thelper.tasks.utils.Task
                   input,        # type: thelper.typedefs.InputType
-                  pred,         # type: thelper.typedefs.PredictionType
-                  target,       # type: thelper.typedefs.TargetType
+                  pred,         # type: thelper.typedefs.AnyPredictionType
+                  target,       # type: thelper.typedefs.AnyTargetType
                   sample,       # type: thelper.typedefs.SampleType
                   loss,         # type: Optional[float]
                   iter_idx,     # type: int

@@ -583,8 +583,8 @@ class Trainer:
     def _iter_logger_callback(self,         # see `thelper.typedefs.IterCallbackParams` for more info
                               task,         # type: thelper.tasks.utils.Task
                               input,        # type: thelper.typedefs.InputType
-                              pred,         # type: thelper.typedefs.PredictionType
-                              target,       # type: thelper.typedefs.TargetType
+                              pred,         # type: thelper.typedefs.AnyPredictionType
+                              target,       # type: thelper.typedefs.AnyTargetType
                               sample,       # type: thelper.typedefs.SampleType
                               loss,         # type: Optional[float]
                               iter_idx,     # type: int

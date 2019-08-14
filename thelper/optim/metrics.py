@@ -42,8 +42,8 @@ class Metric(PredictionConsumer):
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
                input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.PredictionType
-               target,      # type: thelper.typedefs.TargetType
+               pred,        # type: thelper.typedefs.AnyPredictionType
+               target,      # type: thelper.typedefs.AnyTargetType
                sample,      # type: thelper.typedefs.SampleType
                loss,        # type: Optional[float]
                iter_idx,    # type: int
@@ -168,8 +168,8 @@ class Accuracy(Metric):
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
                input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.PredictionType
-               target,      # type: thelper.typedefs.TargetType
+               pred,        # type: thelper.typedefs.ClassificationPredictionType
+               target,      # type: thelper.typedefs.ClassificationTargetType
                sample,      # type: thelper.typedefs.SampleType
                loss,        # type: Optional[float]
                iter_idx,    # type: int
@@ -303,8 +303,8 @@ class MeanAbsoluteError(Metric):
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
                input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.PredictionType
-               target,      # type: thelper.typedefs.TargetType
+               pred,        # type: thelper.typedefs.ClassificationPredictionType
+               target,      # type: thelper.typedefs.ClassificationTargetType
                sample,      # type: thelper.typedefs.SampleType
                loss,        # type: Optional[float]
                iter_idx,    # type: int
@@ -430,8 +430,8 @@ class MeanSquaredError(Metric):
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
                input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.PredictionType
-               target,      # type: thelper.typedefs.TargetType
+               pred,        # type: thelper.typedefs.ClassificationPredictionType
+               target,      # type: thelper.typedefs.ClassificationTargetType
                sample,      # type: thelper.typedefs.SampleType
                loss,        # type: Optional[float]
                iter_idx,    # type: int
@@ -485,6 +485,7 @@ class MeanSquaredError(Metric):
         return Metric.minimize
 
 
+@thelper.utils.supports_classification
 class ExternalMetric(Metric):
     r"""External metric wrapping interface.
 
@@ -643,8 +644,8 @@ class ExternalMetric(Metric):
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
                input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.PredictionType
-               target,      # type: thelper.typedefs.TargetType
+               pred,        # type: thelper.typedefs.ClassificationTargetType
+               target,      # type: thelper.typedefs.ClassificationPredictionType
                sample,      # type: thelper.typedefs.SampleType
                loss,        # type: Optional[float]
                iter_idx,    # type: int
@@ -886,8 +887,8 @@ class ROCCurve(Metric):
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
                input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.PredictionType
-               target,      # type: thelper.typedefs.TargetType
+               pred,        # type: thelper.typedefs.ClassificationPredictionType
+               target,      # type: thelper.typedefs.ClassificationTargetType
                sample,      # type: thelper.typedefs.SampleType
                loss,        # type: Optional[float]
                iter_idx,    # type: int
@@ -1056,8 +1057,8 @@ class PSNR(Metric):
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
                input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.PredictionType
-               target,      # type: thelper.typedefs.TargetType
+               pred,        # type: thelper.typedefs.ClassificationPredictionType
+               target,      # type: thelper.typedefs.ClassificationTargetType
                sample,      # type: thelper.typedefs.SampleType
                loss,        # type: Optional[float]
                iter_idx,    # type: int
@@ -1171,8 +1172,8 @@ class AveragePrecision(Metric):
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
                input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.PredictionType
-               target,      # type: thelper.typedefs.TargetType
+               pred,        # type: thelper.typedefs.DetectionPredictionType
+               target,      # type: thelper.typedefs.DetectionTargetType
                sample,      # type: thelper.typedefs.SampleType
                loss,        # type: Optional[float]
                iter_idx,    # type: int

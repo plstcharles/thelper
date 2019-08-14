@@ -36,10 +36,12 @@ import yaml
 import thelper.typedefs  # noqa: F401
 
 if TYPE_CHECKING:
-    from typing import Any, AnyStr, List, Optional, Type, NoReturn  # noqa: F401
+    from typing import Any, AnyStr, Callable, List, Optional, Type, NoReturn  # noqa: F401
     from types import FunctionType  # noqa: F401
 
 SUPPORT_PREFIX = "supports_"
+"""Prefix that is applied before any 'concept' decorator."""
+
 logger = logging.getLogger(__name__)
 bypass_queries = False
 warned_generic_draw = False
@@ -1994,6 +1996,7 @@ def get_params_hash(*args, **kwargs):
 
 
 def apply_support(func_or_cls=None, concept=None):
+    # type: (Optional[Union[FunctionType, Callable]], Optional[AnyStr]) -> Callable
     """
     Utility decorator that allows marking a function or a class as *supporting* a certain ``concept``.
 
@@ -2007,21 +2010,62 @@ def apply_support(func_or_cls=None, concept=None):
         | :func:`thelper.utils.supports_segmentation`
         | :func:`thelper.utils.supports_regression`
     """
-    def apply_decorator(func):
-        @functools.wraps(func)
+
+    # actual function that applies the concept to the decorated 'thing'
+    def apply_concept(_thing, _concept, *_args, **_kwargs):
+        if isinstance(_concept, str) and len(_concept):
+            _concept = "{}{}".format(SUPPORT_PREFIX, _concept) if not _concept.startswith(SUPPORT_PREFIX) else _concept
+            setattr(_thing, _concept, True)
+        return _thing
+
+    # wrapper generator for class types or class instances
+    class ApplyDecorator(object):
+        def __new__(cls, wrapped=None, _concept=None, *args, **kwargs):
+            cls.__wrapped__ = wrapped
+            return apply_concept(wrapped, _concept, *args, **kwargs)
+
+    # wrapper generator for functions or class methods
+    def apply_decorator(f_or_c):
+        if inspect.isclass(f_or_c):
+            return ApplyDecorator(f_or_c, concept)
+
+        @functools.wraps(f_or_c)  # lift wrapped object definitions, so that it still looks like the original
         def decorate(*args, **kwargs):
-            if callable(func):
-                i = func(*args, **kwargs)
-                concept = concept if isinstance(concept, str) else "unknown"
-                concept = "{}{}".format(SUPPORT_PREFIX, concept) if not concept.startswith(SUPPORT_PREFIX) else concept
-                setattr(i, concept, True)
-                return i
-            return func
+            return apply_concept(f_or_c, concept, *args, **kwargs)
         return decorate
-    return apply_decorator(func_or_cls) if callable(func_or_cls) else apply_decorator
+
+    if inspect.isclass(func_or_cls):
+        # the '_concept' input passed down here ensures that a class decorated with a predefined
+        # shortcut decorator function called without parenthesis will still receive the wanted 'concept'
+        # ex:
+        #   @support_classification     # <== no () here
+        #   def ClassifObj(): pass
+        return ApplyDecorator(func_or_cls, _concept=concept)
+    elif func_or_cls:
+        # this is in case the decorator is applied to a function instead of a class
+        return apply_decorator(func_or_cls)
+    return apply_decorator
+
+
+def supports(thing, concept):
+    # type: (Any, AnyStr) -> bool
+    """Utility method to evaluate if ``thing`` *supports* a given ``concept`` as defined by decorators.
+
+    Arguments:
+        thing: any type, function, method, class or object instance to evaluate if it is marked by the concept
+        concept: concept to check
+
+    .. seealso::
+        | :func:`thelper.utils.supports_classification`
+        | :func:`thelper.utils.supports_detection`
+        | :func:`thelper.utils.supports_segmentation`
+        | :func:`thelper.utils.supports_regression`
+    """
+    return getattr(thing, "{}{}".format(SUPPORT_PREFIX, concept), False) if isinstance(concept, str) else False
 
 
 def supports_classification(func_or_cls=None):
+    # type: (Optional[Union[FunctionType, Callable]]) -> Callable
     """Decorator that allows marking a function or class as *supporting* the image classification task.
 
     Example::
@@ -2041,6 +2085,7 @@ def supports_classification(func_or_cls=None):
 
 
 def supports_detection(func_or_cls=None):
+    # type: (Optional[Union[FunctionType, Callable]]) -> Callable
     """Decorator that allows marking a function or class as *supporting* the object detection task.
 
     Example::
@@ -2060,6 +2105,7 @@ def supports_detection(func_or_cls=None):
 
 
 def supports_segmentation(func_or_cls=None):
+    # type: (Optional[Union[FunctionType, Callable]]) -> Callable
     """Decorator that allows marking a function or class as *supporting* the image segmentation task.
 
     Example::
@@ -2079,6 +2125,7 @@ def supports_segmentation(func_or_cls=None):
 
 
 def supports_regression(func_or_cls=None):
+    # type: (Optional[Union[FunctionType, Callable]]) -> Callable
     """Decorator that allows marking a function or class as *supporting* the generic regression task.
 
     Example::
@@ -2095,16 +2142,3 @@ def supports_regression(func_or_cls=None):
         > True
     """
     return apply_support(func_or_cls, "regression")
-
-
-def supports(obj, concept):
-    # type: (Any, AnyStr) -> bool
-    """Utility method to evaluate if an object instance *supports* a given ``concept`` as defined by decorators.
-
-    .. seealso::
-        | :func:`thelper.utils.supports_classification`
-        | :func:`thelper.utils.supports_detection`
-        | :func:`thelper.utils.supports_segmentation`
-        | :func:`thelper.utils.supports_regression`
-    """
-    return getattr(obj, "{}{}".format(SUPPORT_PREFIX, concept), False) if isinstance(concept, str) else False

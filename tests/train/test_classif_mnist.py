@@ -1,7 +1,7 @@
 import copy
 import os
 import shutil
-from typing import Optional  # noqa: F401
+from typing import Any, Optional  # noqa: F401
 
 import numpy as np
 import pytest
@@ -183,17 +183,18 @@ def test_outputs(config):
                 assert compare_dictionaries(backup_config, override_config) == ""
 
 
-def callback(task,  # type: thelper.tasks.utils.Task
-             input,  # type: thelper.typedefs.InputType
-             pred,  # type: thelper.typedefs.PredictionType
-             target,  # type: thelper.typedefs.TargetType
-             sample,  # type: thelper.typedefs.SampleType
-             loss,  # type: Optional[float]
-             iter_idx,  # type: int
-             max_iters,  # type: int
-             epoch_idx,  # type: int
-             max_epochs,  # type: int
-             **kwargs):
+def callback(task,          # type: thelper.tasks.utils.Task
+             input,         # type: thelper.typedefs.InputType
+             pred,          # type: thelper.typedefs.AnyPredictionType
+             target,        # type: thelper.typedefs.AnyTargetType
+             sample,        # type: thelper.typedefs.SampleType
+             loss,          # type: Optional[float]
+             iter_idx,      # type: int
+             max_iters,     # type: int
+             epoch_idx,     # type: int
+             max_epochs,    # type: int
+             **kwargs,      # type: Any
+             ):             # type: (...) -> None
     assert isinstance(task, thelper.tasks.Classification)
     assert isinstance(input, torch.Tensor)
     assert isinstance(pred, torch.Tensor)
