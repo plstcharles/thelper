@@ -12,9 +12,20 @@
             }
         }
     },
+    "loaders": {
+        "workers": 0,
+        "collate_fn": {
+            "type": "thelper.data.loaders.default_collate",
+            "params": {"force_tensor": false}
+        },
+        "train_split": {
+            "testbed15": 1.0
+        }
+    },
     "viz": {
         "kwargs": {
-            "block": true
+            "block": true,
+            "ch_transpose": false
         }
     }
 }
