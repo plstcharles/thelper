@@ -11,6 +11,7 @@ import gdal
 import numpy as np
 import ogr
 import osr
+import tqdm
 
 import thelper.data
 import thelper.data.geo as geo
@@ -26,9 +27,11 @@ class VectorCropDataset(thelper.data.Dataset):
                  vector_area_min=0.0, vector_area_max=float("inf"),
                  vector_target_prop=None, vector_roi_buffer=None,
                  srs_target="3857", raster_key="raster", mask_key="mask",
-                 feature_key="feature", force_parse=False, transforms=None):
+                 force_parse=False, reproj_rasters=False, reproj_all_cpus=True,
+                 keep_rasters_open=True, transforms=None):
         # before anything else, create a hash to cache parsed data
-        cache_hash = hashlib.sha1(str({k: v for k, v in vars().items() if not k.startswith("_") and k != "self"}).encode())
+        cache_hash = hashlib.sha1(str({k: v for k, v in vars().items() if not k.startswith("_") and k != "self"}).encode()) \
+            if not force_parse else None
         assert isinstance(raster_path, str), f"raster file/folder path should be given as string"
         assert isinstance(vector_path, str), f"vector file/folder path should be given as string"
         self.raster_path = raster_path
@@ -46,9 +49,15 @@ class VectorCropDataset(thelper.data.Dataset):
         assert isinstance(allow_outlying_vectors, bool), "unexpected flag type"
         assert isinstance(clip_outlying_vectors, bool), "unexpected flag type"
         assert isinstance(force_parse, bool), "unexpected flag type"
+        assert isinstance(reproj_rasters, bool), "unexpected flag type"
+        assert isinstance(reproj_all_cpus, bool), "unexpected flag type"
+        assert isinstance(keep_rasters_open, bool), "unexpected flag type"
         self.allow_outlying = allow_outlying_vectors
         self.clip_outlying = clip_outlying_vectors
-        self.force_parse =force_parse
+        self.force_parse = force_parse
+        self.reproj_rasters = reproj_rasters
+        self.reproj_all_cpus = reproj_all_cpus
+        self.keep_rasters_open = keep_rasters_open
         assert isinstance(vector_area_min, float) and vector_area_min >= 0, "min surface filter value must be > 0"
         assert isinstance(vector_area_max, float) and vector_area_max >= vector_area_min,\
             "max surface filter value must be greater than minimum surface value"
@@ -73,90 +82,143 @@ class VectorCropDataset(thelper.data.Dataset):
         self.raster_key = raster_key
         assert isinstance(mask_key, str), "mask key must be given as string"
         self.mask_key = mask_key
-        assert isinstance(feature_key, str), "feature key must be given as string"
-        self.feature_key = feature_key
         super().__init__(transforms=transforms)
-        logger.info(f"parsing rasters from path '{self.raster_path}'...")
-        raster_paths = thelper.utils.get_file_paths(self.raster_path, ".", allow_glob=True)
-        self.rasters_data, self.coverage = geo.utils.parse_rasters(raster_paths, self.srs_target)
-        assert self.rasters_data, f"could not find any usable rasters at '{raster_paths}'"
-        logger.debug(f"rasters total coverage area = {self.coverage.area:.2f}")
-        for idx, data in enumerate(self.rasters_data):
-            logger.debug(f"raster #{idx + 1} area = {data['target_roi'].area:.2f}")
-            # here, we enforce that raster datatypes/bandcounts match
-            assert data["band_count"] == self.rasters_data[0]["band_count"], \
-                f"parser expects that all raster band counts match" + \
-                f"(found {str(data['band_count'])} and {str(self.rasters_data[0]['band_count'])})"
-            assert data["data_type"] == self.rasters_data[0]["data_type"], \
-                f"parser expects that all raster data types match" + \
-                f"(found {str(data['data_type'])} and {str(self.rasters_data[0]['data_type'])})"
-            data["to_target_transform"] = osr.CoordinateTransformation(data["srs"], self.srs_target)
-            data["from_target_transform"] = osr.CoordinateTransformation(self.srs_target, data["srs"])
-        logger.info(f"parsing vectors from path '{self.vector_path}'...")
-        assert os.path.isfile(self.vector_path) and self.vector_path.endswith("geojson"), \
-            "vector file must be provided as geojson (shapefile support still incomplete)"
-        cache_file_path = os.path.join(os.path.dirname(self.vector_path), cache_hash.hexdigest() + ".pkl")
-        if not force_parse and os.path.exists(cache_file_path):
-            logger.debug(f"parsing cached feature data from '{cache_file_path}'...")
-            with open(cache_file_path, "rb") as fd:
-                features = pickle.load(fd)
-        else:
-            with open(self.vector_path) as vector_fd:
-                vector_data = json.load(vector_fd)
-            features = geo.utils.parse_geojson(vector_data, srs_target=self.srs_target, roi=self.coverage,
-                                               allow_outlying=self.allow_outlying, clip_outlying=self.clip_outlying)
-            if self.target_prop is not None:
-                features = [feature for feature in features
-                            if all([k in feature["properties"] and
-                                    feature["properties"][k] == v for k, v in self.target_prop.items()])]
-            features = [feature for feature in features
-                        if self.area_min <= feature["geometry"].area <= self.area_max]
-            logger.debug(f"parsed {len(features)} features of interest; preparing rois...")
-            if not force_parse:
-                logger.debug(f"caching feature data to '{cache_file_path}'...")
-                with open(cache_file_path, "wb") as fd:
-                    pickle.dump(features, fd)
-        self.samples = []  # required attrib name for access via base class funcs
-        for feature in features:
-            # add ROIs and target crop sizes to pre-parsed features (note: this is in target_srs)
-            roi, roi_tl, roi_br, crop_width, crop_height = \
-                geo.utils.get_feature_roi(feature["geometry"], self.px_size, self.skew, self.roi_buffer)
-            # test all regions that touch the selected feature
-            roi_hits, roi_geoms = [], []
-            for raster_idx, raster_data in enumerate(self.rasters_data):
-                inters_geometry = raster_data["target_roi"].intersection(roi)
-                if not inters_geometry.is_empty:
-                    assert inters_geometry.geom_type in ["Polygon", "MultiPolygon"], "unexpected inters geom type"
-                    roi_hits.append(raster_idx)
-                    roi_geoms.append(inters_geometry)
-            self.samples.append({
-                **feature,
-                "roi": roi,
-                "roi_tl": roi_tl,
-                "roi_br": roi_br,
-                "roi_hits": roi_hits,
-                "roi_geoms": roi_geoms,
-                "crop_width": crop_width,
-                "crop_height": crop_height
-            })
-        meta_keys = [self.feature_key, "srs", "geo_bbox"]
+        self.rasters_data, self.coverage = self._parse_rasters(self.raster_path, self.srs_target, reproj_rasters)
+        features = self._parse_features(self.vector_path, self.srs_target, self.coverage, cache_hash,
+                                        self.allow_outlying, self.clip_outlying, self._default_feature_cleaner)
+        self.samples, meta_keys = self._parse_crops(features, self.rasters_data, self._default_feature_cropper,
+                                                    self.vector_path, cache_hash)
         # create default task without gt specification (this is a pretty basic parser)
         self.task = thelper.tasks.Task(input_key=self.raster_key, meta_keys=meta_keys)
         self.display_debug = True  # temporary @@@@
 
-    def _process_feature(self, feature):
-        """Returns a crop for a specific (internal) feature object."""
-        crop_width, crop_height = feature["crop_width"], feature["crop_height"]
-        roi_tl, roi_br = feature["roi_tl"], feature["roi_br"]
+    def _default_feature_cleaner(self, features):
+        """Flags geometric features as 'clean' based on some criteria (may be modified in derived classes)."""
+        # note: we use a flag here instead of removing bad features so that end-users can still use them if needed
+        for feat in features:
+            assert isinstance(feat, dict) and "clean" not in feat
+            feat["clean"] = True
+            if self.target_prop is not None and "properties" in feat and isinstance(feat["properties"], dict):
+                if not all([k in feat["properties"] and feat["properties"][k] == v for k, v in self.target_prop.items()]):
+                    feat["clean"] = False
+            if not (self.area_min <= feat["geometry"].area <= self.area_max):
+                feat["clean"] = False
+        return features
+
+    def _default_feature_cropper(self, feature):
+        """Returns the ROI information for a given feature (may be modified in derived classes)."""
+        # note: default behavior = just center on the feature, and pad if required by user
+        return geo.utils.get_feature_roi(feature["geometry"], self.px_size, self.skew, self.roi_buffer)
+
+    @staticmethod
+    def _parse_rasters(path, srs, reproj_rasters):
+        """Parses rasters (geotiffs) and returns metadata/coverage information."""
+        logger.info(f"parsing rasters from path '{path}'...")
+        raster_paths = thelper.utils.get_file_paths(path, ".", allow_glob=True)
+        rasters_data, coverage = geo.utils.parse_rasters(raster_paths, srs, reproj_rasters)
+        assert rasters_data, f"could not find any usable rasters at '{raster_paths}'"
+        logger.debug(f"rasters total coverage area = {coverage.area:.2f}")
+        for idx, data in enumerate(rasters_data):
+            logger.debug(f"raster #{idx + 1} area = {data['target_roi'].area:.2f}")
+            # here, we enforce that raster datatypes/bandcounts match
+            assert data["band_count"] == rasters_data[0]["band_count"], \
+                f"parser expects that all raster band counts match" + \
+                f"(found {str(data['band_count'])} and {str(rasters_data[0]['band_count'])})"
+            assert data["data_type"] == rasters_data[0]["data_type"], \
+                f"parser expects that all raster data types match" + \
+                f"(found {str(data['data_type'])} and {str(rasters_data[0]['data_type'])})"
+            data["to_target_transform"] = osr.CoordinateTransformation(data["srs"], srs)
+            data["from_target_transform"] = osr.CoordinateTransformation(srs, data["srs"])
+        return rasters_data, coverage
+
+    @staticmethod
+    def _parse_features(path, srs, roi, cache_hash, allow_outlying, clip_outlying, cleaner):
+        """Parses vector files (geojsons) and returns geometry information."""
+        logger.info(f"parsing vectors from path '{path}'...")
+        assert os.path.isfile(path) and path.endswith("geojson"), \
+            "vector file must be provided as geojson (shapefile support still incomplete)"
+        cache_file_path = os.path.join(os.path.dirname(path), cache_hash.hexdigest() + ".feats.pkl") \
+            if cache_hash else None
+        if cache_file_path is not None and os.path.exists(cache_file_path):
+            logger.debug(f"parsing cached feature data from '{cache_file_path}'...")
+            with open(cache_file_path, "rb") as fd:
+                features = pickle.load(fd)
+        else:
+            with open(path) as vector_fd:
+                vector_data = json.load(vector_fd)
+            features = geo.utils.parse_geojson(vector_data, srs_target=srs, roi=roi,
+                                               allow_outlying=allow_outlying, clip_outlying=clip_outlying)
+            logger.debug(f"cleaning up {len(features)} features...")
+            features = cleaner(features)
+            if cache_file_path is not None:
+                logger.debug(f"caching clean data to '{cache_file_path}'...")
+                with open(cache_file_path, "wb") as fd:
+                    pickle.dump(features, fd)
+        logger.debug(f"post-cleaning resulted in {len([f for f in features if f['clean']])} features of interest")
+        return features
+
+    def _parse_crops(self, features, rasters_data, cropper, path, cache_hash):
+        """Parses crops based on prior feature/raster data.
+
+        Each 'crop' corresponds to a sample that can be loaded at runtime.
+        """
+        logger.info(f"preparing crops using {len(features)} features (total)...")
+        cache_file_path = os.path.join(os.path.dirname(path), cache_hash.hexdigest() + ".crops.pkl") \
+            if cache_hash else None
+        if cache_file_path is not None and os.path.exists(cache_file_path):
+            logger.debug(f"parsing cached crop data from '{cache_file_path}'...")
+            with open(cache_file_path, "rb") as fd:
+                samples = pickle.load(fd)
+        else:
+            samples = []
+            srs_target_wkt = self.srs_target.ExportToWkt()
+            for feature in tqdm.tqdm(features, desc="preparing crop regions"):
+                if not feature["clean"]:
+                    continue  # skip (will not use bad features as the origin of a 'sample')
+                roi, roi_tl, roi_br, crop_width, crop_height = cropper(feature)
+                # test all raster regions that touch the selected feature
+                roi_hits, roi_geoms = [], []
+                for raster_idx, raster_data in enumerate(rasters_data):
+                    inters_geometry = raster_data["target_roi"].intersection(roi)
+                    if not inters_geometry.is_empty:
+                        assert inters_geometry.geom_type in ["Polygon", "MultiPolygon"], "unexpected inters geom type"
+                        roi_hits.append(raster_idx)
+                        roi_geoms.append(inters_geometry)
+                # make list of all other features that may be included in the roi
+                roi_features = [f for f in features if f["geometry"].intersects(roi)]
+                # prepare actual 'sample' for crop generation at runtime
+                samples.append({
+                    # there's lots of 'meta' info here that might not be 'batchable', but useful anyway
+                    "features": roi_features,
+                    "focal": feature,
+                    "roi": roi,
+                    "roi_tl": roi_tl,
+                    "roi_br": roi_br,
+                    "roi_hits": roi_hits,
+                    "roi_geoms": roi_geoms,
+                    "crop_width": crop_width,
+                    "crop_height": crop_height,
+                    "srs": srs_target_wkt,
+                    "geo_bbox": np.asarray(list(roi_tl) + list(roi_br)),
+                })
+            if cache_file_path is not None:
+                logger.debug(f"caching crop data to '{cache_file_path}'...")
+                with open(cache_file_path, "wb") as fd:
+                    pickle.dump(samples, fd)
+        meta_keys = ["features", "focal", "roi", "roi_tl", "roi_br",
+                     "roi_hits", "roi_geoms", "crop_width", "crop_height",
+                     "srs", "geo_bbox", self.mask_key]  # yeah, there's a lot, deal with it
+        return samples, meta_keys
+
+    def _process_crop(self, sample):
+        """Returns a crop for a specific (internal) set of sampled features."""
         # remember: we assume that all rasters have the same intrinsic settings
         crop_datatype = geo.utils.GDAL2NUMPY_TYPE_CONV[self.rasters_data[0]["data_type"]]
-        crop_size = (crop_height, crop_width, self.rasters_data[0]["band_count"])
-
+        crop_size = (sample["crop_height"], sample["crop_width"], self.rasters_data[0]["band_count"])
         crop = np.ma.array(np.zeros(crop_size, dtype=crop_datatype), mask=np.ones(crop_size, dtype=np.uint8))
         mask = np.zeros(crop_size[0:2], dtype=np.uint8)
-
-        output_geotransform = (feature["roi_tl"][0], self.px_size[0], self.skew[0],
-                               feature["roi_tl"][1], self.skew[1], self.px_size[1])
+        output_geotransform = (sample["roi_tl"][0], self.px_size[0], self.skew[0],
+                               sample["roi_tl"][1], self.skew[1], self.px_size[1])
         crop_raster_gdal = gdal.GetDriverByName("MEM").Create("", crop_size[1], crop_size[0],
                                                               crop_size[2], self.rasters_data[0]["data_type"])
         crop_raster_gdal.SetGeoTransform(output_geotransform)
@@ -167,24 +229,36 @@ class VectorCropDataset(thelper.data.Dataset):
         crop_mask_gdal.GetRasterBand(1).WriteArray(np.zeros(crop_size[0:2], dtype=np.uint8))
         ogr_dataset = ogr.GetDriverByName("Memory").CreateDataSource("mask")
         ogr_layer = ogr_dataset.CreateLayer("feature_mask", srs=self.srs_target)
-        ogr_feature = ogr.Feature(ogr_layer.GetLayerDefn())
-        ogr_geometry = ogr.CreateGeometryFromWkt(feature["geometry"].wkt)
-        ogr_feature.SetGeometry(ogr_geometry)
-        ogr_layer.CreateFeature(ogr_feature)
+        for feature in sample["features"]:
+            ogr_feature = ogr.Feature(ogr_layer.GetLayerDefn())
+            ogr_geometry = ogr.CreateGeometryFromWkt(feature["geometry"].wkt)
+            ogr_feature.SetGeometry(ogr_geometry)
+            ogr_layer.CreateFeature(ogr_feature)
         gdal.RasterizeLayer(crop_mask_gdal, [1], ogr_layer, burn_values=[1], options=["ALL_TOUCHED=TRUE"])
         np.copyto(dst=mask, src=crop_mask_gdal.GetRasterBand(1).ReadAsArray())
-        for raster_idx, inters_geom in zip(feature["roi_hits"], feature["roi_geoms"]):
+        for raster_idx in sample["roi_hits"]:
             raster_data = self.rasters_data[raster_idx]
-            rasterfile = gdal.Open(raster_data["file_path"], gdal.GA_ReadOnly)
-            assert rasterfile is not None, f"could not open raster data file at '{raster_data['file_path']}'"
+            if "rasterfile" in raster_data:
+                rasterfile = raster_data["rasterfile"]
+            else:
+                if raster_data["reproj_path"] is not None:
+                    raster_path = raster_data["reproj_path"]
+                else:
+                    raster_path = raster_data["file_path"]
+                rasterfile = gdal.Open(raster_path, gdal.GA_ReadOnly)
+                assert rasterfile is not None, f"could not open raster data file at '{raster_path}'"
+                if self.keep_rasters_open:
+                    raster_data["rasterfile"] = rasterfile
             assert rasterfile.RasterCount == crop_size[2], "unexpected raster count"
             for raster_band_idx in range(rasterfile.RasterCount):
                 curr_band = rasterfile.GetRasterBand(raster_band_idx + 1)
                 nodataval = curr_band.GetNoDataValue()
                 crop_raster_gdal.GetRasterBand(raster_band_idx + 1).WriteArray(
                     np.full(crop_size[0:2], fill_value=nodataval, dtype=crop_datatype))
-            res = gdal.ReprojectImage(rasterfile, crop_raster_gdal, raster_data["srs"].ExportToWkt(),
-                                      self.srs_target.ExportToWkt(), gdal.GRA_Bilinear)
+            # using all cpus should be ok since we probably cant parallelize this loader anyway (swig serialization issues)
+            options = ["NUM_THREADS=ALL_CPUS"] if self.reproj_all_cpus else []
+            res = gdal.ReprojectImage(rasterfile, crop_raster_gdal, rasterfile.GetProjectionRef(),
+                                      self.srs_target.ExportToWkt(), gdal.GRA_Bilinear, options=options)
             assert res == 0, "resampling failed"
             for raster_band_idx in range(crop_raster_gdal.RasterCount):
                 curr_band = crop_raster_gdal.GetRasterBand(raster_band_idx + 1)
@@ -199,7 +273,7 @@ class VectorCropDataset(thelper.data.Dataset):
         crop_mask_gdal = None  # close local fd
         # noinspection PyUnusedLocal
         rasterfile = None  # close input fd
-        return crop, mask, np.asarray(list(feature["roi_tl"]) + list(feature["roi_br"]))
+        return crop, mask
 
     def __getitem__(self, idx):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
@@ -209,7 +283,7 @@ class VectorCropDataset(thelper.data.Dataset):
         if idx < 0:
             idx = len(self.samples) + idx
         sample = self.samples[idx]
-        crop, mask, bbox = self._process_feature(sample)
+        crop, mask = self._process_crop(sample)
         if self.display_debug:
             crop = cv.cvtColor(crop, cv.COLOR_GRAY2BGR)
             mask = cv.cvtColor(mask, cv.COLOR_GRAY2BGR)
@@ -220,9 +294,7 @@ class VectorCropDataset(thelper.data.Dataset):
         sample = {
             self.raster_key: np.array(crop.data, copy=True),
             self.mask_key: mask,
-            self.feature_key: sample,
-            "srs": self.srs_target,
-            "geo_bbox": bbox
+            **sample
         }
         if self.transforms:
             sample = self.transforms(sample)

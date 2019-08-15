@@ -1,6 +1,6 @@
-import collections
 import logging
 import math
+import os
 
 import affine
 import gdal
@@ -11,6 +11,7 @@ import shapely
 import shapely.geometry
 import shapely.ops
 import shapely.wkt
+import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -96,10 +97,12 @@ def parse_coordinate_system(body):
     return crs
 
 
-def parse_rasters(raster_paths, srs_target=None):
+def parse_rasters(raster_paths, srs_target=None, reproj=False):
     # note: the rasters will not be projected in this function if an SRS is given
     assert isinstance(raster_paths, list) and all([isinstance(s, str) for s in raster_paths]), \
         "input raster paths must be provided as a list of strings"
+    # remove reprojs from list (will be rediscovered later)
+    raster_paths = [r for r in raster_paths if not r.endswith(".reproj.tif")]
     if srs_target is not None:
         assert isinstance(srs_target, (str, int, osr.SpatialReference)), \
             "target EPSG SRS must be given as int/str"
@@ -124,7 +127,7 @@ def parse_rasters(raster_paths, srs_target=None):
         skew_x, skew_y = raster_geotransform[2], raster_geotransform[4]
         logger.debug(f"grid X/Y skew: {skew_x} / {skew_y}")
         raster_extent = get_geoextent(raster_geotransform, 0, 0, rasterfile.RasterXSize, rasterfile.RasterYSize)
-        logger.debug(f"extent: {str(raster_extent)}")
+        logger.debug(f"extent: {str(raster_extent)}")  # [tl, bl, br, tr]
         raster_curr_srs = osr.SpatialReference()
         raster_curr_srs_str = rasterfile.GetProjectionRef()
         if "unknown" not in raster_curr_srs_str:
@@ -141,11 +144,20 @@ def parse_rasters(raster_paths, srs_target=None):
                 raster_datatype = curr_band.DataType
             assert raster_datatype == curr_band.DataType, "expected identical data types in all bands"
         local_roi = shapely.geometry.Polygon([list(pt) for pt in raster_extent])
+        reproj_path = None
         if srs_target is not None and not raster_curr_srs.IsSame(srs_target):
-            shapes_srs_transform = osr.CoordinateTransformation(raster_curr_srs, srs_target)
+            srs_transform = osr.CoordinateTransformation(raster_curr_srs, srs_target)
             ogr_geometry = ogr.CreateGeometryFromWkb(local_roi.wkb)
-            ogr_geometry.Transform(shapes_srs_transform)
+            ogr_geometry.Transform(srs_transform)
             target_roi = shapely.wkt.loads(ogr_geometry.ExportToWkt())
+            if reproj:
+                reproj_path = raster_path + ".reproj.tif"
+                if not os.path.exists(reproj_path):
+                    logger.info(f"reprojecting raster to '{reproj_path}'...")
+                    gdal.Warp(reproj_path, rasterfile, dstSRS=srs_target.ExportToWkt(),
+                              outputType=raster_datatype, xRes=px_width, yRes=px_height,
+                              callback=lambda *args: logger.debug(f"reprojection @ {int(args[0] * 100)} %"),
+                              options=["NUM_THREADS=ALL_CPUS"])
         else:
             target_roi = local_roi
         target_rois.append(target_roi)
@@ -163,6 +175,7 @@ def parse_rasters(raster_paths, srs_target=None):
             "local_roi": local_roi,
             "target_roi": target_roi,
             "file_path": raster_path,
+            "reproj_path": reproj_path
         })
         rasterfile = None  # close input fd
     target_coverage = shapely.ops.cascaded_union(target_rois)
@@ -175,7 +188,7 @@ def parse_geojson(geojson, srs_target=None, roi=None, allow_outlying=False, clip
     features = geojson["features"]
     logger.debug(f"parsing {len(features)} features from geojson...")
     srs_origin = parse_coordinate_system(geojson)
-    shapes_srs_transform = None
+    srs_transform = None
     if srs_target is not None:
         assert isinstance(srs_target, (str, int, osr.SpatialReference)), \
             "target EPSG SRS must be given as int/str"
@@ -186,9 +199,9 @@ def parse_geojson(geojson, srs_target=None, roi=None, allow_outlying=False, clip
             srs_target_obj.ImportFromEPSG(srs_target)
             srs_target = srs_target_obj
         if not srs_origin.IsSame(srs_target):
-            shapes_srs_transform = osr.CoordinateTransformation(srs_origin, srs_target)
+            srs_transform = osr.CoordinateTransformation(srs_origin, srs_target)
     kept_features = []
-    for feature in features:
+    for feature in tqdm.tqdm(features, desc="parsing raw geojson features"):
         assert feature["geometry"]["type"] in ["Polygon", "MultiPolygon"], \
             f"unhandled raw geometry type: {feature['geometry']['type']}"
         if feature["geometry"]["type"] == "Polygon":
@@ -198,18 +211,18 @@ def parse_geojson(geojson, srs_target=None, roi=None, allow_outlying=False, clip
             assert all([isinstance(c, list) and len(c) == 2 for c in coords[0]]) and len(coords[0]) >= 4, \
                 "unexpected poly coord format"
             poly = shapely.geometry.Polygon(coords[0])
-            if shapes_srs_transform is not None:
+            if srs_transform is not None:
                 ogr_geometry = ogr.CreateGeometryFromWkb(poly.wkb)
-                ogr_geometry.Transform(shapes_srs_transform)
+                ogr_geometry.Transform(srs_transform)
                 poly = shapely.wkt.loads(ogr_geometry.ExportToWkt())
             feature["geometry"] = poly
             feature["type"] = "Polygon"
         elif feature["geometry"]["type"] == "MultiPolygon":
             multipoly = shapely.geometry.shape(feature["geometry"])
             assert multipoly.is_valid, "found invalid input multipolygon in geojson"
-            if shapes_srs_transform is not None:
+            if srs_transform is not None:
                 ogr_geometry = ogr.CreateGeometryFromWkb(multipoly.wkb)
-                ogr_geometry.Transform(shapes_srs_transform)
+                ogr_geometry.Transform(srs_transform)
                 multipoly = shapely.wkt.loads(ogr_geometry.ExportToWkt())
             feature["geometry"] = multipoly
             feature["type"] = "MultiPolygon"
