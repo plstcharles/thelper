@@ -58,11 +58,12 @@ class VectorCropDataset(thelper.data.Dataset):
         self.reproj_rasters = reproj_rasters
         self.reproj_all_cpus = reproj_all_cpus
         self.keep_rasters_open = keep_rasters_open
-        assert isinstance(vector_area_min, float) and vector_area_min >= 0, "min surface filter value must be > 0"
-        assert isinstance(vector_area_max, float) and vector_area_max >= vector_area_min,\
+        assert isinstance(vector_area_min, (float, int)) and vector_area_min >= 0, \
+            "min surface filter value must be > 0"
+        assert isinstance(vector_area_max, (float, int)) and vector_area_max >= vector_area_min, \
             "max surface filter value must be greater than minimum surface value"
-        self.area_min = vector_area_min
-        self.area_max = vector_area_max
+        self.area_min = float(vector_area_min)
+        self.area_max = float(vector_area_max)
         assert vector_target_prop is None or isinstance(vector_target_prop, dict), \
             "feature target props should be specified as dictionary of property name-value pairs for search"
         self.target_prop = {} if vector_target_prop is None else vector_target_prop
@@ -84,13 +85,13 @@ class VectorCropDataset(thelper.data.Dataset):
         self.mask_key = mask_key
         super().__init__(transforms=transforms)
         self.rasters_data, self.coverage = self._parse_rasters(self.raster_path, self.srs_target, reproj_rasters)
-        features = self._parse_features(self.vector_path, self.srs_target, self.coverage, cache_hash,
-                                        self.allow_outlying, self.clip_outlying, self._default_feature_cleaner)
-        self.samples, meta_keys = self._parse_crops(features, self.rasters_data, self._default_feature_cropper,
+        self.features = self._parse_features(self.vector_path, self.srs_target, self.coverage, cache_hash,
+                                             self.allow_outlying, self.clip_outlying, self._default_feature_cleaner)
+        self.samples, meta_keys = self._parse_crops(self.features, self.rasters_data, self._default_feature_cropper,
                                                     self.vector_path, cache_hash)
         # create default task without gt specification (this is a pretty basic parser)
         self.task = thelper.tasks.Task(input_key=self.raster_key, meta_keys=meta_keys)
-        self.display_debug = True  # temporary @@@@
+        self.display_debug = False  # for internal debugging purposes only
 
     def _default_feature_cleaner(self, features):
         """Flags geometric features as 'clean' based on some criteria (may be modified in derived classes)."""
@@ -185,11 +186,13 @@ class VectorCropDataset(thelper.data.Dataset):
                         roi_hits.append(raster_idx)
                         roi_geoms.append(inters_geometry)
                 # make list of all other features that may be included in the roi
-                roi_features = [f for f in features if f["geometry"].intersects(roi)]
+                roi_radius = np.linalg.norm(np.asarray(roi_tl) - np.asarray(roi_br)) / 2
+                roi_features = [f for f in features if feature["centroid"].distance(f["centroid"]) <= roi_radius and
+                                f["geometry"].intersects(roi)]
                 # prepare actual 'sample' for crop generation at runtime
                 samples.append({
-                    # there's lots of 'meta' info here that might not be 'batchable', but useful anyway
                     "features": roi_features,
+                    "clipped_flags": [f["clipped"] or not roi.contains(f["geometry"]) for f in roi_features],
                     "focal": feature,
                     "roi": roi,
                     "roi_tl": roi_tl,
@@ -199,15 +202,17 @@ class VectorCropDataset(thelper.data.Dataset):
                     "crop_width": crop_width,
                     "crop_height": crop_height,
                     "srs": srs_target_wkt,
-                    "geo_bbox": np.asarray(list(roi_tl) + list(roi_br)),
+                    "geotransform": (roi_tl[0], self.px_size[0], self.skew[0],
+                                     roi_tl[1], self.skew[1], self.px_size[1]),
                 })
             if cache_file_path is not None:
                 logger.debug(f"caching crop data to '{cache_file_path}'...")
                 with open(cache_file_path, "wb") as fd:
                     pickle.dump(samples, fd)
+        # there's lots of 'meta' info here that might not be 'batchable', but useful anyway...
         meta_keys = ["features", "focal", "roi", "roi_tl", "roi_br",
                      "roi_hits", "roi_geoms", "crop_width", "crop_height",
-                     "srs", "geo_bbox", self.mask_key]  # yeah, there's a lot, deal with it
+                     "srs", "geotransform", self.mask_key]  # yeah, there's a lot, deal with it
         return samples, meta_keys
 
     def _process_crop(self, sample):
@@ -217,14 +222,12 @@ class VectorCropDataset(thelper.data.Dataset):
         crop_size = (sample["crop_height"], sample["crop_width"], self.rasters_data[0]["band_count"])
         crop = np.ma.array(np.zeros(crop_size, dtype=crop_datatype), mask=np.ones(crop_size, dtype=np.uint8))
         mask = np.zeros(crop_size[0:2], dtype=np.uint8)
-        output_geotransform = (sample["roi_tl"][0], self.px_size[0], self.skew[0],
-                               sample["roi_tl"][1], self.skew[1], self.px_size[1])
         crop_raster_gdal = gdal.GetDriverByName("MEM").Create("", crop_size[1], crop_size[0],
                                                               crop_size[2], self.rasters_data[0]["data_type"])
-        crop_raster_gdal.SetGeoTransform(output_geotransform)
+        crop_raster_gdal.SetGeoTransform(sample["geotransform"])
         crop_raster_gdal.SetProjection(self.srs_target.ExportToWkt())
         crop_mask_gdal = gdal.GetDriverByName("MEM").Create("", crop_size[1], crop_size[0], 1, gdal.GDT_Byte)
-        crop_mask_gdal.SetGeoTransform(output_geotransform)
+        crop_mask_gdal.SetGeoTransform(sample["geotransform"])
         crop_mask_gdal.SetProjection(self.srs_target.ExportToWkt())
         crop_mask_gdal.GetRasterBand(1).WriteArray(np.zeros(crop_size[0:2], dtype=np.uint8))
         ogr_dataset = ogr.GetDriverByName("Memory").CreateDataSource("mask")

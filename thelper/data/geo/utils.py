@@ -226,13 +226,20 @@ def parse_geojson(geojson, srs_target=None, roi=None, allow_outlying=False, clip
                 multipoly = shapely.wkt.loads(ogr_geometry.ExportToWkt())
             feature["geometry"] = multipoly
             feature["type"] = "MultiPolygon"
+        bounds = feature["geometry"].bounds
+        feature["tl"] = bounds[0:2]
+        feature["br"] = bounds[2:4]
+        feature["clipped"] = False
+        feature["centroid"] = feature["geometry"].centroid
         if roi is None:
             kept_features.append(feature)
         else:
             if (allow_outlying and roi.intersects(feature["geometry"])) or \
                     (not allow_outlying and roi.contains(feature["geometry"])):
                 if clip_outlying:
-                    feature["geometry"] = roi.intersection(feature["geometry"])
+                    if not roi.contains(feature["geometry"]):
+                        feature["clipped"] = True
+                        feature["geometry"] = roi.intersection(feature["geometry"])
                     assert feature["geometry"].type in ["Polygon", "MultiPolygon"], \
                         f"unhandled intersection geometry type: {feature['geometry'].type}"
                 feature["type"] = feature["geometry"].type
