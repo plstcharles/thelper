@@ -275,7 +275,7 @@ class ClassifLogger(PredictionConsumer):
             pred_scores = logdata["pred"][sample_idx]
             sorted_score_idxs = np.argsort(pred_scores)[::-1]
             sorted_scores = pred_scores[sorted_score_idxs]
-            if self.conf_threshold is None or pred_scores[gt_label_idx] < self.conf_threshold:
+            if self.conf_threshold is None or pred_scores[gt_label_idx] >= self.conf_threshold:
                 entry = f"{self.class_names[gt_label_idx]},{pred_scores[gt_label_idx]:2.4f}"
                 for k in range(self.top_k):
                     entry += f",{self.class_names[sorted_score_idxs[k]]},{sorted_scores[k]:2.4f}"
