@@ -9,7 +9,6 @@ import logging
 import os
 import sys
 
-import h5py
 import numpy as np
 import tqdm
 
@@ -423,6 +422,7 @@ def create_hdf5(archive_path, task, train_loader, valid_loader, test_loader, com
         compression = {}
     if config_backup is None:
         config_backup = {}
+    import h5py
     with h5py.File(archive_path, "w") as fd:
         fd.attrs["source"] = thelper.utils.get_log_stamp()
         fd.attrs["git_sha1"] = thelper.utils.get_git_stamp()

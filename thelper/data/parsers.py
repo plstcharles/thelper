@@ -10,7 +10,6 @@ import os
 from abc import abstractmethod
 
 import cv2 as cv
-import h5py
 import numpy as np
 import PIL
 import PIL.Image
@@ -188,8 +187,8 @@ class HDF5Dataset(Dataset):
         section of the archive to load. By default, it loads the training set.
         """
         super(HDF5Dataset, self).__init__(transforms=transforms, deepcopy=False)
-        if subset not in ["train", "valid", "test"]:
-            raise AssertionError(f"unrecognized subset '{subset}'")
+        assert subset in ["train", "valid", "test"], f"unrecognized subset '{subset}'"
+        import h5py
         self.archive = h5py.File(root, "r")
         self.source = self.archive.attrs["source"]
         self.git_sha1 = self.archive.attrs["git_sha1"]
