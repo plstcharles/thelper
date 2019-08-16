@@ -3,7 +3,9 @@ Typing definitions for thelper.
 """
 
 import io
-from typing import TYPE_CHECKING, Any, AnyStr, Callable, Dict, List, Optional, Tuple, Union  # noqa: F401
+from typing import (    # noqa: F401
+    TYPE_CHECKING, Any, AnyStr, Callable, Dict, Generic, Iterable, List, Optional, Tuple, TypeVar, Union
+)
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -15,15 +17,38 @@ if TYPE_CHECKING:
     from thelper.data.loaders import DataLoader
     from thelper.tasks.detect import BoundingBox
 
-    ArrayType = np.ndarray
+    ArrayType = np.ndarray  # generic definition
     ArrayShapeType = Union[List[int], Tuple[int]]
     OneOrManyArrayType = Union[List[ArrayType], ArrayType]
+
+    # FIXME: experimental
+    #  more verbatim than 'Any' or plain 'ndarray', but could flag invalid types in come places
+    # more explicit definition, ex: ArrayOfType[myClass, ArrayShape[10, 10]]
+    # more examples: https://github.com/python/typing/issues/516#issuecomment-350745218
+    ArrayDType = TypeVar('ArrayDType', bound=np.generic)
+    ArrayShape = TypeVar('ArrayShape', bound=Iterable[int])
+    T = TypeVar('T')
+    class ndarray(Generic[ArrayDType, ArrayShape]):  # noqa: E306  # name must match original exactly
+        @property
+        def shape(self):    # type: (...) -> Tuple[int]
+            return ()
+    ArrayOfType = ndarray
+
+    # specialized arrays
+    W = TypeVar('W', bound=int)
+    H = TypeVar('H', bound=int)
+    C = TypeVar('C', bound=int)
+    BoundingBoxArray = ArrayOfType[BoundingBox]
+    ImageArray = ArrayOfType[ArrayType, ArrayShape[W, H, C]]
+
+    ClassIdType = Union[AnyStr, int]
     LabelColorMapType = Union[ArrayType, Dict[int, ArrayType]]
     LabelIndex = AnyStr
     LabelType = AnyStr
     LabelDict = Dict[LabelIndex, LabelType]
     LabelList = List[LabelType]
-    DrawingType = Union[Tuple[plt.Figure, plt.Axes], None]
+    DrawingType = Optional[Tuple[plt.Figure, plt.Axes]]
+    ClassColorMap = Dict[ClassIdType, Union[int, Tuple[int, int, int]]]
 
     Number = Union[int, float]
     _literalJSON = Optional[Union[AnyStr, Number, bool]]
@@ -40,7 +65,7 @@ if TYPE_CHECKING:
 
     ConfigIndex = AnyStr
     ConfigValue = Union[AnyStr, bool, float, int, List[Any], Dict[Any, Any]]
-    ConfigDict = Dict[ConfigIndex, ConfigValue]
+    ConfigDict = Dict[ConfigIndex, Union[ConfigValue, "ConfigDict"]]
 
     CheckpointLoadingType = Union[AnyStr, io.FileIO]
     CheckpointContentType = Dict[AnyStr, Any]

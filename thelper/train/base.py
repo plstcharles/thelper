@@ -649,6 +649,7 @@ class Trainer:
                     raw_filepath = os.path.join(output_path, raw_filename)
                     cv.imwrite(raw_filepath, img[..., [2, 1, 0]])
             txt = metric.report() if hasattr(metric, "report") and callable(metric.report) else None
+            ext = getattr(metric, "ext", "txt")
             if not txt and isinstance(metric, thelper.optim.metrics.Metric):
                 eval_res = metric.eval()
                 if eval_res is not None:
@@ -657,7 +658,7 @@ class Trainer:
                     else:
                         txt = str(eval_res)
             if txt:
-                raw_filename = "%s-%04d.txt" % (metric_name, epoch)
+                raw_filename = f"{metric_name}-{epoch:04d}.{ext}"
                 raw_filepath = os.path.join(output_path, raw_filename)
                 with open(raw_filepath, "w") as fd:
                     fd.write(txt)

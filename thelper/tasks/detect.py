@@ -5,7 +5,7 @@ This module contains classes that define object detection utilities and task int
 import copy
 import logging
 import os
-from typing import Optional  # noqa: F401
+from typing import List, Optional, Tuple, Union  # noqa: F401
 
 import numpy as np
 import torch
@@ -66,7 +66,7 @@ class BoundingBox:
 
     @class_id.setter
     def class_id(self, value):
-        # type: (Union[int, str]) -> NoReturn
+        # type: (Union[int, str]) -> None
         """Sets the object class type identifier  (should be string/int)."""
         assert isinstance(value, (int, str)), "class should be defined as integer (index) or string (name)"
         self._class_id = value
@@ -325,7 +325,7 @@ class BoundingBox:
         return tuple(self.tolist())
 
     def tolist(self):
-        # type: () -> List[int, int, int, int]
+        # type: () -> List[int]
         """Gets a ``list`` representation of the underlying bounding box tuple :math:`(x_min,y_min,x_max,y_max)`.
 
         This ensures that ``Tensor`` objects are converted to native *Python* types."""
@@ -341,7 +341,7 @@ class BoundingBox:
             "confidence": self.confidence,
             "include_margin": self.include_margin,
             "difficult": self.difficult,
-            "occlured": self.occluded,
+            "occluded": self.occluded,
             "truncated": self.truncated,
             "is_crowd": self.iscrowd,
         }

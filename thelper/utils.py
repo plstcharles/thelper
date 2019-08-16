@@ -36,7 +36,7 @@ import yaml
 import thelper.typedefs  # noqa: F401
 
 if TYPE_CHECKING:
-    from typing import Any, AnyStr, Callable, List, Optional, Type, NoReturn  # noqa: F401
+    from typing import Any, AnyStr, Callable, List, Optional, Type  # noqa: F401
     from types import FunctionType  # noqa: F401
 
 SUPPORT_PREFIX = "supports_"
@@ -322,7 +322,7 @@ def migrate_config(config,        # type: thelper.typedefs.ConfigDict
     """Migrates the content of an incompatible or outdated configuration to the current version of the framework.
 
     This function might not be able to fix all backward compatibility issues (e.g. it cannot fix class interfaces
-    that were changed). Perfect reproductibility of tests cannot be guaranteed either if this migration tool is used.
+    that were changed). Perfect reproducibility of tests cannot be guaranteed either if this migration tool is used.
 
     Args:
         config: session configuration dictionary obtained e.g. by parsing a JSON file. Note that the data contained
@@ -383,7 +383,7 @@ def migrate_config(config,        # type: thelper.typedefs.ConfigDict
             return cfg
         config = import_refactoring(config)
         if "trainer" in config and isinstance(config["trainer"], dict):
-            trainer_cfg = config["trainer"]
+            trainer_cfg = config["trainer"]    # type: thelper.typedefs.ConfigDict
             # move 'loss' section to 'optimization' section
             if "loss" in trainer_cfg:
                 if "optimization" not in trainer_cfg or not isinstance(trainer_cfg["optimization"], dict):
@@ -1108,7 +1108,7 @@ def load_config(path, as_json=False):
 
 
 def save_config(config, path, force_convert=True, as_json=False):
-    # type: (thelper.typedefs.ConfigDict, str, bool, bool) -> NoReturn
+    # type: (thelper.typedefs.ConfigDict, str, bool, bool) -> None
     """Saves the given session/object configuration dictionary to the provided path.
 
     The type of file that is created is based on the extension specified in the path. If the file
@@ -1841,8 +1841,40 @@ def draw_bbox(image, tl, br, text, color, box_thickness=2, font_thickness=1,
     return win_name, image
 
 
-def draw_bboxes(images, preds=None, bboxes=None, color_map=None, redraw=None, block=False, min_confidence=0.5, **kwargs):
-    """Draws and returns a set of bounding box prediction results."""
+def draw_bboxes(images,                 # type: thelper.typedefs.ImageArray
+                preds=None,             # type: Optional[thelper.typedefs.BoundingBoxArray]
+                bboxes=None,            # type: Optional[thelper.typedefs.BoundingBoxArray]
+                color_map=None,         # type: Optional[thelper.typedefs.ClassColorMap]
+                redraw=None,            # type: Optional[thelper.typedefs.DrawingType]
+                block=False,            # type: Optional[bool]
+                min_confidence=0.5,     # type: thelper.typedefs.Number
+                class_map=None,         # type: Optional[thelper.typedefs.ClassIdType, AnyStr]
+                **kwargs                # type: Any
+                ):
+    """Draws a set of bounding box prediction results on images.
+
+    Args:
+        images: images with first dimension as list index, and other dimensions are each image's content
+        preds: predicted bounding boxes per image to be displayed, must match images count if provided
+        bboxes: ground truth (targets) bounding boxes per image to be displayed, must match images count if provided
+        color_map: mapping of class-id to color to be applied to drawn bounding boxes on the image
+        redraw: existing figure and axes to reuse for drawing the new images and bounding boxes
+        block: indicate whether to block execution until all figures have been closed or not
+        min_confidence: ignore display of bounding boxes that have a confidence below this value, if available
+        class_map: alternative class-id to class-name mapping to employ for display.
+            This overrides the default class names retrieved from each bounding box's attributed task.
+            Useful for displaying generic bounding boxes obtained from raw input values without a specific task.
+        kwargs: other arguments to be passed down to further drawing functions or drawing settings
+            (amongst other settings, box_thickness, font_thickness and font_scale can be provided)
+    """
+    def get_class_name(_bbox):
+        if isinstance(class_map, dict):
+            return class_map[_bbox.class_id]
+        elif bbox.task is not None:
+            return _bbox.task.class_names[_bbox.class_id]
+        else:
+            raise RuntimeError("could not find class name from either class mapping or bbox task definition")
+
     image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
     if color_map is not None and isinstance(color_map, dict):
         assert len(color_map) <= 256, "too many indices for uint8 map"
@@ -1869,8 +1901,8 @@ def draw_bboxes(images, preds=None, bboxes=None, color_map=None, redraw=None, bl
                     conf = f" ({bbox.confidence:.3f})"
                 elif isinstance(bbox.confidence, (list, tuple, np.ndarray)):
                     conf = f" ({bbox.confidence[bbox.class_id]:.3f})"
-                draw_bbox(image, bbox.top_left, bbox.bottom_right, f"{bbox.task.class_names[bbox.class_id]}{conf}", color,
-                          box_thickness=box_thickness, font_thickness=font_thickness, font_scale=font_scale)
+                draw_bbox(image, bbox.top_left, bbox.bottom_right, f"{get_class_name(bbox)} {conf}",
+                          color, box_thickness=box_thickness, font_thickness=font_thickness, font_scale=font_scale)
     if bboxes is not None:
         assert len(image_list) == len(bboxes), "mismatched bboxes list and image list sizes"
         clean_image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
@@ -1879,8 +1911,8 @@ def draw_bboxes(images, preds=None, bboxes=None, color_map=None, redraw=None, bl
                 assert isinstance(bbox, thelper.data.BoundingBox), "unrecognized bbox type"
                 color = get_bgr_from_hsl(bbox_idx / len(bboxes_list) * 360, 1.0, 0.5) \
                     if color_map is None else color_map[bbox.class_id]
-                draw_bbox(image, bbox.top_left, bbox.bottom_right, f"GT: {bbox.task.class_names[bbox.class_id]}", color,
-                          box_thickness=box_thickness, font_thickness=font_thickness, font_scale=font_scale)
+                draw_bbox(image, bbox.top_left, bbox.bottom_right, f"GT: {get_class_name(bbox)}",
+                          color, box_thickness=box_thickness, font_thickness=font_thickness, font_scale=font_scale)
         grid_size_y += 1
         image_list += clean_image_list
     return draw_images(image_list, redraw=redraw, window_name="detections", block=block,

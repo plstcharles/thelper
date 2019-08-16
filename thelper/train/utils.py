@@ -8,14 +8,13 @@ training. See :mod:`thelper.optim.metrics` for more information on metrics.
 import logging
 import os
 from abc import ABC, abstractmethod
-from typing import Any, AnyStr, Dict, Iterable, List, Optional, Union  # noqa: F401
+from typing import Any, AnyStr, Dict, List, Optional, Union  # noqa: F401
 
 import cv2 as cv
 import numpy as np
 import sklearn.metrics
 import torch
 import json
-import copy
 
 import thelper.utils
 import thelper.typedefs  # noqa: F401
@@ -142,14 +141,32 @@ class FormatHandler(ABC):
 
     Attributes:
         format: format to be used for producing the report (default: "text")
+        ext: extension associated with generated format (default: "txt")
     """
+
+    # ext -> format
+    __formats__ = {
+        "txt": "text",
+        "text": "text",
+        "csv": "csv",
+        "yml": "yaml",
+        "yaml": "yaml",
+        "json": "json",
+    }
 
     # args and kwargs are for additional inputs that could be passed down involuntarily, but that are not necessary
     def __init__(self, format="text", *args, **kwargs):
         # type: (AnyStr, Any, Any) -> None
-        self.format = format
+        self.format = None
+        self.ext = None
+        self.solve_format(format)
 
-    def report(self, format="text"):
+    def solve_format(self, format):
+        # type: (Optional[AnyStr]) -> None
+        self.format = self.__formats__.get(format, "text")
+        self.ext = format if format in self.__formats__ else "txt"
+
+    def report(self, format=None):
         # type: (AnyStr) -> Optional[AnyStr]
         """
         Returns the report as a print-friendly string, matching the specified format if specified in configuration.
@@ -157,9 +174,9 @@ class FormatHandler(ABC):
         Args:
             format: format to be used for producing the report (default: initialization attribute or "text" if invalid)
         """
-        format = format or self.format
-        if isinstance(format, str):
-            formatter = getattr(self, "report_{}".format(format.lower()), None)
+        self.solve_format(format or self.format or "text")
+        if isinstance(self.format, str):
+            formatter = getattr(self, "report_{}".format(self.format.lower()), None)
             if formatter is not None:
                 return formatter()
         return self.report_text()
@@ -661,8 +678,8 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         raise NotImplementedError  # TODO
 
     def group_bbox(self,
-                   target_bboxes,   # type: Iterable[Optional[BoundingBox]]
-                   detect_bboxes,   # type: Iterable[BoundingBox]
+                   target_bboxes,   # type: List[Optional[BoundingBox]]
+                   detect_bboxes,   # type: List[BoundingBox]
                    ):               # type: (...) -> List[Dict[AnyStr, Union[BoundingBox, float, None]]]
         """Groups a sample's detected bounding boxes with target bounding boxes according to configuration parameters.
 
@@ -710,16 +727,19 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
             group_bboxes = [{"target": target_bboxes[0], "detect": sorted_detect}]
         else:
             # regroup by highest IoU
-            target_detects = [[]] * target_count
+            target_detects = [[] for _ in range(target_count)]
             for det in group_bboxes:
+                # FIXME:
+                #  should we do something different if all IoU = 0 (ie: false positive detection)
+                #  for now, they will all be stored in the first target, but can be tracked with IoU = 0
                 det_target_iou = [compute_iou(det, t) for t in target_bboxes]
-                best_iou_idx = np.argmax(det_target_iou)
+                best_iou_idx = int(np.argmax(det_target_iou))
                 target_detects[best_iou_idx].append({"bbox": det, "iou": det_target_iou[best_iou_idx]})
             group_bboxes = [{"target": target_bboxes[i],
                              "detect": list(sorted(
-                                target_detects[i], key=lambda d: d["iou"], reverse=True))
-                                if sort_by_iou else target_detects[i]
-                            } for i in range(target_count)]
+                                 target_detects[i], key=lambda d: d["iou"], reverse=True))
+                                 if sort_by_iou else target_detects[i]
+                            } for i in range(target_count)]     # noqa: PEP8
         # apply filters on grouped results
         if self.iou_threshold:
             for grp in group_bboxes:
@@ -730,7 +750,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         return list(group_bboxes)
 
     def gen_report(self):
-        # type: () -> Optional[thelper.typedefs.JSON]
+        # type: () -> Optional[List[Dict[AnyStr, Any]]]
         """Returns the logged metadata of predicted bounding boxes per sample target in a JSON-like structure.
 
         For every target bounding box, the corresponding *best*-sorted detections are returned.
@@ -749,27 +769,37 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         pack = list(zip(*[(*pack,)
                           for packs in zip(self.bbox, self.true, *self.meta.values())
                           for pack in zip(*packs)]))
-        logdata = {key: val for key, val in zip(["detect", "target", *self.meta.keys()], pack)}
-        assert all([len(val) == len(logdata["target"]) for val in logdata.values()]), "messed up unpacking"
+        data = {key: val for key, val in zip(["detect", "target", *self.meta.keys()], pack)}
+        assert all([len(val) == len(data["target"]) for val in data.values()]), "messed up unpacking"
 
         # flatten targets per batches/samples
         all_targets = []
-        sample_count = len(logdata["target"])
+        sample_count = len(data["target"])
         for sample_idx in range(sample_count):
             if isinstance(self.report_count, int) and self.report_count >= len(all_targets):
                 logger.warning(f"report max count {self.report_count} reached at {len(all_targets)} targets "
                                f"(sample {sample_idx}/{sample_count} processed)")
                 break
-            sample_targets = logdata["target"][sample_idx]
-            sample_detects = logdata["detect"][sample_idx]
+            sample_targets = data["target"][sample_idx]
+            sample_detects = data["detect"][sample_idx]
             sample_report = self.group_bbox(sample_targets, sample_detects)
             for target in sample_report:
-                target.update(self.meta[sample_idx])
+                for k in self.meta:
+                    target[k] = self.meta[k][sample_idx]
                 target["target"] = {
                     "bbox": target["target"],
                     "class_name": self.class_names[target["target"].class_id]
                 }
             all_targets.extend(sample_report)
+        # format everything nicely as json
+        for item in all_targets:
+            if isinstance(item["target"]["bbox"], BoundingBox):
+                item["target"].update(item["target"].pop("bbox").json())
+                item["target"]["class_name"] = self.class_names[item["target"]["class_id"]]
+            for det in item["detect"]:
+                if isinstance(det["bbox"], BoundingBox):
+                    det.update(det.pop("bbox").json())
+                    det["class_name"] = self.class_names[det["class_id"]]
         return all_targets
 
     def report_json(self):
@@ -778,14 +808,6 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         report = self.gen_report()
         if not report:
             return None
-        for item in report:
-            if isinstance(item["target"]["bbox"], BoundingBox):
-                item["target"].update(item["target"].pop("bbox").json())
-                item["target"]["class_name"] = self.class_names[item["target"]["class_id"]]
-            for det in item["detect"]:
-                if isinstance(det["bbox"], BoundingBox):
-                    det.update(det.pop("bbox").json())
-                    det["class_name"] = self.class_names[det["class_id"]]
         return json.dumps(report, indent=4)
 
     def report_text(self):
@@ -800,16 +822,21 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
 
         Note that this string might be very long if the dataset is large or if the model tends to generate a lot of
         detections. The string will contain at least :math:`N_sample \cdot N_target` lines and each line will have
-        up to :math:`N_bbox` detections, unless limitted by configuration parameters.
+        up to :math:`N_bbox` detections, unless limited by configuration parameters.
         """
-        report = self.report_json()
+        report = self.gen_report()
         if not report:
             return None
 
-        def patch_none(to_patch, number_format='2.4f'):
+        none_str = "unknown"
+
+        def patch_none(to_patch, number_format='2.4f'):  # type: (Any, str) -> str
             if to_patch is None:
-                return "unknown"
-            return f"{to_patch}{f':{number_format}' if number_format and isinstance(to_patch, (int, float)) else ''}"
+                return none_str
+            if isinstance(to_patch, float):
+                s = f"{{:{number_format}}}"
+                return s.format(to_patch)
+            return str(to_patch)
 
         header = "sample,target_name,target_bbox"
         for meta_key in self.log_keys:
@@ -821,13 +848,16 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
             # unknown count total detections (can be variable)
             header += f",detect_name[N],detect_bbox[N],detect_conf[N],detect_iou[N],(...)[N]"
         lines = [""] * len(report)
-        for i, target in enumerate(report):
-            entry = f"{target['image_id']},{patch_none(target['class_name'])},{patch_none(target['bbox'])}"
+        for i, result in enumerate(report):
+            target = result["target"]
+            detect = result["detect"]
+            if not target:
+                entry = f"{none_str},{none_str},{none_str}"
+            else:
+                entry = f"{target['image_id']},{patch_none(target['class_name'])},{patch_none(target['bbox'])}"
             for meta_key in self.log_keys:
                 entry += f",{str(target[meta_key])}"
-            if not len(target["detect"]):
-                entry += patch_none(None)
-            for det in target["detect"]:
+            for det in detect:
                 entry += f",{det['class_name']},{det['bbox']},{patch_none(det['confidence'])},{patch_none(det['iou'])}"
             lines[i] = entry
         return "\n".join([header, *lines])
