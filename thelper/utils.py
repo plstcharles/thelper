@@ -1963,5 +1963,5 @@ def get_file_paths(input_path, data_root, allow_glob=False, can_be_dir=False):
 def get_params_hash(*args, **kwargs):
     """Returns a sha1 hash for the given list of parameters (useful for caching)."""
     # by default, will use the repr of all params but remove the 'at 0x00000000' addresses
-    clean_str = re.sub(" at 0x[a-f\d]+", "", str(args) + str(kwargs))
+    clean_str = re.sub(" at 0x[a-f\\d]+", "", str(args) + str(kwargs))
     return hashlib.sha1(clean_str.encode()).hexdigest()
