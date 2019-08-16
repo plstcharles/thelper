@@ -60,23 +60,25 @@ class BoundingBox:
 
     @property
     def class_id(self):
+        # type: () -> Union[int, str]
         """Returns the object class type identifier."""
         return self._class_id
 
     @class_id.setter
     def class_id(self, value):
+        # type: (Union[int, str]) -> NoReturn
         """Sets the object class type identifier  (should be string/int)."""
         assert isinstance(value, (int, str)), "class should be defined as integer (index) or string (name)"
         self._class_id = value
 
     @property
     def bbox(self):
-        """Returns the bounding box tuple (xmin,ymin,xmax,ymax)."""
+        """Returns the bounding box tuple :math:`(x_min,y_min,x_max,y_max)`."""
         return self._bbox
 
     @bbox.setter
     def bbox(self, value):
-        """Sets the bounding box tuple (xmin,ymin,xmax,ymax)."""
+        """Sets the bounding box tuple :math:`(x_min,y_min,x_max,y_max)`."""
         assert isinstance(value, (list, tuple, np.ndarray, torch.Tensor)) and len(value) == 4, "invalid input type/len"
         assert not isinstance(value, (list, tuple)) or all([isinstance(v, (int, float)) for v in value]), \
             "input bbox values must be integer/float"
@@ -107,12 +109,12 @@ class BoundingBox:
 
     @property
     def top_left(self):
-        """Returns the top left bounding box corner coordinates (x,y)."""
+        """Returns the top left bounding box corner coordinates :math:`(x,y)`."""
         return self._bbox[0], self._bbox[1]
 
     @top_left.setter
     def top_left(self, value):
-        """Sets the top left bounding box corner coordinates (x,y)."""
+        """Sets the top left bounding box corner coordinates :math:`(x,y)`."""
         assert isinstance(value, (list, tuple, np.ndarray, torch.Tensor)) and len(value) == 2, "invalid input type/len"
         self._bbox[0], self._bbox[1] = value[0], value[1]
 
@@ -138,12 +140,12 @@ class BoundingBox:
 
     @property
     def bottom_right(self):
-        """Returns the bottom right bounding box corner coordinates (x,y)."""
+        """Returns the bottom right bounding box corner coordinates :math:`(x,y)`."""
         return self._bbox[2], self._bbox[3]
 
     @bottom_right.setter
     def bottom_right(self, value):
-        """Sets the bottom right bounding box corner coordinates (x,y)."""
+        """Sets the bottom right bounding box corner coordinates :math:`(x,y)`."""
         assert isinstance(value, (list, tuple, np.ndarray, torch.Tensor)) and len(value) == 2, "invalid input type/len"
         assert value[0] >= self._bbox[0] and value[1] >= self._bbox[1]
         self._bbox[2], self._bbox[3] = value[0], value[1]
@@ -160,7 +162,7 @@ class BoundingBox:
 
     @property
     def centroid(self, floor=False):
-        """Returns the bounding box centroid coordinates (x,y)."""
+        """Returns the bounding box centroid coordinates :math:`(x,y)`."""
         if self.include_margin:
             if floor:
                 return (self._bbox[0] + self._bbox[2] + 1) // 2, (self._bbox[1] + self._bbox[3] + 1) // 2
@@ -172,56 +174,56 @@ class BoundingBox:
 
     @property
     def include_margin(self):
-        """Returns whether xmax/ymax is included in the bounding box area or not"""
+        """Returns whether :math:`x_max` and :math:`y_max` are included in the bounding box area or not"""
         return self._include_margin
 
     @include_margin.setter
     def include_margin(self, value):
-        """Sets whether xmax/ymax is included in the bounding box area or not"""
+        """Sets whether :math:`x_max` and :math:`y_max` are is included in the bounding box area or not"""
         assert isinstance(value, (int, bool)), "flag type must be integer or boolean"
         self._include_margin = value
 
     @property
     def difficult(self):
-        """Returns whether this bounding box is considered "difficult" by the dataset (false by default)."""
+        """Returns whether this bounding box is considered *difficult* by the dataset (false by default)."""
         return self._difficult
 
     @difficult.setter
     def difficult(self, value):
-        """Sets whether this bounding box is considered "difficult" by the dataset."""
+        """Sets whether this bounding box is considered *difficult* by the dataset."""
         assert isinstance(value, (int, bool)), "flag type must be integer or boolean"
         self._difficult = value
 
     @property
     def occluded(self):
-        """Returns whether this bounding box is considered "occluded" by the dataset (false by default)."""
+        """Returns whether this bounding box is considered *occluded* by the dataset (false by default)."""
         return self._occluded
 
     @occluded.setter
     def occluded(self, value):
-        """Sets whether this bounding box is considered "occluded" by the dataset."""
+        """Sets whether this bounding box is considered *occluded* by the dataset."""
         assert isinstance(value, (int, bool)), "flag type must be integer or boolean"
         self._occluded = value
 
     @property
     def truncated(self):
-        """Returns whether this bounding box is considered "truncated" by the dataset (false by default)."""
+        """Returns whether this bounding box is considered *truncated* by the dataset (false by default)."""
         return self._truncated
 
     @truncated.setter
     def truncated(self, value):
-        """Sets whether this bounding box is considered "truncated" by the dataset."""
+        """Sets whether this bounding box is considered *truncated* by the dataset."""
         assert isinstance(value, (int, bool)), "flag type must be integer or boolean"
         self._truncated = value
 
     @property
     def iscrowd(self):
-        """Returns whether this instance covers a "crowd" of objects or not (false by default)."""
+        """Returns whether this instance covers a *crowd* of objects or not (false by default)."""
         return self._iscrowd
 
     @iscrowd.setter
     def iscrowd(self, value):
-        """Sets whether this instance covers a "crowd" of objects or not."""
+        """Sets whether this instance covers a *crowd* of objects or not."""
         assert isinstance(value, (int, bool)), "flag type must be integer or boolean"
         self._iscrowd = value
 
@@ -285,8 +287,11 @@ class BoundingBox:
 
     @staticmethod
     def decode(vec, format=None):
-        """Returns a BoundingBox object from a vectorized representation in a specified format."""
-        # note: the input bbox is expected to be a 4 element array (xmin,ymin,xmax,ymax)
+        """Returns a BoundingBox object from a vectorized representation in a specified format.
+
+        .. note::
+            The input bbox is expected to be a 4 element array :math:`(x_min,y_min,x_max,y_max)`.
+        """
         if format == "coco":
             assert len(vec) == 5, "unexpected vector length (should contain 5 values)"
             return BoundingBox(class_id=vec[4], bbox=[vec[0], vec[1], vec[0] + vec[2], vec[1] + vec[3]])
@@ -311,6 +316,35 @@ class BoundingBox:
         else:
             return not (self._bbox[0] > geom._bbox[2] or geom._bbox[0] > self._bbox[2] or
                         self._bbox[3] < geom._bbox[1] or geom._bbox[3] < self._bbox[1])
+
+    def totuple(self):
+        # type: () -> Tuple[int, int, int, int]
+        """Gets a ``tuple`` representation of the underlying bounding box tuple :math:`(x_min,y_min,x_max,y_max)`.
+
+        This ensures that ``Tensor`` objects are converted to native *Python* types."""
+        return tuple(self.tolist())
+
+    def tolist(self):
+        # type: () -> List[int, int, int, int]
+        """Gets a ``list`` representation of the underlying bounding box tuple :math:`(x_min,y_min,x_max,y_max)`.
+
+        This ensures that ``Tensor`` objects are converted to native *Python* types."""
+        return self._bbox.tolist() if isinstance(self._bbox, torch.Tensor) else list(self._bbox)
+
+    def json(self):
+        # type: () -> thelper.typedefs.JSON
+        """Gets a JSON-serializable representation of the bounding box parameters."""
+        return {
+            "class_id": self.class_id,
+            "image_id": self.image_id,
+            "bbox": self.tolist(),
+            "confidence": self.confidence,
+            "include_margin": self.include_margin,
+            "difficult": self.difficult,
+            "occlured": self.occluded,
+            "truncated": self.truncated,
+            "is_crowd": self.iscrowd,
+        }
 
     def __repr__(self):
         """Creates a print-friendly representation of the object detection bbox instance."""

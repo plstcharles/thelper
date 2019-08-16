@@ -8,16 +8,19 @@ training. See :mod:`thelper.optim.metrics` for more information on metrics.
 import logging
 import os
 from abc import ABC, abstractmethod
-from typing import Any, AnyStr, Dict, List, Optional, Union  # noqa: F401
+from typing import Any, AnyStr, Dict, Iterable, List, Optional, Union  # noqa: F401
 
 import cv2 as cv
 import numpy as np
 import sklearn.metrics
 import torch
 import json
+import copy
 
 import thelper.utils
 import thelper.typedefs  # noqa: F401
+from thelper.optim.eval import compute_iou
+from thelper.tasks.detect import BoundingBox
 
 logger = logging.getLogger(__name__)
 
@@ -200,7 +203,7 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
 
     Attributes:
         top_k: number of 'best' predictions to keep for each sample (along with the gt label).
-        conf_threshold: threshold used to eliminate all uncertain predictions.
+        conf_threshold: threshold used to eliminate uncertain predictions.
         class_names: holds the list of class label names provided by the dataset parser. If it is not
             provided when the constructor is called, it will be set by the trainer at runtime.
         target_name: name of the targeted label (may be 'None' if all classes are used).
@@ -333,7 +336,7 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         The returned object is a print-friendly CSV string that can be consumed directly by tensorboardX. Note
         that this string might be very long if the dataset is large (i.e. it will contain one line per sample).
         """
-        if self.report_count is not None and self.report_count == 0:
+        if isinstance(self.report_count, int) and self.report_count <= 0:
             return None
         if self.score is None or self.true is None:
             return None
@@ -359,7 +362,7 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
                 for meta_key in self.log_keys:
                     entry += f",{str(logdata[meta_key][sample_idx])}"
                 lines.append(entry)
-                if self.report_count is not None and len(lines) >= self.report_count:
+                if isinstance(self.report_count, int) and len(lines) >= self.report_count:
                     break
         return "\n".join([header, *lines])
 
@@ -456,6 +459,7 @@ class ClassifReport(PredictionConsumer, ClassNamesHandler, FormatHandler):
             self.target = np.asarray([None] * max_iters)
         if task.class_names != self.class_names:
             self.set_class_names(task.class_names)
+        # FIXME: we should still accumulate predictions on missing targets for evalution-only logging
         if target is None or target.numel() == 0:
             # only accumulate results when groundtruth is available
             self.pred[iter_idx] = None
@@ -522,7 +526,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
                 # this type is used to instantiate the confusion matrix report object
                 "type": "thelper.train.utils.DetectLogger",
                 "params": {
-                    # (optional) log the three 'best' detection for each sample
+                    # (optional) log the three 'best' detection for each target
                     "top_k": 3
                 }
             },
@@ -531,9 +535,13 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         # ...
 
     Attributes:
-        top_k: number of 'best' detections to keep for each sample (along with the target label).
-            If not specified, lists all bounding box predictions by the model.
-        conf_threshold: threshold used to eliminate all uncertain predictions (if they support confidence).
+        top_k: number of 'best' detections to keep for each target sample (along with the target label).
+            If omitted, lists all bounding box predictions by the model after applying IoU and confidence thresholds.
+        conf_threshold: threshold used to eliminate uncertain predictions (if they support confidence).
+            If confidence is not supported by the model bbox predictions, this parameter is ignored.
+        iou_threshold: threshold used to eliminate predictions too far from target (regardless of confidence).
+            If omitted, will ignore only completely non-overlapping predicted bounding boxes (:math:`IoU=0`).
+            If no target bounding boxes are provided (prediction-only), this parameter is ignored.
         class_names: holds the list of class label names provided by the dataset parser. If it is not
             provided when the constructor is called, it will be set by the trainer at runtime.
         target_name: name of the targeted label (may be 'None' if all classes are used).
@@ -544,12 +552,13 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         bbox: array used to store prediction bounding boxes for logging.
         true: array used to store groundtruth labels for logging.
         meta: array used to store metadata pulled from samples for logging.
-        format: output format of the produced log (supports: text, CSV)
+        format: output format of the produced log (supports: text, CSV, JSON)
     """
 
     def __init__(self,
                  top_k=None,            # type: Optional[int]
                  conf_threshold=None,   # type: Optional[thelper.typedefs.Number]
+                 iou_threshold=None,    # type: Optional[thelper.typedefs.Number]
                  class_names=None,      # type: Optional[List[AnyStr]]
                  target_name=None,      # type: Optional[List[AnyStr]]
                  viz_count=0,           # type: int
@@ -559,8 +568,10 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
                  ):                     # type: (...) -> None
         """Receives the logging parameters & the optional class label names used to decorate the log."""
         assert top_k is None or isinstance(top_k, int) and top_k > 0, "invalid top-k value"
-        assert conf_threshold is None or (isinstance(conf_threshold, (float, int)) and 0 < conf_threshold <= 1), \
-            "classification confidence threshold should be 'None' or float in ]0, 1]"
+        assert conf_threshold is None or (isinstance(conf_threshold, (float, int)) and 0 <= conf_threshold <= 1), \
+            "detection confidence threshold should be 'None' or number in [0, 1]"
+        assert iou_threshold is None or (isinstance(iou_threshold, (int, float)) and 0 <= iou_threshold <= 1), \
+            "detection IoU threshold should be 'None' or number in [0, 1]"
         assert isinstance(viz_count, int) and viz_count >= 0, "invalid image count to visualize"
         assert report_count is None or (
                 isinstance(report_count, int) and report_count >= 0), "invalid report sample count"
@@ -571,6 +582,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         self.target_name = target_name
         self.target_idx = None
         self.conf_threshold = conf_threshold
+        self.iou_threshold = iou_threshold
         self.viz_count = viz_count
         self.report_count = report_count
         self.log_keys = log_keys if log_keys is not None else []
@@ -623,19 +635,15 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         if task.class_names != self.class_names:
             self.set_class_names(task.class_names)
         if target is None or len(target) == 0 or all(len(t) == 0 for t in target):
-            # only accumulate results when groundtruth is available
-            self.bbox[iter_idx] = None
-            self.true[iter_idx] = None
-            for key, array in self.meta.items():
-                array[iter_idx] = None
-            return
-        assert len(pred) == len(target), "prediction/target bounding boxes list batch size mismatch"
+            target = [None] * len(pred)   # simplify unpacking during report generation
+        else:
+            assert len(pred) == len(target), "prediction/target bounding boxes list batch size mismatch"
+            for gt in target:
+                assert all(isinstance(bbox, BoundingBox) for bbox in gt), \
+                           "detect logger only supports 2D lists of bounding box targets"
         for det in pred:
-            assert all(isinstance(bbox, thelper.tasks.detect.BoundingBox) for bbox in det), \
+            assert all(isinstance(bbox, BoundingBox) for bbox in det), \
                        "detect logger only supports 2D lists of bounding box predictions"
-        for gt in target:
-            assert all(isinstance(bbox, thelper.tasks.detect.BoundingBox) for bbox in gt), \
-                       "detect logger only supports 2D lists of bounding box targets"
         self.bbox[iter_idx] = pred
         self.true[iter_idx] = target
         for meta_key in self.log_keys:
@@ -652,6 +660,134 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
             return None
         raise NotImplementedError  # TODO
 
+    def group_bbox(self,
+                   target_bboxes,   # type: Iterable[Optional[BoundingBox]]
+                   detect_bboxes,   # type: Iterable[BoundingBox]
+                   ):               # type: (...) -> List[Dict[AnyStr, Union[BoundingBox, float, None]]]
+        """Groups a sample's detected bounding boxes with target bounding boxes according to configuration parameters.
+
+        Returns a list of detections grouped by target(s) with following format::
+
+            [
+                {
+                    "target": <associated-target-bbox>,
+                    "detect": [
+                        {
+                            "bbox": <detection-bbox>,
+                            "iou": <IoU(detect-bbox, target-bbox)>
+                        },
+                        ...
+                    ]
+                },
+                ...
+            ]
+
+        The associated target bounding box and :math:`IoU` can be ``None`` if no target was provided
+        (ie: during inference). In this case, the returned list will have only a single element with all detections
+        associated to it. A single element list can also be returned if only one target was specified for this sample.
+
+        When multiple ground truth targets were provided, the returned list will have the same length and ordering as
+        these targets. The associated detected bounding boxes will depend on IoU between target/detection combinations.
+
+        All filtering thresholds specified as configuration parameter will be applied for the returned list. Detected
+        bounding boxes will also be sorted by highest confidence (if available) or by highest IoU as fallback.
+        """
+        # remove low confidence and sort by highest
+        group_bboxes = sorted(
+            [bbox for bbox in (detect_bboxes if detect_bboxes else []) if isinstance(bbox, BoundingBox)],
+            key=lambda b: b.confidence if b.confidence is not None else 0, reverse=True)
+        if self.conf_threshold:
+            group_bboxes = [b for b in group_bboxes if b.confidence is not None and b.confidence >= self.conf_threshold]
+        sort_by_iou = all(bbox.confidence is None for bbox in group_bboxes)
+        # group according to target count
+        target_count = len(target_bboxes)
+        if target_count == 0:
+            group_bboxes = [{"target": None, "detect": [{"bbox": bbox, "iou": None} for bbox in group_bboxes]}]
+        elif target_count == 1:
+            sorted_detect = [{"bbox": bbox, "iou": compute_iou(bbox, target_bboxes[0])} for bbox in group_bboxes]
+            if sort_by_iou:
+                sorted_detect = list(sorted(sorted_detect, key=lambda d: d["iou"], reverse=True))
+            group_bboxes = [{"target": target_bboxes[0], "detect": sorted_detect}]
+        else:
+            # regroup by highest IoU
+            target_detects = [[]] * target_count
+            for det in group_bboxes:
+                det_target_iou = [compute_iou(det, t) for t in target_bboxes]
+                best_iou_idx = np.argmax(det_target_iou)
+                target_detects[best_iou_idx].append({"bbox": det, "iou": det_target_iou[best_iou_idx]})
+            group_bboxes = [{"target": target_bboxes[i],
+                             "detect": list(sorted(
+                                target_detects[i], key=lambda d: d["iou"], reverse=True))
+                                if sort_by_iou else target_detects[i]
+                            } for i in range(target_count)]
+        # apply filters on grouped results
+        if self.iou_threshold:
+            for grp in group_bboxes:
+                grp["detect"] = [d for d in grp["detect"] if d["iou"] is None or d["iou"] >= self.iou_threshold]
+        if self.top_k:
+            for grp in group_bboxes:
+                grp["detect"] = grp["detect"][:self.top_k]
+        return list(group_bboxes)
+
+    def gen_report(self):
+        # type: () -> Optional[thelper.typedefs.JSON]
+        """Returns the logged metadata of predicted bounding boxes per sample target in a JSON-like structure.
+
+        For every target bounding box, the corresponding *best*-sorted detections are returned.
+        Sample metadata is appended to every corresponding sub-target if any where requested.
+
+        If :arg:`report_count` was specified, the returned report will be limited to that requested amount of targets.
+
+        .. seealso::
+            | :meth:`DetectLogger.group_bbox` for formatting, sorting and filtering details.
+        """
+        if isinstance(self.report_count, int) and self.report_count <= 0:
+            return None
+        if self.bbox is None or self.true is None:
+            return None
+        # flatten batches/samples
+        pack = list(zip(*[(*pack,)
+                          for packs in zip(self.bbox, self.true, *self.meta.values())
+                          for pack in zip(*packs)]))
+        logdata = {key: val for key, val in zip(["detect", "target", *self.meta.keys()], pack)}
+        assert all([len(val) == len(logdata["target"]) for val in logdata.values()]), "messed up unpacking"
+
+        # flatten targets per batches/samples
+        all_targets = []
+        sample_count = len(logdata["target"])
+        for sample_idx in range(sample_count):
+            if isinstance(self.report_count, int) and self.report_count >= len(all_targets):
+                logger.warning(f"report max count {self.report_count} reached at {len(all_targets)} targets "
+                               f"(sample {sample_idx}/{sample_count} processed)")
+                break
+            sample_targets = logdata["target"][sample_idx]
+            sample_detects = logdata["detect"][sample_idx]
+            sample_report = self.group_bbox(sample_targets, sample_detects)
+            for target in sample_report:
+                target.update(self.meta[sample_idx])
+                target["target"] = {
+                    "bbox": target["target"],
+                    "class_name": self.class_names[target["target"].class_id]
+                }
+            all_targets.extend(sample_report)
+        return all_targets
+
+    def report_json(self):
+        # type: () -> Optional[AnyStr]
+        """Returns the logged metadata of predicted bounding boxes as a JSON formatted string."""
+        report = self.gen_report()
+        if not report:
+            return None
+        for item in report:
+            if isinstance(item["target"]["bbox"], BoundingBox):
+                item["target"].update(item["target"].pop("bbox").json())
+                item["target"]["class_name"] = self.class_names[item["target"]["class_id"]]
+            for det in item["detect"]:
+                if isinstance(det["bbox"], BoundingBox):
+                    det.update(det.pop("bbox").json())
+                    det["class_name"] = self.class_names[det["class_id"]]
+        return json.dumps(report, indent=4)
+
     def report_text(self):
         # type: () -> Optional[AnyStr]
         return self.report_csv()
@@ -661,37 +797,39 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         """Returns the logged metadata of predicted bounding boxes.
 
         The returned object is a print-friendly CSV string.
-        Note that this string might be very long if the dataset is large (i.e. it will contain one line per sample)
-        or if the model tends to generate a lot of bbox proposals.
+
+        Note that this string might be very long if the dataset is large or if the model tends to generate a lot of
+        detections. The string will contain at least :math:`N_sample \cdot N_target` lines and each line will have
+        up to :math:`N_bbox` detections, unless limitted by configuration parameters.
         """
-        if self.report_count is not None and self.report_count == 0:
+        report = self.report_json()
+        if not report:
             return None
-        if self.bbox is None or self.true is None:
-            return None
-        pack = list(zip(*[(*pack,) for packs in zip(self.bbox, self.true, *self.meta.values())
-                          if packs[1] is not None for pack in zip(*packs)]))
-        logdata = {key: np.stack(val, axis=0) for key, val in zip(["pred", "target", *self.meta.keys()], pack)}
-        assert all([len(val) == len(logdata["target"]) for val in logdata.values()]), "messed up unpacking"
-        header = "target_name,target_score"
-        for k in range(self.top_k):
-            header += f",pred_{k + 1}_name,pred_{k + 1}_score"
+
+        def patch_none(to_patch, number_format='2.4f'):
+            if to_patch is None:
+                return "unknown"
+            return f"{to_patch}{f':{number_format}' if number_format and isinstance(to_patch, (int, float)) else ''}"
+
+        header = "sample,target_name,target_bbox"
         for meta_key in self.log_keys:
             header += f",{str(meta_key)}"
-        lines = []
-        for sample_idx in range(len(logdata["target"])):
-            gt_label_idx = int(logdata["target"][sample_idx])
-            pred_scores = logdata["pred"][sample_idx]
-            sorted_score_idxs = np.argsort(pred_scores)[::-1]
-            sorted_scores = pred_scores[sorted_score_idxs]
-            if self.conf_threshold is None or pred_scores[gt_label_idx] < self.conf_threshold:
-                entry = f"{self.class_names[gt_label_idx]},{pred_scores[gt_label_idx]:2.4f}"
-                for k in range(self.top_k):
-                    entry += f",{self.class_names[sorted_score_idxs[k]]},{sorted_scores[k]:2.4f}"
-                for meta_key in self.log_keys:
-                    entry += f",{str(logdata[meta_key][sample_idx])}"
-                lines.append(entry)
-                if self.report_count is not None and len(lines) >= self.report_count:
-                    break
+        if self.top_k:
+            for k in range(self.top_k):
+                header += f",detect_{k + 1}_name,detect_{k + 1}_bbox,detect_{k + 1}_conf,detect_{k + 1}_iou"
+        else:
+            # unknown count total detections (can be variable)
+            header += f",detect_name[N],detect_bbox[N],detect_conf[N],detect_iou[N],(...)[N]"
+        lines = [""] * len(report)
+        for i, target in enumerate(report):
+            entry = f"{target['image_id']},{patch_none(target['class_name'])},{patch_none(target['bbox'])}"
+            for meta_key in self.log_keys:
+                entry += f",{str(target[meta_key])}"
+            if not len(target["detect"]):
+                entry += patch_none(None)
+            for det in target["detect"]:
+                entry += f",{det['class_name']},{det['bbox']},{patch_none(det['confidence'])},{patch_none(det['iou'])}"
+            lines[i] = entry
         return "\n".join([header, *lines])
 
     def reset(self):
