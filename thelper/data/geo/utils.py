@@ -297,3 +297,29 @@ def get_feature_roi(geom, px_size, skew, roi_buffer=None, crop_img_size=None, cr
     roi_br = get_geocoord(offset_geotransform, roi_br_offsetpx[0], roi_br_offsetpx[1])
     roi = shapely.geometry.Polygon([roi_tl, (roi_br[0], roi_tl[1]), roi_br, (roi_tl[0], roi_br[1])])
     return roi, roi_tl, roi_br, crop_width, crop_height
+
+
+def export_geotiff(filepath, crop, srs, geotransform):
+    assert isinstance(filepath, str), "filepath should be given as string"
+    assert isinstance(crop, np.ndarray), "crop data should be given as numpy array"
+    assert crop.ndim == 2 or crop.ndim == 3, "crop array should be 2D or 3D"
+    assert isinstance(srs, (str, int, osr.SpatialReference)), \
+        "target EPSG SRS must be given as int/str"
+    if isinstance(srs, (str, int)):
+        if isinstance(srs, str):
+            srs_target = int(srs.replace("EPSG:", ""))
+        srs_target_obj = osr.SpatialReference()
+        srs_target_obj.ImportFromEPSG(srs)
+        srs_target = srs_target_obj
+    assert isinstance(geotransform, (list, tuple, np.ndarray)) and len(geotransform) == 6, \
+        "geotransform should be given as array of [x, px_w, sk_x, y, sk_y, px_h]"
+    raster_size = crop.shape[1], crop.shape[0]
+    raster_bands = crop.shape[2]
+    driver = gdal.GetDriverByName("GTiff")
+    dataset = driver.Create(filepath, *raster_size, raster_bands, NUMPY2GDAL_TYPE_CONV[crop.dtype])
+    dataset.SetGeoTransform(geotransform)
+    dataset.SetProjection(srs.ExportToWkt())
+    for b in range(raster_bands):
+        dataset.GetRasterBand(b + 1).WriteArray(crop[:, :, b])
+    dataset.FlushCache()
+    dataset = None  # close fd
