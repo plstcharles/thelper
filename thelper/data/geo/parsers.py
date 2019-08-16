@@ -1,5 +1,6 @@
 """Geospatial data parser & utilities module."""
 
+import functools
 import hashlib
 import json
 import logging
@@ -27,7 +28,8 @@ class VectorCropDataset(thelper.data.Dataset):
                  vector_area_min=0.0, vector_area_max=float("inf"),
                  vector_target_prop=None, vector_roi_buffer=None,
                  srs_target="3857", raster_key="raster", mask_key="mask",
-                 force_parse=False, reproj_rasters=False, reproj_all_cpus=True,
+                 cleaner=None, cropper=None, force_parse=False,
+                 reproj_rasters=False, reproj_all_cpus=True,
                  keep_rasters_open=True, transforms=None):
         # before anything else, create a hash to cache parsed data
         cache_hash = hashlib.sha1(str({k: v for k, v in vars().items() if not k.startswith("_") and k != "self"}).encode()) \
@@ -44,8 +46,8 @@ class VectorCropDataset(thelper.data.Dataset):
         assert skew is None or \
             (isinstance(skew, (list, tuple)) and all([isinstance(i, (float, int)) for i in skew]) and len(skew) == 2) or \
             isinstance(skew, (float, int)), "pixel skew must be float/int or list/tuple"
-        self.skew = (0.0, 0.0) if px_size is None else (float(px_size[0]), float(px_size[1])) \
-            if isinstance(px_size, (list, tuple)) else (float(px_size), float(px_size))
+        self.skew = (0.0, 0.0) if skew is None else (float(skew[0]), float(skew[1])) \
+            if isinstance(skew, (list, tuple)) else (float(skew), float(skew))
         assert isinstance(allow_outlying_vectors, bool), "unexpected flag type"
         assert isinstance(clip_outlying_vectors, bool), "unexpected flag type"
         assert isinstance(force_parse, bool), "unexpected flag type"
@@ -85,31 +87,71 @@ class VectorCropDataset(thelper.data.Dataset):
         self.mask_key = mask_key
         super().__init__(transforms=transforms)
         self.rasters_data, self.coverage = self._parse_rasters(self.raster_path, self.srs_target, reproj_rasters)
+        if cleaner is None:
+            cleaner = functools.partial(self._default_feature_cleaner, area_min=self.area_min,
+                                        area_max=self.area_max, target_prop=self.target_prop)
         self.features = self._parse_features(self.vector_path, self.srs_target, self.coverage, cache_hash,
-                                             self.allow_outlying, self.clip_outlying, self._default_feature_cleaner)
-        self.samples, meta_keys = self._parse_crops(self.features, self.rasters_data, self._default_feature_cropper,
-                                                    self.vector_path, cache_hash)
+                                             self.allow_outlying, self.clip_outlying, cleaner)
+        if cropper is None:
+            cropper = functools.partial(self._default_feature_cropper, px_size=self.px_size,
+                                        skew=self.skew, roi_buffer=self.roi_buffer)
+        self.samples = self._parse_crops(self.features, self.rasters_data, cropper, self.vector_path, cache_hash)
+        # all keys already in sample dicts should be 'meta'; mask & raster will be added later
+        meta_keys = list(set([k for s in self.samples for k in s]))
+        if self.mask_key not in meta_keys:
+            meta_keys.append(self.mask_key)
         # create default task without gt specification (this is a pretty basic parser)
         self.task = thelper.tasks.Task(input_key=self.raster_key, meta_keys=meta_keys)
         self.display_debug = False  # for internal debugging purposes only
 
-    def _default_feature_cleaner(self, features):
+    @staticmethod
+    def _default_feature_cleaner(features, area_min, area_max, target_prop=None):
         """Flags geometric features as 'clean' based on some criteria (may be modified in derived classes)."""
         # note: we use a flag here instead of removing bad features so that end-users can still use them if needed
-        for feat in features:
-            assert isinstance(feat, dict) and "clean" not in feat
-            feat["clean"] = True
-            if self.target_prop is not None and "properties" in feat and isinstance(feat["properties"], dict):
-                if not all([k in feat["properties"] and feat["properties"][k] == v for k, v in self.target_prop.items()]):
-                    feat["clean"] = False
-            if not (self.area_min <= feat["geometry"].area <= self.area_max):
-                feat["clean"] = False
+        for feature in tqdm.tqdm(features, desc="cleaning up features"):
+            assert isinstance(feature, dict) and "clean" not in feature
+            feature["clean"] = True
+            if target_prop is not None and "properties" in feature and isinstance(feature["properties"], dict):
+                if not all([k in feature["properties"] and feature["properties"][k] == v for k, v in target_prop.items()]):
+                    feature["clean"] = False
+            if not (area_min <= feature["geometry"].area <= area_max):
+                feature["clean"] = False
         return features
 
-    def _default_feature_cropper(self, feature):
-        """Returns the ROI information for a given feature (may be modified in derived classes)."""
+    @staticmethod
+    def _default_feature_cropper(features, rasters_data, px_size, skew, roi_buffer):
+        """Returns the samples for a set of features (may be modified in derived classes)."""
         # note: default behavior = just center on the feature, and pad if required by user
-        return geo.utils.get_feature_roi(feature["geometry"], self.px_size, self.skew, self.roi_buffer)
+        samples = []
+        for feature in tqdm.tqdm(features, desc="preparing crop regions"):
+            assert "clean" in feature, "cleaner should have added 'clean' flag to each feature"
+            if not feature["clean"]:
+                continue  # skip (will not use bad features as the origin of a 'sample')
+            roi, roi_tl, roi_br, crop_width, crop_height = \
+                geo.utils.get_feature_roi(feature["geometry"], px_size, skew, roi_buffer)
+            # test all raster regions that touch the selected feature
+            roi_hits = []
+            for raster_idx, raster_data in enumerate(rasters_data):
+                if raster_data["target_roi"].intersects(roi):
+                    roi_hits.append(raster_idx)
+            # make list of all other features that may be included in the roi
+            roi_radius = np.linalg.norm(np.asarray(roi_tl) - np.asarray(roi_br)) / 2
+            roi_features = [f for f in features if feature["centroid"].distance(f["centroid"]) <= roi_radius and
+                            f["geometry"].intersects(roi)]
+            # prepare actual 'sample' for crop generation at runtime
+            samples.append({
+                "features": roi_features,
+                "focal": feature,
+                "roi": roi,
+                "roi_tl": roi_tl,
+                "roi_br": roi_br,
+                "roi_hits": roi_hits,
+                "crop_width": crop_width,
+                "crop_height": crop_height,
+                "geotransform": (roi_tl[0], px_size[0], skew[0],
+                                 roi_tl[1], skew[1], px_size[1]),
+            })
+        return samples
 
     @staticmethod
     def _parse_rasters(path, srs, reproj_rasters):
@@ -149,7 +191,6 @@ class VectorCropDataset(thelper.data.Dataset):
                 vector_data = json.load(vector_fd)
             features = geo.utils.parse_geojson(vector_data, srs_target=srs, roi=roi,
                                                allow_outlying=allow_outlying, clip_outlying=clip_outlying)
-            logger.debug(f"cleaning up {len(features)} features...")
             features = cleaner(features)
             if cache_file_path is not None:
                 logger.debug(f"caching clean data to '{cache_file_path}'...")
@@ -171,49 +212,16 @@ class VectorCropDataset(thelper.data.Dataset):
             with open(cache_file_path, "rb") as fd:
                 samples = pickle.load(fd)
         else:
-            samples = []
+            samples = cropper(features, rasters_data)
             srs_target_wkt = self.srs_target.ExportToWkt()
-            for feature in tqdm.tqdm(features, desc="preparing crop regions"):
-                if not feature["clean"]:
-                    continue  # skip (will not use bad features as the origin of a 'sample')
-                roi, roi_tl, roi_br, crop_width, crop_height = cropper(feature)
-                # test all raster regions that touch the selected feature
-                roi_hits, roi_geoms = [], []
-                for raster_idx, raster_data in enumerate(rasters_data):
-                    inters_geometry = raster_data["target_roi"].intersection(roi)
-                    if not inters_geometry.is_empty:
-                        assert inters_geometry.geom_type in ["Polygon", "MultiPolygon"], "unexpected inters geom type"
-                        roi_hits.append(raster_idx)
-                        roi_geoms.append(inters_geometry)
-                # make list of all other features that may be included in the roi
-                roi_radius = np.linalg.norm(np.asarray(roi_tl) - np.asarray(roi_br)) / 2
-                roi_features = [f for f in features if feature["centroid"].distance(f["centroid"]) <= roi_radius and
-                                f["geometry"].intersects(roi)]
-                # prepare actual 'sample' for crop generation at runtime
-                samples.append({
-                    "features": roi_features,
-                    "clipped_flags": [f["clipped"] or not roi.contains(f["geometry"]) for f in roi_features],
-                    "focal": feature,
-                    "roi": roi,
-                    "roi_tl": roi_tl,
-                    "roi_br": roi_br,
-                    "roi_hits": roi_hits,
-                    "roi_geoms": roi_geoms,
-                    "crop_width": crop_width,
-                    "crop_height": crop_height,
-                    "srs": srs_target_wkt,
-                    "geotransform": (roi_tl[0], self.px_size[0], self.skew[0],
-                                     roi_tl[1], self.skew[1], self.px_size[1]),
-                })
+            for sample in samples:
+                assert "srs" not in sample, "target srs must be added by _parse_crops"
+                sample["srs"] = srs_target_wkt
             if cache_file_path is not None:
                 logger.debug(f"caching crop data to '{cache_file_path}'...")
                 with open(cache_file_path, "wb") as fd:
                     pickle.dump(samples, fd)
-        # there's lots of 'meta' info here that might not be 'batchable', but useful anyway...
-        meta_keys = ["features", "focal", "roi", "roi_tl", "roi_br",
-                     "roi_hits", "roi_geoms", "crop_width", "crop_height",
-                     "srs", "geotransform", self.mask_key]  # yeah, there's a lot, deal with it
-        return samples, meta_keys
+        return samples
 
     def _process_crop(self, sample):
         """Returns a crop for a specific (internal) set of sampled features."""
