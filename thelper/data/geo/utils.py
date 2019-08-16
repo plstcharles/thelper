@@ -307,10 +307,10 @@ def export_geotiff(filepath, crop, srs, geotransform):
         "target EPSG SRS must be given as int/str"
     if isinstance(srs, (str, int)):
         if isinstance(srs, str):
-            srs_target = int(srs.replace("EPSG:", ""))
-        srs_target_obj = osr.SpatialReference()
-        srs_target_obj.ImportFromEPSG(srs)
-        srs_target = srs_target_obj
+            srs = int(srs.replace("EPSG:", ""))
+        srs_obj = osr.SpatialReference()
+        srs_obj.ImportFromEPSG(srs)
+        srs = srs_obj
     assert isinstance(geotransform, (list, tuple, np.ndarray)) and len(geotransform) == 6, \
         "geotransform should be given as array of [x, px_w, sk_x, y, sk_y, px_h]"
     raster_size = crop.shape[1], crop.shape[0]

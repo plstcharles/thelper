@@ -47,7 +47,7 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
                          allow_outlying_vectors=allow_outlying_vectors, clip_outlying_vectors=clip_outlying_vectors,
                          vector_area_min=lake_area_min, vector_area_max=lake_area_max,
                          vector_target_prop=None, vector_roi_buffer=roi_buffer, srs_target=srs_target,
-                         raster_key="lidar", mask_key="hydro",  cleaner=cleaner, cropper=cropper,
+                         raster_key="lidar", mask_key="hydro", cleaner=cleaner, cropper=cropper,
                          force_parse=force_parse, reproj_rasters=reproj_rasters, reproj_all_cpus=reproj_all_cpus,
                          keep_rasters_open=keep_rasters_open, transforms=transforms)
         meta_keys = self.task.meta_keys
@@ -190,7 +190,8 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
         dmap *= self.px_size[0]  # constructor enforces same px width/height size
         # dc mask is crop.mask, but most likely lost below
         if self.display_debug:
-            crop = cv.normalize(crop, dst=crop, alpha=0, beta=255, norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U, mask=(~crop.mask).astype(np.uint8))
+            crop = cv.normalize(crop, dst=crop, alpha=0, beta=255, norm_type=cv.NORM_MINMAX,
+                                dtype=cv.CV_8U, mask=(~crop.mask).astype(np.uint8))
             mask = cv.normalize(mask, dst=mask, alpha=0, beta=255, norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U)
             dmap = cv.normalize(dmap, dst=dmap, alpha=0, beta=255, norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U)
         sample = {
