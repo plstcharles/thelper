@@ -1,7 +1,6 @@
 """Geospatial data parser & utilities module."""
 
 import functools
-import hashlib
 import json
 import logging
 import os
@@ -32,8 +31,8 @@ class VectorCropDataset(thelper.data.Dataset):
                  reproj_rasters=False, reproj_all_cpus=True,
                  keep_rasters_open=True, transforms=None):
         # before anything else, create a hash to cache parsed data
-        cache_hash = hashlib.sha1(str({k: v for k, v in vars().items() if not k.startswith("_") and k != "self"}).encode()) \
-            if not force_parse else None
+        cache_hash = thelper.utils.get_params_hash(
+            {k: v for k, v in vars().items() if not k.startswith("_") and k != "self"}) if not force_parse else None
         assert isinstance(raster_path, str), f"raster file/folder path should be given as string"
         assert isinstance(vector_path, str), f"vector file/folder path should be given as string"
         self.raster_path = raster_path
@@ -180,7 +179,7 @@ class VectorCropDataset(thelper.data.Dataset):
         logger.info(f"parsing vectors from path '{path}'...")
         assert os.path.isfile(path) and path.endswith("geojson"), \
             "vector file must be provided as geojson (shapefile support still incomplete)"
-        cache_file_path = os.path.join(os.path.dirname(path), cache_hash.hexdigest() + ".feats.pkl") \
+        cache_file_path = os.path.join(os.path.dirname(path), cache_hash + ".feats.pkl") \
             if cache_hash else None
         if cache_file_path is not None and os.path.exists(cache_file_path):
             logger.debug(f"parsing cached feature data from '{cache_file_path}'...")
@@ -196,7 +195,7 @@ class VectorCropDataset(thelper.data.Dataset):
                 logger.debug(f"caching clean data to '{cache_file_path}'...")
                 with open(cache_file_path, "wb") as fd:
                     pickle.dump(features, fd)
-        logger.debug(f"post-cleaning resulted in {len([f for f in features if f['clean']])} features of interest")
+        logger.debug(f"cleanup resulted in {len([f for f in features if f['clean']])} features of interest")
         return features
 
     def _parse_crops(self, features, rasters_data, cropper, path, cache_hash):
@@ -205,7 +204,7 @@ class VectorCropDataset(thelper.data.Dataset):
         Each 'crop' corresponds to a sample that can be loaded at runtime.
         """
         logger.info(f"preparing crops using {len(features)} features (total)...")
-        cache_file_path = os.path.join(os.path.dirname(path), cache_hash.hexdigest() + ".crops.pkl") \
+        cache_file_path = os.path.join(os.path.dirname(path), cache_hash + ".crops.pkl") \
             if cache_hash else None
         if cache_file_path is not None and os.path.exists(cache_file_path):
             logger.debug(f"parsing cached crop data from '{cache_file_path}'...")

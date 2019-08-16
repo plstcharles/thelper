@@ -6,10 +6,14 @@
             "params": {
                 "raster_path": "data/testbed15/*.tif",
                 "vector_path": "data/testbed15/hydro_original.geojson",
-                "lake_area_min": 10,
+                "px_size": 3,
+                "lake_area_min": 100,
                 "lake_area_max": 200000,
+                "lake_river_max_dist": 300,
+                "roi_buffer": 1000,
                 "srs_target": "3857",
-                "reproj_rasters": true
+                "reproj_rasters": true,
+                "display_debug": true
             }
         }
     },
