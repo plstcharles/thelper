@@ -7,6 +7,7 @@ import copy
 import errno
 import functools
 import glob
+import hashlib
 import importlib
 import importlib.util
 import inspect
@@ -497,7 +498,6 @@ def download_file(url, root, filename, md5=None):
         sys.stdout.write("\r")
         sys.stdout.flush()
     if md5 is not None:
-        import hashlib
         md5o = hashlib.md5()
         with open(fpath, 'rb') as f:
             for chunk in iter(lambda: f.read(1024 * 1024), b''):
@@ -1958,3 +1958,10 @@ def get_file_paths(input_path, data_root, allow_glob=False, can_be_dir=False):
         elif not os.path.isfile(input_path) and not (can_be_dir and os.path.isdir(input_path)):
             raise AssertionError("invalid input file at path '%s'" % input_path)
     return [input_path]
+
+
+def get_params_hash(*args, **kwargs):
+    """Returns a sha1 hash for the given list of parameters (useful for caching)."""
+    # by default, will use the repr of all params but remove the 'at 0x00000000' addresses
+    clean_str = re.sub(" at 0x[a-f\d]+", "", str(args) + str(kwargs))
+    return hashlib.sha1(clean_str.encode()).hexdigest()
