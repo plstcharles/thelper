@@ -256,8 +256,6 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         assert report_count is None or (isinstance(report_count, int) and report_count >= 0), \
             "invalid report sample count"
         assert log_keys is None or isinstance(log_keys, list), "invalid list of sample keys to log"
-        ClassNamesHandler.__init__(self, class_names)
-        FormatHandler.__init__(self, format)
         self.top_k = top_k
         self.target_name = target_name
         self.target_idx = None
@@ -269,6 +267,8 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         self.score = None
         self.true = None
         self.meta = None
+        ClassNamesHandler.__init__(self, class_names)
+        FormatHandler.__init__(self, format)
 
     def __repr__(self):
         """Returns a generic print-friendly string containing info about this consumer."""
@@ -315,6 +315,7 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         if task.class_names != self.class_names:
             self.set_class_names(task.class_names)
         if target is None or target.numel() == 0:
+            # FIXME: we should still accumulate predictions on missing targets for evalution-only logging
             # only accumulate results when groundtruth is available
             self.score[iter_idx] = None
             self.true[iter_idx] = None
@@ -435,14 +436,13 @@ class ClassifReport(PredictionConsumer, ClassNamesHandler, FormatHandler):
             digits: metrics output digit count, forwarded to ``sklearn.metrics.classification_report``.
             format: output format of the produced log.
         """
-
-        ClassNamesHandler.__init__(self, class_names)
-        FormatHandler.__init__(self, format)
         self.class_names = None
         self.sample_weight = sample_weight
         self.digits = digits
         self.pred = None
         self.target = None
+        ClassNamesHandler.__init__(self, class_names)
+        FormatHandler.__init__(self, format)
 
     def __repr__(self):
         """Returns a generic print-friendly string containing info about this consumer."""
@@ -477,7 +477,6 @@ class ClassifReport(PredictionConsumer, ClassNamesHandler, FormatHandler):
             self.target = np.asarray([None] * max_iters)
         if task.class_names != self.class_names:
             self.set_class_names(task.class_names)
-        # FIXME: we should still accumulate predictions on missing targets for evalution-only logging
         if target is None or target.numel() == 0:
             # only accumulate results when groundtruth is available
             self.pred[iter_idx] = None
@@ -594,8 +593,6 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         assert report_count is None or (
             isinstance(report_count, int) and report_count >= 0), "invalid report sample count"
         assert log_keys is None or isinstance(log_keys, list), "invalid list of sample keys to log"
-        ClassNamesHandler.__init__(self, class_names)
-        FormatHandler.__init__(self, format)
         self.top_k = top_k
         self.target_name = target_name
         self.target_idx = None
@@ -607,6 +604,8 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         self.bbox = None    # type: Optional[thelper.typedefs.DetectionPredictionType]
         self.true = None    # type: Optional[thelper.typedefs.DetectionTargetType]
         self.meta = None    # type: Optional[Dict[AnyStr, List[Any]]]
+        ClassNamesHandler.__init__(self, class_names)
+        FormatHandler.__init__(self, format)
 
     def __repr__(self):
         """Returns a generic print-friendly string containing info about this consumer."""
