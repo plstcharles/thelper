@@ -6,7 +6,6 @@ data loaded via a dataset parser.
 
 import abc
 import collections
-import json
 import logging
 import os
 

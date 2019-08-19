@@ -14,7 +14,6 @@ import inspect
 import io
 import itertools
 import json
-import yaml
 import logging
 import math
 import os
@@ -32,6 +31,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sklearn.metrics
 import torch
+import yaml
 
 import thelper.typedefs  # noqa: F401
 

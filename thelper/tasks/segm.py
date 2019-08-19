@@ -12,8 +12,8 @@ import PIL.Image
 import torch
 import tqdm
 
-from thelper.tasks.utils import Task
 import thelper.utils
+from thelper.tasks.utils import Task
 
 logger = logging.getLogger(__name__)
 

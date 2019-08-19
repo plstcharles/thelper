@@ -3,7 +3,6 @@
 This module contains classes that define object detection utilities and task interfaces.
 """
 import copy
-import json
 import logging
 import os
 from typing import Optional  # noqa: F401
@@ -12,9 +11,9 @@ import numpy as np
 import torch
 import tqdm
 
+import thelper.utils
 from thelper.tasks.regr import Regression
 from thelper.tasks.utils import Task
-import thelper.utils
 
 logger = logging.getLogger(__name__)
 
