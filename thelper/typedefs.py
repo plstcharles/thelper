@@ -28,10 +28,12 @@ if TYPE_CHECKING:
     ArrayDType = TypeVar('ArrayDType', bound=np.generic)
     ArrayShape = TypeVar('ArrayShape', bound=Iterable[int])
     T = TypeVar('T')
+
     class ndarray(Generic[ArrayDType, ArrayShape]):  # noqa: E306  # name must match original exactly
         @property
-        def shape(self):    # type: (...) -> Tuple[int]
+        def shape(self):    # type: (...) -> Union[Tuple[int], Tuple[()]]
             return ()
+
     ArrayOfType = ndarray
 
     # specialized arrays

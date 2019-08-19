@@ -591,7 +591,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
             "detection IoU threshold should be 'None' or number in [0, 1]"
         assert isinstance(viz_count, int) and viz_count >= 0, "invalid image count to visualize"
         assert report_count is None or (
-                isinstance(report_count, int) and report_count >= 0), "invalid report sample count"
+            isinstance(report_count, int) and report_count >= 0), "invalid report sample count"
         assert log_keys is None or isinstance(log_keys, list), "invalid list of sample keys to log"
         ClassNamesHandler.__init__(self, class_names)
         FormatHandler.__init__(self, format)
@@ -657,10 +657,10 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
             assert len(pred) == len(target), "prediction/target bounding boxes list batch size mismatch"
             for gt in target:
                 assert all(isinstance(bbox, BoundingBox) for bbox in gt), \
-                           "detect logger only supports 2D lists of bounding box targets"
+                    "detect logger only supports 2D lists of bounding box targets"
         for det in pred:
             assert all(isinstance(bbox, BoundingBox) for bbox in det), \
-                       "detect logger only supports 2D lists of bounding box predictions"
+                "detect logger only supports 2D lists of bounding box predictions"
         self.bbox[iter_idx] = pred
         self.true[iter_idx] = target
         for meta_key in self.log_keys:
@@ -816,7 +816,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
 
     def report_csv(self):
         # type: () -> Optional[AnyStr]
-        """Returns the logged metadata of predicted bounding boxes.
+        r"""Returns the logged metadata of predicted bounding boxes.
 
         The returned object is a print-friendly CSV string.
 
