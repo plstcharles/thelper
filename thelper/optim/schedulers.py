@@ -39,6 +39,9 @@ class CustomStepLR(torch.optim.lr_scheduler._LRScheduler):
             80: 0.01
         })
         for epoch in range(100):
+            # note: we can call the scheduler's step function before optimizing, as
+            # we provide it with the epoch index directly --- this is not the case
+            # typically with default pytorch schedulers (and it changed beyond v1.1)
             scheduler.step(epoch)
             train(...)
             validate(...)
