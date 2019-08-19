@@ -526,7 +526,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
 
     This class provides a simple logging interface for accumulating and saving the bounding boxes of an
     object detector. By default, all detections will be logged. However, a confidence threshold can be set
-    to focus on "hard" samples if necessary.
+    to focus on strong predictions if necessary.
 
     .. todo::
         It also optionally offers tensorboardX-compatible output images that can be saved
@@ -543,7 +543,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
                 # this type is used to instantiate the confusion matrix report object
                 "type": "thelper.train.utils.DetectLogger",
                 "params": {
-                    # (optional) log the three 'best' detection for each target
+                    # (optional) log the three 'best' detections for each target
                     "top_k": 3
                 }
             },
@@ -552,7 +552,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         # ...
 
     Attributes:
-        top_k: number of 'best' detections to keep for each target sample (along with the target label).
+        top_k: number of 'best' detections to keep for each target bbox (along with the target label).
             If omitted, lists all bounding box predictions by the model after applying IoU and confidence thresholds.
         conf_threshold: threshold used to eliminate uncertain predictions (if they support confidence).
             If confidence is not supported by the model bbox predictions, this parameter is ignored.
