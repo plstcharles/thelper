@@ -17,6 +17,7 @@ develop-eggs
 lib
 lib64
 /data
+env/
 venv*/
 pyvenv*/
 pip-log.txt

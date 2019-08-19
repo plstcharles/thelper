@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.optim
 
+import thelper.concepts
 import thelper.typedefs as typ  # noqa: F401
 import thelper.utils
 from thelper.train.base import Trainer
@@ -13,6 +14,7 @@ from thelper.train.base import Trainer
 logger = logging.getLogger(__name__)
 
 
+@thelper.concepts.regression
 class RegressionTrainer(Trainer):
     """Trainer interface specialized for generic (n-dim) regression.
 

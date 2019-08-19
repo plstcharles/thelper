@@ -11,6 +11,7 @@ import thelper
 
 
 def compute_iou(bbox1, bbox2):
+    # type: (thelper.tasks.detect.BoundingBox, thelper.tasks.detect.BoundingBox) -> float
     """Computes and returns the Intersection over Union (IoU) of two bounding boxes."""
     assert isinstance(bbox1, thelper.data.BoundingBox) and isinstance(bbox2, thelper.data.BoundingBox), \
         "unexpected input bounding box types"
@@ -21,7 +22,7 @@ def compute_iou(bbox1, bbox2):
         intersection_width += 1
         intersection_height += 1
     intersection_area = max(0, intersection_width) * max(0, intersection_height)
-    return intersection_area / float(bbox1.area + bbox2.area - intersection_area)
+    return float(intersection_area / float(bbox1.area + bbox2.area - intersection_area))
 
 
 def compute_pascalvoc_metrics(pred_bboxes, gt_bboxes, task, iou_threshold=0.5, method="all-points"):
