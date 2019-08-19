@@ -3,7 +3,6 @@
 This module contains classes that define object detection utilities and task interfaces.
 """
 import copy
-import json
 import logging
 import os
 from typing import Optional  # noqa: F401
@@ -12,6 +11,7 @@ import numpy as np
 import torch
 import tqdm
 
+import thelper.utils
 from thelper.tasks.regr import Regression
 from thelper.tasks.utils import Task
 
@@ -375,8 +375,7 @@ class Detection(Regression):
     def class_names(self, class_names):
         """Sets the list of class names to be predicted."""
         if isinstance(class_names, str) and os.path.exists(class_names):
-            with open(class_names, "r") as fd:
-                class_names = json.load(fd)
+            class_names = thelper.utils.load_config(class_names)
         assert isinstance(class_names, (list, dict)), "expected class names to be provided as a list or map"
         if isinstance(class_names, list):
             if len(class_names) != len(set(class_names)):

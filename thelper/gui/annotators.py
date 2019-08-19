@@ -6,7 +6,6 @@ data loaded via a dataset parser.
 
 import abc
 import collections
-import json
 import logging
 import os
 
@@ -256,8 +255,7 @@ class ImageSegmentAnnotator(Annotator):
             if hasattr(dataset, "samples") and isinstance(dataset.samples, list):
                 log_content["samples"] = [str(sample) for sample in dataset.samples]
             dataset_log_file = os.path.join(annot_dir, "metadata.log")
-            with open(dataset_log_file, "w") as fd:
-                json.dump(log_content, fd, indent=4, sort_keys=False)
+            thelper.utils.save_config(log_content, dataset_log_file, as_json=True)
         self.logger.info("datasets possess a total of %d samples" % self.sample_count)
         self.curr_sample_idx = int(thelper.utils.get_key_def("start_sample_idx", config, 0))
         if self.curr_sample_idx >= self.sample_count:

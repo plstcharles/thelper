@@ -31,11 +31,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sklearn.metrics
 import torch
+import yaml
 
 import thelper.typedefs  # noqa: F401
 
 if TYPE_CHECKING:
-    from typing import List, Optional, Type  # noqa: F401
+    from typing import List, Optional, Type, NoReturn  # noqa: F401
     from types import FunctionType  # noqa: F401
 
 logger = logging.getLogger(__name__)
@@ -1067,8 +1068,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
         if config is not None:
             backup_path = os.path.join(save_dir, "config.latest" + backup_ext)
             if os.path.exists(backup_path):
-                with open(backup_path, "r") as fd:
-                    config_backup = json.load(fd)
+                config_backup = thelper.utils.load_config(backup_path)
                 if config_backup != config:
                     query_msg = f"Config backup in '{backup_path}' differs from config loaded through checkpoint; overwrite?"
                     answer = query_yes_no(query_msg, bypass="y")
@@ -1086,7 +1086,26 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
     return save_dir
 
 
-def save_config(config, path, force_convert=True):
+def load_config(path, as_json=False):
+    # type: (str, bool) -> thelper.typedefs.ConfigDict
+    """Loads the configuration dictionary from the provided path.
+
+    The type of file that is loaded is based on the extension in the path.
+
+    Args:
+        path: the path specifying which configuration to be loaded.
+            only supported types are loaded unless `as_json` is `True`.
+        as_json: specifies if an alternate extension should be considered as JSON format.
+    """
+    ext = os.path.splitext(path)[-1]
+    if ext in [".json", ".yml", ".yaml"] or as_json:
+        with open(path) as fd:
+            return yaml.safe_load(fd)  # also supports json
+    raise AssertionError(f"unknown input file type: {ext}")
+
+
+def save_config(config, path, force_convert=True, as_json=False):
+    # type: (thelper.typedefs.ConfigDict, str, bool, bool) -> NoReturn
     """Saves the given session/object configuration dictionary to the provided path.
 
     The type of file that is created is based on the extension specified in the path. If the file
@@ -1097,18 +1116,24 @@ def save_config(config, path, force_convert=True):
     Args:
         config: the session/object configuration dictionary to save.
         path: the path specifying where to create the output file. The extension used will determine
-            what type of backup to create (e.g. Pickle = .pkl, JSON = .json).
+            what type of backup to create (e.g. Pickle = .pkl, JSON = .json, YAML = .yml/.yaml).
+            if `as_json` is `True`, then any specified extension will be preserved bump dumped as JSON.
         force_convert: specifies whether non-serializable types should be converted if necessary.
+        as_json: specifies if an alternate extension should be considered as JSON format.
     """
-    if path.endswith(".json"):
-        serializer = (lambda x: str(x)) if force_convert else None
+    ext = os.path.splitext(path)[-1]
+    if ext in [".json", ".yml", ".yaml"] or as_json:
         with open(path, "w") as fd:
-            json.dump(config, fd, indent=4, sort_keys=False, default=serializer)
-    elif path.endswith(".pkl"):
+            if ext == ".json" or as_json:
+                serializer = (lambda x: str(x)) if force_convert else None
+                json.dump(config, fd, indent=4, sort_keys=False, default=serializer)
+            else:
+                yaml.dump(config, fd, indent=4)
+    elif ext == ".pkl":
         with open(path, "w") as fd:
             pickle.dump(config, fd)
     else:
-        raise AssertionError("unknown output file type")
+        raise AssertionError(f"unknown output file type: {ext}")
 
 
 def save_env_list(path):

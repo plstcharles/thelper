@@ -3,7 +3,6 @@
 This module contains a class that defines the objectives of models/trainers for classification tasks.
 """
 import copy
-import json
 import logging
 import os
 from typing import Optional  # noqa: F401
@@ -56,8 +55,7 @@ class Classification(Task):
     def class_names(self, class_names):
         """Sets the list of class names to be predicted."""
         if isinstance(class_names, str) and os.path.exists(class_names):
-            with open(class_names, "r") as fd:
-                class_names = json.load(fd)
+            class_names = thelper.utils.load_config(class_names)
         if isinstance(class_names, dict):
             assert all([idx in class_names or str(idx) in class_names for idx in range(len(class_names))]), \
                 "missing class indices (all integers must be consecutive)"
