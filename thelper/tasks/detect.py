@@ -2,9 +2,7 @@
 
 This module contains classes that define object detection utilities and task interfaces.
 """
-import copy
 import logging
-import os
 from typing import List, Optional, Tuple, Union  # noqa: F401
 
 import numpy as np
@@ -12,6 +10,7 @@ import torch
 import tqdm
 
 import thelper.concepts
+import thelper.train.utils
 import thelper.utils
 from thelper.tasks.regr import Regression
 from thelper.tasks.utils import Task
@@ -357,7 +356,7 @@ class BoundingBox:
 
 
 @thelper.concepts.detection
-class Detection(Regression):
+class Detection(Regression, thelper.train.utils.ClassNamesHandler):
     """Interface for object detection tasks.
 
     This specialization requests that when given an input image, the trained model should
@@ -399,49 +398,11 @@ class Detection(Regression):
         super(Detection, self).__init__(input_key, bboxes_key, meta_keys,
                                         input_shape=input_shape, target_shape=target_shape,
                                         target_min=target_min, target_max=target_max)
-        self.class_names = class_names
+        thelper.train.utils.ClassNamesHandler.__init__(self, class_names=class_names)
+        if background is not None:
+            background = None if "background" not in self.class_indices else self.class_indices["background"]
         self.background = background
         self.color_map = color_map
-
-    @property
-    def class_names(self):
-        """Returns the list of class names to be predicted."""
-        return self._class_names
-
-    @class_names.setter
-    def class_names(self, class_names):
-        """Sets the list of class names to be predicted."""
-        if isinstance(class_names, str) and os.path.exists(class_names):
-            class_names = thelper.utils.load_config(class_names)
-        assert isinstance(class_names, (list, dict)), "expected class names to be provided as a list or map"
-        if isinstance(class_names, list):
-            if len(class_names) != len(set(class_names)):
-                # no longer throwing here, imagenet possesses such a case ('crane#134' and 'crane#517')
-                logger.warning("found duplicated name in class list, might be a data entry problem...")
-                class_names = [name if class_names.count(name) == 1 else name + "#" + str(idx)
-                               for idx, name in enumerate(class_names)]
-            class_indices = {class_name: class_idx for class_idx, class_name in enumerate(class_names)}
-        else:
-            class_indices = copy.deepcopy(class_names)
-        assert isinstance(class_indices, dict), "expected class names to be provided as a dictionary"
-        assert all([isinstance(name, str) for name in class_indices.keys()]), "all classes must be named with strings"
-        assert all([isinstance(idx, int) for idx in class_indices.values()]), "all classes must be indexed with integers"
-        assert len(class_indices) >= 1, "should have at least one class!"
-        background = None if "background" not in class_indices else class_indices["background"]
-        self._class_names = [class_name for class_name in class_indices.keys()]
-        self._class_indices = class_indices
-        self.background = background
-
-    @property
-    def class_indices(self):
-        """Returns the class-name-to-index map used for encoding labels as integers."""
-        return self._class_indices
-
-    @class_indices.setter
-    def class_indices(self, class_indices):
-        """Sets the class-name-to-index map used for encoding labels as integers."""
-        assert isinstance(class_indices, dict), "class indices must be provided as dictionary"
-        self.class_names = class_indices
 
     @property
     def background(self):

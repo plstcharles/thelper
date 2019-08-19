@@ -15,13 +15,13 @@ import sklearn.metrics
 import torch
 
 import thelper.concepts
+import thelper.train.utils
 import thelper.utils
-from thelper.train.utils import PredictionConsumer
 
 logger = logging.getLogger(__name__)
 
 
-class Metric(PredictionConsumer):
+class Metric(thelper.train.utils.PredictionConsumer):
     """Abstract metric interface.
 
     This interface defines basic functions required so that :class:`thelper.train.base.Trainer` can
@@ -489,7 +489,7 @@ class MeanSquaredError(Metric):
 
 @thelper.concepts.classification
 @thelper.concepts.segmentation
-class ExternalMetric(Metric):
+class ExternalMetric(Metric, thelper.train.utils.ClassNamesHandler):
     r"""External metric wrapping interface.
 
     This interface is used to wrap external metrics and use them in the training framework. The metrics
@@ -603,13 +603,9 @@ class ExternalMetric(Metric):
         self.metric_params = metric_params if metric_params is not None else {}
         self.target_name = target_name
         self.target_idx = None
-        self.class_names = None
         self.force_softmax = None
-        if "classif" in metric_type:
-            if class_names is not None:
-                self.set_class_names(class_names)
-            if metric_type == "classif_score":
-                self.force_softmax = force_softmax  # only useful in this case
+        if metric_type == "classif_score":
+            self.force_softmax = force_softmax  # only useful in this case
         # elif "regression" in metric_type: missing impl for custom handling @@@
         assert max_win_size is None or (isinstance(max_win_size, int) and max_win_size > 0), \
             "invalid max sliding window size (should be positive integer)"
@@ -617,6 +613,7 @@ class ExternalMetric(Metric):
         self.pred = None  # will be instantiated on first iter
         self.target = None  # will be instantiated on first iter
         self._live_eval = live_eval  # could be 'False' for external impls that are pretty slow to eval
+        thelper.train.utils.ClassNamesHandler.__init__(self, class_names)
 
     def __repr__(self):
         """Returns a generic print-friendly string containing info about this metric."""
@@ -627,7 +624,8 @@ class ExternalMetric(Metric):
             f"class_names={repr(self.class_names)}, max_win_size={repr(self.max_win_size)}, " + \
             f"force_softmax={repr(self.force_softmax)})"
 
-    def set_class_names(self, class_names):
+    @thelper.train.utils.ClassNamesHandler.class_names.setter
+    def class_names(self, class_names):
         """Sets the class label names that must be predicted by the model.
 
         This is only useful in metric handling modes related to classification. The goal of having
@@ -636,13 +634,11 @@ class ExternalMetric(Metric):
         (in string format) before being forwarded to this object by the trainer.
         """
         if "classif" in self.metric_type:
-            assert isinstance(class_names, list), "expected list for class names"
-            assert len(class_names) >= 2, "not enough classes in provided class list"
+            thelper.train.utils.ClassNamesHandler.class_names.fset(self, class_names)
             if self.target_name is not None:
-                assert self.target_name in class_names, \
+                assert self.target_name in self.class_indices, \
                     f"could not find target name {repr(self.target_name)} in class names list"
-                self.target_idx = class_names.index(self.target_name)
-            self.class_names = class_names
+                self.target_idx = self.class_indices[self.target_name]
 
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
@@ -675,7 +671,7 @@ class ExternalMetric(Metric):
         curr_idx = iter_idx % curr_win_size
         if "classif" in self.metric_type:
             if hasattr(task, "class_names") and task.class_names != self.class_names:
-                self.set_class_names(task.class_names)
+                self.class_names = task.class_names
             if target is None or target.numel() == 0:
                 # only accumulate results when groundtruth is available
                 self.pred[curr_idx] = None
@@ -743,7 +739,7 @@ class ExternalMetric(Metric):
 
 @thelper.concepts.classification
 @thelper.concepts.segmentation
-class ROCCurve(Metric):
+class ROCCurve(Metric, thelper.train.utils.ClassNamesHandler):
     """Receiver operating characteristic (ROC) computation interface.
 
     This class provides an interface to ``sklearn.metrics.roc_curve`` and ``sklearn.metrics.roc_auc_score``
@@ -835,9 +831,6 @@ class ROCCurve(Metric):
             else:  # if target_fpr is not None
                 self.target_fpr = target_fpr
         self.target_idx = None
-        self.class_names = None
-        if class_names is not None:
-            self.set_class_names(class_names)
         self.force_softmax = force_softmax
         self.sample_weight = sample_weight
         self.drop_intermediate = drop_intermediate
@@ -864,6 +857,7 @@ class ROCCurve(Metric):
         self.auc = gen_auc
         self.score = None
         self.true = None
+        thelper.train.utils.ClassNamesHandler.__init__(self, class_names)
 
     def __repr__(self):
         """Returns a generic print-friendly string containing info about this metric."""
@@ -873,20 +867,14 @@ class ROCCurve(Metric):
             f"force_softmax={repr(self.force_softmax)}, sample_weight={repr(self.sample_weight)}, " + \
             f"drop_intermediate={repr(self.drop_intermediate)})"
 
-    def set_class_names(self, class_names):
-        """Sets the class label names that must be predicted by the model.
-
-        This allows the target class name to be mapped to a target class index.
-
-        The current implementation of :class:`thelper.train.base.Trainer` will automatically
-        call this function at runtime if it is available, and provide the dataset's classes as a
-        list of strings.
-        """
-        assert isinstance(class_names, list), "expected list for class names"
-        assert len(class_names) >= 2, "not enough classes in provided class list"
-        assert self.target_name in class_names, f"could not find target {repr(self.target_name)} in class list"
-        self.target_idx = class_names.index(self.target_name)
-        self.class_names = class_names
+    @thelper.train.utils.ClassNamesHandler.class_names.setter
+    def class_names(self, class_names):
+        """Sets the class label names that must be predicted by the model."""
+        thelper.train.utils.ClassNamesHandler.class_names.fset(self, class_names)
+        if self.target_name is not None:
+            assert self.target_name in self.class_indices, \
+                f"could not find target name {repr(self.target_name)} in class names list"
+            self.target_idx = self.class_indices[self.target_name]
 
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
@@ -914,7 +902,7 @@ class ROCCurve(Metric):
             self.score = np.asarray([None] * max_iters)
             self.true = np.asarray([None] * max_iters)
         if task.class_names != self.class_names:
-            self.set_class_names(task.class_names)
+            self.class_names = task.class_names
         if target is None or target.numel() == 0:
             # only accumulate results when groundtruth is available
             self.score[iter_idx] = None

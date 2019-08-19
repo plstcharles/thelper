@@ -2,15 +2,14 @@
 
 This module contains a class that defines the objectives of models/trainers for classification tasks.
 """
-import copy
 import logging
-import os
 from typing import Optional  # noqa: F401
 
 import numpy as np
 import torch
 
 import thelper.concepts
+import thelper.train.utils
 import thelper.utils
 from thelper.tasks.utils import Task
 
@@ -18,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @thelper.concepts.classification
-class Classification(Task):
+class Classification(Task, thelper.train.utils.ClassNamesHandler):
     """Interface for input labeling/classification tasks.
 
     This specialization requests that when given an input tensor, the trained model should
@@ -46,43 +45,7 @@ class Classification(Task):
         used as-is to index dictionaries, and must therefore be key-compatible types.
         """
         super(Classification, self).__init__(input_key, label_key, meta_keys)
-        self.class_names = class_names
-
-    @property
-    def class_names(self):
-        """Returns the list of class names to be predicted."""
-        return self._class_names
-
-    @class_names.setter
-    def class_names(self, class_names):
-        """Sets the list of class names to be predicted."""
-        if isinstance(class_names, str) and os.path.exists(class_names):
-            class_names = thelper.utils.load_config(class_names)
-        if isinstance(class_names, dict):
-            assert all([idx in class_names or str(idx) in class_names for idx in range(len(class_names))]), \
-                "missing class indices (all integers must be consecutive)"
-            class_names = [thelper.utils.get_key([idx, str(idx)], class_names) for idx in range(len(class_names))]
-        assert isinstance(class_names, list), "expected class names to be provided as an array"
-        assert all([isinstance(name, str) for name in class_names]), "all classes must be named with strings"
-        assert len(class_names) >= 1, "should have at least one class!"
-        if len(class_names) != len(set(class_names)):
-            # no longer throwing here, imagenet possesses such a case ('crane#134' and 'crane#517')
-            logger.warning("found duplicated name in class list, might be a data entry problem...")
-            class_names = [name if class_names.count(name) == 1 else name + "#" + str(idx)
-                           for idx, name in enumerate(class_names)]
-        self._class_names = copy.deepcopy(class_names)
-        self._class_indices = {class_name: idx for idx, class_name in enumerate(class_names)}
-
-    @property
-    def class_indices(self):
-        """Returns the class-name-to-index map used for encoding labels as integers."""
-        return self._class_indices
-
-    @class_indices.setter
-    def class_indices(self, class_indices):
-        """Sets the class-name-to-index map used for encoding labels as integers."""
-        assert isinstance(class_indices, dict), "class indices must be provided as dictionary"
-        self.class_names = class_indices
+        thelper.train.utils.ClassNamesHandler.__init__(self, class_names=class_names)
 
     def get_class_sizes(self, samples):
         """Given a list of samples, returns a map of sample counts for each class label."""

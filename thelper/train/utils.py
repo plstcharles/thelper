@@ -5,6 +5,7 @@ the prediction consumer interface used by metrics and loggers to receive iterati
 training. See :mod:`thelper.optim.metrics` for more information on metrics.
 """
 
+import copy
 import json
 import logging
 import os
@@ -117,20 +118,55 @@ class ClassNamesHandler(ABC):
     """Generic interface to handle class names operations for inheriting classes.
 
     Attributes:
-        class_names: holds the list of class label names provided by the dataset parser.
+        class_names: holds the list of class label names.
+        class_indices: holds a mapping (dict) of class-names-to-label-indices.
     """
 
     # args and kwargs are for additional inputs that could be passed down involuntarily, but that are not necessary
     def __init__(self, class_names=None, *args, **kwargs):
         # type: (Optional[List[AnyStr]], Any, Any) -> None
-        """Initializes the class names if provided."""
-        self.class_names = None if class_names is None else self.set_class_names(class_names)
-
-    def set_class_names(self, class_names):
-        """Sets the class label names that must be predicted by the model."""
-        assert isinstance(class_names, list), "expected list for class names"
-        assert len(class_names) >= 2, "not enough classes in provided class list"
+        """Initializes the class names array, if an object is provided."""
         self.class_names = class_names
+
+    @property
+    def class_names(self):
+        """Returns the list of class names considered "of interest" by the derived class."""
+        return self._class_names
+
+    @class_names.setter
+    def class_names(self, class_names):
+        """Sets the list of class names considered "of interest" by the derived class."""
+        if class_names is None:
+            self._class_names = None
+            self._class_indices = None
+            return
+        if isinstance(class_names, str) and os.path.exists(class_names):
+            class_names = thelper.utils.load_config(class_names)
+        if isinstance(class_names, dict):
+            assert all([idx in class_names or str(idx) in class_names for idx in range(len(class_names))]), \
+                "missing class indices (all integers must be consecutive)"
+            class_names = [thelper.utils.get_key([idx, str(idx)], class_names) for idx in range(len(class_names))]
+        assert isinstance(class_names, list), "expected class names to be provided as an array"
+        assert all([isinstance(name, str) for name in class_names]), "all classes must be named with strings"
+        assert len(class_names) >= 1, "should have at least one class!"
+        if len(class_names) != len(set(class_names)):
+            # no longer throwing here, imagenet possesses such a case ('crane#134' and 'crane#517')
+            logger.warning("found duplicated name in class list, might be a data entry problem...")
+            class_names = [name if class_names.count(name) == 1 else name + "#" + str(idx)
+                           for idx, name in enumerate(class_names)]
+        self._class_names = copy.deepcopy(class_names)
+        self._class_indices = {class_name: idx for idx, class_name in enumerate(class_names)}
+
+    @property
+    def class_indices(self):
+        """Returns the class-name-to-index map used for encoding labels as integers."""
+        return self._class_indices
+
+    @class_indices.setter
+    def class_indices(self, class_indices):
+        """Sets the class-name-to-index map used for encoding labels as integers."""
+        assert class_indices is None or isinstance(class_indices, dict), "indices must be provided as dictionary"
+        self.class_names = class_indices
 
 
 class FormatHandler(ABC):
@@ -278,13 +314,14 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
             f"viz_count={repr(self.viz_count)}, report_count={repr(self.report_count)}, " + \
             f"log_keys={repr(self.log_keys)}, force_softmax={repr(self.force_softmax)})"
 
-    def set_class_names(self, class_names):
+    @ClassNamesHandler.class_names.setter
+    def class_names(self, class_names):
         """Sets the class label names that must be predicted by the model."""
-        ClassNamesHandler.set_class_names(self, class_names)
+        ClassNamesHandler.class_names.fset(self, class_names)
         if self.target_name is not None:
-            assert self.target_name in class_names, \
+            assert self.target_name in self.class_indices, \
                 f"could not find target name {repr(self.target_name)} in class names list"
-            self.target_idx = class_names.index(self.target_name)
+            self.target_idx = self.class_indices[self.target_name]
 
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
@@ -313,7 +350,7 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
             self.true = np.asarray([None] * max_iters)
             self.meta = {key: np.asarray([None] * max_iters) for key in self.log_keys}
         if task.class_names != self.class_names:
-            self.set_class_names(task.class_names)
+            self.class_names = task.class_names
         if target is None or target.numel() == 0:
             # FIXME: we should still accumulate predictions on missing targets for evalution-only logging
             # only accumulate results when groundtruth is available
@@ -476,7 +513,7 @@ class ClassifReport(PredictionConsumer, ClassNamesHandler, FormatHandler):
             self.pred = np.asarray([None] * max_iters)
             self.target = np.asarray([None] * max_iters)
         if task.class_names != self.class_names:
-            self.set_class_names(task.class_names)
+            self.class_names = task.class_names
         if target is None or target.numel() == 0:
             # only accumulate results when groundtruth is available
             self.pred[iter_idx] = None
@@ -615,13 +652,14 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
                f"viz_count={repr(self.viz_count)}, report_count={repr(self.report_count)}, " + \
                f"log_keys={repr(self.log_keys)})"
 
-    def set_class_names(self, class_names):
+    @ClassNamesHandler.class_names.setter
+    def class_names(self, class_names):
         """Sets the class label names that must be predicted by the model."""
-        ClassNamesHandler.set_class_names(self, class_names)
+        ClassNamesHandler.class_names.fset(self, class_names)
         if self.target_name is not None:
-            assert self.target_name in class_names, \
+            assert self.target_name in self.class_indices, \
                 f"could not find target name {repr(self.target_name)} in class names list"
-            self.target_idx = class_names.index(self.target_name)
+            self.target_idx = self.class_indices[self.target_name]
 
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
@@ -650,7 +688,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
             self.true = np.asarray([None] * max_iters)
             self.meta = {key: np.asarray([None] * max_iters) for key in self.log_keys}
         if task.class_names != self.class_names:
-            self.set_class_names(task.class_names)
+            self.class_names = task.class_names
         if target is None or len(target) == 0 or all(len(t) == 0 for t in target):
             target = [None] * len(pred)   # simplify unpacking during report generation
         else:
@@ -921,11 +959,11 @@ class ConfusionMatrix(PredictionConsumer, ClassNamesHandler):
             _y_pred = [_class_names[classid] if (0 <= classid < len(_class_names)) else "<unset>" for classid in y_pred]
             return sklearn.metrics.confusion_matrix(_y_true, _y_pred, labels=_class_names)
 
-        ClassNamesHandler.__init__(self, class_names)
         self.matrix = gen_matrix
         self.draw_normalized = draw_normalized
         self.pred = None
         self.target = None
+        ClassNamesHandler.__init__(self, class_names)
 
     def __repr__(self):
         """Returns a generic print-friendly string containing info about this consumer."""
@@ -958,7 +996,7 @@ class ConfusionMatrix(PredictionConsumer, ClassNamesHandler):
             self.pred = np.asarray([None] * max_iters)
             self.target = np.asarray([None] * max_iters)
         if task.class_names != self.class_names:
-            self.set_class_names(task.class_names)
+            self.class_names = task.class_names
         if target is None or target.numel() == 0:
             # only accumulate results when groundtruth is available
             self.pred[iter_idx] = None
