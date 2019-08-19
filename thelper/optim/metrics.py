@@ -635,10 +635,12 @@ class ExternalMetric(Metric, ClassNamesHandler):
         """
         if "classif" in self.metric_type:
             ClassNamesHandler.class_names.fset(self, class_names)
-            if self.target_name is not None:
+            if self.target_name is not None and self.class_names is not None:
                 assert self.target_name in self.class_indices, \
                     f"could not find target name {repr(self.target_name)} in class names list"
                 self.target_idx = self.class_indices[self.target_name]
+            else:
+                self.target_idx = None
 
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
@@ -871,10 +873,12 @@ class ROCCurve(Metric, ClassNamesHandler):
     def class_names(self, class_names):
         """Sets the class label names that must be predicted by the model."""
         ClassNamesHandler.class_names.fset(self, class_names)
-        if self.target_name is not None:
+        if self.target_name is not None and self.class_names is not None:
             assert self.target_name in self.class_indices, \
                 f"could not find target name {repr(self.target_name)} in class names list"
             self.target_idx = self.class_indices[self.target_name]
+        else:
+            self.target_idx = None
 
     def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
                task,        # type: thelper.tasks.utils.Task
