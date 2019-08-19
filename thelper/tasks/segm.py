@@ -11,15 +11,15 @@ import torch
 import tqdm
 
 import thelper.concepts
-import thelper.train.utils
 import thelper.utils
+from thelper.ifaces import ClassNamesHandler
 from thelper.tasks.utils import Task
 
 logger = logging.getLogger(__name__)
 
 
 @thelper.concepts.segmentation
-class Segmentation(Task, thelper.train.utils.ClassNamesHandler):
+class Segmentation(Task, ClassNamesHandler):
     """Interface for pixel-level labeling/classification (segmentation) tasks.
 
     This specialization requests that when given an input tensor, the trained model should
@@ -53,7 +53,7 @@ class Segmentation(Task, thelper.train.utils.ClassNamesHandler):
         to index dictionaries, and must therefore be key-compatible types.
         """
         super(Segmentation, self).__init__(input_key, label_map_key, meta_keys)
-        thelper.train.utils.ClassNamesHandler.__init__(self, class_names=class_names)
+        ClassNamesHandler.__init__(self, class_names=class_names)
         if "dontcare" in self.class_indices:
             logger.warning("found reserved 'dontcare' label in input classes; it will be removed from the internal list")
             assert dontcare is None or self.class_indices["dontcare"] == dontcare, "mismatched internal dontcare val"

@@ -9,15 +9,15 @@ import numpy as np
 import torch
 
 import thelper.concepts
-import thelper.train.utils
 import thelper.utils
+from thelper.ifaces import ClassNamesHandler
 from thelper.tasks.utils import Task
 
 logger = logging.getLogger(__name__)
 
 
 @thelper.concepts.classification
-class Classification(Task, thelper.train.utils.ClassNamesHandler):
+class Classification(Task, ClassNamesHandler):
     """Interface for input labeling/classification tasks.
 
     This specialization requests that when given an input tensor, the trained model should
@@ -45,7 +45,7 @@ class Classification(Task, thelper.train.utils.ClassNamesHandler):
         used as-is to index dictionaries, and must therefore be key-compatible types.
         """
         super(Classification, self).__init__(input_key, label_key, meta_keys)
-        thelper.train.utils.ClassNamesHandler.__init__(self, class_names=class_names)
+        ClassNamesHandler.__init__(self, class_names=class_names)
 
     def get_class_sizes(self, samples):
         """Given a list of samples, returns a map of sample counts for each class label."""

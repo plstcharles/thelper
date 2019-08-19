@@ -10,8 +10,8 @@ import torch
 import tqdm
 
 import thelper.concepts
-import thelper.train.utils
 import thelper.utils
+from thelper.ifaces import ClassNamesHandler
 from thelper.tasks.regr import Regression
 from thelper.tasks.utils import Task
 
@@ -356,7 +356,7 @@ class BoundingBox:
 
 
 @thelper.concepts.detection
-class Detection(Regression, thelper.train.utils.ClassNamesHandler):
+class Detection(Regression, ClassNamesHandler):
     """Interface for object detection tasks.
 
     This specialization requests that when given an input image, the trained model should
@@ -398,7 +398,7 @@ class Detection(Regression, thelper.train.utils.ClassNamesHandler):
         super(Detection, self).__init__(input_key, bboxes_key, meta_keys,
                                         input_shape=input_shape, target_shape=target_shape,
                                         target_min=target_min, target_max=target_max)
-        thelper.train.utils.ClassNamesHandler.__init__(self, class_names=class_names)
+        ClassNamesHandler.__init__(self, class_names=class_names)
         if background is not None:
             background = None if "background" not in self.class_indices else self.class_indices["background"]
         self.background = background

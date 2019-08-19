@@ -15,13 +15,13 @@ import sklearn.metrics
 import torch
 
 import thelper.concepts
-import thelper.train.utils
 import thelper.utils
+from thelper.ifaces import ClassNamesHandler, PredictionConsumer
 
 logger = logging.getLogger(__name__)
 
 
-class Metric(thelper.train.utils.PredictionConsumer):
+class Metric(PredictionConsumer):
     """Abstract metric interface.
 
     This interface defines basic functions required so that :class:`thelper.train.base.Trainer` can
@@ -29,7 +29,7 @@ class Metric(thelper.train.utils.PredictionConsumer):
 
     All metrics, by definition, must be 'optimizable'. This means that they should return a scalar value
     when 'evaluated' and define an optimal goal (-inf or +inf). If this is not possible, then the class
-    should probably be derived using the more generic :class:`thelper.train.utils.PredictionConsumer`
+    should probably be derived using the more generic :class:`thelper.ifaces.PredictionConsumer`
     instead.
     """
 
@@ -489,7 +489,7 @@ class MeanSquaredError(Metric):
 
 @thelper.concepts.classification
 @thelper.concepts.segmentation
-class ExternalMetric(Metric, thelper.train.utils.ClassNamesHandler):
+class ExternalMetric(Metric, ClassNamesHandler):
     r"""External metric wrapping interface.
 
     This interface is used to wrap external metrics and use them in the training framework. The metrics
@@ -613,7 +613,7 @@ class ExternalMetric(Metric, thelper.train.utils.ClassNamesHandler):
         self.pred = None  # will be instantiated on first iter
         self.target = None  # will be instantiated on first iter
         self._live_eval = live_eval  # could be 'False' for external impls that are pretty slow to eval
-        thelper.train.utils.ClassNamesHandler.__init__(self, class_names)
+        ClassNamesHandler.__init__(self, class_names)
 
     def __repr__(self):
         """Returns a generic print-friendly string containing info about this metric."""
@@ -624,7 +624,7 @@ class ExternalMetric(Metric, thelper.train.utils.ClassNamesHandler):
             f"class_names={repr(self.class_names)}, max_win_size={repr(self.max_win_size)}, " + \
             f"force_softmax={repr(self.force_softmax)})"
 
-    @thelper.train.utils.ClassNamesHandler.class_names.setter
+    @ClassNamesHandler.class_names.setter
     def class_names(self, class_names):
         """Sets the class label names that must be predicted by the model.
 
@@ -634,7 +634,7 @@ class ExternalMetric(Metric, thelper.train.utils.ClassNamesHandler):
         (in string format) before being forwarded to this object by the trainer.
         """
         if "classif" in self.metric_type:
-            thelper.train.utils.ClassNamesHandler.class_names.fset(self, class_names)
+            ClassNamesHandler.class_names.fset(self, class_names)
             if self.target_name is not None:
                 assert self.target_name in self.class_indices, \
                     f"could not find target name {repr(self.target_name)} in class names list"
@@ -739,7 +739,7 @@ class ExternalMetric(Metric, thelper.train.utils.ClassNamesHandler):
 
 @thelper.concepts.classification
 @thelper.concepts.segmentation
-class ROCCurve(Metric, thelper.train.utils.ClassNamesHandler):
+class ROCCurve(Metric, ClassNamesHandler):
     """Receiver operating characteristic (ROC) computation interface.
 
     This class provides an interface to ``sklearn.metrics.roc_curve`` and ``sklearn.metrics.roc_auc_score``
@@ -857,7 +857,7 @@ class ROCCurve(Metric, thelper.train.utils.ClassNamesHandler):
         self.auc = gen_auc
         self.score = None
         self.true = None
-        thelper.train.utils.ClassNamesHandler.__init__(self, class_names)
+        ClassNamesHandler.__init__(self, class_names)
 
     def __repr__(self):
         """Returns a generic print-friendly string containing info about this metric."""
@@ -867,10 +867,10 @@ class ROCCurve(Metric, thelper.train.utils.ClassNamesHandler):
             f"force_softmax={repr(self.force_softmax)}, sample_weight={repr(self.sample_weight)}, " + \
             f"drop_intermediate={repr(self.drop_intermediate)})"
 
-    @thelper.train.utils.ClassNamesHandler.class_names.setter
+    @ClassNamesHandler.class_names.setter
     def class_names(self, class_names):
         """Sets the class label names that must be predicted by the model."""
-        thelper.train.utils.ClassNamesHandler.class_names.fset(self, class_names)
+        ClassNamesHandler.class_names.fset(self, class_names)
         if self.target_name is not None:
             assert self.target_name in self.class_indices, \
                 f"could not find target name {repr(self.target_name)} in class names list"
