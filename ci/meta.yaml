@@ -27,6 +27,7 @@ requirements:
     - pillow
     - pip
     - python {{ python }}
+    - pyyaml
     - scikit-learn
     - scipy
     - shapely
@@ -47,6 +48,7 @@ requirements:
     - pillow
     - pip
     - python
+    - pyyaml
     - scikit-learn
     - scipy
     - shapely
