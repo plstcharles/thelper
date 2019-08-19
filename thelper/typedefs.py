@@ -3,13 +3,13 @@ Typing definitions for thelper.
 """
 
 import io
-from typing import (    # noqa: F401
-    TYPE_CHECKING, Any, AnyStr, Callable, Dict, Generic, Iterable, List, Optional, Tuple, TypeVar, Union
-)
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+
+from typing import (TYPE_CHECKING, Any, AnyStr, Callable, Dict,  # isort:skip
+                    Generic, Iterable, List, Optional, Tuple, TypeVar, Union)  # noqa: F401
 
 if TYPE_CHECKING:
     from thelper.tasks.utils import Task

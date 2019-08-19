@@ -5,6 +5,7 @@ the prediction consumer interface used by metrics and loggers to receive iterati
 training. See :mod:`thelper.optim.metrics` for more information on metrics.
 """
 
+import json
 import logging
 import os
 from abc import ABC, abstractmethod
@@ -14,10 +15,9 @@ import cv2 as cv
 import numpy as np
 import sklearn.metrics
 import torch
-import json
 
-import thelper.utils
 import thelper.typedefs  # noqa: F401
+import thelper.utils
 from thelper.optim.eval import compute_iou
 from thelper.tasks.detect import BoundingBox
 

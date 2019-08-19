@@ -36,7 +36,7 @@ import yaml
 import thelper.typedefs  # noqa: F401
 
 if TYPE_CHECKING:
-    from typing import Any, AnyStr, Callable, List, Optional, Type  # noqa: F401
+    from typing import Any, AnyStr, Callable, List, Optional, Type, Union  # noqa: F401
     from types import FunctionType  # noqa: F401
 
 SUPPORT_PREFIX = "supports_"
