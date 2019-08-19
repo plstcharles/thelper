@@ -16,6 +16,7 @@ import numpy as np
 import sklearn.metrics
 import torch
 
+import thelper.concepts
 import thelper.typedefs  # noqa: F401
 import thelper.utils
 from thelper.optim.eval import compute_iou
@@ -188,7 +189,7 @@ class FormatHandler(ABC):
         raise NotImplementedError
 
 
-@thelper.utils.supports_classification
+@thelper.concepts.classification
 class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
     """Classification output logger.
 
@@ -390,7 +391,7 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         self.meta = None
 
 
-@thelper.utils.supports_classification
+@thelper.concepts.classification
 class ClassifReport(PredictionConsumer, ClassNamesHandler, FormatHandler):
     """Classification report interface.
 
@@ -520,7 +521,7 @@ class ClassifReport(PredictionConsumer, ClassNamesHandler, FormatHandler):
         self.target = None
 
 
-@thelper.utils.supports_detection
+@thelper.concepts.detection
 class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
     """Detection output logger.
 
@@ -869,7 +870,8 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         self.meta = None
 
 
-@thelper.utils.supports_classification
+@thelper.concepts.classification
+@thelper.concepts.segmentation
 class ConfusionMatrix(PredictionConsumer, ClassNamesHandler):
     """Confusion matrix report interface.
 

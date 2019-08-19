@@ -12,13 +12,14 @@ import PIL.Image
 import torch
 import tqdm
 
+import thelper.concepts
 import thelper.utils
 from thelper.tasks.utils import Task
 
 logger = logging.getLogger(__name__)
 
 
-@thelper.utils.supports_segmentation
+@thelper.concepts.segmentation
 class Segmentation(Task):
     """Interface for pixel-level labeling/classification (segmentation) tasks.
 

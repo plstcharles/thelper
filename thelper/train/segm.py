@@ -5,6 +5,7 @@ from typing import AnyStr  # noqa: F401
 import torch
 import torch.optim
 
+import thelper.concepts
 import thelper.typedefs as typ  # noqa: F401
 import thelper.utils
 from thelper.train.base import Trainer
@@ -12,7 +13,7 @@ from thelper.train.base import Trainer
 logger = logging.getLogger(__name__)
 
 
-@thelper.utils.supports_segmentation
+@thelper.concepts.segmentation
 class ImageSegmTrainer(Trainer):
     """Trainer interface specialized for image segmentation.
 

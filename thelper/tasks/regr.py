@@ -7,13 +7,14 @@ from typing import Optional  # noqa: F401
 
 import numpy as np
 
+import thelper.concepts
 import thelper.utils
 from thelper.tasks.utils import Task
 
 logger = logging.getLogger(__name__)
 
 
-@thelper.utils.supports_regression
+@thelper.concepts.regression
 class Regression(Task):
     """Interface for n-dimension regression tasks.
 
@@ -185,7 +186,7 @@ class Regression(Task):
             f"target_min={repr(self.target_min)}, target_max={repr(self.target_max)})"
 
 
-@thelper.utils.supports_regression
+@thelper.concepts.regression
 class SuperResolution(Regression):
     """Interface for super-resolution tasks.
 

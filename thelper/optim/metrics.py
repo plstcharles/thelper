@@ -14,6 +14,7 @@ import numpy as np
 import sklearn.metrics
 import torch
 
+import thelper.concepts
 import thelper.utils
 from thelper.train.utils import PredictionConsumer
 
@@ -96,7 +97,8 @@ class Metric(PredictionConsumer):
         return True
 
 
-@thelper.utils.supports_classification
+@thelper.concepts.classification
+@thelper.concepts.segmentation
 class Accuracy(Metric):
     r"""Classification accuracy metric interface.
 
@@ -231,7 +233,7 @@ class Accuracy(Metric):
         return Metric.maximize
 
 
-@thelper.utils.supports_classification
+@thelper.concepts.regression
 class MeanAbsoluteError(Metric):
     r"""Mean absolute error metric interface.
 
@@ -358,7 +360,7 @@ class MeanAbsoluteError(Metric):
         return Metric.minimize
 
 
-@thelper.utils.supports_classification
+@thelper.concepts.regression
 class MeanSquaredError(Metric):
     r"""Mean squared error metric interface.
 
@@ -485,7 +487,8 @@ class MeanSquaredError(Metric):
         return Metric.minimize
 
 
-@thelper.utils.supports_classification
+@thelper.concepts.classification
+@thelper.concepts.segmentation
 class ExternalMetric(Metric):
     r"""External metric wrapping interface.
 
@@ -738,7 +741,8 @@ class ExternalMetric(Metric):
         return self._live_eval
 
 
-@thelper.utils.supports_classification
+@thelper.concepts.classification
+@thelper.concepts.segmentation
 class ROCCurve(Metric):
     """Receiver operating characteristic (ROC) computation interface.
 
@@ -995,7 +999,7 @@ class ROCCurve(Metric):
         return False  # some operating modes might be pretty slow, check back impl later
 
 
-@thelper.utils.supports_classification
+@thelper.concepts.regression
 class PSNR(Metric):
     r"""Peak Signal-to-Noise Ratio (PSNR) metric interface.
 
@@ -1110,7 +1114,7 @@ class PSNR(Metric):
         return Metric.maximize
 
 
-@thelper.utils.supports_detection
+@thelper.concepts.detection
 class AveragePrecision(Metric):
     r"""Object detection average precision score from PascalVOC.
 

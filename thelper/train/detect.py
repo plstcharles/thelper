@@ -8,6 +8,7 @@ import torch
 import torch.optim
 import torchvision
 
+import thelper.concepts
 import thelper.typedefs as typ  # noqa: F401
 import thelper.utils
 from thelper.train.base import Trainer
@@ -15,7 +16,7 @@ from thelper.train.base import Trainer
 logger = logging.getLogger(__name__)
 
 
-@thelper.utils.supports_detection
+@thelper.concepts.detection
 class ObjDetectTrainer(Trainer):
     """Trainer interface specialized for object detection.
 

@@ -6,6 +6,7 @@ Running ``import thelper`` will recursively import all important subpackages and
 import logging
 
 import thelper.cli  # noqa: F401
+import thelper.concepts  # noqa: F401
 import thelper.data  # noqa: F401
 import thelper.nn  # noqa: F401
 import thelper.optim  # noqa: F401

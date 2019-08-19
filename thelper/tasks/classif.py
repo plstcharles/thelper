@@ -10,13 +10,14 @@ from typing import Optional  # noqa: F401
 import numpy as np
 import torch
 
+import thelper.concepts
 import thelper.utils
 from thelper.tasks.utils import Task
 
 logger = logging.getLogger(__name__)
 
 
-@thelper.utils.supports_classification
+@thelper.concepts.classification
 class Classification(Task):
     """Interface for input labeling/classification tasks.
 
