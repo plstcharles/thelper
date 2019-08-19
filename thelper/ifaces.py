@@ -96,9 +96,17 @@ class ClassNamesHandler(ABC):
         if isinstance(class_names, str) and os.path.exists(class_names):
             class_names = thelper.utils.load_config(class_names)
         if isinstance(class_names, dict):
-            assert all([idx in class_names or str(idx) in class_names for idx in range(len(class_names))]), \
-                "missing class indices (all integers must be consecutive)"
-            class_names = [thelper.utils.get_key([idx, str(idx)], class_names) for idx in range(len(class_names))]
+            indices_as_keys = all([idx in class_names or str(idx) in class_names
+                                   for idx in range(len(class_names))])
+            indices_as_values = all([idx in class_names.values() or str(idx) in class_names.values()
+                                     for idx in range(len(class_names))])
+            assert indices_as_keys or indices_as_values, "missing class indices (all integers must be consecutive)"
+            if indices_as_keys:
+                class_names = [thelper.utils.get_key([idx, str(idx)], class_names)
+                               for idx in range(len(class_names))]
+            elif indices_as_values:
+                class_names = [k for idx in range(len(class_names))
+                               for k, v in class_names.items() if v == idx or v == str(idx)]
         assert isinstance(class_names, list), "expected class names to be provided as an array"
         assert all([isinstance(name, str) for name in class_names]), "all classes must be named with strings"
         assert len(class_names) >= 1, "should have at least one class!"
