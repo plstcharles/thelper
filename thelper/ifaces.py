@@ -142,15 +142,18 @@ class FormatHandler(ABC):
         ext: extension associated with generated format (default: "txt")
     """
 
-    # ext -> format
+    # corresponding formats should have preferred extension last
+    # extension -> format
     __formats__ = {
-        "txt": "text",
         "text": "text",
+        "txt": "text",
         "csv": "csv",
-        "yml": "yaml",
         "yaml": "yaml",
+        "yml": "yaml",
         "json": "json",
     }
+    # format -> extension
+    __fmt_ext__ = {fmt: ext for ext, fmt in __formats__.items()}
 
     # args and kwargs are for additional inputs that could be passed down involuntarily, but that are not necessary
     def __init__(self, format="text", *args, **kwargs):
@@ -162,7 +165,7 @@ class FormatHandler(ABC):
     def solve_format(self, format):
         # type: (Optional[AnyStr]) -> None
         self.format = self.__formats__.get(format, "text")
-        self.ext = format if format in self.__formats__ else "txt"
+        self.ext = self.__fmt_ext__.get(self.format, "txt")
 
     def report(self, format=None):
         # type: (AnyStr) -> Optional[AnyStr]
