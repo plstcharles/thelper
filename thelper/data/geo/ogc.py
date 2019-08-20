@@ -28,7 +28,7 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
                  lake_river_max_dist=float("inf"), roi_buffer=1000,
                  focus_lakes=True, srs_target="3857", force_parse=False,
                  reproj_rasters=False, reproj_all_cpus=True, display_debug=False,
-                 keep_rasters_open=True, transforms=None):
+                 keep_rasters_open=True, parallel=False, transforms=None):
         assert isinstance(lake_river_max_dist, (float, int)) and lake_river_max_dist >= 0, "unexpected dist type"
         self.lake_river_max_dist = float(lake_river_max_dist)
         assert isinstance(focus_lakes, bool), "unexpected flag type"
@@ -37,9 +37,10 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
         px_size = (1.0, 1.0) if px_size is None else (float(px_size), float(px_size))
         # note: we wrap partial static functions for caching to see when internal parameters are changing
         cleaner = functools.partial(self._feature_cleaner, area_min=lake_area_min, area_max=lake_area_max,
-                                    lake_river_max_dist=lake_river_max_dist)
+                                    lake_river_max_dist=lake_river_max_dist, parallel=parallel)
         if self.focus_lakes:
-            cropper = functools.partial(self._lake_cropper, px_size=px_size, skew=(0.0, 0.0), roi_buffer=roi_buffer)
+            cropper = functools.partial(self._lake_cropper, px_size=px_size, skew=(0.0, 0.0),
+                                        roi_buffer=roi_buffer, parallel=parallel)
         else:
             # TODO: implement river-focused cropper (i.e. river-length parsing?)
             raise NotImplementedError
@@ -51,7 +52,8 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
                          force_parse=force_parse, reproj_rasters=reproj_rasters, reproj_all_cpus=reproj_all_cpus,
                          keep_rasters_open=keep_rasters_open, transforms=transforms)
         meta_keys = self.task.meta_keys
-        del meta_keys[meta_keys.index("bboxes")]  # placed in meta list by base class constr, moved to detect target below
+        if "bboxes" in meta_keys:
+            del meta_keys[meta_keys.index("bboxes")]  # placed in meta list by base class constr, moved to detect target below
         self.task = thelper.tasks.Detection(class_names={"background": self.BACKGROUND_ID, "lake": self.LAKE_ID},
                                             input_key="input", bboxes_key="bboxes",
                                             meta_keys=meta_keys, background=0)
@@ -60,9 +62,10 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
             for b in s["bboxes"]:
                 b.task = self.task
         self.display_debug = display_debug
+        self.parallel = parallel
 
     @staticmethod
-    def _feature_cleaner(features, area_min, area_max, lake_river_max_dist):
+    def _feature_cleaner(features, area_min, area_max, lake_river_max_dist, parallel=False):
         """Flags geometric features as 'clean' based on type and distance to nearest river."""
         # note: we use a flag here instead of removing bad features so that end-users can still use them if needed
         for f in features:
@@ -70,24 +73,39 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
         rivers = [f for f in features if f["properties"]["TYPECE"] == TB15D104Dataset.TYPECE_RIVER]
         lakes = [f for f in features if f["properties"]["TYPECE"] == TB15D104Dataset.TYPECE_LAKE]
         logger.info(f"labeling and cleaning {len(lakes)} lakes...")
-        for lake in tqdm.tqdm(lakes, desc="labeling + cleaning lakes"):
+        def clean_lake(lake):
             if area_min <= lake["geometry"].area <= area_max:
                 if lake_river_max_dist == float("inf"):
-                    lake["clean"] = True
+                    return True
                 else:
                     for river in rivers:
+                        # note: distance check below seems to be "intelligent", i.e. it will
+                        # first check bbox distance, then check chull distance, and finally use
+                        # the full geometries (doing these steps here explicitly makes it slower)
                         if lake["geometry"].distance(river["geometry"]) < lake_river_max_dist:
-                            lake["clean"] = True
-                            break
+                            return True
+            return False
+        if parallel:
+            if not isinstance(parallel, int):
+                import multiprocessing
+                parallel = multiprocessing.cpu_count()
+            assert parallel > 0, "unexpected min core count"
+            import joblib
+            flags = joblib.Parallel(n_jobs=parallel)(joblib.delayed(
+                clean_lake)(lake) for lake in tqdm.tqdm(lakes, desc="labeling + cleaning lakes"))
+            for flag, lake in zip(flags, lakes):
+                lake["clean"] = flag
+        else:
+            for lake in tqdm.tqdm(lakes, desc="labeling + cleaning lakes"):
+                lake["clean"] = clean_lake(lake)
         return features
 
     @staticmethod
-    def _lake_cropper(features, rasters_data, px_size, skew, roi_buffer):
+    def _lake_cropper(features, rasters_data, px_size, skew, roi_buffer, parallel=False):
         """Returns the ROI information for a given feature (may be modified in derived classes)."""
-        samples = []
-        for feature in tqdm.tqdm(features, desc="preparing crop regions"):
+        def crop_feature(feature):
             if not feature["clean"]:
-                continue  # skip (will not use bad features as the origin of a 'sample')
+                return None  # skip (will not use bad features as the origin of a 'sample')
             roi, roi_tl, roi_br, crop_width, crop_height = \
                 geo.utils.get_feature_roi(feature["geometry"], px_size, skew, roi_buffer)
             roi_geotransform = (roi_tl[0], px_size[0], skew[0],
@@ -134,7 +152,7 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
                     bboxes.append(thelper.tasks.detect.BoundingBox(TB15D104Dataset.LAKE_ID, bbox=bbox,
                                                                    include_margin=False, truncated=clip))
             # prepare actual 'sample' for crop generation at runtime
-            samples.append({
+            return {
                 "features": roi_features,
                 "bboxes": bboxes,
                 "focal": feature,
@@ -145,8 +163,20 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
                 "crop_width": crop_width,
                 "crop_height": crop_height,
                 "geotransform": roi_geotransform,
-            })
-        return samples
+            }
+        if parallel:
+            if not isinstance(parallel, int):
+                import multiprocessing
+                parallel = multiprocessing.cpu_count()
+            assert parallel > 0, "unexpected min core count"
+            import joblib
+            samples = joblib.Parallel(n_jobs=parallel)(joblib.delayed(
+                crop_feature)(feat) for feat in tqdm.tqdm(features, desc="preparing crop regions"))
+        else:
+            samples = []
+            for feature in tqdm.tqdm(features, desc="preparing crop regions"):
+                samples.append(crop_feature(feature))
+        return [s for s in samples if s is not None]
 
     def _show_stats_plots(self, show=False, block=False):
         """Draws and returns feature stats histograms using pyplot."""

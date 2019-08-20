@@ -11,9 +11,10 @@
                 "lake_area_max": 200000,
                 "lake_river_max_dist": 300,
                 "roi_buffer": 1000,
-                "srs_target": "3857",
-                "reproj_rasters": true,
-                "display_debug": true
+                "srs_target": "2959",
+                "reproj_rasters": false,
+                "display_debug": true,
+                "parallel": 4
             }
         }
     },
