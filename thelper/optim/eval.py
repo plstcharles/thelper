@@ -15,12 +15,10 @@ def compute_iou(bbox1, bbox2):
     """Computes and returns the Intersection over Union (IoU) of two bounding boxes."""
     assert isinstance(bbox1, thelper.data.BoundingBox) and isinstance(bbox2, thelper.data.BoundingBox), \
         "unexpected input bounding box types"
-    assert bbox1.include_margin == bbox2.include_margin, "unexpected margin inclusion mismatch"
-    intersection_width = min(bbox1.right, bbox2.right) - max(bbox1.left, bbox2.left)
-    intersection_height = min(bbox1.bottom, bbox2.bottom) - max(bbox1.top, bbox2.top)
-    if bbox1.include_margin:
-        intersection_width += 1
-        intersection_height += 1
+    bbox1_marg = 1 if bbox1.include_margin else 0
+    bbox2_marg = 1 if bbox2.include_margin else 0
+    intersection_width = min(bbox1.right + bbox1_marg, bbox2.right + bbox2_marg) - max(bbox1.left, bbox2.left)
+    intersection_height = min(bbox1.bottom + bbox1_marg, bbox2.bottom + bbox2_marg) - max(bbox1.top, bbox2.top)
     intersection_area = max(0, intersection_width) * max(0, intersection_height)
     return float(intersection_area / float(bbox1.area + bbox2.area - intersection_area))
 
