@@ -108,6 +108,14 @@ def setup_cv2(config):
     # todo: add more global opencv flags setups here
 
 
+def setup_gdal(config):
+    """Parses the provided config for GDAL flags and sets up its global state accordingly."""
+    config = get_key_def("gdal", config, {})
+    if "proj_search_path" in config:
+        import osr
+        osr.SetPROJSearchPath(config["proj_search_path"])
+
+
 def setup_cudnn(config):
     """Parses the provided config for CUDNN flags and sets up PyTorch accordingly."""
     if "cudnn" in config and isinstance(config["cudnn"], dict):
@@ -138,6 +146,7 @@ def setup_globals(config):
         bypass_queries = True
     setup_plt(config)
     setup_cv2(config)
+    setup_gdal(config)
     setup_cudnn(config)
 
 
