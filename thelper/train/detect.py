@@ -72,7 +72,7 @@ class ObjDetectTrainer(Trainer):
             bboxes = [{
                 "boxes": torch.as_tensor([[*b.bbox] for b in bset], dtype=torch.float32),
                 "labels": torch.as_tensor([b.class_id for b in bset], dtype=torch.int64),
-                "image_id": torch.as_tensor([b.image_id for b in bset]),
+                "image_id": torch.as_tensor([b.image_id if b.image_id is not None else -1 for b in bset]),
                 "area": torch.as_tensor([b.area for b in bset], dtype=torch.float32),
                 "iscrowd": torch.as_tensor([b.iscrowd for b in bset], dtype=torch.int64),
                 "refs": bset
