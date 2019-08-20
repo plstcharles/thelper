@@ -73,6 +73,7 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
         rivers = [f for f in features if f["properties"]["TYPECE"] == TB15D104Dataset.TYPECE_RIVER]
         lakes = [f for f in features if f["properties"]["TYPECE"] == TB15D104Dataset.TYPECE_LAKE]
         logger.info(f"labeling and cleaning {len(lakes)} lakes...")
+
         def clean_lake(lake):
             if area_min <= lake["geometry"].area <= area_max:
                 if lake_river_max_dist == float("inf"):
@@ -85,6 +86,7 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
                         if lake["geometry"].distance(river["geometry"]) < lake_river_max_dist:
                             return True
             return False
+
         if parallel:
             if not isinstance(parallel, int):
                 import multiprocessing
@@ -103,6 +105,7 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
     @staticmethod
     def _lake_cropper(features, rasters_data, px_size, skew, roi_buffer, parallel=False):
         """Returns the ROI information for a given feature (may be modified in derived classes)."""
+
         def crop_feature(feature):
             if not feature["clean"]:
                 return None  # skip (will not use bad features as the origin of a 'sample')
@@ -119,6 +122,8 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
             roi_centroid = feature["centroid"]
             roi_radius = np.linalg.norm(np.asarray(roi_tl) - np.asarray(roi_br)) / 2
             roi_features, bboxes = [], []
+            # note: the 'image id' is in fact the id of the focal feature in the crop
+            image_id = int(feature["properties"]["OBJECTID"])
             for f in features:
                 if f["centroid"].distance(roi_centroid) > roi_radius:
                     continue
@@ -149,13 +154,17 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
                             min(crop_width - 1, feat_br_px[0]),
                             min(crop_height - 1, feat_br_px[1])]
                     # note: lake class id is 1 by definition
-                    bboxes.append(thelper.tasks.detect.BoundingBox(TB15D104Dataset.LAKE_ID, bbox=bbox,
-                                                                   include_margin=False, truncated=clip))
+                    bboxes.append(thelper.tasks.detect.BoundingBox(TB15D104Dataset.LAKE_ID,
+                                                                   bbox=bbox,
+                                                                   include_margin=False,
+                                                                   truncated=clip,
+                                                                   image_id=image_id))
             # prepare actual 'sample' for crop generation at runtime
             return {
                 "features": roi_features,
                 "bboxes": bboxes,
                 "focal": feature,
+                "id": image_id,
                 "roi": roi,
                 "roi_tl": roi_tl,
                 "roi_br": roi_br,
@@ -164,6 +173,7 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
                 "crop_height": crop_height,
                 "geotransform": roi_geotransform,
             }
+
         if parallel:
             if not isinstance(parallel, int):
                 import multiprocessing
@@ -227,7 +237,7 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
         sample = {
             "input": np.stack([crop, mask, dmap], axis=-1),
             # note: bboxes are automatically added in the "cropper" preprocessing function
-            self.mask_key: mask,
+            "hydro": mask,
             **sample
         }
         if self.transforms:
