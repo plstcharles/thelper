@@ -3,6 +3,18 @@
 Changelog
 =========
 
+0.3.9 (2019/08/20)
+------------------
+
+* Fixed collate issues for pytorch >= 1.2
+* Fixed null-size batch issues
+* Cleaned up params#kwargs parsing in trainer
+* Added pickled hashed param support utils
+* Added support for yaml-based session configuration
+* Added concept decorators for metrics/consumer classes
+* Cleaned up shared interfaces to fix circular dependencies
+* Added detection (bbox) logger class
+
 0.3.8 (2019/08/08)
 ------------------
 
