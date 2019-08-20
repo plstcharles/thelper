@@ -637,7 +637,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         For every target bounding box, the corresponding *best*-sorted detections are returned.
         Sample metadata is appended to every corresponding sub-target if any where requested.
 
-        If :arg:`report_count` was specified, the returned report will be limited to that requested amount of targets.
+        If ``report_count`` was specified, the returned report will be limited to that requested amount of targets.
 
         .. seealso::
             | :meth:`DetectLogger.group_bbox` for formatting, sorting and filtering details.
