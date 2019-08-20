@@ -14,7 +14,7 @@
                 "srs_target": "2959",
                 "reproj_rasters": false,
                 "display_debug": true,
-                "parallel": 4
+                "parallel": 0
             }
         }
     },

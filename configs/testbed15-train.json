@@ -1,0 +1,65 @@
+{
+    "name": "testbed15-viz",
+    "datasets": {
+        "testbed15": {
+            "type": "thelper.data.geo.ogc.TB15D104Dataset",
+            "params": {
+                "raster_path": "data/testbed15/roi_hrdem.tif",
+                "vector_path": "data/testbed15/hydro_original.geojson",
+                "px_size": 3,
+                "lake_area_min": 100,
+                "lake_area_max": 200000,
+                "lake_river_max_dist": 300,
+                "roi_buffer": 1000,
+                "srs_target": "2959",
+                "reproj_rasters": false,
+                "display_debug": true,
+                "parallel": 0
+            }
+        }
+    },
+    "loaders": {
+        "workers": 0,
+        "batch_size": 1,
+        "collate_fn": {
+            "type": "thelper.data.loaders.default_collate",
+            "params": {"force_tensor": false}
+        },
+        "base_transforms": [
+            {
+                "operation": "torchvision.transforms.ToTensor",
+                "target_key": "input"
+            }
+        ],
+        "train_split": {
+            "testbed15": 0.9
+        },
+        "valid_split": {
+            "testbed15": 0.1
+        }
+    },
+    "model": {
+        "type" : "torchvision.models.detection.fasterrcnn_resnet50_fpn",
+        "params": {"pretrained": true}
+    },
+    "trainer": {
+        "epochs": 100,
+        "monitor": "mAP",
+        "save_freq": 10,
+        "optimization": {
+            "optimizer": {
+                "type": "torch.optim.SGD",
+                "params": {
+                    "lr": 0.005,
+                    "momentum": 0.9,
+                    "weight_decay": 0.0005
+                }
+            }
+        },
+        "valid_metrics": {
+            "mAP": {
+                "type": "thelper.optim.metrics.AveragePrecision"
+            }
+        }
+    }
+}
