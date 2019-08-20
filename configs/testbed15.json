@@ -4,7 +4,7 @@
         "testbed15": {
             "type": "thelper.data.geo.ogc.TB15D104Dataset",
             "params": {
-                "raster_path": "data/testbed15/*.tif",
+                "raster_path": "data/testbed15/roi_hrdem.tif",
                 "vector_path": "data/testbed15/hydro_original.geojson",
                 "px_size": 3,
                 "lake_area_min": 100,
