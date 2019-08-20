@@ -1,8 +1,8 @@
+flake8
+mock
 pyopenssl
 pytest
-pytest-travis-fold
 pytest-cov
 pytest-mock
-mock
-flake8
+pytest-travis-fold
 tox

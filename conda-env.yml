@@ -3,30 +3,30 @@ channels:
   - pytorch
   - conda-forge
 dependencies:
-  - pytorch
-  - torchvision
-  - numpy
+  - albumentations
   - cython
-  - matplotlib
-  - opencv
-  - lz4
-  - scikit-learn
   - ddt
   - gitdb
   - gitpython
+  - lz4
+  - matplotlib
   - mock
+  - numpy
+  - opencv
   - pip
   - pytest
   - pytest-cov
   - pytest-mock
+  - pytorch
   - pyyaml
-  - tqdm
+  - scikit-learn
   - shapely
-  - albumentations
+  - torchvision
+  - tqdm
   - pip:
+    - augmentor
     - h5py
     - imgaug==0.2.5
-    - augmentor
     - opencv-python
-    - tensorboardX
     - pynput
+    - tensorboardX
