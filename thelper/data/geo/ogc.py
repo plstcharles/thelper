@@ -153,6 +153,8 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
                     bbox = [max(0, feat_tl_px[0]), max(0, feat_tl_px[1]),
                             min(crop_width - 1, feat_br_px[0]),
                             min(crop_height - 1, feat_br_px[1])]
+                    if bbox[2] - bbox[0] <= 1 or bbox[3] - bbox[1] <= 1:
+                        continue  # skip all bboxes smaller than 1 px (c'mon...)
                     # note: lake class id is 1 by definition
                     bboxes.append(thelper.tasks.detect.BoundingBox(TB15D104Dataset.LAKE_ID,
                                                                    bbox=bbox,
