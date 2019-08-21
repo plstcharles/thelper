@@ -157,6 +157,8 @@ class ObjDetectTrainer(Trainer):
             # pack image list back into 4d tensor
             images = torch.cat(images) if len(images) > 1 else torch.unsqueeze(images[0], 0)
             iter_loss = iter_loss.item()
+            if not pred:  # for some reason, preds are not provided in train mode by faster-rcnn head
+                pred = [[] * images.shape[0]]  # ... create dummy list of lists for metrics
             for metric in metrics.values():
                 metric.update(task=self.task, input=images, pred=pred, target=target_bboxes,
                               sample=sample, loss=iter_loss, iter_idx=idx, max_iters=epoch_size,
