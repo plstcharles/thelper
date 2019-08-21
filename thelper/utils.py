@@ -1817,7 +1817,8 @@ def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False
 def draw_bbox(image, tl, br, text, color, box_thickness=2, font_thickness=1,
               font_scale=0.4, show=False, block=False, win_name="bbox"):
     """Draws a single bounding box on a given image (used in :func:`thelper.utils.draw_bboxes`)."""
-    tl, br = (round(tl[0]), round(tl[1])), (round(br[0]), round(br[1]))
+    tl, br = (round(float(tl[0])), round(float(tl[1]))), \
+             (round(float(br[0])), round(float(br[1])))
     text_size, baseline = cv.getTextSize(text, fontFace=cv.FONT_HERSHEY_SIMPLEX,
                                          fontScale=font_scale, thickness=font_thickness)
     text_bl = (tl[0] + box_thickness + 1, tl[1] + text_size[1] + box_thickness + 1)
