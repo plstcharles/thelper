@@ -53,12 +53,13 @@ class Segmentation(Task, ClassNamesHandler):
         to index dictionaries, and must therefore be key-compatible types.
         """
         super(Segmentation, self).__init__(input_key, label_map_key, meta_keys)
-        ClassNamesHandler.__init__(self, class_names=class_names)
-        if "dontcare" in self.class_indices:
+        if "dontcare" in class_names:
             logger.warning("found reserved 'dontcare' label in input classes; it will be removed from the internal list")
-            assert dontcare is None or self.class_indices["dontcare"] == dontcare, "mismatched internal dontcare val"
-            dontcare = self.class_indices["dontcare"]
-            del self.class_indices["dontcare"]
+            if isinstance(class_names, list):
+                del class_names[class_names.index("dontcare")]
+            elif isinstance(class_names, dict):
+                del class_names["dontcare"]
+        ClassNamesHandler.__init__(self, class_names=class_names)
         self.dontcare = dontcare
         self.color_map = color_map
 
