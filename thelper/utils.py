@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 bypass_queries = False
 warned_generic_draw = False
+fixed_yaml_parsing = False
 
 
 class Struct:
@@ -1097,6 +1098,21 @@ def load_config(path, as_json=False):
             only supported types are loaded unless `as_json` is `True`.
         as_json: specifies if an alternate extension should be considered as JSON format.
     """
+    global fixed_yaml_parsing
+    if not fixed_yaml_parsing:
+        # https://stackoverflow.com/questions/30458977/yaml-loads-5e-6-as-string-and-not-a-number
+        loader = yaml.SafeLoader
+        loader.add_implicit_resolver(
+            u'tag:yaml.org,2002:float',
+            re.compile(u'''^(?:
+                 [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
+                |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
+                |\\.[0-9_]+(?:[eE][-+][0-9]+)?
+                |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
+                |[-+]?\\.(?:inf|Inf|INF)
+                |\\.(?:nan|NaN|NAN))$''', re.X),
+            list(u'-+0123456789.'))
+        fixed_yaml_parsing = True
     ext = os.path.splitext(path)[-1]
     if ext in [".json", ".yml", ".yaml"] or as_json:
         with open(path) as fd:
