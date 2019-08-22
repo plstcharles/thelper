@@ -175,10 +175,10 @@ that it does not understand. This is useful when sections or subsections are add
 when only a portion of the configuration is relevant to some use case (for example, the 'visualization'
 mode of the CLI will only look at the datasets and data loaders sections).
 
-For now, all configuration files are expected to be in JSON format, but future versions of the framework
-will support YAML configurations as well as raw python modules (.py files) that define each subsection
-as a dictionary. Examples of complete configuration files used for various purposes are available in the
-``config`` directory located with the code (`[see them here]`__).
+For now, all configuration files are expected to be in JSON or YAML format. Future versions of the
+framework should support raw python modules (.py files) that define each subsection as a dictionary.
+Examples of complete configuration files used for various purposes are available in the ``config``
+directory located with the code (`[see them here]`__).
 
 .. __: https://github.com/plstcharles/thelper/tree/master/configs
 
