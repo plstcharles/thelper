@@ -1,5 +1,5 @@
 {
-    "name": "testbed15-viz",
+    "name": "testbed15-train",
     "datasets": {
         "testbed15": {
             "type": "thelper.data.geo.ogc.TB15D104Dataset",

@@ -56,7 +56,7 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
             del meta_keys[meta_keys.index("bboxes")]  # placed in meta list by base class constr, moved to detect target below
         self.task = thelper.tasks.Detection(class_names={"background": self.BACKGROUND_ID, "lake": self.LAKE_ID},
                                             input_key="input", bboxes_key="bboxes",
-                                            meta_keys=meta_keys, background=0)
+                                            meta_keys=meta_keys, background=0, color_map={"lake": [255, 0, 0]})
         # update all already-created bboxes with new task ref
         for s in self.samples:
             for b in s["bboxes"]:
