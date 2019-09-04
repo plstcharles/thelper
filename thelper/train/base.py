@@ -98,18 +98,25 @@ class Trainer:
         # ...
 
     Attributes:
-        logger: used to output debug/warning/error messages to session log.
-        name: name of the session, used for printing and creating log folders.
+        checkpoint_dir: session checkpoint output directory (located within the 'session directory').
+        config: session configuration dictionary holding all original settings, including trainer configuration.
+        devices: list of (cuda) device IDs to upload the model/tensors to; can be empty if only the CPU is available.
         epochs: number of epochs to train the model for.
+        logger: used to output debug/warning/error messages to session log.
+        model: reference to the model being trained or used for evaluation/prediction.
+        monitor: name of the training/validation metric that should be monitored for model improvement.
+        name: name of the session, used for printing and creating log folders.
         optimization_config: dictionary of optim-related parameters, parsed at training time.
+        output_paths: map of session output paths where training/evaluation results should be saved.
         save_freq: frequency of checkpoint saves while training (i.e. save every X epochs).
         save_raw: specifies whether to save raw types or thelper objects in checkpoints.
-        checkpoint_dir: session checkpoint output directory (located within 'save_dir').
+        skip_eval_iter: number of evaluation iterations to skip (useful for resuming a session).
+        skip_tbx_histograms: flag used to skip the generation of graph histograms in tbx (useful for large models).
+        task: reference to the object used to specialize the model and that holds task metainformation.
+        tbx_histogram_freq: frequency of tbx histogram saves while training (i.e. save every X epochs).
         use_tbx: defines whether to use tensorboardX writers for logging or not.
-        model: model to train; will be uploaded to target device(s) at runtime.
-        config: full configuration dictionary of the session; will be incorporated into all saved checkpoints.
-        devices: list of (cuda) device IDs to upload the model/tensors to; can be empty if only the CPU is available.
-        monitor: name of the training/validation metric that should be monitored for model improvement.
+        writers: map of tbx writers used to save training/evaluation events.
+
 
     TODO: move static utils to their related modules
 
@@ -123,7 +130,7 @@ class Trainer:
 
     def __init__(self,
                  session_name,    # type: AnyStr
-                 save_dir,        # type: AnyStr
+                 session_dir,     # type: AnyStr
                  model,           # type: thelper.typedefs.ModelType
                  task,            # type: thelper.tasks.Task
                  loaders,         # type: thelper.typedefs.MultiLoaderType
@@ -141,8 +148,9 @@ class Trainer:
 
         # parse basic training config args
         trainer_config = thelper.utils.get_key("trainer", config, msg="session config dictionary missing 'trainer' field")
-        thelper.utils.save_env_list(os.path.join(save_dir, "logs", "packages.log"))
-        train_logger_path = os.path.join(save_dir, "logs", "trainer.log")
+        os.makedirs(session_dir, exist_ok=True)
+        thelper.utils.save_env_list(os.path.join(session_dir, "logs", "packages.log"))
+        train_logger_path = os.path.join(session_dir, "logs", "trainer.log")
         train_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         train_logger_fh = logging.FileHandler(train_logger_path)
         train_logger_fh.setFormatter(train_logger_format)
@@ -158,11 +166,12 @@ class Trainer:
         self.save_freq = int(thelper.utils.get_key_def("save_freq", trainer_config, 1))
         assert self.save_freq >= 1, "checkpoint save frequency should be strictly positive integer"
         self.save_raw = thelper.utils.str2bool(thelper.utils.get_key_def("save_raw", trainer_config, True))
-        self.checkpoint_dir = os.path.join(save_dir, "checkpoints")
+        self.checkpoint_dir = os.path.join(session_dir, "checkpoints")
         os.makedirs(self.checkpoint_dir, exist_ok=True)
         output_root_dir = thelper.utils.get_key_def("output_dir", trainer_config)
         if not output_root_dir:
-            output_root_dir = os.path.join(save_dir, "output", self.name)
+            # append session name for cleaner TBX folder merging
+            output_root_dir = os.path.join(session_dir, "output", self.name)
         assert isinstance(output_root_dir, str) and len(output_root_dir), "invalid output directory path"
         os.makedirs(output_root_dir, exist_ok=True)
         unique_output_dir = thelper.utils.get_key_def("unique_output_dir", trainer_config, True)
