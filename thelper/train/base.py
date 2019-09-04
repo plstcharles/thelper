@@ -160,13 +160,13 @@ class Trainer:
         self.save_raw = thelper.utils.str2bool(thelper.utils.get_key_def("save_raw", trainer_config, True))
         self.checkpoint_dir = os.path.join(save_dir, "checkpoints")
         os.makedirs(self.checkpoint_dir, exist_ok=True)
-        output_location = thelper.utils.get_key_def("output_location", trainer_config)
-        if isinstance(output_location, str) and len(output_location):
-            output_root_dir = output_location
-        else:
-            output_root_dir = thelper.utils.get_key_def("output_dir", trainer_config, os.path.join(save_dir, "output"))
-            output_root_dir = os.path.join(output_root_dir, self.name)
+        output_root_dir = thelper.utils.get_key_def("output_dir", trainer_config)
+        if not output_root_dir:
+            output_root_dir = os.path.join(save_dir, "output", self.name)
+        assert isinstance(output_root_dir, str) and len(output_root_dir), "invalid output directory path"
         os.makedirs(output_root_dir, exist_ok=True)
+        unique_output_dir = thelper.utils.get_key_def("unique_output_dir", trainer_config, True)
+        assert isinstance(unique_output_dir, bool), "invalid unique_output_dir flag (should be bool)"
         devices_str = thelper.utils.get_key_def(["device", "train_device"], trainer_config, None)
         self.devices = self._load_devices(devices_str)
         self.skip_eval_iter = thelper.utils.get_key_def("skip_eval_iter", trainer_config, 0)
@@ -184,7 +184,7 @@ class Trainer:
         timestr = time.strftime("%Y%m%d-%H%M%S")
         self.writers, self.output_paths = {}, {}
         for cname, loader in zip(["train", "valid", "test"], loaders):
-            folder_name = f"{cname}-{str(platform.node())}-{timestr}"
+            folder_name = f"{cname}-{str(platform.node())}-{timestr}" if unique_output_dir else cname
             self.output_paths[cname] = os.path.join(output_root_dir, folder_name) if loader else None
             self.writers[cname] = None  # will be instantiated only when needed based on above path
 
