@@ -160,8 +160,12 @@ class Trainer:
         self.save_raw = thelper.utils.str2bool(thelper.utils.get_key_def("save_raw", trainer_config, True))
         self.checkpoint_dir = os.path.join(save_dir, "checkpoints")
         os.makedirs(self.checkpoint_dir, exist_ok=True)
-        output_root_dir = thelper.utils.get_key_def("output_dir", trainer_config, os.path.join(save_dir, "output"))
-        output_root_dir = os.path.join(output_root_dir, self.name)
+        output_location = thelper.utils.get_key_def("output_location", trainer_config)
+        if isinstance(output_location, str) and len(output_location):
+            output_root_dir = output_location
+        else:
+            output_root_dir = thelper.utils.get_key_def("output_dir", trainer_config, os.path.join(save_dir, "output"))
+            output_root_dir = os.path.join(output_root_dir, self.name)
         os.makedirs(output_root_dir, exist_ok=True)
         devices_str = thelper.utils.get_key_def(["device", "train_device"], trainer_config, None)
         self.devices = self._load_devices(devices_str)
@@ -173,7 +177,8 @@ class Trainer:
             import tensorboardX
             self.tbx = tensorboardX
             self.logger.debug("tensorboard init : tensorboard --logdir %s --port <your_port>" % output_root_dir)
-        self.skip_tbx_histograms = thelper.utils.str2bool(thelper.utils.get_key_def("skip_tbx_histograms", trainer_config, False))
+        self.skip_tbx_histograms = thelper.utils.str2bool(
+            thelper.utils.get_key_def("skip_tbx_histograms", trainer_config, False))
         self.tbx_histogram_freq = int(thelper.utils.get_key_def("tbx_histogram_freq", trainer_config, 1))
         assert self.tbx_histogram_freq >= 1, "histogram output frequency should be strictly positive integer"
         timestr = time.strftime("%Y%m%d-%H%M%S")
@@ -417,7 +422,8 @@ class Trainer:
                         # note: makes no sense to look for it in test metrics
                         assert metric is not None, f"cannot find metric '{scheduler_step_metric}' for scheduler step"
                         assert isinstance(metric, thelper.optim.metrics.Metric), "monitoring consumer must be metric"
-                        metric_anti_goal = thelper.optim.Metric.maximize if metric.goal == thelper.optim.Metric.minimize \
+                        metric_anti_goal = thelper.optim.Metric.maximize \
+                            if metric.goal == thelper.optim.Metric.minimize \
                             else thelper.optim.Metric.minimize
                         metric_val = metric.eval() if self.current_epoch > 0 else metric_anti_goal
                         scheduler.step(metrics=metric_val, epoch=self.current_epoch)
