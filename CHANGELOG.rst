@@ -3,6 +3,18 @@
 Changelog
 =========
 
+
+0.3.10 (2019/09/05)
+-------------------
+
+* Cleaned up dependency lists, docstrings
+* Fixed bbox iou computation with mixed int/float
+* Fixed dontcare label deletion in segmentation task
+* Cleaned up training session output directory localization
+* Fixed object detection trainer empty bbox lists
+* Fixed exponential parsing with pyyaml
+* Fixed bbox display when using integer coords values
+
 0.3.9 (2019/08/20)
 ------------------
 
