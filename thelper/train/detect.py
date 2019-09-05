@@ -31,7 +31,7 @@ class ObjDetectTrainer(Trainer):
 
     def __init__(self,
                  session_name,    # type: AnyStr
-                 save_dir,        # type: AnyStr
+                 session_dir,     # type: AnyStr
                  model,           # type: thelper.typedefs.ModelType
                  task,            # type: thelper.tasks.Task
                  loaders,         # type: thelper.typedefs.MultiLoaderType
@@ -39,7 +39,7 @@ class ObjDetectTrainer(Trainer):
                  ckptdata=None    # type: typ.Optional[thelper.typedefs.CheckpointContentType]
                  ):
         """Receives session parameters, parses tensor/target keys from task object, and sets up metrics."""
-        super().__init__(session_name, save_dir, model, task, loaders, config, ckptdata=ckptdata)
+        super().__init__(session_name, session_dir, model, task, loaders, config, ckptdata=ckptdata)
         assert isinstance(self.task, thelper.tasks.Detection), "expected task to be object detection"
 
     def _to_tensor(self, sample):

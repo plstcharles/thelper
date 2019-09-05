@@ -27,7 +27,7 @@ class ImageClassifTrainer(Trainer):
 
     def __init__(self,
                  session_name,    # type: AnyStr
-                 save_dir,        # type: AnyStr
+                 session_dir,     # type: AnyStr
                  model,           # type: thelper.typedefs.ModelType
                  task,            # type: thelper.tasks.Task
                  loaders,         # type: thelper.typedefs.MultiLoaderType
@@ -35,7 +35,7 @@ class ImageClassifTrainer(Trainer):
                  ckptdata=None    # type: typ.Optional[thelper.typedefs.CheckpointContentType]
                  ):
         """Receives session parameters, parses image/label keys from task object, and sets up metrics."""
-        super().__init__(session_name, save_dir, model, task, loaders, config, ckptdata=ckptdata)
+        super().__init__(session_name, session_dir, model, task, loaders, config, ckptdata=ckptdata)
         assert isinstance(self.task, thelper.tasks.Classification), "expected task to be classification"
         self.warned_no_shuffling_augments = False
 
