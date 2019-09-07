@@ -18,6 +18,9 @@ import tqdm
 import thelper
 
 
+TASK_COMPAT_CHOICES = frozenset(["old", "new", "compat"])
+
+
 def create_session(config, save_dir):
     """Creates a session to train a model.
 
@@ -56,7 +59,7 @@ def create_session(config, save_dir):
     return trainer.outputs
 
 
-def resume_session(ckptdata, save_dir, config=None, eval_only=False):
+def resume_session(ckptdata, save_dir, config=None, eval_only=False, task_compat=None):
     """Resumes a previously created training session.
 
     Since the saved checkpoints contain the original session's configuration, the ``config`` argument
@@ -85,6 +88,7 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
             :class:`thelper.train.base.Trainer` and :func:`thelper.data.utils.create_loaders` for more information.
             Here, it is only expected to contain a ``name`` field that specifies the name of the session.
         eval_only: specifies whether training should be resumed or the model should only be evaluated.
+        task_compat: specifies how to handle discrepancy between old task from checkpoint and new task from config
 
     .. seealso::
         | :class:`thelper.train.base.Trainer`
@@ -109,20 +113,24 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
     old_task = thelper.tasks.create_task(ckptdata["task"]) if isinstance(ckptdata["task"], str) else ckptdata["task"]
     if not old_task.check_compat(new_task, exact=True):
         compat_task = None if not old_task.check_compat(new_task) else old_task.get_compat(new_task)
-        loaders_config = thelper.utils.get_key(["data_config", "loaders"], config)
-        task_compat_mode = thelper.utils.get_key_def("task_compat_mode", loaders_config, default=None)
-        task_compat_choices = ["old", "new", "compat"]
-        if task_compat_mode in task_compat_choices:
+        if task_compat in TASK_COMPAT_CHOICES:
             logger.warning("discrepancy between old task from checkpoint and new task from config resolved by " +
-                           "config: task_compat_mode={}", task_compat_mode)
+                           "input argument: task_compat={}", task_compat)
+            task_compat_mode = task_compat
         else:
+            loaders_config = thelper.utils.get_key(["data_config", "loaders"], config)
+            task_compat_mode = thelper.utils.get_key_def("task_compat_mode", loaders_config, default=None)
+            if task_compat_mode in TASK_COMPAT_CHOICES:
+                logger.warning("discrepancy between old task from checkpoint and new task from config resolved by " +
+                               "config: task_compat_mode={}", task_compat_mode)
+        if task_compat_mode not in TASK_COMPAT_CHOICES:
             task_compat_mode = thelper.utils.query_string(
                 "Found discrepancy between old task from checkpoint and new task from config; " +
                 "which one would you like to resume the session with?\n" +
                 f"\told: {str(old_task)}\n\tnew: {str(new_task)}\n" +
                 (f"\tcompat: {str(compat_task)}\n\n" if compat_task is not None else "\n") +
                 "WARNING: if resuming with new or compat, some weights might be discarded!",
-                choices=task_compat_choices)
+                choices=TASK_COMPAT_CHOICES)
         task = old_task if task_compat_mode == "old" else new_task if task_compat_mode == "new" else compat_task
         if task_compat_mode != "old":
             # saved optimizer state might cause issues with mismatched tasks, let's get rid of it
@@ -393,6 +401,8 @@ def make_argparser():
     resume_ap.add_argument("-m", "--map-location", default=None, help="map location for loading data (default=None)")
     resume_ap.add_argument("-c", "--override-cfg", default=None, help="override config file path (default=None)")
     resume_ap.add_argument("-e", "--eval-only", default=False, action="store_true", help="only run evaluation pass (valid+test)")
+    resume_ap.add_argument("-t", "--task-compat", default=None, type=str, choices=TASK_COMPAT_CHOICES,
+                           help="task compatibility mode to use to resolve any discrepancy between loaded tasks")
     viz_ap = subparsers.add_parser("viz", help="visualize the loaded data for a training/eval session")
     viz_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session save directory)")
     annot_ap = subparsers.add_parser("annot", help="launches a dataset annotation session with a GUI tool")
@@ -478,7 +488,7 @@ def main(args=None, argparser=None):
             else:
                 save_dir = thelper.utils.query_string("Please provide the path to where the resumed session output should be saved:")
                 save_dir = thelper.utils.get_save_dir(save_dir, dir_name="", config=override_config)
-        resume_session(ckptdata, save_dir, config=override_config, eval_only=args.eval_only)
+        resume_session(ckptdata, save_dir, config=override_config, eval_only=args.eval_only, task_compat=args.task_compat)
     else:
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
         config = thelper.utils.load_config(args.cfg_path)
