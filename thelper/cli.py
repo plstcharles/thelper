@@ -109,14 +109,22 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False):
     old_task = thelper.tasks.create_task(ckptdata["task"]) if isinstance(ckptdata["task"], str) else ckptdata["task"]
     if not old_task.check_compat(new_task, exact=True):
         compat_task = None if not old_task.check_compat(new_task) else old_task.get_compat(new_task)
-        choice = thelper.utils.query_string("Found discrepancy between old task from checkpoint and new task from config; "+
-                                            "which one would you like to resume the session with?\n" +
-                                            f"\told: {str(old_task)}\n\tnew: {str(new_task)}\n" +
-                                            (f"\tcompat: {str(compat_task)}\n\n" if compat_task is not None else "\n") +
-                                            "WARNING: if resuming with new or compat, some weights might be discarded!",
-                                            choices=["old", "new", "compat"])
-        task = old_task if choice == "old" else new_task if choice == "new" else compat_task
-        if choice != "old":
+        loaders_config = thelper.utils.get_key(["data_config", "loaders"], config)
+        task_compat_mode = thelper.utils.get_key_def("task_compat_mode", loaders_config, default=None)
+        task_compat_choices = ["old", "new", "compat"]
+        if task_compat_mode in task_compat_choices:
+            logger.warning("discrepancy between old task from checkpoint and new task from config resolved by " +
+                           "config: task_compat_mode={}", task_compat_mode)
+        else:
+            task_compat_mode = thelper.utils.query_string(
+                "Found discrepancy between old task from checkpoint and new task from config; " +
+                "which one would you like to resume the session with?\n" +
+                f"\told: {str(old_task)}\n\tnew: {str(new_task)}\n" +
+                (f"\tcompat: {str(compat_task)}\n\n" if compat_task is not None else "\n") +
+                "WARNING: if resuming with new or compat, some weights might be discarded!",
+                choices=task_compat_choices)
+        task = old_task if task_compat_mode == "old" else new_task if task_compat_mode == "new" else compat_task
+        if task_compat_mode != "old":
             # saved optimizer state might cause issues with mismatched tasks, let's get rid of it
             logger.warning("dumping optimizer state to avoid issues when resuming with modified task")
             ckptdata["optimizer"], ckptdata["scheduler"] = None, None
