@@ -20,6 +20,7 @@
     },
     "loaders": {
         "workers": 0,
+        "shuffle": false,
         "collate_fn": {
             "type": "thelper.data.loaders.default_collate",
             "params": {"force_tensor": false}
