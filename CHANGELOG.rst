@@ -3,6 +3,10 @@
 Changelog
 =========
 
+0.3.11 (2019/09/09)
+-------------------
+
+* Add cli/config override for task compatibility mode setting
 
 0.3.10 (2019/09/05)
 -------------------
