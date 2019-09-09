@@ -17,7 +17,6 @@ import tqdm
 
 import thelper
 
-
 TASK_COMPAT_CHOICES = frozenset(["old", "new", "compat"])
 
 
