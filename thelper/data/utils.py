@@ -112,6 +112,9 @@ def create_loaders(config, save_dir=None):
                 # see 'thelper.transforms.utils.load_transforms'
                 # ...
             },
+            # optionally indicate how to resolve dataset loader task vs model task incompatibility if any
+            # leave blank to get more details about each case during runtime if this situation happens
+            "task_compat_mode": "old|new|compat",
             # finally, we define a 80%-10%-10% split for our data
             # (we could instead use one dataset for training and one for testing)
             "train_split": {
