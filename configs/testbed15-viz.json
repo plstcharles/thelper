@@ -1,7 +1,7 @@
 {
     "name": "testbed15-viz",
     "datasets": {
-        "testbed15": {
+        "testbed15_smart": {
             "type": "thelper.data.geo.ogc.TB15D104Dataset",
             "params": {
                 "raster_path": "data/testbed15/roi_hrdem.tif",
@@ -11,6 +11,22 @@
                 "lake_area_max": 200000,
                 "lake_river_max_dist": 300,
                 "roi_buffer": 1000,
+                "srs_target": "2959",
+                "reproj_rasters": false,
+                "display_debug": true,
+                "parallel": 0
+            }
+        },
+        "testbed15_tiled": {
+            "type": "thelper.data.geo.ogc.TB15D104TileDataset",
+            "params": {
+                "raster_path": "data/testbed15/roi_hrdem.tif",
+                "vector_path": "data/testbed15/hydro_original.geojson",
+                "tile_size": [500, 500],
+                "tile_overlap": 100,
+                "px_size": 3,
+                "lake_area_min": 100,
+                "lake_area_max": 200000,
                 "srs_target": "2959",
                 "reproj_rasters": false,
                 "display_debug": true,
@@ -26,7 +42,10 @@
             "params": {"force_tensor": false}
         },
         "train_split": {
-            "testbed15": 1.0
+            "testbed15_smart": 1.0
+        },
+        "valid_split": {
+            "testbed15_tiled": 1.0
         }
     },
     "viz": {
