@@ -299,6 +299,40 @@ def get_feature_roi(geom, px_size, skew, roi_buffer=None, crop_img_size=None, cr
     return roi, roi_tl, roi_br, crop_width, crop_height
 
 
+def open_rasterfile(raster_data, keep_rasters_open=False):
+    assert isinstance(raster_data, dict), "unexpected raster data type (should be internal dict)"
+    if "rasterfile" in raster_data:
+        rasterfile = raster_data["rasterfile"]
+    else:
+        if raster_data["reproj_path"] is not None:
+            raster_path = raster_data["reproj_path"]
+        else:
+            raster_path = raster_data["file_path"]
+        rasterfile = gdal.Open(raster_path, gdal.GA_ReadOnly)
+        assert rasterfile is not None, f"could not open raster data file at '{raster_path}'"
+        if keep_rasters_open:
+            raster_data["rasterfile"] = rasterfile
+    return rasterfile
+
+
+def reproject_crop(raster, crop_raster, crop_size, crop_datatype,
+                   crop_nodataval=None, reproj_opt=None, fill_nodata=False):
+    if fill_nodata:
+        for raster_band_idx in range(raster.RasterCount):
+            curr_band = raster.GetRasterBand(raster_band_idx + 1)
+            if crop_nodataval is None:
+                crop_nodataval = curr_band.GetNoDataValue()
+            else:
+                assert crop_nodataval == curr_band.GetNoDataValue()
+            crop_raster.GetRasterBand(raster_band_idx + 1).WriteArray(
+                np.full([int(round(c)) for c in crop_size[0:2]],
+                        fill_value=crop_nodataval, dtype=crop_datatype))
+    res = gdal.ReprojectImage(raster, crop_raster, raster.GetProjectionRef(),
+                              crop_raster.GetProjectionRef(), gdal.GRA_Bilinear,
+                              options=[] if not reproj_opt else reproj_opt)
+    assert res == 0, "reprojection failed"
+
+
 def export_geotiff(filepath, crop, srs, geotransform):
     assert isinstance(filepath, str), "filepath should be given as string"
     assert isinstance(crop, np.ndarray), "crop data should be given as numpy array"

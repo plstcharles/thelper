@@ -3,6 +3,7 @@
 import functools
 import json
 import logging
+import math
 import os
 import pickle
 
@@ -94,7 +95,7 @@ class VectorCropDataset(thelper.data.Dataset):
         if cropper is None:
             cropper = functools.partial(self._default_feature_cropper, px_size=self.px_size,
                                         skew=self.skew, roi_buffer=self.roi_buffer)
-        self.samples = self._parse_crops(self.features, self.rasters_data, cropper, self.vector_path, cache_hash)
+        self.samples = self._parse_crops(cropper, self.vector_path, cache_hash)
         # all keys already in sample dicts should be 'meta'; mask & raster will be added later
         meta_keys = list(set([k for s in self.samples for k in s]))
         if self.mask_key not in meta_keys:
@@ -118,21 +119,21 @@ class VectorCropDataset(thelper.data.Dataset):
         return features
 
     @staticmethod
-    def _default_feature_cropper(features, rasters_data, px_size, skew, roi_buffer):
+    def _default_feature_cropper(features, rasters_data, coverage, srs_target, px_size, skew, roi_buffer):
         """Returns the samples for a set of features (may be modified in derived classes)."""
         # note: default behavior = just center on the feature, and pad if required by user
         samples = []
-        for feature in tqdm.tqdm(features, desc="preparing crop regions"):
-            assert "clean" in feature, "cleaner should have added 'clean' flag to each feature"
-            if not feature["clean"]:
-                continue  # skip (will not use bad features as the origin of a 'sample')
+        clean_feats = [f for f in features if f["clean"]]
+        srs_target_wkt = srs_target.ExportToWkt()
+        for feature in tqdm.tqdm(clean_feats, desc="validating crop candidates"):
+            assert feature["clean"]  # should not get here with bad features
             roi, roi_tl, roi_br, crop_width, crop_height = \
                 geo.utils.get_feature_roi(feature["geometry"], px_size, skew, roi_buffer)
             # test all raster regions that touch the selected feature
-            roi_hits = []
+            raster_hits = []
             for raster_idx, raster_data in enumerate(rasters_data):
                 if raster_data["target_roi"].intersects(roi):
-                    roi_hits.append(raster_idx)
+                    raster_hits.append(raster_idx)
             # make list of all other features that may be included in the roi
             roi_radius = np.linalg.norm(np.asarray(roi_tl) - np.asarray(roi_br)) / 2
             roi_features = [f for f in features if feature["centroid"].distance(f["centroid"]) <= roi_radius and
@@ -144,11 +145,12 @@ class VectorCropDataset(thelper.data.Dataset):
                 "roi": roi,
                 "roi_tl": roi_tl,
                 "roi_br": roi_br,
-                "roi_hits": roi_hits,
+                "raster_hits": raster_hits,
                 "crop_width": crop_width,
                 "crop_height": crop_height,
                 "geotransform": (roi_tl[0], px_size[0], skew[0],
                                  roi_tl[1], skew[1], px_size[1]),
+                "srs": srs_target_wkt,
             })
         return samples
 
@@ -198,24 +200,20 @@ class VectorCropDataset(thelper.data.Dataset):
         logger.debug(f"cleanup resulted in {len([f for f in features if f['clean']])} features of interest")
         return features
 
-    def _parse_crops(self, features, rasters_data, cropper, path, cache_hash):
+    def _parse_crops(self, cropper, cache_file_path, cache_hash):
         """Parses crops based on prior feature/raster data.
 
         Each 'crop' corresponds to a sample that can be loaded at runtime.
         """
-        logger.info(f"preparing crops using {len(features)} features (total)...")
-        cache_file_path = os.path.join(os.path.dirname(path), cache_hash + ".crops.pkl") \
+        logger.info(f"preparing crops...")
+        cache_file_path = os.path.join(os.path.dirname(cache_file_path), cache_hash + ".crops.pkl") \
             if cache_hash else None
         if cache_file_path is not None and os.path.exists(cache_file_path):
             logger.debug(f"parsing cached crop data from '{cache_file_path}'...")
             with open(cache_file_path, "rb") as fd:
                 samples = pickle.load(fd)
         else:
-            samples = cropper(features, rasters_data)
-            srs_target_wkt = self.srs_target.ExportToWkt()
-            for sample in samples:
-                assert "srs" not in sample, "target srs must be added by _parse_crops"
-                sample["srs"] = srs_target_wkt
+            samples = cropper(self.features, self.rasters_data, self.coverage, self.srs_target)
             if cache_file_path is not None:
                 logger.debug(f"caching crop data to '{cache_file_path}'...")
                 with open(cache_file_path, "wb") as fd:
@@ -246,30 +244,13 @@ class VectorCropDataset(thelper.data.Dataset):
             ogr_layer.CreateFeature(ogr_feature)
         gdal.RasterizeLayer(crop_mask_gdal, [1], ogr_layer, burn_values=[1], options=["ALL_TOUCHED=TRUE"])
         np.copyto(dst=mask, src=crop_mask_gdal.GetRasterBand(1).ReadAsArray())
-        for raster_idx in sample["roi_hits"]:
-            raster_data = self.rasters_data[raster_idx]
-            if "rasterfile" in raster_data:
-                rasterfile = raster_data["rasterfile"]
-            else:
-                if raster_data["reproj_path"] is not None:
-                    raster_path = raster_data["reproj_path"]
-                else:
-                    raster_path = raster_data["file_path"]
-                rasterfile = gdal.Open(raster_path, gdal.GA_ReadOnly)
-                assert rasterfile is not None, f"could not open raster data file at '{raster_path}'"
-                if self.keep_rasters_open:
-                    raster_data["rasterfile"] = rasterfile
+        for raster_idx in sample["raster_hits"]:
+            rasterfile = geo.utils.open_rasterfile(self.rasters_data[raster_idx],
+                                                   keep_rasters_open=self.keep_rasters_open)
             assert rasterfile.RasterCount == crop_size[2], "unexpected raster count"
-            for raster_band_idx in range(rasterfile.RasterCount):
-                curr_band = rasterfile.GetRasterBand(raster_band_idx + 1)
-                nodataval = curr_band.GetNoDataValue()
-                crop_raster_gdal.GetRasterBand(raster_band_idx + 1).WriteArray(
-                    np.full(crop_size[0:2], fill_value=nodataval, dtype=crop_datatype))
             # using all cpus should be ok since we probably cant parallelize this loader anyway (swig serialization issues)
             options = ["NUM_THREADS=ALL_CPUS"] if self.reproj_all_cpus else []
-            res = gdal.ReprojectImage(rasterfile, crop_raster_gdal, rasterfile.GetProjectionRef(),
-                                      self.srs_target.ExportToWkt(), gdal.GRA_Bilinear, options=options)
-            assert res == 0, "resampling failed"
+            geo.utils.reproject_crop(rasterfile, crop_raster_gdal, crop_size, crop_datatype, reproj_opt=options, fill_nodata=True)
             for raster_band_idx in range(crop_raster_gdal.RasterCount):
                 curr_band = crop_raster_gdal.GetRasterBand(raster_band_idx + 1)
                 curr_band_array = curr_band.ReadAsArray()
@@ -309,3 +290,120 @@ class VectorCropDataset(thelper.data.Dataset):
         if self.transforms:
             sample = self.transforms(sample)
         return sample
+
+
+class TileDataset(VectorCropDataset):
+    """Abstract dataset used to systematically tile vector data and rasters."""
+
+    def __init__(self, raster_path, vector_path, tile_size, tile_overlap=0,
+                 skip_empty_tiles=False, skip_nodata_tiles=True, px_size=None,
+                 allow_outlying_vectors=True, clip_outlying_vectors=True,
+                 vector_area_min=0.0, vector_area_max=float("inf"),
+                 vector_target_prop=None,  srs_target="3857",
+                 raster_key="raster", mask_key="mask", cleaner=None,
+                 force_parse=False, reproj_rasters=False,
+                 reproj_all_cpus=True, keep_rasters_open=True, transforms=None):
+        # note1: input 'tile_size' must be given in pixels
+        # note2: input 'tile_overlap' must be given in pixels
+        # note3: input 'px_size' must be given in meters/degrees
+        if isinstance(tile_size, (float, int)):
+            tile_size = (tile_size, tile_size)
+        assert isinstance(tile_size, (tuple, list)) and len(tile_size) == 2, \
+            "invalid tile size (should be scalar or two-elem tuple)"
+        assert all([t > 0 for t in tile_size]), "unexpected tile size value (should be positive)"
+        tile_size = [float(t) for t in tile_size]  # convert all vals if necessary
+        assert isinstance(tile_overlap, (float, int)) and tile_overlap >= 0, \
+            "unexpected tile overlap (should be non-negative scalar)"
+        tile_overlap = float(tile_overlap)
+        assert isinstance(skip_empty_tiles, bool), "unexpected flag type (should be bool)"
+        assert isinstance(skip_nodata_tiles, bool), "unexpected flag type (should be bool)"
+        cropper = functools.partial(self._tile_cropper, tile_size=tile_size, tile_overlap=tile_overlap,
+                                    skip_empty_tiles=skip_empty_tiles, skip_nodata_tiles=skip_nodata_tiles,
+                                    keep_rasters_open=keep_rasters_open, px_size=px_size)
+        super().__init__(raster_path=raster_path, vector_path=vector_path, px_size=px_size, skew=None,
+                         allow_outlying_vectors=allow_outlying_vectors, clip_outlying_vectors=clip_outlying_vectors,
+                         vector_area_min=vector_area_min, vector_area_max=vector_area_max,
+                         vector_target_prop=vector_target_prop, srs_target=srs_target, raster_key=raster_key, mask_key=mask_key,
+                         cleaner=cleaner, cropper=cropper, force_parse=force_parse, reproj_rasters=reproj_rasters,
+                         reproj_all_cpus=reproj_all_cpus, keep_rasters_open=keep_rasters_open, transforms=transforms)
+
+    @staticmethod
+    def _tile_cropper(features, rasters_data, coverage, srs_target, tile_size, tile_overlap,
+                      skip_empty_tiles, skip_nodata_tiles, keep_rasters_open, px_size):
+        """Returns the ROI information for a given feature (may be modified in derived classes)."""
+        # instead of iterating over features to generate samples, we tile the raster(s)
+        # note: the 'coverage' geometry should already be in the target srs
+        roi_tl, roi_br = geo.utils.get_feature_bbox(coverage)
+        roi_geotransform = (roi_tl[0], px_size[0], 0.0,
+                            roi_tl[1], 0.0, px_size[1])
+        srs_target_wkt = srs_target.ExportToWkt()
+        import shapely
+        import gdal
+        # remember: we assume that all rasters have the same intrinsic settings
+        crop_datatype = geo.utils.GDAL2NUMPY_TYPE_CONV[rasters_data[0]["data_type"]]
+        crop_raster_gdal = gdal.GetDriverByName("MEM").Create("",
+                                                              int(round(tile_size[1])),
+                                                              int(round(tile_size[0])),
+                                                              rasters_data[0]["band_count"],
+                                                              rasters_data[0]["data_type"])
+        crop_raster_gdal.SetProjection(srs_target_wkt)
+        samples = []
+        crop_id = 0
+        roi_px_br = geo.utils.get_pxcoord(roi_geotransform, *roi_br)
+        nb_iter_y = int(math.ceil((roi_px_br[1] + tile_overlap) / (tile_size[1] - tile_overlap)))
+        nb_iter_x = int(math.ceil((roi_px_br[0] + tile_overlap) / (tile_size[0] - tile_overlap)))
+        pbar = tqdm.tqdm(total=nb_iter_y * nb_iter_x, desc="validating crop candidates")
+        roi_offset_px_y = -tile_overlap
+        while roi_offset_px_y < roi_px_br[1]:
+            roi_offset_px_x = -tile_overlap
+            while roi_offset_px_x < roi_px_br[0]:
+                pbar.update(1)
+                crop_px_tl = (roi_offset_px_x, roi_offset_px_y)
+                crop_px_br = (crop_px_tl[0] + tile_size[0], crop_px_tl[1] + tile_size[1])
+                crop_tl = geo.utils.get_geocoord(roi_geotransform, *crop_px_tl)
+                crop_br = geo.utils.get_geocoord(roi_geotransform, *crop_px_br)
+                crop_geom = shapely.geometry.Polygon([crop_tl, (crop_br[0], crop_tl[1]), crop_br, (crop_tl[0], crop_br[1])])
+                crop_geotransform = (crop_tl[0], px_size[0], 0.0,
+                                     crop_tl[1], 0.0, px_size[1])
+                crop_raster_gdal.SetGeoTransform(crop_geotransform)
+                raster_hits = []
+                found_valid_intersection = False or not skip_nodata_tiles
+                for raster_idx, raster_data in enumerate(rasters_data):
+                    if raster_data["target_roi"].intersects(crop_geom):
+                        if not found_valid_intersection:
+                            rasterfile = geo.utils.open_rasterfile(raster_data, keep_rasters_open=keep_rasters_open)
+                            # yeah, we reproject the crop, preprocessing is slow, deal with it
+                            geo.utils.reproject_crop(rasterfile, crop_raster_gdal, tile_size, crop_datatype, fill_nodata=True)
+                            for raster_band_idx in range(crop_raster_gdal.RasterCount):
+                                curr_band = crop_raster_gdal.GetRasterBand(raster_band_idx + 1)
+                                found_valid_intersection = found_valid_intersection or \
+                                    np.count_nonzero(curr_band.ReadAsArray() != curr_band.GetNoDataValue()) > 0
+                        raster_hits.append(raster_idx)
+                if raster_hits and found_valid_intersection:
+                    crop_centroid = crop_geom.centroid
+                    crop_radius = np.linalg.norm(np.asarray(crop_tl) - np.asarray(crop_br)) / 2
+                    crop_features = []
+                    for f in features:
+                        if f["geometry"].distance(crop_centroid) > crop_radius:
+                            continue
+                        inters = f["geometry"].intersection(crop_geom)
+                        if inters.is_empty:
+                            continue
+                        crop_features.append(f)
+                    if crop_features or not skip_empty_tiles:
+                        # prepare actual 'sample' for crop generation at runtime
+                        samples.append({
+                            "features": crop_features,
+                            "id": crop_id,
+                            "roi": crop_geom,
+                            "roi_tl": crop_tl,
+                            "roi_br": crop_br,
+                            "raster_hits": raster_hits,
+                            "crop_width": int(round(tile_size[0])),
+                            "crop_height": int(round(tile_size[1])),
+                            "geotransform": crop_geotransform,
+                        })
+                crop_id += 1
+                roi_offset_px_x += tile_size[0] - tile_overlap
+            roi_offset_px_y += tile_size[1] - tile_overlap
+        return samples
