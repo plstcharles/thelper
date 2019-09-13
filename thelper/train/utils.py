@@ -116,7 +116,7 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
                  top_k=1,               # type: int
                  conf_threshold=None,   # type: Optional[thelper.typedefs.Number]
                  class_names=None,      # type: Optional[List[AnyStr]]
-                 target_name=None,      # type: Optional[List[AnyStr]]
+                 target_name=None,      # type: Optional[AnyStr]
                  viz_count=0,           # type: int
                  report_count=None,     # type: Optional[int]
                  log_keys=None,         # type: Optional[List[AnyStr]]
@@ -456,7 +456,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
                  conf_threshold=None,   # type: Optional[thelper.typedefs.Number]
                  iou_threshold=None,    # type: Optional[thelper.typedefs.Number]
                  class_names=None,      # type: Optional[List[AnyStr]]
-                 target_name=None,      # type: Optional[List[AnyStr]]
+                 target_name=None,      # type: Optional[AnyStr]
                  viz_count=0,           # type: int
                  report_count=None,     # type: Optional[int]
                  log_keys=None,         # type: Optional[List[AnyStr]]
