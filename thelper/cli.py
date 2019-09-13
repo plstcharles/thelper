@@ -129,7 +129,7 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False, task_compat
                 f"\told: {str(old_task)}\n\tnew: {str(new_task)}\n" +
                 (f"\tcompat: {str(compat_task)}\n\n" if compat_task is not None else "\n") +
                 "WARNING: if resuming with new or compat, some weights might be discarded!",
-                choices=TASK_COMPAT_CHOICES)
+                choices=list(TASK_COMPAT_CHOICES))
         task = old_task if task_compat_mode == "old" else new_task if task_compat_mode == "new" else compat_task
         if task_compat_mode != "old":
             # saved optimizer state might cause issues with mismatched tasks, let's get rid of it
