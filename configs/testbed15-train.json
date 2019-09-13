@@ -59,6 +59,9 @@
         "valid_metrics": {
             "mAP": {
                 "type": "thelper.optim.metrics.AveragePrecision"
+            },
+            "detections": {
+                "type": "thelper.data.geo.ogc.TB15D104DetectLogger"
             }
         }
     }
