@@ -192,22 +192,18 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
             self.meta = {key: np.asarray([None] * max_iters) for key in self.log_keys}
         if task.class_names != self.class_names:
             self.class_names = task.class_names
-        if target is None or target.numel() == 0:
-            # FIXME: we should still accumulate predictions on missing targets for evalution-only logging
-            # only accumulate results when groundtruth is available
-            self.score[iter_idx] = None
-            self.true[iter_idx] = None
-            for key, array in self.meta.items():
-                array[iter_idx] = None
-            return
-        assert pred.dim() == 2 or target.dim() == 1, "current classif logger impl only supports batched 1D outputs"
-        assert pred.shape[0] == target.shape[0], "prediction/gt tensors batch size mismatch"
+        assert pred.dim() == 2, "current classif logger impl only supports 2D outputs (BxC)"
         assert pred.shape[1] == len(self.class_names), "unexpected prediction class dimension size"
+        if target is None or target.numel() == 0:
+            self.true[iter_idx] = None
+        else:
+            assert target.dim() == 1, "gt should be batched (1D) tensor"
+            assert pred.shape[0] == target.shape[0], "prediction/gt tensors batch size mismatch"
+            self.true[iter_idx] = target.numpy()
         if self.force_softmax:
             with torch.no_grad():
                 pred = torch.nn.functional.softmax(pred, dim=1)
         self.score[iter_idx] = pred.numpy()
-        self.true[iter_idx] = target.numpy()
         for meta_key in self.log_keys:
             assert meta_key in sample, f"could not extract sample field with key {repr(meta_key)}"
             val = sample[meta_key]
@@ -237,8 +233,9 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
             return None
         if self.score is None or self.true is None:
             return None
-        pack = list(zip(*[(*pack, ) for packs in zip(self.score, self.true, *self.meta.values())
-                          if packs[1] is not None for pack in zip(*packs)]))
+        pack = list(zip(*[(*pack, )
+                          for packs in zip(self.score, self.true, *self.meta.values())
+                          for pack in zip(*packs)]))
         logdata = {key: np.stack(val, axis=0) for key, val in zip(["pred", "target", *self.meta.keys()], pack)}
         assert all([len(val) == len(logdata["target"]) for val in logdata.values()]), "messed up unpacking"
         header = "target_name,target_score"
@@ -252,8 +249,12 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
             pred_scores = logdata["pred"][sample_idx]
             sorted_score_idxs = np.argsort(pred_scores)[::-1]
             sorted_scores = pred_scores[sorted_score_idxs]
-            if self.conf_threshold is None or pred_scores[gt_label_idx] >= self.conf_threshold:
-                entry = f"{self.class_names[gt_label_idx]},{pred_scores[gt_label_idx]:2.4f}"
+            if self.conf_threshold is None or gt_label_idx is None or \
+                    pred_scores[gt_label_idx] >= self.conf_threshold:
+                if gt_label_idx is not None:
+                    entry = f"{self.class_names[gt_label_idx]},{pred_scores[gt_label_idx]:2.4f}"
+                else:
+                    entry = f"<unknown>,{0.0:2.4f}"
                 for k in range(self.top_k):
                     entry += f",{self.class_names[sorted_score_idxs[k]]},{sorted_scores[k]:2.4f}"
                 for meta_key in self.log_keys:
