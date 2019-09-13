@@ -3,6 +3,12 @@
 Changelog
 =========
 
+0.3.12 (2019/09/13)
+-------------------
+
+* Fixed potential issue when reinstantiating custom ResNet
+* Fixed ClassifLogger prediction logger w/o groundtruth
+
 0.3.11 (2019/09/09)
 -------------------
 
