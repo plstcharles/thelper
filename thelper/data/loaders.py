@@ -272,8 +272,10 @@ class LoaderFactory:
         if not self.train_split and not self.valid_split and not self.test_split:
             raise AssertionError("data config must define a split for at least one loader type (train/valid/test)")
         self.total_usage = Counter(self.train_split) + Counter(self.valid_split) + Counter(self.test_split)
-        self.skip_split_norm = thelper.utils.str2bool(thelper.utils.get_key_def("skip_split_norm", config, False))
-        self.skip_class_balancing = thelper.utils.str2bool(thelper.utils.get_key_def("skip_class_balancing", config, False))
+        self.skip_split_norm = thelper.utils.str2bool(thelper.utils.get_key_def(
+            ["skip_norm", "skip_split_norm"], config, False))
+        self.skip_class_balancing = thelper.utils.str2bool(thelper.utils.get_key_def(
+            ["skip_balancing", "skip_class_balancing", "skip_rebalancing", "skip_class_rebalancing"], config, False))
         for name, usage in self.total_usage.items():
             if usage != 1:
                 normalize_ratios = None

@@ -126,7 +126,7 @@ class SqueezeExcitationBlock(Module):
 
 class ResNet(thelper.nn.Module):
 
-    def __init__(self, task, block=BasicBlock, layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
+    def __init__(self, task, block="thelper.nn.resnet.BasicBlock", layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
                  flexible_input_res=False, pool_size=7, coordconv=False, radius_channel=True, pretrained=False):
         # note: must always forward args to base class to keep backup
         super().__init__(task, **{k: v for k, v in vars().items() if k not in ["self", "task", "__class__"]})
@@ -254,7 +254,7 @@ class ConvTailNet(torch.nn.Module):
 
 class ResNetFullyConv(ResNet):
 
-    def __init__(self, task, block=BasicBlock, layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
+    def __init__(self, task, block="thelper.nn.resnet.BasicBlock", layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
                  flexible_input_res=False, pool_size=7, coordconv=False, radius_channel=True, pretrained=False):
         super().__init__(task=task, block=block, layers=layers, strides=strides, input_channels=input_channels,
                          flexible_input_res=flexible_input_res, pool_size=pool_size, coordconv=coordconv,

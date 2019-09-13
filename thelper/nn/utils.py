@@ -201,7 +201,7 @@ class Module(torch.nn.Module):
         if task is None or not isinstance(task, thelper.tasks.Task):
             raise AssertionError("task must derive from thelper.tasks.Task")
         self.task = task
-        self.config = kwargs
+        self.config = kwargs  # make a backup of constructor params for reinstantiation later
 
     @abstractmethod
     def forward(self, *input):
