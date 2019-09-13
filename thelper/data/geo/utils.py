@@ -163,8 +163,9 @@ def parse_rasters(raster_paths, srs_target=None, reproj=False):
         target_rois.append(target_roi)
         rasters_data.append({
             "srs": raster_curr_srs,
-            "geotransform": raster_geotransform,
-            "offset_geotransform": (0, px_width, skew_x, 0, skew_y, px_height),
+            "geotransform": np.asarray(raster_geotransform),
+            "offset_geotransform": np.asarray((0, px_width, skew_x,
+                                               0, skew_y, px_height)),
             "extent": raster_extent,
             "skew": (skew_x, skew_y),
             "resolution": (px_width, px_height),

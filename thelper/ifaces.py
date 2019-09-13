@@ -155,6 +155,7 @@ class FormatHandler(ABC):
         "yaml": "yaml",
         "yml": "yaml",
         "json": "json",
+        "geojson": "geojson",
     }
     # format -> extension
     __fmt_ext__ = {fmt: ext for ext, fmt in __formats__.items()}

@@ -9,6 +9,7 @@ import tqdm
 
 import thelper.data
 import thelper.data.geo as geo
+import thelper.train.utils
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +179,7 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
                 "raster_hits": raster_hits,
                 "crop_width": crop_width,
                 "crop_height": crop_height,
-                "geotransform": roi_geotransform,
+                "geotransform": np.asarray(roi_geotransform),
                 "srs": srs_target_wkt,
             }
 
@@ -348,3 +349,32 @@ class TB15D104TileDataset(geo.parsers.TileDataset):
         if self.transforms:
             sample = self.transforms(sample)
         return sample
+
+
+class TB15D104DetectLogger(thelper.train.utils.DetectLogger):
+
+    def __init__(self, conf_threshold=0.5):
+        super().__init__(conf_threshold=conf_threshold, target_name="lake",
+                         log_keys=["id", "geotransform"], format="geojson")
+
+    def report_geojson(self):
+        # here, we only care about reporting predictions, we ignore the (possibly missing) gt bboxes
+        import shapely
+        import geojson
+        batch_size = len(self.bbox[0])
+        bbox_lists = [bboxes for batch in self.bbox for bboxes in batch]  # one list per crop
+        if batch_size > 1:
+            geotransforms = [np.asarray(geot) for batch in self.meta["geotransform"] for geot in batch]
+        else:
+            # special check to avoid issues when unpacking (1,6)-dim tensor
+            geotransforms = [np.asarray(geot) for geot in self.meta["geotransform"]]
+        crop_ids = [id for batch in self.meta["id"] for id in batch]
+        output_features = []
+        for bboxes, geotransform, id in zip(bbox_lists, geotransforms, crop_ids):
+            for bbox in bboxes:
+                bbox_tl = geo.utils.get_geocoord(geotransform, *bbox.top_left)
+                bbox_br = geo.utils.get_geocoord(geotransform, *bbox.bottom_right)
+                bbox_geom = shapely.geometry.Polygon([bbox_tl, (bbox_br[0], bbox_tl[1]),
+                                                      bbox_br, (bbox_tl[0], bbox_br[1])])
+                output_features.append(geojson.Feature(geometry=bbox_geom, properties={"image_id": id}))
+        return geojson.dumps(geojson.FeatureCollection(output_features))

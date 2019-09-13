@@ -12,6 +12,7 @@ import gdal
 import numpy as np
 import ogr
 import osr
+import shapely
 import tqdm
 
 import thelper.data
@@ -148,8 +149,8 @@ class VectorCropDataset(thelper.data.Dataset):
                 "raster_hits": raster_hits,
                 "crop_width": crop_width,
                 "crop_height": crop_height,
-                "geotransform": (roi_tl[0], px_size[0], skew[0],
-                                 roi_tl[1], skew[1], px_size[1]),
+                "geotransform": np.asarray((roi_tl[0], px_size[0], skew[0],
+                                            roi_tl[1], skew[1], px_size[1])),
                 "srs": srs_target_wkt,
             })
         return samples
@@ -337,8 +338,6 @@ class TileDataset(VectorCropDataset):
         roi_geotransform = (roi_tl[0], px_size[0], 0.0,
                             roi_tl[1], 0.0, px_size[1])
         srs_target_wkt = srs_target.ExportToWkt()
-        import shapely
-        import gdal
         # remember: we assume that all rasters have the same intrinsic settings
         crop_datatype = geo.utils.GDAL2NUMPY_TYPE_CONV[rasters_data[0]["data_type"]]
         crop_raster_gdal = gdal.GetDriverByName("MEM").Create("",
@@ -362,7 +361,8 @@ class TileDataset(VectorCropDataset):
                 crop_px_br = (crop_px_tl[0] + tile_size[0], crop_px_tl[1] + tile_size[1])
                 crop_tl = geo.utils.get_geocoord(roi_geotransform, *crop_px_tl)
                 crop_br = geo.utils.get_geocoord(roi_geotransform, *crop_px_br)
-                crop_geom = shapely.geometry.Polygon([crop_tl, (crop_br[0], crop_tl[1]), crop_br, (crop_tl[0], crop_br[1])])
+                crop_geom = shapely.geometry.Polygon([crop_tl, (crop_br[0], crop_tl[1]),
+                                                      crop_br, (crop_tl[0], crop_br[1])])
                 crop_geotransform = (crop_tl[0], px_size[0], 0.0,
                                      crop_tl[1], 0.0, px_size[1])
                 crop_raster_gdal.SetGeoTransform(crop_geotransform)
@@ -401,7 +401,7 @@ class TileDataset(VectorCropDataset):
                             "raster_hits": raster_hits,
                             "crop_width": int(round(tile_size[0])),
                             "crop_height": int(round(tile_size[1])),
-                            "geotransform": crop_geotransform,
+                            "geotransform": np.asarray(crop_geotransform),
                         })
                 crop_id += 1
                 roi_offset_px_x += tile_size[0] - tile_overlap
