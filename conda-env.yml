@@ -8,6 +8,7 @@ dependencies:
   - cython
   - ddt
   - gdal
+  - geojson
   - gitdb
   - gitpython
   - lz4

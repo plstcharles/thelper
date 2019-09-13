@@ -224,6 +224,7 @@ autodoc_mock_imports = [
     'augmentor',
     'cv2',
     'gdal',  # for geospatial tools
+    'geojson',  # for geospatial tools
     'git',
     'h5py',
     'lz4',
