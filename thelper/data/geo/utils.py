@@ -188,7 +188,6 @@ def parse_geojson(geojson, srs_target=None, roi=None, allow_outlying=False, clip
     assert "features" in geojson and isinstance(geojson["features"], list), "unexpected geojson format"
     features = geojson["features"]
     logger.debug(f"parsing {len(features)} features from geojson...")
-    srs_origin = parse_coordinate_system(geojson)
     srs_transform = None
     if srs_target is not None:
         assert isinstance(srs_target, (str, int, osr.SpatialReference)), \
@@ -199,6 +198,7 @@ def parse_geojson(geojson, srs_target=None, roi=None, allow_outlying=False, clip
             srs_target_obj = osr.SpatialReference()
             srs_target_obj.ImportFromEPSG(srs_target)
             srs_target = srs_target_obj
+        srs_origin = parse_coordinate_system(geojson)
         if not srs_origin.IsSame(srs_target):
             srs_transform = osr.CoordinateTransformation(srs_origin, srs_target)
     kept_features = []
