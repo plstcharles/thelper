@@ -305,7 +305,6 @@ class VectorCropDataset(Dataset):
             sample = self.transforms(sample)
         return sample
 
-
 class TileDataset(VectorCropDataset):
     """Abstract dataset used to systematically tile vector data and rasters."""
 
@@ -421,3 +420,46 @@ class TileDataset(VectorCropDataset):
                 roi_offset_px_x += tile_size[0] - tile_overlap
             roi_offset_px_y += tile_size[1] - tile_overlap
         return samples
+
+
+class SlidingWindowDataset(thelper.data.Dataset):
+
+    def __init__(self, raster_path, raster_bands, patch_size, transforms=None, image_key="image"):
+        super().__init__(transforms=transforms)
+        self.image_key = image_key
+        self.raster_ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
+        self.center_key = "center"
+        if self.raster_ds is None:
+            logger.fatal(f"File not found: {raster_path}")
+            exit(0)
+        xsize = self.raster_ds.RasterXSize
+        ysize = self.raster_ds.RasterYSize
+        self.patch_size = patch_size
+        self.hpatch_size = self.patch_size // 2
+        for k in raster_bands:
+            raster_band = self.raster_ds.GetRasterBand(k)
+            if raster_band is None:
+                logger.fatal(f"Raster band {k} not found: {raster_path}")
+                exit(0)
+            else:
+                logger.info(f"Using band {k} in {raster_path}")
+        self.samples = []
+        for y in range(ysize - self.patch_size-1):
+            for x in range(xsize - self.patch_size-1):
+                self.samples.append((int(x), int(y)))
+        self.raster_bands = raster_bands
+
+    def __getitem__(self, idx):
+        offsets = self.samples[idx]
+        image = []
+        for raster_band in self.raster_bands:
+            image.append(self.raster_ds.GetRasterBand(raster_band).ReadAsArray(offsets[0], offsets[1],
+                         self.patch_size, self.patch_size))
+        image = np.dstack(image)
+        sample = {
+            self.image_key: np.array(image.data, copy=True, dtype='float32'),
+            self.center_key: (offsets[0] + self.hpatch_size, offsets[1] + self.hpatch_size),
+        }
+        if self.transforms:
+            sample = self.transforms(sample)
+        return sample

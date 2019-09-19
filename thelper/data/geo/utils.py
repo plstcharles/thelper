@@ -415,7 +415,9 @@ def export_geotiff(filepath, crop, srs, geotransform):
 
 
 def export_geojson_with_crs(features, srs_target):
-    """Exports a list of features along with their SRS into a GeoJSON-compat string."""
+    """
+    Exports a list of features along with their SRS into a GeoJSON-compat string.
+    """
 
     class _FeatureCollection(geojson.FeatureCollection):
         def __init__(self, *args, srs="4326", **kwargs):
@@ -438,3 +440,102 @@ def export_geojson_with_crs(features, srs_target):
 
     assert isinstance(features, list), "unexpected feature list type"
     return geojson.dumps(_FeatureCollection(features, srs=srs_target), indent=2)
+
+
+def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
+                             batch_size=256, num_workers=8, use_gpu=True,
+                             transforms=None, normalize_loss=True):
+
+    import thelper.data.geo
+    import torch
+    model = thelper.nn.create_model(config=ckptdata['config'], task=None, save_dir=None,
+                                    ckptdata=ckptdata)
+    if use_gpu:
+        model = model.cuda()
+    else:
+        model = model.cpu()
+    sofmax = torch.nn.Softmax(dim=1)
+
+    task = eval(ckptdata["task"])
+    nclasses = len(task.class_names)
+
+    for raster_input in raster_inputs:
+        raster_path = raster_input['path']
+        raster_bands = raster_input['bands']
+        ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
+        xsize = ds.RasterXSize
+        ysize = ds.RasterYSize
+        georef = ds.GetProjectionRef()
+        affine = ds.GetGeoTransform()
+        raster_basename = os.path.basename(raster_path).split(".")[0]
+        raster_class_path = os.path.join(save_dir, raster_basename + "_class.tif")
+        class_ds = gdal.GetDriverByName('GTiff').Create(raster_class_path, xsize, ysize, 1, gdal.GDT_Byte)
+        if class_ds is None:
+            raise Exception(f"Unable to create: {raster_class_path}")
+        else:
+            logger.info(f"Creating: {raster_class_path}")
+        class_ds.SetGeoTransform(affine)
+        class_ds.SetProjection(georef)
+        band = class_ds.GetRasterBand(1)
+        band.SetNoDataValue(0)
+        class_ds = 0
+        class_ds = gdal.Open(raster_class_path, gdal.GA_Update)
+
+        raster_prob_path = os.path.join(save_dir, raster_basename + "_probs.tif")
+        probs_ds = gdal.GetDriverByName('GTiff').Create(raster_prob_path, xsize, ysize, nclasses, gdal.GDT_Float32)
+        if probs_ds is None:
+            raise Exception(f"Unable to create: {raster_prob_path}")
+        else:
+            logger.info(f"Creating: {raster_prob_path}")
+        probs_ds.SetGeoTransform(affine)
+        probs_ds.SetProjection(georef)
+        probs_ds = 0
+        probs_ds = gdal.Open(raster_prob_path, gdal.GA_Update)
+
+        dataset = thelper.data.geo.parsers.SlidingWindowDataset(raster_path=raster_path,
+                                                                raster_bands=raster_bands,
+                                                                patch_size=patch_size,
+                                                                transforms=transforms)
+        dataloader = thelper.data.DataLoader(dataset=dataset,
+                                                 batch_size=batch_size,
+                                                 num_workers=num_workers,
+                                                 shuffle=False)
+        nbatches = len(dataloader)
+        model.eval()
+
+        l = 0
+        import cv2
+        with torch.no_grad():
+            for k, sample in enumerate(dataloader):
+                logging.info(f"Batch {k+1} of {nbatches}: {(k+1)/nbatches:4.1%}")
+                centerX0 = sample["center"][0].cpu().data.numpy()
+                centerY0 = sample["center"][1].cpu().data.numpy()
+                ndata = centerX0.shape[0]
+                x_data = sample['image']
+                if use_gpu:
+                    x_data = x_data.cuda()
+                y_prob = model(x_data)
+                if normalize_loss:
+                    y_prob = sofmax(y_prob)
+                y_class_idxs = torch.argmax(y_prob, dim=1).cpu().data.numpy()
+                y_prob = y_prob.cpu().data.numpy()
+                x_data = x_data.cpu().data.numpy()
+                #print(y_class_idxs)
+                for j in range(ndata):
+                    #cv2.imshow("test", x_data[j].transpose(1,2,0))
+                    #cv2.waitKey(10)
+                    #print(int(xoffset0[j]),int(yoffset0[j]))
+                    #print(y_class_idxs[j]+1, int(centerX0[j]), int(centerY0[j]))
+                    class_id = np.array( [[y_class_idxs[j] + 1]])
+                    x0 = int(centerX0[j])
+                    y0 = int(centerY0[j])
+                    class_ds.GetRasterBand(1).WriteArray(class_id, x0, y0)
+                    for l in range(y_prob.shape[1]):
+                        probs_ds.GetRasterBand(l+1).WriteArray(np.array([[y_prob[j, l]]], dtype='float32'),
+                                                               int(centerX0[j]), int(centerY0[j]))
+                class_ds.FlushCache()
+                probs_ds.FlushCache()
+        class_ds=None
+        probs_ds=None
+
+

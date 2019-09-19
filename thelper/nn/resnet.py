@@ -127,7 +127,8 @@ class SqueezeExcitationBlock(Module):
 class ResNet(thelper.nn.Module):
 
     def __init__(self, task, block="thelper.nn.resnet.BasicBlock", layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
-                 flexible_input_res=False, pool_size=7, head_type=None, coordconv=False, radius_channel=True, pretrained=False):
+                 flexible_input_res=False, pool_size=7, head_type=None, coordconv=False, radius_channel=True, pretrained=False,
+                 conv1_config=[7, 2, 3]):
         # note: must always forward args to base class to keep backup
         super().__init__(task, **{k: v for k, v in vars().items() if k not in ["self", "task", "__class__"]})
         if isinstance(block, str):
@@ -138,6 +139,10 @@ class ResNet(thelper.nn.Module):
             raise AssertionError("expected layers/strides to be provided as list of ints")
         if len(layers) != len(strides):
             raise AssertionError("layer/strides length mismatch")
+        # NOTE: conv1_config=[7,2,3] is the basic configuration of ResNet.  
+        #       other configuration more suitables for CIFAR for example can use conv1_config[3,1,1]
+        if not isinstance(conv1_config, list) or not len(conv1_config) == 3 or not all(isinstance(c, int) for c in conv1_config): 
+            raise AssertionError("conv1 configuration must be a list of 3 parameters defining [kernel_size,stride,padding]")
         self.input_channels = input_channels
         self.flexible_input_res = flexible_input_res
         self.pool_size = pool_size
@@ -147,7 +152,7 @@ class ResNet(thelper.nn.Module):
         self.pretrained = pretrained
         self.inplanes = 64
         self.conv1 = self._make_conv2d(in_channels=input_channels, out_channels=self.inplanes,
-                                       kernel_size=7, stride=2, padding=3, bias=False)
+                                       kernel_size=conv1_config[0], stride=conv1_config[1], padding=conv1_config[2], bias=False)
         self.bn1 = torch.nn.BatchNorm2d(self.inplanes)
         self.relu = torch.nn.ReLU(inplace=True)
         self.maxpool = torch.nn.MaxPool2d(kernel_size=3, stride=2, padding=1)

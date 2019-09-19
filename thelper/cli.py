@@ -406,6 +406,10 @@ def make_argparser():
     split_ap = subparsers.add_parser("export", help="launches a model exportation session from a config file")
     split_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session directory)")
     split_ap.add_argument("save_dir", type=str, help="path to the session output root directory")
+    infer_ap = subparsers.add_parser("infer", help="creates a inference session from a config file")
+    infer_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session directory)")
+    infer_ap.add_argument("save_dir", type=str, help="path to the session output root directory")
+
     return ap
 
 
@@ -430,6 +434,50 @@ def setup(args=None, argparser=None):
     thelper.utils.init_logger(log_level, args.log, args.force_stdout)
     return args
 
+
+def inference_session(ckpt_path, save_dir, raster_inputs, batch_size, patch_size,
+                      num_workers=4,use_gpu=True, transforms=None, normalize_loss=True):
+
+    import gdal
+    import thelper.data.geo
+    logger = thelper.utils.get_func_logger()
+    if not os.path.exists(ckpt_path):
+        logger.fatal(f"Model not found: {ckpt_path}")
+        exit(0)
+
+    ckptdata = thelper.utils.load_checkpoint(ckpt_path)
+
+    if not os.path.exists(save_dir):
+        logger.info(f"Create save directory: {save_dir}")
+        os.makedirs(save_dir)
+    else:
+        logger.info(f"Found save directory: {save_dir}")
+
+    for raster_input in raster_inputs:
+        raster_path = raster_input['path']
+
+        raster_ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
+        if raster_ds is None:
+            logger.fatal(f"File not found: {raster_path}")
+            exit(0)
+
+        for k in raster_input['bands']:
+            raster_band = raster_ds.GetRasterBand(k+1)
+            if raster_band is None:
+                logger.fatal(f"Raster band {k} not found: {raster_path}")
+                exit(0)
+            else:
+                logger.info(f"Using band {k} in {raster_path}")
+
+    thelper.data.geo.utils.sliding_window_inference(save_dir=save_dir,
+                                                    ckptdata=ckptdata,
+                                                    raster_inputs=raster_inputs,
+                                                    batch_size=batch_size,
+                                                    num_workers=num_workers,
+                                                    patch_size=patch_size,
+                                                    use_gpu=use_gpu,
+                                                    transforms=transforms,
+                                                    normalize_loss=normalize_loss)
 
 def main(args=None, argparser=None):
     """Main entrypoint to use with console applications.
@@ -474,6 +522,31 @@ def main(args=None, argparser=None):
         if save_dir is None:
             save_dir = thelper.utils.get_save_dir(out_root=None, dir_name=None, config=override_config)
         resume_session(ckptdata, save_dir, config=override_config, eval_only=args.eval_only, task_compat=args.task_compat)
+    elif args.mode == "infer":
+        thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
+        config = thelper.utils.load_config(args.cfg_path)
+        save_dir = args.save_dir
+        name = config["name"]
+        normalize_loss = config["normalize_loss"]
+        raster_inputs = config["raster_inputs"]
+        ckpt_path = config["ckpt_path"]
+        save_dir = os.path.join(save_dir, name)
+
+        batch_size = thelper.utils.get_key_def("batch_size",  config, 256 )
+        num_workers = thelper.utils.get_key_def("num_workers", config, 8)
+        use_gpu = thelper.utils.get_key_def("use_gpu", config, True)
+        patch_size = thelper.utils.get_key( "patch_size", config)
+
+        transforms_config = thelper.utils.get_key_def("base_transforms", config, None)
+        transforms = None
+        if transforms_config is not None:
+            transforms = thelper.transforms.load_transforms(transforms_config)
+
+        inference_session(ckpt_path=ckpt_path, save_dir=save_dir, raster_inputs=raster_inputs, batch_size=batch_size,
+                          num_workers=num_workers, patch_size=patch_size, use_gpu=use_gpu, transforms=transforms,
+                          normalize_loss=normalize_loss)
+
+
     else:
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
         config = thelper.utils.load_config(args.cfg_path)
