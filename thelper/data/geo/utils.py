@@ -1,3 +1,4 @@
+import json
 import logging
 import math
 import os
@@ -203,6 +204,45 @@ def parse_geojson(geojson, srs_target=None, roi=None, allow_outlying=False, clip
             srs_transform = osr.CoordinateTransformation(srs_origin, srs_target)
     kept_features = []
     for feature in tqdm.tqdm(features, desc="parsing raw geojson features"):
+        _postproc_feature(feature, kept_features, srs_transform, roi, allow_outlying, clip_outlying)
+    logger.debug(f"kept {len(kept_features)} features after roi validation")
+    return kept_features
+
+
+def parse_shapefile(shapefile_path, srs_target=None, roi=None, allow_outlying=False, clip_outlying=False, layer_id=0):
+    assert isinstance(shapefile_path, str), "unexpected shapefile path type (must be str)"
+    shapefile = ogr.Open(shapefile_path, 0)  # 0 = read only?
+    assert shapefile is not None, f"failed to open shapefile at '{shapefile_path}'"
+    layer = shapefile.GetLayer(layer_id)
+    assert layer.GetFeatureCount() > 0, "target shapefile layer did not possess any feature"
+    logger.debug(f"parsing {layer.GetFeatureCount()} features from shapefile...")
+    srs_transform = None
+    if srs_target is not None:
+        assert isinstance(srs_target, (str, int, osr.SpatialReference)), \
+            "target EPSG SRS must be given as int/str"
+        if isinstance(srs_target, (str, int)):
+            if isinstance(srs_target, str):
+                srs_target = int(srs_target.replace("EPSG:", ""))
+            srs_target_obj = osr.SpatialReference()
+            srs_target_obj.ImportFromEPSG(srs_target)
+            srs_target = srs_target_obj
+        srs_origin = layer.GetSpatialRef()
+        if not srs_origin.IsSame(srs_target):
+            srs_transform = osr.CoordinateTransformation(srs_origin, srs_target)
+    kept_features = []
+    attribs = [layer.GetLayerDefn().GetFieldDefn(i) for i in range(layer.GetLayerDefn().GetFieldCount())]
+    for feature in tqdm.tqdm(layer, desc="parsing raw shapefile features"):
+        feature = {
+            "geometry": shapely.wkt.loads(feature.GetGeometryRef().ExportToWkt()),
+            "properties": {attribs[i].GetNameRef(): feature.GetField(i) for i in range(len(attribs))},
+        }
+        _postproc_feature(feature, kept_features, srs_transform, roi, allow_outlying, clip_outlying)
+    logger.debug(f"kept {len(kept_features)} features after roi validation")
+    return kept_features
+
+
+def _postproc_feature(feature, kept_features, srs_transform=None, roi=None, allow_outlying=False, clip_outlying=False):
+    if isinstance(feature["geometry"], dict):
         assert feature["geometry"]["type"] in ["Polygon", "MultiPolygon"], \
             f"unhandled raw geometry type: {feature['geometry']['type']}"
         if feature["geometry"]["type"] == "Polygon":
@@ -220,33 +260,46 @@ def parse_geojson(geojson, srs_target=None, roi=None, allow_outlying=False, clip
             feature["type"] = "Polygon"
         elif feature["geometry"]["type"] == "MultiPolygon":
             multipoly = shapely.geometry.shape(feature["geometry"])
-            assert multipoly.is_valid, "found invalid input multipolygon in geojson"
+            assert multipoly.is_valid, "found invalid input multipolygon"
             if srs_transform is not None:
                 ogr_geometry = ogr.CreateGeometryFromWkb(multipoly.wkb)
                 ogr_geometry.Transform(srs_transform)
                 multipoly = shapely.wkt.loads(ogr_geometry.ExportToWkt())
             feature["geometry"] = multipoly
             feature["type"] = "MultiPolygon"
-        bounds = feature["geometry"].bounds
-        feature["tl"] = bounds[0:2]
-        feature["br"] = bounds[2:4]
-        feature["clipped"] = False
-        feature["centroid"] = feature["geometry"].centroid
-        if roi is None:
+    assert isinstance(feature["geometry"], (shapely.geometry.polygon.Polygon,
+                                            shapely.geometry.multipolygon.MultiPolygon))
+    bounds = feature["geometry"].bounds
+    feature["tl"] = bounds[0:2]
+    feature["br"] = bounds[2:4]
+    feature["clipped"] = False
+    feature["centroid"] = feature["geometry"].centroid
+    if roi is None:
+        kept_features.append(feature)
+    else:
+        if (allow_outlying and roi.intersects(feature["geometry"])) or \
+                (not allow_outlying and roi.contains(feature["geometry"])):
+            if clip_outlying:
+                if not roi.contains(feature["geometry"]):
+                    feature["clipped"] = True
+                    feature["geometry"] = roi.intersection(feature["geometry"])
+                assert feature["geometry"].type in ["Polygon", "MultiPolygon"], \
+                    f"unhandled intersection geometry type: {feature['geometry'].type}"
+            feature["type"] = feature["geometry"].type
             kept_features.append(feature)
-        else:
-            if (allow_outlying and roi.intersects(feature["geometry"])) or \
-                    (not allow_outlying and roi.contains(feature["geometry"])):
-                if clip_outlying:
-                    if not roi.contains(feature["geometry"]):
-                        feature["clipped"] = True
-                        feature["geometry"] = roi.intersection(feature["geometry"])
-                    assert feature["geometry"].type in ["Polygon", "MultiPolygon"], \
-                        f"unhandled intersection geometry type: {feature['geometry'].type}"
-                feature["type"] = feature["geometry"].type
-                kept_features.append(feature)
-    logger.debug(f"kept {len(kept_features)} features after roi validation")
-    return kept_features
+
+
+def parse_roi(roi_path, srs_target=None):
+    assert isinstance(roi_path, str), "input path type should be string"
+    assert os.path.exists(roi_path), f"invalid roi path '{roi_path}'"
+    if roi_path.lower().endswith("geojson"):
+        with open(roi_path) as roi_fd:
+            features = parse_geojson(json.load(roi_fd), srs_target=srs_target)
+    elif roi_path.lower().endswith("shp"):
+        features = parse_shapefile(roi_path, srs_target=srs_target)
+    else:
+        raise AssertionError("unexpected roi file type")
+    return shapely.ops.cascaded_union([f["geometry"] for f in features])
 
 
 def get_feature_bbox(geom, offsets=None):
