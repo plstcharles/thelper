@@ -30,8 +30,8 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
     def __init__(self, raster_path, vector_path, px_size=None,
                  allow_outlying_vectors=True, clip_outlying_vectors=True,
                  lake_area_min=0.0, lake_area_max=float("inf"),
-                 lake_river_max_dist=float("inf"), roi_buffer=1000,
-                 focus_lakes=True, srs_target="3857", force_parse=False,
+                 lake_river_max_dist=float("inf"), feature_buffer=1000,
+                 master_roi=None, focus_lakes=True, srs_target="3857", force_parse=False,
                  reproj_rasters=False, reproj_all_cpus=True, display_debug=False,
                  keep_rasters_open=True, parallel=False, transforms=None):
         assert isinstance(lake_river_max_dist, (float, int)) and lake_river_max_dist >= 0, "unexpected dist type"
@@ -45,14 +45,14 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
                                     lake_river_max_dist=lake_river_max_dist, parallel=parallel)
         if self.focus_lakes:
             cropper = functools.partial(self.lake_cropper, px_size=px_size, skew=(0.0, 0.0),
-                                        roi_buffer=roi_buffer, parallel=parallel)
+                                        feature_buffer=feature_buffer, parallel=parallel)
         else:
             # TODO: implement river-focused cropper (i.e. river-length parsing?)
             raise NotImplementedError
         super().__init__(raster_path=raster_path, vector_path=vector_path, px_size=px_size, skew=None,
                          allow_outlying_vectors=allow_outlying_vectors, clip_outlying_vectors=clip_outlying_vectors,
-                         vector_area_min=lake_area_min, vector_area_max=lake_area_max,
-                         vector_target_prop=None, vector_roi_buffer=roi_buffer, srs_target=srs_target,
+                         vector_area_min=lake_area_min, vector_area_max=lake_area_max, vector_target_prop=None,
+                         feature_buffer=feature_buffer, master_roi=master_roi, srs_target=srs_target,
                          raster_key="lidar", mask_key="hydro", cleaner=cleaner, cropper=cropper,
                          force_parse=force_parse, reproj_rasters=reproj_rasters, reproj_all_cpus=reproj_all_cpus,
                          keep_rasters_open=keep_rasters_open, transforms=transforms)
@@ -108,14 +108,14 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
         return features
 
     @staticmethod
-    def lake_cropper(features, rasters_data, coverage, srs_target, px_size, skew, roi_buffer, parallel=False):
+    def lake_cropper(features, rasters_data, coverage, srs_target, px_size, skew, feature_buffer, parallel=False):
         """Returns the ROI information for a given feature (may be modified in derived classes)."""
         srs_target_wkt = srs_target.ExportToWkt()
 
         def crop_feature(feature):
             assert feature["clean"]  # should not get here with bad features
             roi, roi_tl, roi_br, crop_width, crop_height = \
-                geo.utils.get_feature_roi(feature["geometry"], px_size, skew, roi_buffer)
+                geo.utils.get_feature_roi(feature["geometry"], px_size, skew, feature_buffer)
             roi_geotransform = (roi_tl[0], px_size[0], skew[0],
                                 roi_tl[1], skew[1], px_size[1])
             # test all raster regions that touch the selected feature
@@ -260,8 +260,8 @@ class TB15D104TileDataset(geo.parsers.TileDataset):
 
     def __init__(self, raster_path, vector_path, tile_size, tile_overlap,
                  px_size=None,  allow_outlying_vectors=True, clip_outlying_vectors=True,
-                 lake_area_min=0.0, lake_area_max=float("inf"), srs_target="3857", force_parse=False,
-                 reproj_rasters=False, reproj_all_cpus=True, display_debug=False,
+                 lake_area_min=0.0, lake_area_max=float("inf"), master_roi=None, srs_target="3857",
+                 force_parse=False, reproj_rasters=False, reproj_all_cpus=True, display_debug=False,
                  keep_rasters_open=True, parallel=False, transforms=None):
         assert px_size is None or isinstance(px_size, (float, int)), "pixel size (resolution) must be float/int"
         px_size = (1.0, 1.0) if px_size is None else (float(px_size), float(px_size))
@@ -272,9 +272,9 @@ class TB15D104TileDataset(geo.parsers.TileDataset):
                          tile_overlap=tile_overlap, skip_empty_tiles=True, skip_nodata_tiles=False,
                          px_size=px_size, allow_outlying_vectors=allow_outlying_vectors,
                          clip_outlying_vectors=clip_outlying_vectors, vector_area_min=lake_area_min,
-                         vector_area_max=lake_area_max, vector_target_prop=None, srs_target=srs_target,
-                         raster_key="lidar", mask_key="hydro", cleaner=cleaner, force_parse=force_parse,
-                         reproj_rasters=reproj_rasters, reproj_all_cpus=reproj_all_cpus,
+                         vector_area_max=lake_area_max, vector_target_prop=None, master_roi=master_roi,
+                         srs_target=srs_target, raster_key="lidar", mask_key="hydro", cleaner=cleaner,
+                         force_parse=force_parse, reproj_rasters=reproj_rasters, reproj_all_cpus=reproj_all_cpus,
                          keep_rasters_open=keep_rasters_open, transforms=transforms)
         meta_keys = self.task.meta_keys
         self.task = thelper.tasks.Detection(class_names={"background": TB15D104.BACKGROUND_ID, "lake": TB15D104.LAKE_ID},
