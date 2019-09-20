@@ -27,7 +27,7 @@ class VectorCropDataset(thelper.data.Dataset):
     def __init__(self, raster_path, vector_path, px_size=None, skew=None,
                  allow_outlying_vectors=True, clip_outlying_vectors=True,
                  vector_area_min=0.0, vector_area_max=float("inf"),
-                 vector_target_prop=None, vector_roi_buffer=None,
+                 vector_target_prop=None, feature_buffer=None, master_roi=None,
                  srs_target="3857", raster_key="raster", mask_key="mask",
                  cleaner=None, cropper=None, force_parse=False,
                  reproj_rasters=False, reproj_all_cpus=True,
@@ -70,9 +70,12 @@ class VectorCropDataset(thelper.data.Dataset):
         assert vector_target_prop is None or isinstance(vector_target_prop, dict), \
             "feature target props should be specified as dictionary of property name-value pairs for search"
         self.target_prop = {} if vector_target_prop is None else vector_target_prop
-        assert vector_roi_buffer is None or (isinstance(vector_roi_buffer, (int, float)) and vector_roi_buffer > 0), \
+        assert feature_buffer is None or (isinstance(feature_buffer, (int, float)) and feature_buffer > 0), \
             "feature roi 'buffer' value should be strictly positive int/float"
-        self.roi_buffer = vector_roi_buffer
+        self.feature_buffer = feature_buffer
+        assert isinstance(master_roi, (str, shapely.geometry.polygon.Polygon,
+                                       shapely.geometry.multipolygon.MultiPolygon)), \
+            "invalid master roi (should be path to geojson/shapefile or polygon object)"
         assert isinstance(srs_target, (str, int, osr.SpatialReference)), \
             "target EPSG SRS must be given as int/str"
         self.srs_target = srs_target
@@ -82,12 +85,16 @@ class VectorCropDataset(thelper.data.Dataset):
             srs_target_obj = osr.SpatialReference()
             srs_target_obj.ImportFromEPSG(self.srs_target)
             self.srs_target = srs_target_obj
+        self.master_roi = geo.utils.parse_roi(master_roi, srs_target=self.srs_target) \
+            if isinstance(master_roi, str) else master_roi
         assert isinstance(raster_key, str), "raster key must be given as string"
         self.raster_key = raster_key
         assert isinstance(mask_key, str), "mask key must be given as string"
         self.mask_key = mask_key
         super().__init__(transforms=transforms)
         self.rasters_data, self.coverage = self._parse_rasters(self.raster_path, self.srs_target, reproj_rasters)
+        if self.master_roi is not None:
+            self.coverage = self.coverage.intersection(self.master_roi)
         if cleaner is None:
             cleaner = functools.partial(self._default_feature_cleaner, area_min=self.area_min,
                                         area_max=self.area_max, target_prop=self.target_prop)
@@ -95,7 +102,7 @@ class VectorCropDataset(thelper.data.Dataset):
                                              self.allow_outlying, self.clip_outlying, cleaner)
         if cropper is None:
             cropper = functools.partial(self._default_feature_cropper, px_size=self.px_size,
-                                        skew=self.skew, roi_buffer=self.roi_buffer)
+                                        skew=self.skew, feature_buffer=self.feature_buffer)
         self.samples = self._parse_crops(cropper, self.vector_path, cache_hash)
         # all keys already in sample dicts should be 'meta'; mask & raster will be added later
         meta_keys = list(set([k for s in self.samples for k in s]))
@@ -120,7 +127,7 @@ class VectorCropDataset(thelper.data.Dataset):
         return features
 
     @staticmethod
-    def _default_feature_cropper(features, rasters_data, coverage, srs_target, px_size, skew, roi_buffer):
+    def _default_feature_cropper(features, rasters_data, coverage, srs_target, px_size, skew, feature_buffer):
         """Returns the samples for a set of features (may be modified in derived classes)."""
         # note: default behavior = just center on the feature, and pad if required by user
         samples = []
@@ -129,7 +136,7 @@ class VectorCropDataset(thelper.data.Dataset):
         for feature in tqdm.tqdm(clean_feats, desc="validating crop candidates"):
             assert feature["clean"]  # should not get here with bad features
             roi, roi_tl, roi_br, crop_width, crop_height = \
-                geo.utils.get_feature_roi(feature["geometry"], px_size, skew, roi_buffer)
+                geo.utils.get_feature_roi(feature["geometry"], px_size, skew, feature_buffer)
             # test all raster regions that touch the selected feature
             raster_hits = []
             for raster_idx, raster_data in enumerate(rasters_data):
@@ -300,7 +307,7 @@ class TileDataset(VectorCropDataset):
                  skip_empty_tiles=False, skip_nodata_tiles=True, px_size=None,
                  allow_outlying_vectors=True, clip_outlying_vectors=True,
                  vector_area_min=0.0, vector_area_max=float("inf"),
-                 vector_target_prop=None,  srs_target="3857",
+                 vector_target_prop=None,  master_roi=None, srs_target="3857",
                  raster_key="raster", mask_key="mask", cleaner=None,
                  force_parse=False, reproj_rasters=False,
                  reproj_all_cpus=True, keep_rasters_open=True, transforms=None):
@@ -323,8 +330,8 @@ class TileDataset(VectorCropDataset):
                                     keep_rasters_open=keep_rasters_open, px_size=px_size)
         super().__init__(raster_path=raster_path, vector_path=vector_path, px_size=px_size, skew=None,
                          allow_outlying_vectors=allow_outlying_vectors, clip_outlying_vectors=clip_outlying_vectors,
-                         vector_area_min=vector_area_min, vector_area_max=vector_area_max,
-                         vector_target_prop=vector_target_prop, srs_target=srs_target, raster_key=raster_key, mask_key=mask_key,
+                         vector_area_min=vector_area_min, vector_area_max=vector_area_max, vector_target_prop=vector_target_prop,
+                         master_roi=master_roi, srs_target=srs_target, raster_key=raster_key, mask_key=mask_key,
                          cleaner=cleaner, cropper=cropper, force_parse=force_parse, reproj_rasters=reproj_rasters,
                          reproj_all_cpus=reproj_all_cpus, keep_rasters_open=keep_rasters_open, transforms=transforms)
 
