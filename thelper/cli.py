@@ -17,6 +17,9 @@ import tqdm
 
 import thelper
 
+import matplotlib
+matplotlib.use('Agg')
+
 TASK_COMPAT_CHOICES = frozenset(["old", "new", "compat"])
 
 
@@ -496,6 +499,7 @@ def main(args=None, argparser=None):
         | :func:`thelper.cli.visualize_data`
         | :func:`thelper.cli.annotate_data`
         | :func:`thelper.cli.split_data`
+        | :func:`thelper.cli.inference_session`
     """
     args = setup(args=args, argparser=argparser)
     if isinstance(args, int):
@@ -545,7 +549,6 @@ def main(args=None, argparser=None):
         inference_session(ckpt_path=ckpt_path, save_dir=save_dir, raster_inputs=raster_inputs, batch_size=batch_size,
                           num_workers=num_workers, patch_size=patch_size, use_gpu=use_gpu, transforms=transforms,
                           normalize_loss=normalize_loss)
-
 
     else:
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)

@@ -1413,3 +1413,10 @@ def check_installed(package_name):
         return True
     except ImportError:
         return False
+
+
+def set_matplotlib_agg():
+    import matplotlib
+    matplotlib.use('Agg')
+
+

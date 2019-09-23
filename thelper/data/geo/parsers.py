@@ -422,6 +422,58 @@ class TileDataset(VectorCropDataset):
         return samples
 
 
+class ImageFolderGDataset(thelper.data.ImageFolderDataset):
+    """Image folder dataset specialization interface for classification tasks.
+
+    This specialization is used to parse simple image subfolders, and it essentially replaces the very
+    basic ``torchvision.datasets.ImageFolder`` interface with similar functionalities. It it used to provide
+    a proper task interface as well as path metadata in each loaded packet for metrics/logging output.
+
+    .. seealso::
+        | :class:`thelper.data.parsers.ImageDataset`
+        | :class:`thelper.data.parsers.ClassificationDataset`
+    """
+
+    def __init__(self, root, transforms=None, image_key="image", label_key="label", path_key="path", idx_key="idx", channels=[1,2,3]):
+        """Image folder dataset parser constructor."""
+
+        super(ImageFolderGDataset, self).__init__(root=root, transforms=transforms, image_key=image_key,
+                                                 label_key=label_key, idx_key=idx_key)
+        self.channels=channels
+
+    def __getitem__(self, idx):
+        """Returns the data sample (a dictionary) for a specific (0-based) index."""
+        if isinstance(idx, slice):
+            return self._getitems(idx)
+        if idx >= len(self.samples):
+            raise AssertionError("sample index is out-of-range")
+        if idx < 0:
+            idx = len(self.samples) + idx
+        sample = self.samples[idx]
+        raster_path = sample[self.path_key]
+        raster_ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
+        if raster_ds is None:
+            raise Exception(f"File not found: {raster_path}")
+
+        image = []
+        for channel in self.channels:
+            image_arr = raster_ds.GetRasterBand(channel).ReadAsArray()
+            if image_arr is None:
+                logger.fatal(f"Band not found: {channel}")
+            image.append(image_arr)
+        image = np.dstack(image)
+        raster_ds=None
+
+        sample = {
+            self.image_key: image,
+            self.idx_key: idx,
+            **sample
+        }
+        if self.transforms:
+            sample = self.transforms(sample)
+        return sample
+
+
 class SlidingWindowDataset(thelper.data.Dataset):
 
     def __init__(self, raster_path, raster_bands, patch_size, transforms=None, image_key="image"):
@@ -450,6 +502,7 @@ class SlidingWindowDataset(thelper.data.Dataset):
         self.raster_bands = raster_bands
 
     def __getitem__(self, idx):
+
         offsets = self.samples[idx]
         image = []
         for raster_band in self.raster_bands:
