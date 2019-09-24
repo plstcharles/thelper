@@ -130,7 +130,7 @@ class PASCALVOC(Dataset):
                         sample_name, val = line.split()
                         if int(val) > 0:
                             valid_sample_names.add(sample_name)
-        self.label_colors = {idx: thelper.utils.get_label_color_mapping(self._label_name_map[name])[::-1]
+        self.label_colors = {idx: thelper.draw.get_label_color_mapping(self._label_name_map[name])[::-1]
                              for name, idx in self.label_name_map.items()}
         color_map = {idx: self.label_colors[idx][::-1] for idx in self.label_name_map.values()}
         if self.task_name == "detect":

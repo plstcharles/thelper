@@ -212,7 +212,7 @@ def visualize_data(config):
         for sample in tqdm.tqdm(loader):
             input = sample[task.input_key]
             target = sample[task.gt_key] if task.gt_key in sample else None
-            redraw = thelper.utils.draw(task=task, input=input, target=target, redraw=redraw, **viz_kwargs)
+            redraw = thelper.draw.draw(task=task, input=input, target=target, redraw=redraw, **viz_kwargs)
         logger.info("all done")
 
 

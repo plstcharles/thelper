@@ -172,7 +172,7 @@ def test_resume_session(simple_config, mocker):
 
 
 def test_visualize_data(simple_config, mocker):
-    fake_draw = mocker.patch("thelper.utils.draw")
+    fake_draw = mocker.patch("thelper.draw.draw")
     fake_imread = mocker.patch("cv2.imread", return_value=["ohhai"])
     fake_config_bad_viz = copy.deepcopy(simple_config)
     fake_config_bad_viz["viz"] = "bad"

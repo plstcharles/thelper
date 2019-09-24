@@ -143,7 +143,7 @@ class CenterCrop:
         crop_width = int(round(self.size[0] * sample.shape[1])) if self.relative else self.size[0]
         tl = [sample.shape[1] // 2 - crop_width // 2, sample.shape[0] // 2 - crop_height // 2]
         br = [tl[0] + crop_width, tl[1] + crop_height]
-        return thelper.utils.safe_crop(sample, tl, br, self.bordertype, self.borderval)
+        return thelper.draw.safe_crop(sample, tl, br, self.bordertype, self.borderval)
 
     def invert(self, sample):
         """Specifies that this operation cannot be inverted, as data loss is incurred during image transformation."""
@@ -320,7 +320,7 @@ class RandomResizedCrop:
                 target_row = np.random.randint(min(0, image_height - target_height), max(0, image_height - target_height) + 1)
                 if roi is None:
                     break
-                roi = thelper.utils.safe_crop(roi, (target_col, target_row), (target_col + target_width, target_row + target_height))
+                roi = thelper.draw.safe_crop(roi, (target_col, target_row), (target_col + target_width, target_row + target_height))
                 if np.count_nonzero(roi) >= target_width * target_height * self.min_roi_iou:
                     break
         if target_row is None or target_col is None:
@@ -331,7 +331,7 @@ class RandomResizedCrop:
             if roi is not None and not self.warned_no_crop_found_with_roi:
                 logger.warning("random resized crop failing to find proper ROI matches after max attempt count")
                 self.warned_no_crop_found_with_roi = True
-        crop = thelper.utils.safe_crop(image, (target_col, target_row), (target_col + target_width, target_row + target_height))
+        crop = thelper.draw.safe_crop(image, (target_col, target_row), (target_col + target_width, target_row + target_height))
         if self.output_size is None:
             return crop
         elif isinstance(self.output_size[0], float):
@@ -950,9 +950,9 @@ class Tile:
             image, mask = image[0], image[1]
         tile_rects, tile_images = self._get_tile_rects(image, mask), []
         for rect in tile_rects:
-            tile_images.append(thelper.utils.safe_crop(image, (rect[0], rect[1]),
-                                                       (rect[0]+rect[2], rect[1]+rect[3]),
-                                                       self.bordertype, self.borderval))
+            tile_images.append(thelper.draw.safe_crop(image, (rect[0], rect[1]),
+                                                      (rect[0]+rect[2], rect[1]+rect[3]),
+                                                      self.bordertype, self.borderval))
         return tile_images
 
     def count_tiles(self, image, mask=None):
@@ -999,7 +999,7 @@ class Tile:
             row_range = range(overlap_offset[1], height - overlap_offset[1] - tile_size[1] + 1)
             col_range = range(overlap_offset[0], width - overlap_offset[0] - tile_size[0] + 1)
             for row, col in itertools.product(row_range, col_range):
-                crop = thelper.utils.safe_crop(mask, (col, row), (col + tile_size[0], row + tile_size[1]))
+                crop = thelper.draw.safe_crop(mask, (col, row), (col + tile_size[0], row + tile_size[1]))
                 if np.count_nonzero(crop) >= req_mask_area:
                     offset_coord = (overlap_offset[0] + ((col - overlap_offset[0]) % step_size[0]),
                                     overlap_offset[1] + ((row - overlap_offset[1]) % step_size[1]))
@@ -1013,7 +1013,7 @@ class Tile:
             col = offset_coord[0]
             while col + tile_size[0] <= width - overlap_offset[0]:
                 if mask is not None:
-                    crop = thelper.utils.safe_crop(mask, (col, row), (col + tile_size[0], row + tile_size[1]))
+                    crop = thelper.draw.safe_crop(mask, (col, row), (col + tile_size[0], row + tile_size[1]))
                     if np.count_nonzero(crop) >= req_mask_area:
                         tile_rects.append((col, row, tile_size[0], tile_size[1]))  # rect = (x, y, w, h)
                 else:

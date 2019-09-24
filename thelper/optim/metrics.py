@@ -961,8 +961,8 @@ class ROCCurve(Metric, ClassNamesHandler):
                             if trues is not None for score, true in zip(scores, trues)])
         fpr, tpr, t = self.curve(np.stack(true, axis=0), np.stack(score, axis=0), self.target_idx, self.target_inv)
         try:
-            fig, ax = thelper.utils.draw_roc_curve(fpr, tpr)
-            array = thelper.utils.fig2array(fig)
+            fig, ax = thelper.draw.draw_roc_curve(fpr, tpr)
+            array = thelper.draw.fig2array(fig)
             return array
         except AttributeError as e:
             logger.warning(f"failed to render roc curve; caught exception:\n{str(e)}")

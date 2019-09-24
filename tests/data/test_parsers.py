@@ -293,7 +293,7 @@ def test_superres_dataset(fake_op, fake_image_folder_root, mocker):
     fake_imread.side_effect = lambda x: np.zeros((100, 100))
     fake_resize = mocker.patch("cv2.resize")
     fake_resize.side_effect = lambda x, *args, **kwargs: x
-    fake_crop = mocker.patch("thelper.utils.safe_crop")
+    fake_crop = mocker.patch("thelper.draw.safe_crop")
     fake_crop.side_effect = lambda x, *args, **kwargs: np.ones((50, 50))
     with pytest.raises(AssertionError):
         _ = thelper.data.SuperResFolderDataset(None)

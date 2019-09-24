@@ -520,7 +520,7 @@ class SuperResFolderDataset(Dataset):
             tl = (image.shape[1] // 2 - self.center_crop[0] // 2,
                   image.shape[0] // 2 - self.center_crop[1] // 2)
             br = (tl[0] + self.center_crop[0], tl[1] + self.center_crop[1])
-            image = thelper.utils.safe_crop(image, tl, br)
+            image = thelper.draw.safe_crop(image, tl, br)
         scale = 1.0 / self.downscale_factor
         image_lowres = cv.resize(image, dsize=(0, 0), fx=scale, fy=scale)
         if self.rescale_lowres:

@@ -869,8 +869,8 @@ class ConfusionMatrix(PredictionConsumer, ClassNamesHandler):
                              if targets is not None for pred, target in zip(preds, targets)])
         confmat = self.matrix(np.asarray(target), np.asarray(pred), self.class_names)
         try:
-            fig, ax = thelper.utils.draw_confmat(confmat, self.class_names, normalize=self.draw_normalized)
-            array = thelper.utils.fig2array(fig)
+            fig, ax = thelper.draw.draw_confmat(confmat, self.class_names, normalize=self.draw_normalized)
+            array = thelper.draw.fig2array(fig)
             return array
         except AttributeError as e:
             logger.warning(f"failed to render confusion matrix; caught exception:\n{str(e)}")
@@ -974,8 +974,8 @@ def _draw_wrapper(task,         # type: thelper.tasks.utils.Task
                   # all extra params will be forwarded to the display call
                   **kwargs,     # type: Any
                   ):            # type: (...) -> None
-    """Wrapper to :func:`thelper.utils.draw` used as a callback entrypoint for trainers."""
-    res = thelper.utils.draw(task=task, input=input, pred=pred, target=target, **kwargs)
+    """Wrapper to :func:`thelper.draw.draw` used as a callback entrypoint for trainers."""
+    res = thelper.draw.draw(task=task, input=input, pred=pred, target=target, **kwargs)
     if save:
         assert isinstance(res, tuple) and len(res) == 2, "unexpected redraw output (should be 2-elem tuple)"
         if isinstance(res[1], np.ndarray):

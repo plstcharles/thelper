@@ -213,7 +213,7 @@ def test_callbacks(config, mocker):
     override_config["trainer"]["callback"] = callback
     override_config["trainer"]["callback_kwargs"] = {"hello": ["hi"]}
     override_config["trainer"]["display"] = True
-    fake_draw = mocker.patch("thelper.utils.draw")
+    fake_draw = mocker.patch("thelper.draw.draw")
     assert thelper.cli.create_session(override_config, test_save_path)
     assert fake_draw.call_count > 0
     assert override_config["trainer"]["callback_kwargs"]["hello"][0] == "bye"
