@@ -473,13 +473,12 @@ class ImageFolderGDataset(thelper.data.ImageFolderDataset):
             sample = self.transforms(sample)
         return sample
 
-
 class SlidingWindowDataset(thelper.data.Dataset):
 
     def __init__(self, raster_path, raster_bands, patch_size, transforms=None, image_key="image"):
         super().__init__(transforms=transforms)
         self.image_key = image_key
-        self.raster_ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
+        self.raster_ds = gdal.OpenShared(raster_path, gdal.GA_ReadOnly)
         self.center_key = "center"
         if self.raster_ds is None:
             logger.fatal(f"File not found: {raster_path}")
@@ -496,13 +495,12 @@ class SlidingWindowDataset(thelper.data.Dataset):
             else:
                 logger.info(f"Using band {k} in {raster_path}")
         self.samples = []
-        for y in range(ysize - self.patch_size-1):
-            for x in range(xsize - self.patch_size-1):
+        for y in np.arange(0, ysize - self.patch_size):
+            for x in np.arange(0, xsize - self.patch_size):
                 self.samples.append((int(x), int(y)))
         self.raster_bands = raster_bands
 
     def __getitem__(self, idx):
-
         offsets = self.samples[idx]
         image = []
         for raster_band in self.raster_bands:

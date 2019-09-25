@@ -22,3 +22,15 @@ RUN pip install -q -e . --no-deps
 
 WORKDIR /workspace
 RUN chmod -R a+w /workspace
+
+# set default command
+# NOTE: 
+#   avoid using 'entrypoint' as it requires explicit override which not all services do automatically
+#   command is easier to override as it is the default docker run CLI input after option flags
+#       ie: 
+#           command:        docker run [options] <your-cmd-override>
+#       vs:
+#           entrypoint:     docker run [options] --entrypoint="" <your-cmd-override>
+#           # without "" override, Dockerfile entrypoint is executed and override command is completly ignored
+CMD ["python", "-m", "thelper"]
+
