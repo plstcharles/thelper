@@ -1024,6 +1024,23 @@ def query_string(question, choices=None, default=None, allow_empty=False, bypass
         sys.stdout.write("Please respond with a valid string.\n")
 
 
+def get_config_session_name(config):
+    # type: (thelper.typedefs.ConfigDict) -> Optional[str]
+    """Returns the 'name' of a session as defined inside a configuration dictionary.
+
+    The current implementation will scan for multiple keywords and return the first value found. If no
+    keyword is matched, the function will return None.
+
+    Args:
+        config: the configuration directory to parse for a name.
+
+    Returns:
+        The name that should be given to the session (or 'None' if unknown/unavailable).
+    """
+    return thelper.utils.get_key_def(["output_dir_name", "output_directory_name",
+                                      "session_name", "name"], config, None)
+
+
 def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".json"):
     """Returns a directory path in which the app can save its data.
 
@@ -1051,8 +1068,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
             f"got conflicting options for output save (root) dir:\t{out_root}\n\t\tand\n\t{config_out_root}"
         if config_out_root is not None:
             out_root = config_out_root
-        config_dir_name = thelper.utils.get_key_def(["output_dir_name", "output_directory_name", "session_name", "name"],
-                                                    config, None)
+        config_dir_name = thelper.utils.get_config_session_name(config)
         if config_dir_name is not None:
             assert isinstance(config_dir_name, str), "config session/directory name should be given as string"
             assert not os.path.isabs(config_dir_name), "config session/directory name should never be full (abs) path"
@@ -1098,16 +1114,21 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
     return save_dir
 
 
-def load_config(path, as_json=False, **kwargs):
-    # type: (str, bool, **Any) -> thelper.typedefs.ConfigDict
+def load_config(path, as_json=False, add_name_if_missing=True, **kwargs):
+    # type: (str, bool, bool, **Any) -> thelper.typedefs.ConfigDict
     """Loads the configuration dictionary from the provided path.
 
     The type of file that is loaded is based on the extension in the path.
+
+    If the loaded configuration dictionary does not contain a 'name' field, the name of
+    the file itself will be inserted as a value.
 
     Args:
         path: the path specifying which configuration to be loaded.
             only supported types are loaded unless `as_json` is `True`.
         as_json: specifies if an alternate extension should be considered as JSON format.
+        add_name_if_missing: specifies whether the file name should be added to the config
+            dictionary if it is missing a 'name' field.
         kwargs: forwarded to the extension-specific importer.
     """
     global fixed_yaml_parsing
@@ -1129,11 +1150,15 @@ def load_config(path, as_json=False, **kwargs):
     if ext in [".json", ".yml", ".yaml"] or as_json:
         with open(path) as fd:
             assert not kwargs, "yaml safe load takes no extra args"
-            return yaml.safe_load(fd)  # also supports json
+            config = yaml.safe_load(fd)  # also supports json
     elif ext == ".pkl":
         with open(path, "rb") as fd:
-            return pickle.load(fd, **kwargs)
-    raise AssertionError(f"unknown input file type: {ext}")
+            config = pickle.load(fd, **kwargs)
+    else:
+        raise AssertionError(f"unknown input file type: {ext}")
+    if add_name_if_missing and thelper.utils.get_config_session_name(config) is None:
+        config["name"] = os.path.splitext(os.path.basename(path))[0]
+    return config
 
 
 def save_config(config, path, force_convert=True, as_json=False, **kwargs):

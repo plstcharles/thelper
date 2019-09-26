@@ -38,9 +38,8 @@ def create_session(config, save_dir):
         | :class:`thelper.train.base.Trainer`
     """
     logger = thelper.utils.get_func_logger()
-    if "name" not in config or not config["name"]:
-        raise AssertionError("config missing 'name' field")
-    session_name = config["name"]
+    session_name = thelper.utils.get_config_session_name(config)
+    assert session_name is not None, "config missing 'name' field required for output directory"
     logger.info("creating new training session '%s'..." % session_name)
     thelper.utils.setup_globals(config)
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
@@ -99,9 +98,8 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False, task_compat
         if "config" not in ckptdata or not ckptdata["config"]:
             raise AssertionError("checkpoint data missing 'config' field")
         config = ckptdata["config"]
-    if "name" not in config or not config["name"]:
-        raise AssertionError("config missing 'name' field")
-    session_name = config["name"]
+    session_name = thelper.utils.get_config_session_name(config)
+    assert session_name is not None, "config missing 'name' field required for output directory"
     logger.info("loading training session '%s' objects..." % session_name)
     thelper.utils.setup_globals(config)
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config, resume=True)
@@ -237,9 +235,8 @@ def annotate_data(config, save_dir):
     # import gui here since it imports packages that will cause errors in CLI-only environments
     import thelper.gui
     logger = thelper.utils.get_func_logger()
-    if "name" not in config or not config["name"]:
-        raise AssertionError("config missing 'name' field")
-    session_name = config["name"]
+    session_name = thelper.utils.get_config_session_name(config)
+    assert session_name is not None, "config missing 'name' field required for output directory"
     logger.info("creating annotation session '%s'..." % session_name)
     thelper.utils.setup_globals(config)
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
@@ -278,9 +275,8 @@ def split_data(config, save_dir):
         | :class:`thelper.data.parsers.HDF5Dataset`
     """
     logger = thelper.utils.get_func_logger()
-    if "name" not in config or not config["name"]:
-        raise AssertionError("config missing 'name' field")
-    session_name = config["name"]
+    session_name = thelper.utils.get_config_session_name(config)
+    assert session_name is not None, "config missing 'name' field required for output directory"
     split_config = thelper.utils.get_key_def("split", config, default={})
     if not isinstance(split_config, dict):
         raise AssertionError("unexpected split config type")
@@ -325,9 +321,8 @@ def export_model(config, save_dir):
         | :func:`thelper.nn.utils.create_model`
     """
     logger = thelper.utils.get_func_logger()
-    if "name" not in config or not config["name"]:
-        raise AssertionError("config missing 'name' field")
-    session_name = config["name"]
+    session_name = thelper.utils.get_config_session_name(config)
+    assert session_name is not None, "config missing 'name' field required for output directory"
     export_config = thelper.utils.get_key_def("export", config, default={})
     if not isinstance(export_config, dict):
         raise AssertionError("unexpected export config type")
