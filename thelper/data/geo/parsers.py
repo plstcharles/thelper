@@ -17,7 +17,7 @@ import tqdm
 
 import thelper.tasks
 import thelper.utils
-from thelper.data import Dataset
+from thelper.data import Dataset, ImageFolderDataset
 
 logger = logging.getLogger(__name__)
 
@@ -235,8 +235,8 @@ class VectorCropDataset(Dataset):
 
     def _process_crop(self, sample):
         """Returns a crop for a specific (internal) set of sampled features."""
-        # remember: we assume that all rasters have the same intrinsic settings
         import thelper.data.geo as geo
+        # remember: we assume that all rasters have the same intrinsic settings
         crop_datatype = geo.utils.GDAL2NUMPY_TYPE_CONV[self.rasters_data[0]["data_type"]]
         crop_size = (sample["crop_height"], sample["crop_width"], self.rasters_data[0]["band_count"])
         crop = np.ma.array(np.zeros(crop_size, dtype=crop_datatype), mask=np.ones(crop_size, dtype=np.uint8))
@@ -305,6 +305,7 @@ class VectorCropDataset(Dataset):
             sample = self.transforms(sample)
         return sample
 
+
 class TileDataset(VectorCropDataset):
     """Abstract dataset used to systematically tile vector data and rasters."""
 
@@ -344,9 +345,9 @@ class TileDataset(VectorCropDataset):
     def _tile_cropper(features, rasters_data, coverage, srs_target, tile_size, tile_overlap,
                       skip_empty_tiles, skip_nodata_tiles, keep_rasters_open, px_size):
         """Returns the ROI information for a given feature (may be modified in derived classes)."""
+        import thelper.data.geo as geo
         # instead of iterating over features to generate samples, we tile the raster(s)
         # note: the 'coverage' geometry should already be in the target srs
-        import thelper.data.geo as geo
         roi_tl, roi_br = geo.utils.get_feature_bbox(coverage)
         roi_geotransform = (roi_tl[0], px_size[0], 0.0,
                             roi_tl[1], 0.0, px_size[1])
@@ -422,7 +423,7 @@ class TileDataset(VectorCropDataset):
         return samples
 
 
-class ImageFolderGDataset(thelper.data.ImageFolderDataset):
+class ImageFolderGDataset(ImageFolderDataset):
     """Image folder dataset specialization interface for classification tasks.
 
     This specialization is used to parse simple image subfolders, and it essentially replaces the very
@@ -473,7 +474,8 @@ class ImageFolderGDataset(thelper.data.ImageFolderDataset):
             sample = self.transforms(sample)
         return sample
 
-class SlidingWindowDataset(thelper.data.Dataset):
+
+class SlidingWindowDataset(Dataset):
 
     def __init__(self, raster_path, raster_bands, patch_size, transforms=None, image_key="image"):
         super().__init__(transforms=transforms)
