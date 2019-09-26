@@ -443,22 +443,41 @@ def export_geojson_with_crs(features, srs_target):
 
 
 def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
-                             batch_size=256, num_workers=8, use_gpu=True,
+                             batch_size=256, num_workers=0, use_gpu=True,
                              transforms=None, normalize_loss=True):
+    """
+    This function computes the pixelwise prediction on an image.  It does the prediction per batch size of n pixels.
+    It returns the class predicted and its probability.  The results are saved into two images created with
+    the same size and projection info as the input rasters: the class image gives the class id, a number between 1 and
+    the number of classes. The 0 is reserverd for nodata.  The probs image contains nclass channels with the probability
+    values of the pixels for each class.  The probabilities by default are normalised.
+
+    :param save_dir: (string) path to where the outputs are daved
+    :param ckptdata: (string) path to the thelper checkpoint
+    :param raster_inputs: (list) path to the image, and bands used
+    :param patch_size: (int) patch size used during the classification
+    :param batch_size: (int) batch size to used to the prediction
+    :param num_workers: (int) number of workers.  Due to limitation of gdal, the number of threads must be set to 0
+    :param use_gpu: (bool) use the gpu to do the prediction (faster)
+    :param transforms: (Compose class) basic and nesessary transforms on data
+    :param normalize_loss: (bool) use sofmax to normalised otherwise return the cross entropy loss
+    :return:
+    """
 
     import thelper.data.geo
     import torch
-    model = thelper.nn.create_model(config=ckptdata['config'], task=None, save_dir=None,
-                                    ckptdata=ckptdata)
+    # Create the model
+    model = thelper.nn.create_model(config=ckptdata['config'], task=None, save_dir=None, ckptdata=ckptdata)
     if use_gpu:
         model = model.cuda()
     else:
         model = model.cpu()
+    # Normalizing function
     sofmax = torch.nn.Softmax(dim=1)
 
     task = eval(ckptdata["task"])
     nclasses = len(task.class_names)
-
+    # For each raster image in the list of inputs
     for raster_input in raster_inputs:
         raster_path = raster_input['path']
         raster_bands = raster_input['bands']
@@ -469,6 +488,7 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
         affine = ds.GetGeoTransform()
         raster_basename = os.path.basename(raster_path).split(".")[0]
         raster_class_path = os.path.join(save_dir, raster_basename + "_class.tif")
+        # Create the class raster output
         class_ds = gdal.GetDriverByName('GTiff').Create(raster_class_path, xsize, ysize, 1, gdal.GDT_Byte)
         if class_ds is None:
             raise Exception(f"Unable to create: {raster_class_path}")
@@ -480,7 +500,7 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
         band.SetNoDataValue(0)
         class_ds = 0
         class_ds = gdal.Open(raster_class_path, gdal.GA_Update)
-
+        # Create the probabilities raster output
         raster_prob_path = os.path.join(save_dir, raster_basename + "_probs.tif")
         probs_ds = gdal.GetDriverByName('GTiff').Create(raster_prob_path, xsize, ysize, nclasses, gdal.GDT_Float32)
         if probs_ds is None:
@@ -492,10 +512,14 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
         probs_ds = 0
         probs_ds = gdal.Open(raster_prob_path, gdal.GA_Update)
 
+        # Specialized Sliding Window Dataset
         dataset = thelper.data.geo.parsers.SlidingWindowDataset(raster_path=raster_path,
                                                                 raster_bands=raster_bands,
                                                                 patch_size=patch_size,
                                                                 transforms=transforms)
+        # The number of workers shoud be 0 (for windows) are (0,1) for linux.
+        if num_workers > 0:
+            raise Exception("The number of workers should be 0 because of gdal")
         dataloader = thelper.data.DataLoader(dataset=dataset,
                                                  batch_size=batch_size,
                                                  num_workers=num_workers,
@@ -503,8 +527,6 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
         nbatches = len(dataloader)
         model.eval()
 
-        l = 0
-        import cv2
         with torch.no_grad():
             for k, sample in enumerate(dataloader):
                 logging.info(f"Batch {k+1} of {nbatches}: {(k+1)/nbatches:4.1%}")
@@ -519,13 +541,7 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
                     y_prob = sofmax(y_prob)
                 y_class_idxs = torch.argmax(y_prob, dim=1).cpu().data.numpy()
                 y_prob = y_prob.cpu().data.numpy()
-                x_data = x_data.cpu().data.numpy()
-                #print(y_class_idxs)
                 for j in range(ndata):
-                    #cv2.imshow("test", x_data[j].transpose(1,2,0))
-                    #cv2.waitKey(10)
-                    #print(int(xoffset0[j]),int(yoffset0[j]))
-                    #print(y_class_idxs[j]+1, int(centerX0[j]), int(centerY0[j]))
                     class_id = np.array( [[y_class_idxs[j] + 1]])
                     x0 = int(centerX0[j])
                     y0 = int(centerY0[j])
@@ -533,8 +549,10 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
                     for l in range(y_prob.shape[1]):
                         probs_ds.GetRasterBand(l+1).WriteArray(np.array([[y_prob[j, l]]], dtype='float32'),
                                                                int(centerX0[j]), int(centerY0[j]))
+                # Not sure if it works
                 class_ds.FlushCache()
                 probs_ds.FlushCache()
+        # Close files
         class_ds=None
         probs_ds=None
 
