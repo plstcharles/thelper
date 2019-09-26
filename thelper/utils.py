@@ -1032,13 +1032,54 @@ def get_config_session_name(config):
     keyword is matched, the function will return None.
 
     Args:
-        config: the configuration directory to parse for a name.
+        config: the configuration dictionary to parse for a name.
 
     Returns:
         The name that should be given to the session (or 'None' if unknown/unavailable).
     """
     return thelper.utils.get_key_def(["output_dir_name", "output_directory_name",
                                       "session_name", "name"], config, None)
+
+
+def get_config_output_root(config):
+    # type: (thelper.typedefs.ConfigDict) -> Optional[str]
+    """Returns the output root directory as defined inside a configuration dictionary.
+
+    The current implementation will scan for multiple keywords and return the first value found. If no
+    keyword is matched, the function will return None.
+
+    Args:
+        config: the configuration dictionary to parse for a root output directory.
+
+    Returns:
+        The path to the output root directory. Can point to a non-existing directory, or be None.
+    """
+    return thelper.utils.get_key_def(["output_root_dir", "output_root_directory"], config, None)
+
+
+def get_checkpoint_session_root(ckpt_path):
+    # type: (str) -> Optional[str]
+    """Returns the session root directory associated with a checkpoint path.
+
+    The given path can point to a checkpoint file or to a directory that contains checkpoints. The
+    returned output directory will be the top-level of the session that created the checkpoint, or
+    None if it cannot be deduced.
+
+    Args:
+        ckpt_path: the path to a checkpoint or to an exisiting directory that contains checkpoints.
+
+    Returns:
+        The path to the session root directory. Will always point to an existing directory, or be None.
+    """
+    assert os.path.exists(ckpt_path), "input path should point to valid filesystem node"
+    ckpt_dir_path = os.path.dirname(os.path.abspath(ckpt_path)) \
+        if not os.path.isdir(ckpt_path) else os.path.abspath(ckpt_path)
+    # find session dir by looking for 'logs' directory
+    if os.path.isdir(os.path.join(ckpt_dir_path, "logs")):
+        return os.path.abspath(os.path.join(ckpt_dir_path, ".."))
+    elif os.path.isdir(os.path.join(ckpt_dir_path, "../logs")):
+        return os.path.abspath(os.path.join(ckpt_dir_path, "../.."))
+    return None  # cannot be found... giving up
 
 
 def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".json"):
@@ -1063,10 +1104,14 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
     """
     func_logger = get_func_logger()
     if config is not None:
-        config_out_root = thelper.utils.get_key_def(["output_root_dir", "output_root_directory"], config, None)
-        assert out_root is None or config_out_root is None or out_root == config_out_root, \
-            f"got conflicting options for output save (root) dir:\t{out_root}\n\t\tand\n\t{config_out_root}"
-        if config_out_root is not None:
+        config_out_root = thelper.utils.get_config_output_root(config)
+        if out_root is not None and config_out_root is not None and out_root != config_out_root:
+            answer = query_string("Received conflicting output root directory paths; which one should be used?\n"
+                                  f"\t[config] = {config_out_root}\n\t[cli] = {out_root}", choices=["config", "cli"],
+                                  default="config", bypass="config")
+            if answer == "config":
+                out_root = config_out_root
+        elif out_root is None and config_out_root is not None:
             out_root = config_out_root
         config_dir_name = thelper.utils.get_config_session_name(config)
         if config_dir_name is not None:
@@ -1080,7 +1125,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
         out_root = query_string("Please provide the path to where session directories should be created/saved:")
     func_logger.info(f"output root directory = {out_root}")
     os.makedirs(out_root, exist_ok=True)
-    save_dir = os.path.join(out_root, dir_name)
+    save_dir = os.path.join(out_root, dir_name) if dir_name is not None else out_root
     if not resume:
         overwrite = str2bool(config["overwrite"]) if config is not None and "overwrite" in config else False
         time.sleep(0.25)  # to make sure all debug/info prints are done, and we see the question

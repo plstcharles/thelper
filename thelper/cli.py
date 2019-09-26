@@ -385,29 +385,29 @@ def make_argparser():
     subparsers = ap.add_subparsers(title="Operating mode", dest="mode")
     new_ap = subparsers.add_parser("new", help="creates a new session from a config file")
     new_ap.add_argument("cfg_path", type=str, help="path to the session configuration file")
-    new_ap.add_argument("save_dir", type=str, help="path to the root directory where checkpoints should be saved")
+    new_ap.add_argument("save_dir", type=str, help="path to the session output root directory")
     cl_new_ap = subparsers.add_parser("cl_new", help="creates a new session from a config file for the cluster")
     cl_new_ap.add_argument("cfg_path", type=str, help="path to the session configuration file")
-    cl_new_ap.add_argument("save_dir", type=str, help="path to the root directory where checkpoints should be saved")
+    cl_new_ap.add_argument("save_dir", type=str, help="path to the session output root directory")
     resume_ap = subparsers.add_parser("resume", help="resume a session from a checkpoint file")
-    resume_ap.add_argument("ckpt_path", type=str, help="path to the checkpoint (or save directory) to resume training from")
-    resume_ap.add_argument("-s", "--save-dir", default=None, type=str, help="path to the root directory where checkpoints should be saved")
+    resume_ap.add_argument("ckpt_path", type=str, help="path to the checkpoint (or directory) to resume training from")
+    resume_ap.add_argument("-s", "--save-dir", default=None, type=str, help="path to the session output root directory")
     resume_ap.add_argument("-m", "--map-location", default=None, help="map location for loading data (default=None)")
     resume_ap.add_argument("-c", "--override-cfg", default=None, help="override config file path (default=None)")
     resume_ap.add_argument("-e", "--eval-only", default=False, action="store_true", help="only run evaluation pass (valid+test)")
     resume_ap.add_argument("-t", "--task-compat", default=None, type=str, choices=TASK_COMPAT_CHOICES,
                            help="task compatibility mode to use to resolve any discrepancy between loaded tasks")
     viz_ap = subparsers.add_parser("viz", help="visualize the loaded data for a training/eval session")
-    viz_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session save directory)")
+    viz_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session directory)")
     annot_ap = subparsers.add_parser("annot", help="launches a dataset annotation session with a GUI tool")
-    annot_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session save directory)")
-    annot_ap.add_argument("save_dir", type=str, help="path to the root directory where annotations should be saved")
+    annot_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session directory)")
+    annot_ap.add_argument("save_dir", type=str, help="path to the session output root directory")
     split_ap = subparsers.add_parser("split", help="launches a dataset splitting session from a config file")
-    split_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session save directory)")
-    split_ap.add_argument("save_dir", type=str, help="path to the root directory where the split hdf5 dataset archive should be saved")
+    split_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session directory)")
+    split_ap.add_argument("save_dir", type=str, help="path to the session output root directory")
     split_ap = subparsers.add_parser("export", help="launches a model exportation session from a config file")
-    split_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session save directory)")
-    split_ap.add_argument("save_dir", type=str, help="path to the root directory where the exported checkpoint should be saved")
+    split_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session directory)")
+    split_ap.add_argument("save_dir", type=str, help="path to the session output root directory")
     return ap
 
 
@@ -472,16 +472,9 @@ def main(args=None, argparser=None):
             override_config = thelper.utils.load_config(args.override_cfg)
         save_dir = args.save_dir
         if save_dir is None:
-            ckpt_dir_path = os.path.dirname(os.path.abspath(args.ckpt_path)) \
-                if not os.path.isdir(args.ckpt_path) else os.path.abspath(args.ckpt_path)
-            # find session dir by looking for 'logs' directory
-            if os.path.isdir(os.path.join(ckpt_dir_path, "logs")):
-                save_dir = os.path.abspath(os.path.join(ckpt_dir_path, ".."))
-            elif os.path.isdir(os.path.join(ckpt_dir_path, "../logs")):
-                save_dir = os.path.abspath(os.path.join(ckpt_dir_path, "../.."))
-            else:
-                save_dir = thelper.utils.query_string("Please provide the path to where the resumed session output should be saved:")
-                save_dir = thelper.utils.get_save_dir(save_dir, dir_name="", config=override_config)
+            save_dir = thelper.utils.get_checkpoint_session_root(args.ckpt_path)
+        if save_dir is None:
+            save_dir = thelper.utils.get_save_dir(out_root=None, dir_name=None, config=override_config)
         resume_session(ckptdata, save_dir, config=override_config, eval_only=args.eval_only, task_compat=args.task_compat)
     else:
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)

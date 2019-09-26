@@ -55,7 +55,7 @@ Creating a training session
 
 Usage from the terminal::
 
-  $ thelper new <PATH_TO_CONFIG_FILE.json> <PATH_TO_SAVE_DIRECTORY>
+  $ thelper new <PATH_TO_CONFIG_FILE.json> <PATH_TO_ROOT_SAVE_DIR>
 
 To create a training session, the ``new`` operation of the CLI is used. This redirects the execution flow
 to :meth:`thelper.cli.create_session`. The configuration dictionary that is provided must contain all sections
@@ -114,7 +114,7 @@ Annotating data
 
 Usage from the terminal::
 
-  $ thelper annot <PATH_TO_CONFIG_FILE.json> <PATH_TO_SAVE_DIRECTORY>
+  $ thelper annot <PATH_TO_CONFIG_FILE.json> <PATH_TO_ROOT_SAVE_DIR>
 
 The ``annot`` CLI operation allows the user to browse a dataset and annotate individual samples from it
 using a specialized GUI tool. The configuration dictionary that is provided must contain a ``datasets``
@@ -130,7 +130,7 @@ Split data
 
 Usage from the terminal::
 
-  $ thelper split <PATH_TO_CONFIG_FILE.json> <PATH_TO_SAVE_DIRECTORY>
+  $ thelper split <PATH_TO_CONFIG_FILE.json> <PATH_TO_ROOT_SAVE_DIR>
 
 When traning a model, the framework will typically split the datasets into non-overlapping data loaders.
 This split must be performed every time a training session is created or resumed. This can be a lengthy
@@ -148,7 +148,7 @@ Export model
 
 Usage from the terminal::
 
-  $ thelper export <PATH_TO_CONFIG_FILE.json> <PATH_TO_SAVE_DIRECTORY>
+  $ thelper export <PATH_TO_CONFIG_FILE.json> <PATH_TO_ROOT_SAVE_DIR>
 
 The ``export`` CLI operation allows the user to export a trained model for external use as defined in
 a configuration file. The export format is a new checkpoint that may optionally contain an optimized
