@@ -3,6 +3,16 @@
 Changelog
 =========
 
+0.3.13 (2019/09/26)
+-------------------
+
+* Moved drawing utilities to new module
+* Cleaned up output root/save directory parsing
+* Cleaned up potential circular imports
+* Moved optional dependency imports inside relevant functions
+* Added support for root directory specification via config
+* Updated config load/save to make naming optional
+
 0.3.12 (2019/09/13)
 -------------------
 
