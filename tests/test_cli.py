@@ -72,6 +72,7 @@ def simple_config(request):
 
 def test_save_load_simple_config(simple_config):
     orig_config = copy.deepcopy(simple_config)
+    assert thelper.utils.get_config_session_name(orig_config) == "simple"
     json_config_path = os.path.join(test_save_path, "dummy_name.json")
     thelper.utils.save_config(simple_config, json_config_path)
     new_config = thelper.utils.load_config(json_config_path)
@@ -84,6 +85,10 @@ def test_save_load_simple_config(simple_config):
     thelper.utils.save_config(simple_config, pkl_config_path)
     new_config = thelper.utils.load_config(pkl_config_path)
     assert new_config == orig_config
+    txt_config_path = os.path.join(test_save_path, "dummy_name.txt")
+    thelper.utils.save_config(simple_config, txt_config_path, as_json=True)
+    new_config = thelper.utils.load_config(txt_config_path, as_json=True)
+    assert new_config == orig_config
 
 
 def test_create_session_nameless(simple_config, mocker):
@@ -94,6 +99,13 @@ def test_create_session_nameless(simple_config, mocker):
         thelper.cli.create_session(simple_config, test_save_path)
     assert fake_train.call_count == 0
     assert fake_eval.call_count == 0
+    config_save_path = os.path.join(test_save_path, "dummy.json")
+    thelper.utils.save_config(simple_config, config_save_path)
+    new_config = thelper.utils.load_config(config_save_path, add_name_if_missing=False)
+    assert thelper.utils.get_config_session_name(new_config) is None
+    assert new_config == simple_config
+    new_config = thelper.utils.load_config(config_save_path)
+    assert thelper.utils.get_config_session_name(new_config) == "dummy"
 
 
 def test_create_session_train(simple_config, mocker):
