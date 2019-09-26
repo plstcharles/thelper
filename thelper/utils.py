@@ -30,7 +30,7 @@ import yaml
 import thelper.typedefs  # noqa: F401
 
 if TYPE_CHECKING:
-    from typing import List, Optional, Type  # noqa: F401
+    from typing import Any, List, Optional, Type  # noqa: F401
     from types import FunctionType  # noqa: F401
 
 logger = logging.getLogger(__name__)
@@ -1098,8 +1098,8 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
     return save_dir
 
 
-def load_config(path, as_json=False):
-    # type: (str, bool) -> thelper.typedefs.ConfigDict
+def load_config(path, as_json=False, **kwargs):
+    # type: (str, bool, **Any) -> thelper.typedefs.ConfigDict
     """Loads the configuration dictionary from the provided path.
 
     The type of file that is loaded is based on the extension in the path.
@@ -1108,6 +1108,7 @@ def load_config(path, as_json=False):
         path: the path specifying which configuration to be loaded.
             only supported types are loaded unless `as_json` is `True`.
         as_json: specifies if an alternate extension should be considered as JSON format.
+        kwargs: forwarded to the extension-specific importer.
     """
     global fixed_yaml_parsing
     if not fixed_yaml_parsing:
@@ -1127,12 +1128,16 @@ def load_config(path, as_json=False):
     ext = os.path.splitext(path)[-1]
     if ext in [".json", ".yml", ".yaml"] or as_json:
         with open(path) as fd:
+            assert not kwargs, "yaml safe load takes no extra args"
             return yaml.safe_load(fd)  # also supports json
+    elif ext == ".pkl":
+        with open(path, "rb") as fd:
+            return pickle.load(fd, **kwargs)
     raise AssertionError(f"unknown input file type: {ext}")
 
 
-def save_config(config, path, force_convert=True, as_json=False):
-    # type: (thelper.typedefs.ConfigDict, str, bool, bool) -> None
+def save_config(config, path, force_convert=True, as_json=False, **kwargs):
+    # type: (thelper.typedefs.ConfigDict, str, bool, bool, **Any) -> None
     """Saves the given session/object configuration dictionary to the provided path.
 
     The type of file that is created is based on the extension specified in the path. If the file
@@ -1147,18 +1152,22 @@ def save_config(config, path, force_convert=True, as_json=False):
             if `as_json` is `True`, then any specified extension will be preserved bump dumped as JSON.
         force_convert: specifies whether non-serializable types should be converted if necessary.
         as_json: specifies if an alternate extension should be considered as JSON format.
+        kwargs: forwarded to the extension-specific exporter.
     """
     ext = os.path.splitext(path)[-1]
     if ext in [".json", ".yml", ".yaml"] or as_json:
         with open(path, "w") as fd:
+            kwargs.setdefault("indent", 4)
             if ext == ".json" or as_json:
                 serializer = (lambda x: str(x)) if force_convert else None
-                json.dump(config, fd, indent=4, sort_keys=False, default=serializer)
+                kwargs.setdefault("default", serializer)
+                kwargs.setdefault("sort_keys", False)
+                json.dump(config, fd, **kwargs)
             else:
-                yaml.dump(config, fd, indent=4)
+                yaml.dump(config, fd, **kwargs)
     elif ext == ".pkl":
-        with open(path, "w") as fd:
-            pickle.dump(config, fd)
+        with open(path, "wb") as fd:
+            pickle.dump(config, fd, **kwargs)
     else:
         raise AssertionError(f"unknown output file type: {ext}")
 

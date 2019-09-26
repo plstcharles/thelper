@@ -70,6 +70,22 @@ def simple_config(request):
     }
 
 
+def test_save_load_simple_config(simple_config):
+    orig_config = copy.deepcopy(simple_config)
+    json_config_path = os.path.join(test_save_path, "dummy_name.json")
+    thelper.utils.save_config(simple_config, json_config_path)
+    new_config = thelper.utils.load_config(json_config_path)
+    assert new_config == orig_config
+    yaml_config_path = os.path.join(test_save_path, "dummy_name.yaml")
+    thelper.utils.save_config(simple_config, yaml_config_path)
+    new_config = thelper.utils.load_config(yaml_config_path)
+    assert new_config == orig_config
+    pkl_config_path = os.path.join(test_save_path, "dummy_name.pkl")
+    thelper.utils.save_config(simple_config, pkl_config_path)
+    new_config = thelper.utils.load_config(pkl_config_path)
+    assert new_config == orig_config
+
+
 def test_create_session_nameless(simple_config, mocker):
     fake_train = mocker.patch.object(thelper.train.base.Trainer, "train")
     fake_eval = mocker.patch.object(thelper.train.base.Trainer, "eval")
