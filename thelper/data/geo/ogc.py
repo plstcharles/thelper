@@ -372,6 +372,8 @@ class TB15D104DetectLogger(thelper.train.utils.DetectLogger):
         output_features = []
         for bboxes, geotransform, id in zip(bbox_lists, geotransforms, crop_ids):
             for bbox in bboxes:
+                if geotransform.shape[0] == 1:
+                    geotransform = geotransform[0]
                 bbox_tl = geo.utils.get_geocoord(geotransform, *bbox.top_left)
                 bbox_br = geo.utils.get_geocoord(geotransform, *bbox.bottom_right)
                 bbox_geom = shapely.geometry.Polygon([bbox_tl, (bbox_br[0], bbox_tl[1]),
