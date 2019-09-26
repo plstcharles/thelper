@@ -428,11 +428,14 @@ class ImageFolderGDataset(ImageFolderDataset):
 
     This specialization is used to parse simple image subfolders, and it essentially replaces the very
     basic ``torchvision.datasets.ImageFolder`` interface with similar functionalities. It it used to provide
-    a proper task interface as well as path metadata in each loaded packet for metrics/logging output.
+    a proper task interface as well as path metadata in each loaded packet for metrics/logging output.  The difference
+    with the parent class ImageFolderDataset is the used of gdal to manage multi channels images found in remote
+    sensing domain.  The user can specify the channels to load.  By default the first three channels are loaded [1,2,3].
 
     .. seealso::
         | :class:`thelper.data.parsers.ImageDataset`
         | :class:`thelper.data.parsers.ClassificationDataset`
+        | :class:`thelper.data.parsers.ImageFolderDataset`
     """
 
     def __init__(self, root, transforms=None, image_key="image", label_key="label", path_key="path", idx_key="idx", channels=[1,2,3]):
