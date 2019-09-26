@@ -1045,13 +1045,26 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
         The path to the created save directory for this session.
     """
     func_logger = get_func_logger()
-    save_dir = out_root
-    if save_dir is None:
+    if config is not None:
+        config_out_root = thelper.utils.get_key_def(["output_root_dir", "output_root_directory"], config, None)
+        assert out_root is None or config_out_root is None or out_root == config_out_root, \
+            f"got conflicting options for output save (root) dir:\t{out_root}\n\t\tand\n\t{config_out_root}"
+        if config_out_root is not None:
+            out_root = config_out_root
+        config_dir_name = thelper.utils.get_key_def(["output_dir_name", "output_directory_name", "session_name", "name"],
+                                                    config, None)
+        if config_dir_name is not None:
+            assert isinstance(config_dir_name, str), "config session/directory name should be given as string"
+            assert not os.path.isabs(config_dir_name), "config session/directory name should never be full (abs) path"
+            if dir_name is not None:
+                func_logger.warning(f"overriding output session directory name to '{config_dir_name}'")
+            dir_name = config_dir_name
+    if out_root is None:
         time.sleep(0.25)  # to make sure all debug/info prints are done, and we see the question
-        save_dir = query_string("Please provide the path to where session directories should be created/saved:")
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    save_dir = os.path.join(save_dir, dir_name)
+        out_root = query_string("Please provide the path to where session directories should be created/saved:")
+    func_logger.info(f"output root directory = {out_root}")
+    os.makedirs(out_root, exist_ok=True)
+    save_dir = os.path.join(out_root, dir_name)
     if not resume:
         overwrite = str2bool(config["overwrite"]) if config is not None and "overwrite" in config else False
         time.sleep(0.25)  # to make sure all debug/info prints are done, and we see the question
@@ -1060,31 +1073,28 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
             overwrite = query_yes_no("Training session at '%s' already exists; overwrite?" % abs_save_dir, bypass="y")
             if not overwrite:
                 save_dir = query_string("Please provide a new save directory path:")
-        if not os.path.exists(save_dir):
-            os.mkdir(save_dir)
-        if config is not None:
-            save_config(config, os.path.join(save_dir, "config.latest" + backup_ext))
-    else:
-        if not os.path.exists(save_dir):
-            os.mkdir(save_dir)
-        if config is not None:
-            backup_path = os.path.join(save_dir, "config.latest" + backup_ext)
-            if os.path.exists(backup_path):
-                config_backup = thelper.utils.load_config(backup_path)
-                if config_backup != config:
-                    query_msg = f"Config backup in '{backup_path}' differs from config loaded through checkpoint; overwrite?"
-                    answer = query_yes_no(query_msg, bypass="y")
-                    if answer:
-                        func_logger.warning("config mismatch with previous run; "
-                                            "will overwrite latest backup in save directory")
-                    else:
-                        func_logger.error("config mismatch with previous run; user aborted")
-                        sys.exit(1)
-            save_config(config, backup_path)
+    func_logger.info(f"output session directory = {save_dir}")
+    os.makedirs(save_dir, exist_ok=True)
     logs_dir = os.path.join(save_dir, "logs")
-    if not os.path.exists(logs_dir):
-        os.mkdir(logs_dir)
-    save_config(config, os.path.join(logs_dir, "config." + thelper.utils.get_log_stamp() + backup_ext))
+    func_logger.info(f"output logs directory = {logs_dir}")
+    os.makedirs(logs_dir, exist_ok=True)
+    if config is not None:
+        common_backup_path = os.path.join(save_dir, "config.latest" + backup_ext)
+        if resume and os.path.exists(common_backup_path):
+            config_backup = thelper.utils.load_config(common_backup_path)
+            if config_backup != config:  # TODO make config dict comparison smarter...?
+                query_msg = f"Config backup in '{common_backup_path}' differs from config loaded through checkpoint; overwrite?"
+                answer = query_yes_no(query_msg, bypass="y")
+                if answer:
+                    func_logger.warning("config mismatch with previous run; "
+                                        "will overwrite latest backup in save directory")
+                else:
+                    func_logger.error("config mismatch with previous run; user aborted")
+                    sys.exit(1)
+        save_config(config, common_backup_path)
+        tagged_backup_path = os.path.join(logs_dir, "config." + thelper.utils.get_log_stamp() + backup_ext)
+        assert not os.path.exists(tagged_backup_path), "tagged config name should always be unique..."
+        save_config(config, tagged_backup_path)
     return save_dir
 
 
