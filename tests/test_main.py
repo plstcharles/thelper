@@ -28,6 +28,7 @@ def dummy_config(request):
     request.addfinalizer(fin)
     os.makedirs(os.path.join(dummy_save_path, "logs"), exist_ok=True)
     os.makedirs(os.path.join(dummy_save_path, "checkpoints"), exist_ok=True)
+    os.makedirs(os.path.join(dummy_save_path, "bad/dir/no/ckpts"), exist_ok=True)
     open(dummy_config_path, "a").close()
     open(dummy_ckpt_path, "a").close()
     return
@@ -68,10 +69,10 @@ def test_main_args(dummy_config, mocker):
     assert main(["resume", dummy_save_path]) == 0
     assert main(["resume", dummy_save_path, "-c=" + dummy_config_path]) == 0
     assert main(["resume", os.path.join(dummy_save_path, "checkpoints"), "-c=" + dummy_config_path]) == 0
-    mock_query = mocker.patch("thelper.utils.query_string", return_value="dummy")
     mocker_getter = mocker.patch("thelper.utils.get_save_dir")
-    assert main(["resume", "dummy_path", "-c=" + dummy_config_path]) == 0
-    assert mock_query.call_count == 1
+    assert main(["resume", dummy_save_path, "-c=" + dummy_config_path]) == 0
+    assert mocker_getter.call_count == 0
+    assert main(["resume", os.path.join(dummy_save_path, "bad/dir/no/ckpts")]) == 0
     assert mocker_getter.call_count == 1
     assert main(["resume", dummy_ckpt_path]) == 0
     assert main(["resume", dummy_ckpt_path, "-s=" + dummy_save_path]) == 0
