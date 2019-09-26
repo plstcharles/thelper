@@ -1,7 +1,7 @@
 {
-    "name": "testbed15-train",
+    "name": "testbed15-train-splitroi",
     "datasets": {
-        "testbed15": {
+        "testbed15_train": {
             "type": "thelper.data.geo.ogc.TB15D104Dataset",
             "params": {
                 "raster_path": "data/testbed15/roi_hrdem.tif",
@@ -10,7 +10,25 @@
                 "lake_area_min": 100,
                 "lake_area_max": 200000,
                 "lake_river_max_dist": 300,
-                "roi_buffer": 1000,
+                "feature_buffer": 1000,
+                "master_roi": "data/testbed15/train_roi_epsg26918.shp",
+                "srs_target": "2959",
+                "reproj_rasters": false,
+                "display_debug": true,
+                "parallel": 0
+            }
+        },
+        "testbed15_eval": {
+            "type": "thelper.data.geo.ogc.TB15D104Dataset",
+            "params": {
+                "raster_path": "data/testbed15/hrdem.tif",
+                "vector_path": "data/testbed15/hydro_original.geojson",
+                "px_size": 3,
+                "lake_area_min": 100,
+                "lake_area_max": 200000,
+                "lake_river_max_dist": 300,
+                "feature_buffer": 1000,
+                "master_roi": "data/testbed15/eval_roi_epsg26918.shp",
                 "srs_target": "2959",
                 "reproj_rasters": false,
                 "display_debug": true,
@@ -32,10 +50,10 @@
             }
         ],
         "train_split": {
-            "testbed15": 0.9
+            "testbed15_train": 1
         },
         "valid_split": {
-            "testbed15": 0.1
+            "testbed15_eval": 1
         }
     },
     "model": {
