@@ -212,7 +212,7 @@ def create_loaders(config, save_dir=None):
             dataset_log_file = os.path.join(data_logger_dir, dataset_name + ".log")
             if not loader_factory.skip_verif and os.path.isfile(dataset_log_file):
                 logger.info("verifying sample list for dataset '%s'..." % dataset_name)
-                log_content = thelper.utils.load_config(dataset_log_file, as_json=True)
+                log_content = thelper.utils.load_config(dataset_log_file, as_json=True, add_name_if_missing=False)
                 if not isinstance(log_content, dict):
                     # could not find new style (json) dataset log, cannot easily parse and compare this log
                     logger.warning("cannot verify that old split is similar to new split, log is out-of-date")
@@ -313,7 +313,7 @@ def create_parsers(config, base_transforms=None):
     config = config["datasets"]  # no need to keep the full config here
     if isinstance(config, str):
         try:
-            config = thelper.utils.load_config(config)
+            config = thelper.utils.load_config(config, add_name_if_missing=False)
         except Exception:
             raise AssertionError("'datasets' string should point to valid configuration file")
     logger.debug("loading datasets templates")

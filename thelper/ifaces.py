@@ -94,17 +94,21 @@ class ClassNamesHandler(ABC):
             self._class_indices = None
             return
         if isinstance(class_names, str) and os.path.exists(class_names):
-            class_names = thelper.utils.load_config(class_names)
+            class_names = thelper.utils.load_config(class_names, add_name_if_missing=False)
         if isinstance(class_names, dict):
-            indices_as_keys = all([idx in class_names or str(idx) in class_names
-                                   for idx in range(len(class_names))])
-            indices_as_values = all([idx in class_names.values() or str(idx) in class_names.values()
-                                     for idx in range(len(class_names))])
-            assert indices_as_keys or indices_as_values, "missing class indices (all integers must be consecutive)"
-            if indices_as_keys:
+            indices_as_keys = [idx in class_names or str(idx) in class_names
+                               for idx in range(len(class_names))]
+            indices_as_values = [idx in class_names.values() or str(idx) in class_names.values()
+                                 for idx in range(len(class_names))]
+            missing_indices = {idx: not (a or b) for idx, a, b in
+                               zip(range(len(class_names)), indices_as_keys, indices_as_values)}
+            assert not any(missing_indices.values()), \
+                f"labeling is not contiguous, missing indices:\n\t{[k for k, v in missing_indices.items() if v]}"
+            assert all(indices_as_keys) or all(indices_as_values), "cannot mix indices in keys and values"
+            if all(indices_as_keys):
                 class_names = [thelper.utils.get_key([idx, str(idx)], class_names)
                                for idx in range(len(class_names))]
-            elif indices_as_values:
+            elif all(indices_as_values):
                 class_names = [k for idx in range(len(class_names))
                                for k, v in class_names.items() if v == idx or v == str(idx)]
         assert isinstance(class_names, list), "expected class names to be provided as an array"

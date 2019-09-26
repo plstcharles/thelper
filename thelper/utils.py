@@ -1117,8 +1117,8 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
         if config_dir_name is not None:
             assert isinstance(config_dir_name, str), "config session/directory name should be given as string"
             assert not os.path.isabs(config_dir_name), "config session/directory name should never be full (abs) path"
-            if dir_name is not None:
-                func_logger.warning(f"overriding output session directory name to '{config_dir_name}'")
+            if dir_name is not None and dir_name != config_dir_name:
+                func_logger.warning(f"overriding output session directory name '{dir_name}' to '{config_dir_name}'")
             dir_name = config_dir_name
     if out_root is None:
         time.sleep(0.25)  # to make sure all debug/info prints are done, and we see the question
@@ -1142,7 +1142,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
     if config is not None:
         common_backup_path = os.path.join(save_dir, "config.latest" + backup_ext)
         if resume and os.path.exists(common_backup_path):
-            config_backup = thelper.utils.load_config(common_backup_path)
+            config_backup = thelper.utils.load_config(common_backup_path, add_name_if_missing=False)
             if config_backup != config:  # TODO make config dict comparison smarter...?
                 query_msg = f"Config backup in '{common_backup_path}' differs from config loaded through checkpoint; overwrite?"
                 answer = query_yes_no(query_msg, bypass="y")
@@ -1154,7 +1154,6 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
                     sys.exit(1)
         save_config(config, common_backup_path)
         tagged_backup_path = os.path.join(logs_dir, "config." + thelper.utils.get_log_stamp() + backup_ext)
-        assert not os.path.exists(tagged_backup_path), "tagged config name should always be unique..."
         save_config(config, tagged_backup_path)
     return save_dir
 

@@ -179,7 +179,8 @@ def test_outputs(config):
                 with open(os.path.join(epoch_out_path, filename), "r") as fd:
                     assert np.isclose(float(fd.readline()), train_outputs[epoch][ltype + "/metrics"]["accuracy"])
             elif filename == "config.json":
-                backup_config = thelper.utils.load_config(os.path.join(epoch_out_path, filename))
+                backup_config_path = os.path.join(epoch_out_path, filename)
+                backup_config = thelper.utils.load_config(backup_config_path, add_name_if_missing=False)
                 assert compare_dictionaries(backup_config, override_config) == ""
 
 
