@@ -1,5 +1,4 @@
 {
-    "name": "example-detect-minimalist",
     "datasets": {
         "pascalvoc": {
             "type": "thelper.data.PASCALVOC",

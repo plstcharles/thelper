@@ -1,5 +1,4 @@
 {
-    "name": "example-segm",
     "cudnn": {
         "benchmark": false,
         "deterministic": true

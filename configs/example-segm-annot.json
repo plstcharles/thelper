@@ -1,5 +1,4 @@
 {
-    "name": "example-segm-annot",
     "overwrite": true,
     "datasets": {
         "OUTPUT_FOLDER_NAME": {

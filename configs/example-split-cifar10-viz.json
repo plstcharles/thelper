@@ -1,5 +1,4 @@
 {
-    "name": "example-split-cifar10-viz",
     "datasets": {
         "cifar10_train": {
             "type": "thelper.data.HDF5Dataset",

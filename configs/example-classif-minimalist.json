@@ -1,5 +1,4 @@
 {
-    "name": "example-classif-minimalist",
     "datasets": {
         "cifar10": {
             "type": "torchvision.datasets.CIFAR10",

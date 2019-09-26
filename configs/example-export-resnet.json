@@ -1,5 +1,4 @@
 {
-    "name": "example-export-resnet",
     "model": {
         "type": "torchvision.models.resnet.resnet18",
         "params": {

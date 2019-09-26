@@ -1,5 +1,4 @@
 {
-    "name": "example-segm-viz",
     "datasets": {
         "pascalvoc": {
             "type": "thelper.data.PASCALVOC",

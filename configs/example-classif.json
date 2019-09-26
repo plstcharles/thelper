@@ -1,5 +1,4 @@
 {
-    "name": "example-classif",
     "cudnn": {
         "benchmark": false,
         "deterministic": true

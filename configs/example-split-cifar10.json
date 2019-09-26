@@ -1,5 +1,4 @@
 {
-    "name": "example-split-cifar10",
     "datasets": {
         "cifar10": {
             "type": "torchvision.datasets.CIFAR10",
