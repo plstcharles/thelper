@@ -74,7 +74,7 @@ class VectorCropDataset(thelper.data.Dataset):
             "feature roi 'buffer' value should be strictly positive int/float"
         self.feature_buffer = feature_buffer
         assert isinstance(master_roi, (str, shapely.geometry.polygon.Polygon,
-                                       shapely.geometry.multipolygon.MultiPolygon)), \
+                                       shapely.geometry.multipolygon.MultiPolygon)) or master_roi is None, \
             "invalid master roi (should be path to geojson/shapefile or polygon object)"
         assert isinstance(srs_target, (str, int, osr.SpatialReference)), \
             "target EPSG SRS must be given as int/str"
@@ -307,7 +307,7 @@ class TileDataset(VectorCropDataset):
                  skip_empty_tiles=False, skip_nodata_tiles=True, px_size=None,
                  allow_outlying_vectors=True, clip_outlying_vectors=True,
                  vector_area_min=0.0, vector_area_max=float("inf"),
-                 vector_target_prop=None,  master_roi=None, srs_target="3857",
+                 vector_target_prop=None, master_roi=None, srs_target="3857",
                  raster_key="raster", mask_key="mask", cleaner=None,
                  force_parse=False, reproj_rasters=False,
                  reproj_all_cpus=True, keep_rasters_open=True, transforms=None):

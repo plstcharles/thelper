@@ -259,7 +259,7 @@ class TB15D104TileDataset(geo.parsers.TileDataset):
     """OGC Testbed-15 dataset parser for D104 (lake/river) segmentation task."""
 
     def __init__(self, raster_path, vector_path, tile_size, tile_overlap,
-                 px_size=None,  allow_outlying_vectors=True, clip_outlying_vectors=True,
+                 px_size=None, allow_outlying_vectors=True, clip_outlying_vectors=True,
                  lake_area_min=0.0, lake_area_max=float("inf"), master_roi=None, srs_target="3857",
                  force_parse=False, reproj_rasters=False, reproj_all_cpus=True, display_debug=False,
                  keep_rasters_open=True, parallel=False, transforms=None):
