@@ -149,18 +149,22 @@ class Trainer:
         # parse basic training config args
         trainer_config = thelper.utils.get_key("trainer", config, msg="session config dictionary missing 'trainer' field")
         os.makedirs(session_dir, exist_ok=True)
-        thelper.utils.save_env_list(os.path.join(session_dir, "logs", "packages.log"))
-        train_logger_path = os.path.join(session_dir, "logs", "trainer.log")
+        logs_dir = os.path.join(session_dir, "logs")
+        os.makedirs(logs_dir, exist_ok=True)
+        thelper.utils.save_env_list(os.path.join(logs_dir, "packages.log"))
+        train_logger_path = os.path.join(logs_dir, "trainer.log")
         train_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         train_logger_fh = logging.FileHandler(train_logger_path)
         train_logger_fh.setFormatter(train_logger_format)
         self.logger = thelper.utils.get_class_logger()
         self.logger.addHandler(train_logger_fh)
-        self.logger.info("created training log for session '%s'" % session_name)
+        self.logger.info(f"created training log for session '{session_name}'")
+        self.logger.debug(f"session directory = {os.path.abspath(session_dir)}")
+        self.logger.debug(f"logs directory = {os.path.abspath(logs_dir)}")
         logstamp = thelper.utils.get_log_stamp()
         repover = thelper.__version__ + ":" + thelper.utils.get_git_stamp()
-        self.logger.debug("logstamp = %s" % logstamp)
-        self.logger.debug("version = %s" % repover)
+        self.logger.debug(f"logstamp = {logstamp}")
+        self.logger.debug(f"version = {repover}")
         self.name = session_name
         self.epochs = 1
         self.save_freq = int(thelper.utils.get_key_def("save_freq", trainer_config, 1))
@@ -173,10 +177,12 @@ class Trainer:
             # append session name for cleaner TBX folder merging
             output_root_dir = os.path.join(session_dir, "output", self.name)
         assert isinstance(output_root_dir, str) and len(output_root_dir), "invalid output directory path"
+        self.logger.debug(f"output directory = {os.path.abspath(output_root_dir)}")
         os.makedirs(output_root_dir, exist_ok=True)
         unique_output_dir = thelper.utils.get_key_def("unique_output_dir", trainer_config, True)
         assert isinstance(unique_output_dir, bool), "invalid unique_output_dir flag (should be bool)"
-        devices_str = thelper.utils.get_key_def(["device", "train_device"], trainer_config, None)
+        self.logger.debug(f"output subdirectories {'will' if unique_output_dir else 'will not'} have unique names")
+        devices_str = thelper.utils.get_key_def(["device", "devices", "train_device"], trainer_config, None)
         self.devices = self._load_devices(devices_str)
         self.skip_eval_iter = thelper.utils.get_key_def("skip_eval_iter", trainer_config, 0)
 
@@ -185,7 +191,7 @@ class Trainer:
         if self.use_tbx:
             import tensorboardX
             self.tbx = tensorboardX
-            self.logger.debug("tensorboard init : tensorboard --logdir %s --port <your_port>" % output_root_dir)
+            self.logger.debug(f"tensorboard init : tensorboard --logdir {output_root_dir} --port <your_port>")
         self.skip_tbx_histograms = thelper.utils.str2bool(
             thelper.utils.get_key_def("skip_tbx_histograms", trainer_config, False))
         self.tbx_histogram_freq = int(thelper.utils.get_key_def("tbx_histogram_freq", trainer_config, 1))
@@ -193,8 +199,12 @@ class Trainer:
         timestr = time.strftime("%Y%m%d-%H%M%S")
         self.writers, self.output_paths = {}, {}
         for cname, loader in zip(["train", "valid", "test"], loaders):
-            folder_name = f"{cname}-{str(platform.node())}-{timestr}" if unique_output_dir else cname
-            self.output_paths[cname] = os.path.join(output_root_dir, folder_name) if loader else None
+            if loader:
+                folder_name = f"{cname}-{str(platform.node())}-{timestr}" if unique_output_dir else cname
+                self.output_paths[cname] = os.path.join(output_root_dir, folder_name)
+                self.logger.debug(f"output {cname} directory = {os.path.abspath(self.output_paths[cname])}")
+            else:
+                self.output_paths[cname] = None
             self.writers[cname] = None  # will be instantiated only when needed based on above path
 
         # split loaders
@@ -246,6 +256,7 @@ class Trainer:
             self.monitor_goal = metric.goal
             self.monitor_best = thelper.optim.Metric.minimize if metric.goal == thelper.optim.Metric.maximize \
                 else thelper.optim.Metric.maximize
+            self.logger.debug(f"will monitor metric '{self.monitor}' for best state checkpointing/early stopping")
 
         # parse checkpoint data from previous run (if available)
         ckptdata = {} if ckptdata is None else ckptdata
@@ -260,6 +271,7 @@ class Trainer:
         # parse callbacks (see ``thelper.typedefs.IterCallbackType`` and ``thelper.typedefs.IterCallbackParams`` definitions)
         for cname, mset in zip(["train", "valid", "test"], [self.train_metrics, self.valid_metrics, self.test_metrics]):
             # parse user (custom) callback
+            # TODO: rewrite so that lists of callbacks can be supported @@@@
             user_callback_keys = [f"{cname}_iter_callback", f"{cname}_callback", "callback"]
             user_callback = thelper.utils.get_key_def(user_callback_keys, trainer_config)  # type: Optional[typ.IterCallbackType]
             user_callback_kwargs_keys = [f"{cname}_iter_callback_kwargs", f"{cname}_callback_kwargs", "callback_kwargs"]
@@ -643,7 +655,7 @@ class Trainer:
 
     def _write_epoch_output(self, epoch, metrics, tbx_writer, output_path, loss=None, optimizer=None):
         """Writes the cumulative evaluation result of all metrics using a specific writer."""
-        self.logger.debug("writing epoch metrics to '%s'" % output_path)
+        self.logger.debug(f"writing epoch metrics to {os.path.abspath(output_path)}")
         if not os.path.exists(output_path):
             os.makedirs(output_path)
         if tbx_writer is not None and loss is not None and optimizer is not None:
@@ -659,6 +671,7 @@ class Trainer:
                         tbx_writer.add_image(metric_name, img, epoch, dataformats="HWC")
                     raw_filename = "%s-%04d.png" % (metric_name, epoch)
                     raw_filepath = os.path.join(output_path, raw_filename)
+                    self.logger.debug(f"writing metric render output to {os.path.abspath(raw_filepath)}")
                     cv.imwrite(raw_filepath, img[..., [2, 1, 0]])
             txt = metric.report() if hasattr(metric, "report") and callable(metric.report) else None
             ext = getattr(metric, "ext", "txt")
@@ -672,6 +685,7 @@ class Trainer:
             if txt:
                 raw_filename = f"{metric_name}-{epoch:04d}.{ext}"
                 raw_filepath = os.path.join(output_path, raw_filename)
+                self.logger.debug(f"writing metric text output to '{os.path.abspath(raw_filepath)}'")
                 with open(raw_filepath, "w") as fd:
                     fd.write(txt)
 
