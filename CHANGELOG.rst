@@ -3,6 +3,13 @@
 Changelog
 =========
 
+0.3.14 (2019/09/30)
+-------------------
+
+* Added extra logging calls in trainer and framework utils
+* Cleaned up data configuration parsing logger calls
+* Bypassed full device check when specific one is requested
+
 0.3.13 (2019/09/26)
 -------------------
 
