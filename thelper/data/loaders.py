@@ -585,9 +585,9 @@ class LoaderFactory:
                 loaders.append(None)
         train_loader, valid_loader, test_loader = loaders
         logger.info("initialized loaders with batch counts:" +
-                     (f"\n\ttrain = {len(train_loader)}" if train_loader else "") +
-                     (f"\n\tvalid = {len(valid_loader)}" if valid_loader else "") +
-                     (f"\n\ttest = {len(test_loader)}" if test_loader else ""))
+                    (f"\n\ttrain = {len(train_loader)}" if train_loader else "") +
+                    (f"\n\tvalid = {len(valid_loader)}" if valid_loader else "") +
+                    (f"\n\ttest = {len(test_loader)}" if test_loader else ""))
         return train_loader, valid_loader, test_loader
 
     def get_base_transforms(self):
