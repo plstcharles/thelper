@@ -188,7 +188,7 @@ class LoaderFactory:
 
     def __init__(self, config):
         """Receives and parses the data configuration dictionary."""
-        logger.debug("loading data config")
+        logger.debug("loading data configuration...")
         default_batch_size = 1
         if "batch_size" in config:
             if any([v in config for v in ["train_batch_size", "valid_batch_size", "test_batch_size"]]):
@@ -200,13 +200,9 @@ class LoaderFactory:
         assert self.train_batch_size > 0, "batch size should be strictly positive integer"
         assert self.valid_batch_size > 0, "batch size should be strictly positive integer"
         assert self.test_batch_size > 0, "batch size should be strictly positive integer"
-        logger.debug("loaders will use batch sizes:\n  train = %d\n  valid = %d\n  test = %d" %
-                     (self.train_batch_size, self.valid_batch_size, self.test_batch_size))
         self.train_scale = thelper.utils.get_key_def("train_scale", config, 1.0)
         self.valid_scale = thelper.utils.get_key_def("valid_scale", config, 1.0)
         self.test_scale = thelper.utils.get_key_def("test_scale", config, 1.0)
-        logger.debug("samplers will use scaling factors:\n  train = %f\n  valid = %f\n  test = %f" %
-                     (self.train_scale, self.valid_scale, self.test_scale))
         default_collate_fn = default_collate
         if "collate_fn" in config:
             if any([v in config for v in ["train_collate_fn", "valid_collate_fn", "test_collate_fn"]]):
@@ -238,8 +234,6 @@ class LoaderFactory:
         self.workers = config["workers"] if "workers" in config and config["workers"] >= 0 else 1
         self.pin_memory = thelper.utils.str2bool(config["pin_memory"]) if "pin_memory" in config else False
         self.drop_last = thelper.utils.str2bool(config["drop_last"]) if "drop_last" in config else False
-        if self.drop_last:
-            logger.debug("loaders will drop last batch if sample count not multiple of batch size")
         self.sampler_type = None
         self.train_sampler, self.valid_sampler, self.test_sampler = None, None, None
         sampler_config = thelper.utils.get_key_def("sampler", config, {})
@@ -247,13 +241,11 @@ class LoaderFactory:
             sampler_type = thelper.utils.get_key("type", sampler_config)
             self.sampler_type = thelper.utils.import_class(sampler_type)
             self.sampler_params = thelper.utils.get_key_def(["params", "parameters"], sampler_config, {})
-            logger.debug("will use sampler with type '%s' and config : %s" % (str(self.sampler_type), str(self.sampler_params)))
             self.sampler_pass_labels = thelper.utils.str2bool(thelper.utils.get_key_def("pass_labels", sampler_config, False))
             self.sampler_pass_labels_param_name = thelper.utils.get_key_def("pass_labels_param_name", sampler_config, "labels")
             self.train_sampler = thelper.utils.str2bool(thelper.utils.get_key_def("apply_train", sampler_config, True))
             self.valid_sampler = thelper.utils.str2bool(thelper.utils.get_key_def("apply_valid", sampler_config, False))
             self.test_sampler = thelper.utils.str2bool(thelper.utils.get_key_def("apply_test", sampler_config, False))
-            logger.debug("global sampler will be applied as: %s" % str([self.train_sampler, self.valid_sampler, self.test_sampler]))
         train_augs_targets = ["augments", "trainvalid_augments", "train_augments"]
         valid_augs_targets = ["augments", "trainvalid_augments", "eval_augments", "validtest_augments", "valid_augments"]
         test_augs_targets = ["augments", "eval_augments", "validtest_augments", "test_augments"]
@@ -262,10 +254,7 @@ class LoaderFactory:
         self.test_augments, self.test_augments_append = self._get_augments(test_augs_targets, "test", config)
         self.base_transforms = None
         if "base_transforms" in config and config["base_transforms"]:
-            logger.debug("loading base transforms...")
             self.base_transforms = thelper.transforms.load_transforms(config["base_transforms"])
-            if self.base_transforms:
-                logger.debug("base transforms: %s" % str(self.base_transforms))
         self.train_split = self._get_ratios_split("train", config)
         self.valid_split = self._get_ratios_split("valid", config)
         self.test_split = self._get_ratios_split("test", config)
@@ -282,9 +271,13 @@ class LoaderFactory:
                 assert usage >= 0
                 if 0 < usage < 1 and not math.isclose(usage, 1) and not self.skip_split_norm:
                     query_msg = f"dataset split for {name} has a ratio sum less than 1; do you want to normalize the split?\n\t("
-                    query_msg += f"train={self.train_split[name] if name in self.train_split else None}, "
-                    query_msg += f"valid={self.valid_split[name] if name in self.valid_split else None}, "
-                    query_msg += f"test={self.test_split[name] if name in self.test_split else None})"
+                    query_msg += f"train={self.train_split[name] if name in self.train_split else 0:.03f}, "
+                    query_msg += f"valid={self.valid_split[name] if name in self.valid_split else 0:.03f}, "
+                    query_msg += f"test={self.test_split[name] if name in self.test_split else 0:.03f})\n"
+                    query_msg += "\t\tto\n\t("
+                    query_msg += f"train={self.train_split[name] / usage if name in self.train_split else 0:.03f}, "
+                    query_msg += f"valid={self.valid_split[name] / usage if name in self.valid_split else 0:.03f}, "
+                    query_msg += f"test={self.test_split[name] / usage if name in self.test_split else 0:.03f})"
                     normalize_ratios = thelper.utils.query_yes_no(query_msg, bypass="n")
                 if (normalize_ratios or usage > 1) and usage > 0:
                     if usage > 1:
@@ -296,6 +289,21 @@ class LoaderFactory:
                     if name in self.test_split:
                         self.test_split[name] /= usage
         self.skip_verif = thelper.utils.str2bool(config["skip_verif"]) if "skip_verif" in config else True
+        logger.debug(f"loaders will use batch sizes:" +
+                     (f"\n\ttrain = {self.train_batch_size}" if self.train_split else "") +
+                     (f"\n\tvalid = {self.valid_batch_size}" if self.valid_split else "") +
+                     (f"\n\ttest = {self.test_batch_size}" if self.test_split else ""))
+        logger.debug("samplers will use scaling factors:" +
+                     (f"\n\ttrain = {self.train_scale}" if self.train_split else "") +
+                     (f"\n\tvalid = {self.valid_scale}" if self.valid_split else "") +
+                     (f"\n\ttest = {self.test_scale}" if self.test_split else ""))
+        if self.drop_last:
+            logger.debug("loaders will drop last batch if sample count not multiple of batch size")
+        if sampler_config:
+            logger.debug("will use sampler with type '%s' and config : %s" % (str(self.sampler_type), str(self.sampler_params)))
+            logger.debug("global sampler will be applied as: %s" % str([self.train_sampler, self.valid_sampler, self.test_sampler]))
+        if self.base_transforms:
+            logger.debug("base transforms: %s" % str(self.base_transforms))
 
     @staticmethod
     def _get_collate_fn(val):
@@ -445,9 +453,10 @@ class LoaderFactory:
                     if hasattr(dataset.samples, "samples") and isinstance(dataset.samples.samples, list):
                         sample_maps[dataset_name] = task.get_class_sample_map(dataset.samples.samples, unset_class_key)
                     else:
-                        logger.warning(("must fully parse the external dataset '%s' for intra-class shuffling;" % dataset_name) +
-                                       " this might take a while!\n(consider making a dataset interface that can return labels" +
-                                       " only, it would greatly speed up the analysis of class distributions)")
+                        logger.warning(f"must fully parse the external dataset '{dataset_name}' for balanced intra-class shuffling;" +
+                                       " this might take a while!\n\t...consider making a dataset interface that can return labels" +
+                                       " only, it would greatly speed up the analysis of class distributions\n\t...you could also" +
+                                       " add the 'skip_class_balancing' flag to your data configuration to skip this rebalancing")
                         label_key = task.gt_key
                         # to allow glitch-less tqdm printing after latest logger output
                         sys.stdout.flush()
@@ -575,10 +584,10 @@ class LoaderFactory:
             else:
                 loaders.append(None)
         train_loader, valid_loader, test_loader = loaders
-        logger.info("initialized loaders with batch counts:\n  train=%d\n  valid=%d\n  test=%d" %
-                    (len(train_loader) if train_loader else 0,
-                     len(valid_loader) if valid_loader else 0,
-                     len(test_loader) if test_loader else 0))
+        logger.info("initialized loaders with batch counts:" +
+                     (f"\n\ttrain = {len(train_loader)}" if train_loader else "") +
+                     (f"\n\tvalid = {len(valid_loader)}" if valid_loader else "") +
+                     (f"\n\ttest = {len(test_loader)}" if test_loader else ""))
         return train_loader, valid_loader, test_loader
 
     def get_base_transforms(self):
