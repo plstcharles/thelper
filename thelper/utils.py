@@ -955,9 +955,11 @@ def query_yes_no(question, default=None, bypass=None):
     valid = {"yes": True, "ye": True, "y": True, "no": False, "n": False}
     if bypass is not None and (not isinstance(bypass, str) or bypass not in valid):
         raise AssertionError("unexpected bypass value")
+    clean_q = clipstr(question.replace("\n", " ").replace("\t", " ").replace("'", "`"), 45)
     if bypass_queries:
         if bypass is None:
             raise AssertionError("cannot bypass interactive query, no default value provided")
+        logger.debug(f"bypassed query '{clean_q}...' with {valid[bypass]}")
         return valid[bypass]
     if (isinstance(default, bool) and default) or \
        (isinstance(default, str) and default.lower() in ["yes", "ye", "y"]):
@@ -975,10 +977,16 @@ def query_yes_no(question, default=None, bypass=None):
         choice = input().lower()
         if default is not None and choice == "":
             if isinstance(default, str):
+                sys.stdout.write("\n")
+                logger.debug(f"defaulted query '{clean_q}...' with {valid[default]}")
                 return valid[default]
             else:
+                sys.stdout.write("\n")
+                logger.debug(f"defaulted query '{clean_q}...' with {default}")
                 return default
         elif choice in valid:
+            sys.stdout.write("\n")
+            logger.debug(f"answered query '{clean_q}...' with {valid[choice]}")
             return valid[choice]
         else:
             sys.stdout.write("Please respond with 'yes/y' or 'no/n'.\n")
@@ -1000,9 +1008,11 @@ def query_string(question, choices=None, default=None, allow_empty=False, bypass
     Returns:
         The string entered by the user.
     """
+    clean_q = clipstr(question.replace("\n", " ").replace("\t", " ").replace("'", "`"), 45)
     if bypass_queries:
         if bypass is None:
             raise AssertionError("cannot bypass interactive query, no default value provided")
+        logger.debug(f"bypassed query '{clean_q}...' with {bypass}")
         return bypass
     sys.stdout.flush()
     sys.stderr.flush()
@@ -1017,13 +1027,21 @@ def query_string(question, choices=None, default=None, allow_empty=False, bypass
         answer = input()
         if answer == "":
             if default is not None:
+                sys.stdout.write("\n")
+                logger.debug(f"defaulted query '{clean_q}...' with {default}")
                 return default
             elif allow_empty:
+                sys.stdout.write("\n")
+                logger.debug(f"answered query '{clean_q}...' with empty string")
                 return answer
         elif choices is not None:
             if answer in choices:
+                sys.stdout.write("\n")
+                logger.debug(f"answered query '{clean_q}...' with choice '{answer}'")
                 return answer
         else:
+            sys.stdout.write("\n")
+            logger.debug(f"answered query '{clean_q}...' with {answer}")
             return answer
         sys.stdout.write("Please respond with a valid string.\n")
 
@@ -1127,7 +1145,7 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
     if out_root is None:
         time.sleep(0.25)  # to make sure all debug/info prints are done, and we see the question
         out_root = query_string("Please provide the path to where session directories should be created/saved:")
-    func_logger.info(f"output root directory = {out_root}")
+    func_logger.info(f"output root directory = {os.path.abspath(out_root)}")
     os.makedirs(out_root, exist_ok=True)
     save_dir = os.path.join(out_root, dir_name) if dir_name is not None else out_root
     if not resume:
@@ -1138,10 +1156,10 @@ def get_save_dir(out_root, dir_name, config=None, resume=False, backup_ext=".jso
             overwrite = query_yes_no("Training session at '%s' already exists; overwrite?" % abs_save_dir, bypass="y")
             if not overwrite:
                 save_dir = query_string("Please provide a new save directory path:")
-    func_logger.info(f"output session directory = {save_dir}")
+    func_logger.info(f"output session directory = {os.path.abspath(save_dir)}")
     os.makedirs(save_dir, exist_ok=True)
     logs_dir = os.path.join(save_dir, "logs")
-    func_logger.info(f"output logs directory = {logs_dir}")
+    func_logger.info(f"output logs directory = {os.path.abspath(logs_dir)}")
     os.makedirs(logs_dir, exist_ok=True)
     if config is not None:
         common_backup_path = os.path.join(save_dir, "config.latest" + backup_ext)
