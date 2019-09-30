@@ -383,10 +383,7 @@ class Trainer:
                     return available_cuda_devices
                 assert "cuda:" in dev_str, "expecting cuda device format to be 'cuda:X' (where X is device index)"
                 cuda_dev_idx = int(dev_str.rsplit(":", 1)[-1])
-                if available_cuda_devices is None:
-                    available_cuda_devices = thelper.utils.get_available_cuda_devices()
-                assert cuda_dev_idx in available_cuda_devices, \
-                    f"cuda device '{dev_str}' unavailable (detected devices = {str(available_cuda_devices)})"
+                assert thelper.utils.test_cuda_device_availability(cuda_dev_idx), f"cuda device '{dev_str}' unavailable"
                 devices.append(cuda_dev_idx)
             return devices
         else:

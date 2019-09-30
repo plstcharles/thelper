@@ -51,6 +51,18 @@ class Struct:
             "(" + ", ".join([f"{key}={repr(val)}" for key, val in self.__dict__.items()]) + ")"
 
 
+def test_cuda_device_availability(device_idx):
+    # type: (int) -> bool
+    """Tests the availability of a single cuda device and returns its status."""
+    # noinspection PyBroadException
+    try:
+        torch.cuda.set_device(device_idx)
+        test_val = torch.cuda.FloatTensor([1])
+        return test_val.cpu().item() == 1.0
+    except Exception:
+        return False
+
+
 def get_available_cuda_devices(attempts_per_device=5):
     # type: (Optional[int]) -> List[int]
     """
@@ -71,15 +83,7 @@ def get_available_cuda_devices(attempts_per_device=5):
                     logger.debug("testing availability of cuda device #%d (%s)" % (
                         device_id, torch.cuda.get_device_name(device_id)
                     ))
-                # noinspection PyBroadException
-                try:
-                    torch.cuda.set_device(device_id)
-                    test_val = torch.cuda.FloatTensor([1])
-                    if test_val.cpu().item() != 1.0:
-                        raise AssertionError("sometime's really wrong")
-                    devices_available[device_id] = True
-                except Exception:
-                    pass
+                devices_available[device_id] = test_cuda_device_availability(device_id)
         attempt_broadcast = True
     return [device_id for device_id, available in enumerate(devices_available) if available]
 
