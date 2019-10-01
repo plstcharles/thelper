@@ -239,7 +239,7 @@ class Trainer:
                     assert mkey not in sval, f"metric name '{mkey}' duplicated in set '{skey}'"
                     sval[mkey] = mval
                 for mkey, mval in sval.items():
-                    self.logger.info("parsed metric '%s': %s" % (mkey, str(mval)))
+                    self.logger.info(f"parsed metric '{mkey}': {str(mval)}")
 
         # check for monitored metric
         self.monitor, self.monitor_best, self.monitor_best_epoch = None, None, -1
@@ -411,7 +411,7 @@ class Trainer:
         """
         assert self.train_loader, "missing training data, invalid loader!"
         assert not isinstance(self.model, torch.jit.ScriptModule), "current impl cannot train model traces"  # TODO
-        self.logger.debug("uploading model to '%s'..." % str(self.devices))
+        self.logger.debug(f"uploading model to '{str(self.devices)}'...")
         model = self._upload_model(self.model, self.devices)
         loss, optimizer, scheduler, scheduler_step_metric = self._load_optimization(model, self.devices)
         if optimizer is not None and self.optimizer_state is not None:
@@ -425,7 +425,7 @@ class Trainer:
         latest_loss = math.inf
         while self.current_epoch < self.epochs:
             self.writers["train"] = self._init_writer(self.writers["train"], self.output_paths["train"])
-            self.logger.info("at epoch#%d for '%s' (dev=%s)" % (self.current_epoch, self.name, str(self.devices)))
+            self.logger.info(f"at epoch#{self.current_epoch} for '{self.name}' (dev={str(self.devices)})")
             if scheduler:
                 if scheduler_step_metric:
                     if scheduler_step_metric == "loss":
@@ -462,7 +462,7 @@ class Trainer:
                     if param.grad is not None:
                         grad = param.grad.data.cpu().numpy().flatten()
                         self.writers["train"].add_histogram(pname + '/grad', grad, self.current_epoch)
-            self.logger.debug("learning rate at %.8f" % thelper.optim.get_lr(optimizer))
+            self.logger.debug(f"learning rate at {thelper.optim.get_lr(optimizer):.8f}")
             self._set_rng_state(self.train_loader.seeds, self.current_epoch)
             model.train()
             if hasattr(self.train_loader, "set_epoch") and callable(self.train_loader.set_epoch):
@@ -512,14 +512,14 @@ class Trainer:
                 if new_best:
                     best_str = "(new best value)"
                 else:
-                    best_str = ("(previous best = %s @ epoch = %d)" % (self.monitor_best, self.monitor_best_epoch))
-                self.logger.info("epoch %d, monitored %s = %s  %s" % (self.current_epoch, self.monitor, monitor_val, best_str))
+                    best_str = f"(previous best = {self.monitor_best} @ epoch = {self.monitor_best_epoch})"
+                self.logger.info(f"epoch {self.current_epoch}, monitored {self.monitor} = {monitor_val}  {best_str}")
             self.outputs[self.current_epoch] = result
             if new_best or (self.current_epoch % self.save_freq) == 0:
-                self.logger.info("saving checkpoint @ epoch#%d" % self.current_epoch)
+                self.logger.info(f"saving checkpoint @ epoch#{self.current_epoch}")
                 self._save(self.current_epoch, self.current_iter, optimizer, scheduler, save_best=new_best)
             self.current_epoch += 1
-        self.logger.info("training for session '%s' done" % self.name)
+        self.logger.info(f"training for session '{self.name}' done")
         return self.outputs
 
     def eval(self):
@@ -530,7 +530,7 @@ class Trainer:
         in a derived class via :func:`thelper.train.base.Trainer.eval_epoch`.
         """
         assert self.valid_loader or self.test_loader, "missing validation/test data, invalid loaders!"
-        self.logger.debug("uploading model to '%s'..." % str(self.devices))
+        self.logger.debug(f"uploading model to '{str(self.devices)}'...")
         model = self._upload_model(self.model, self.devices)
         result = {}
         output_group = None, None
@@ -544,7 +544,7 @@ class Trainer:
                 self.test_loader.set_epoch(self.current_epoch)
             self.eval_epoch(model, self.current_epoch, self.devices, self.test_loader, self.test_metrics)
             self._write_epoch_output(self.current_epoch, self.test_metrics,
-                                     self.writers["test"], self.output_paths["test"])
+                                     self.writers["test"], self.output_paths["test"], use_suffix=False)
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()
                                 if isinstance(metric, thelper.optim.metrics.Metric)}
             result = {**result, **test_metric_vals}
@@ -559,7 +559,7 @@ class Trainer:
                 self.valid_loader.set_epoch(self.current_epoch)
             self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader, self.valid_metrics)
             self._write_epoch_output(self.current_epoch, self.valid_metrics,
-                                     self.writers["valid"], self.output_paths["valid"])
+                                     self.writers["valid"], self.output_paths["valid"], use_suffix=False)
             valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()
                                  if isinstance(metric, thelper.optim.metrics.Metric)}
             result = {**result, **valid_metric_vals}
@@ -573,7 +573,7 @@ class Trainer:
         if self.current_epoch not in self.outputs:
             self.outputs[self.current_epoch] = {}
         self.outputs[self.current_epoch][output_group] = result
-        self.logger.info("evaluation for session '%s' done" % self.name)
+        self.logger.info(f"evaluation for session '{self.name}' done")
         return self.outputs
 
     @abstractmethod
@@ -647,13 +647,14 @@ class Trainer:
             for metric_name, metric in metrics.items():
                 if isinstance(metric, thelper.optim.metrics.Metric):
                     if metric_name == self.monitor and monitor_val is not None:
-                        writer.add_scalar("iter/%s" % self.monitor, monitor_val, self.current_iter)
+                        writer.add_scalar(f"iter/{self.monitor}", monitor_val, self.current_iter)
                     elif metric.live_eval:
-                        writer.add_scalar("iter/%s" % metric_name, metric.eval(), self.current_iter)
+                        # if live eval is not true, metric might be too heavy to compute at each iteration
+                        writer.add_scalar(f"iter/{metric_name}", metric.eval(), self.current_iter)
         if set_name == "train":
             self.current_iter += 1
 
-    def _write_epoch_output(self, epoch, metrics, tbx_writer, output_path, loss=None, optimizer=None):
+    def _write_epoch_output(self, epoch, metrics, tbx_writer, output_path, loss=None, optimizer=None, use_suffix=True):
         """Writes the cumulative evaluation result of all metrics using a specific writer."""
         self.logger.debug(f"writing epoch metrics to {os.path.abspath(output_path)}")
         if not os.path.exists(output_path):
@@ -663,13 +664,13 @@ class Trainer:
             tbx_writer.add_scalar("epoch/lr", thelper.optim.get_lr(optimizer), epoch)
         for metric_name, metric in metrics.items():
             if isinstance(metric, thelper.optim.metrics.Metric) and tbx_writer is not None:
-                tbx_writer.add_scalar("epoch/%s" % metric_name, metric.eval(), epoch)
+                tbx_writer.add_scalar(f"epoch/{metric_name}", metric.eval(), epoch)
             if hasattr(metric, "render") and callable(metric.render):
                 img = metric.render()
                 if img is not None:
                     if tbx_writer is not None:
                         tbx_writer.add_image(metric_name, img, epoch, dataformats="HWC")
-                    raw_filename = "%s-%04d.png" % (metric_name, epoch)
+                    raw_filename = f"{metric_name}{f'-{epoch:04d}' if use_suffix else ''}.png"
                     raw_filepath = os.path.join(output_path, raw_filename)
                     self.logger.debug(f"writing metric render output to {os.path.abspath(raw_filepath)}")
                     cv.imwrite(raw_filepath, img[..., [2, 1, 0]])
@@ -679,11 +680,11 @@ class Trainer:
                 eval_res = metric.eval()
                 if eval_res is not None:
                     if isinstance(eval_res, float):
-                        txt = "%.4f" % eval_res  # make sure we always have decent precision
+                        txt = f"{eval_res:.4f}"  # make sure we always have decent precision
                     else:
                         txt = str(eval_res)
             if txt:
-                raw_filename = f"{metric_name}-{epoch:04d}.{ext}"
+                raw_filename = f"{metric_name}{f'-{epoch:04d}' if use_suffix else ''}.{ext}"
                 raw_filepath = os.path.join(output_path, raw_filename)
                 self.logger.debug(f"writing metric text output to '{os.path.abspath(raw_filepath)}'")
                 with open(raw_filepath, "w") as fd:
@@ -714,11 +715,11 @@ class Trainer:
             "monitor_best_epoch": self.monitor_best_epoch,
             "config": self.config  # note: this is the global app config
         }
-        filename = "ckpt.%04d.%s.pth" % (epoch, log_stamp)
+        filename = f"ckpt.{epoch:04d}.{log_stamp}.pth"
         filename = os.path.join(self.checkpoint_dir, filename)
-        self.logger.debug("writing checkpoint to '%s'" % filename)
+        self.logger.debug(f"writing checkpoint to {os.path.abspath(filename)}")
         torch.save(curr_state, filename)
         if save_best:
             filename_best = os.path.join(self.checkpoint_dir, "ckpt.best.pth")
-            self.logger.debug("writing checkpoint to '%s'" % filename_best)
+            self.logger.debug(f"writing checkpoint to {os.path.abspath(filename_best)}")
             torch.save(curr_state, filename_best)
