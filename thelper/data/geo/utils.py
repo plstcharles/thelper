@@ -5,6 +5,7 @@ import os
 
 import affine
 import gdal
+import geojson
 import numpy as np
 import ogr
 import osr
@@ -70,32 +71,6 @@ def reproject_coords(coords, src_srs, tgt_srs):
         x, y, z = transform.TransformPoint(x, y)
         trans_coords.append([x, y])
     return trans_coords
-
-
-def parse_coordinate_system(body):
-    """Imports a coordinate reference system (CRS) from a GeoJSON tree."""
-    crs_body = body.get("crs") or body.get("srs")
-    crs_type = crs_body.get("type", "").upper()
-    crs_opts = list(crs_body.get("properties").values())  # FIXME: no specific mapping of inputs, each is different
-    crs = ogr.osr.SpatialReference()
-    err = -1
-    if crs_type == "EPSG":
-        err = crs.ImportFromEPSG(*crs_opts)
-    elif crs_type == "EPSGA":
-        err = crs.ImportFromEPSGA(*crs_opts)
-    elif crs_type == "ERM":
-        err = crs.ImportFromERM(*crs_opts)
-    elif crs_type == "ESRI":
-        err = crs.ImportFromESRI(*crs_opts)
-    elif crs_type == "USGS":
-        err = crs.ImportFromUSGS(*crs_opts)
-    elif crs_type == "PCI":
-        err = crs.ImportFromPCI(*crs_opts)
-    # add dirty hack for geojsons used in testbed15-d104
-    elif crs_type == "NAME" and len(crs_opts) == 1 and ":EPSG:" in crs_opts[0]:
-        err = crs.ImportFromEPSG(int(crs_opts[0].split(":")[-1]))
-    assert not err, f"could not identify CRS/SRS type ({str(err)})"
-    return crs
 
 
 def parse_rasters(raster_paths, srs_target=None, reproj=False):
@@ -184,6 +159,32 @@ def parse_rasters(raster_paths, srs_target=None, reproj=False):
     return rasters_data, target_coverage
 
 
+def parse_geojson_crs(body):
+    """Imports a coordinate reference system (CRS) from a GeoJSON tree."""
+    crs_body = body.get("crs") or body.get("srs")
+    crs_type = crs_body.get("type", "").upper()
+    crs_opts = list(crs_body.get("properties").values())  # FIXME: no specific mapping of inputs, each is different
+    crs = ogr.osr.SpatialReference()
+    err = -1
+    if crs_type == "EPSG":
+        err = crs.ImportFromEPSG(*crs_opts)
+    elif crs_type == "EPSGA":
+        err = crs.ImportFromEPSGA(*crs_opts)
+    elif crs_type == "ERM":
+        err = crs.ImportFromERM(*crs_opts)
+    elif crs_type == "ESRI":
+        err = crs.ImportFromESRI(*crs_opts)
+    elif crs_type == "USGS":
+        err = crs.ImportFromUSGS(*crs_opts)
+    elif crs_type == "PCI":
+        err = crs.ImportFromPCI(*crs_opts)
+    # add dirty hack for geojsons used in testbed15-d104
+    elif crs_type == "NAME" and len(crs_opts) == 1 and ":EPSG:" in crs_opts[0]:
+        err = crs.ImportFromEPSG(int(crs_opts[0].split(":")[-1]))
+    assert not err, f"could not identify CRS/SRS type ({str(err)})"
+    return crs
+
+
 def parse_geojson(geojson, srs_target=None, roi=None, allow_outlying=False, clip_outlying=False):
     assert isinstance(geojson, dict), "unexpected geojson type (must be dict)"
     assert "features" in geojson and isinstance(geojson["features"], list), "unexpected geojson format"
@@ -199,7 +200,7 @@ def parse_geojson(geojson, srs_target=None, roi=None, allow_outlying=False, clip
             srs_target_obj = osr.SpatialReference()
             srs_target_obj.ImportFromEPSG(srs_target)
             srs_target = srs_target_obj
-        srs_origin = parse_coordinate_system(geojson)
+        srs_origin = parse_geojson_crs(geojson)
         if not srs_origin.IsSame(srs_target):
             srs_transform = osr.CoordinateTransformation(srs_origin, srs_target)
     kept_features = []
@@ -411,3 +412,29 @@ def export_geotiff(filepath, crop, srs, geotransform):
         dataset.GetRasterBand(b + 1).WriteArray(crop[:, :, b])
     dataset.FlushCache()
     dataset = None  # close fd
+
+
+def export_geojson_with_crs(features, srs_target):
+    """Exports a list of features along with their SRS into a GeoJSON-compat string."""
+
+    class _FeatureCollection(geojson.FeatureCollection):
+        def __init__(self, *args, srs="4326", **kwargs):
+            assert isinstance(srs, (str, int, osr.SpatialReference)), \
+                "target EPSG SRS must be given as int/str"
+            if isinstance(srs, osr.SpatialReference):
+                assert srs.GetAttrValue("AUTHORITY", 0) == "EPSG", \
+                    "current implementation only supports EPSG spatial refs"
+                srs = srs.GetAttrValue("AUTHORITY", 1)
+            super().__init__(*args, **kwargs)
+            self.srs = srs
+
+        @property
+        def __geo_interface__(self):
+            res = super().__geo_interface__
+            res.update({
+                "type": "FeatureCollection",
+                "crs": {"type": "EPSG", "properties": {"code": self.srs}}})
+            return res
+
+    assert isinstance(features, list), "unexpected feature list type"
+    return geojson.dumps(_FeatureCollection(features, srs=srs_target))
