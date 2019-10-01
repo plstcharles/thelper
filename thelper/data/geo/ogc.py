@@ -378,15 +378,27 @@ class TB15D104DetectLogger(thelper.train.utils.DetectLogger):
                 bbox_br = geo.utils.get_geocoord(geotransform, *bbox.bottom_right)
                 bbox_geom = shapely.geometry.Polygon([bbox_tl, (bbox_br[0], bbox_tl[1]),
                                                       bbox_br, (bbox_tl[0], bbox_br[1])])
-                output_features.append(geojson.Feature(geometry=bbox_geom, properties={"image_id": id}))
+                output_features.append(geojson.Feature(geometry=bbox_geom, properties={
+                    "image_id": id, "confidence": bbox.confidence}))
         return geojson.dumps(geojson.FeatureCollection(output_features))
 
 
-def postproc_features(input_file, bboxes_srs, orig_geoms_path, output_file):
+def postproc_features(input_file, bboxes_srs, orig_geoms_path, output_file,
+                      final_srs=None, write_shapefile_copy=False):
     """Post-processes bounding box detections produced during an evaluation session into a GeoJSON file."""
+    import ogr
+    import osr
     import json
     import geojson
     import shapely
+    assert isinstance(bboxes_srs, (str, int, osr.SpatialReference)), \
+        "target EPSG SRS must be given as int/str"
+    if isinstance(bboxes_srs, (str, int)):
+        if isinstance(bboxes_srs, str):
+            bboxes_srs = int(bboxes_srs.replace("EPSG:", ""))
+        bboxes_srs_obj = osr.SpatialReference()
+        bboxes_srs_obj.ImportFromEPSG(bboxes_srs)
+        bboxes_srs = bboxes_srs_obj
     with open(input_file) as bboxes_fd:
         bboxes_geoms = thelper.data.geo.utils.parse_geojson(json.load(bboxes_fd))
     with open(orig_geoms_path) as hydro_fd:
@@ -394,16 +406,46 @@ def postproc_features(input_file, bboxes_srs, orig_geoms_path, output_file):
     detect_roi = shapely.ops.cascaded_union([bbox["geometry"] for bbox in bboxes_geoms])
     output_features = []
 
-    def append_poly(feat, props):
+    def append_poly(feat, props, srs_transform=None):
         if feat.is_empty:
             return
         elif feat.type == "Polygon":
-            output_features.append(geojson.Feature(geometry=feat, properties=props))
+            if srs_transform is not None:
+                ogr_geometry = ogr.CreateGeometryFromWkb(feat.wkb)
+                ogr_geometry.Transform(srs_transform)
+                feat = shapely.wkt.loads(ogr_geometry.ExportToWkt())
+            output_features.append((geojson.Feature(geometry=feat, properties=props), feat))
         elif feat.type == "MultiPolygon" or feat.type == "GeometryCollection":
             for f in feat:
                 append_poly(f, props)
 
-    for hydro_feat in hydro_geoms:
-        append_poly(hydro_feat["geometry"].intersection(detect_roi), hydro_feat["properties"])
+    srs_transform = None
+    if final_srs is not None:
+        import osr
+        assert isinstance(final_srs, (str, int, osr.SpatialReference)), \
+            "target EPSG SRS must be given as int/str"
+        if isinstance(final_srs, (str, int)):
+            if isinstance(final_srs, str):
+                final_srs = int(final_srs.replace("EPSG:", ""))
+            final_srs_obj = osr.SpatialReference()
+            final_srs_obj.ImportFromEPSG(final_srs)
+            final_srs = final_srs_obj
+        if not bboxes_srs.IsSame(final_srs):
+            srs_transform = osr.CoordinateTransformation(bboxes_srs, final_srs)
+    for hydro_feat in tqdm.tqdm(hydro_geoms, desc="computing bbox intersections"):
+        hydro_feat["properties"]["TYPECE"] = TB15D104.TYPECE_LAKE
+        append_poly(hydro_feat["geometry"].intersection(detect_roi), hydro_feat["properties"], srs_transform)
     with open(output_file, "w") as fd:
-        geojson.dump(geojson.FeatureCollection(output_features), fd)
+        out_srs = final_srs if final_srs is not None else bboxes_srs
+        fd.write(geo.utils.export_geojson_with_crs([o[0] for o in output_features], srs_target=out_srs))
+    if write_shapefile_copy:
+        driver = ogr.GetDriverByName("ESRI Shapefile")
+        data_source = driver.CreateDataSource(output_file + ".shp")
+        layer = data_source.CreateLayer("lakes", final_srs if final_srs is not None else bboxes_srs, ogr.wkbPolygon)
+        for feat_tuple in output_features:
+            feature = ogr.Feature(layer.GetLayerDefn())
+            point = ogr.CreateGeometryFromWkt(feat_tuple[1].wkt)
+            feature.SetGeometry(point)
+            layer.CreateFeature(feature)
+            feature = None
+        data_source = None
