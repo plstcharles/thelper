@@ -380,3 +380,30 @@ class TB15D104DetectLogger(thelper.train.utils.DetectLogger):
                                                       bbox_br, (bbox_tl[0], bbox_br[1])])
                 output_features.append(geojson.Feature(geometry=bbox_geom, properties={"image_id": id}))
         return geojson.dumps(geojson.FeatureCollection(output_features))
+
+
+def postproc_features(input_file, bboxes_srs, orig_geoms_path, output_file):
+    """Post-processes bounding box detections produced during an evaluation session into a GeoJSON file."""
+    import json
+    import geojson
+    import shapely
+    with open(input_file) as bboxes_fd:
+        bboxes_geoms = thelper.data.geo.utils.parse_geojson(json.load(bboxes_fd))
+    with open(orig_geoms_path) as hydro_fd:
+        hydro_geoms = thelper.data.geo.utils.parse_geojson(json.load(hydro_fd), srs_target=bboxes_srs)
+    detect_roi = shapely.ops.cascaded_union([bbox["geometry"] for bbox in bboxes_geoms])
+    output_features = []
+
+    def append_poly(feat, props):
+        if feat.is_empty:
+            return
+        elif feat.type == "Polygon":
+            output_features.append(geojson.Feature(geometry=feat, properties=props))
+        elif feat.type == "MultiPolygon" or feat.type == "GeometryCollection":
+            for f in feat:
+                append_poly(f, props)
+
+    for hydro_feat in hydro_geoms:
+        append_poly(hydro_feat["geometry"].intersection(detect_roi), hydro_feat["properties"])
+    with open(output_file, "w") as fd:
+        geojson.dump(geojson.FeatureCollection(output_features), fd)
