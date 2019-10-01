@@ -21,7 +21,7 @@
         "testbed15_eval": {
             "type": "thelper.data.geo.ogc.TB15D104Dataset",
             "params": {
-                "raster_path": "data/testbed15/hrdem.tif",
+                "raster_path": "data/testbed15/roi_hrdem.tif",
                 "vector_path": "data/testbed15/hydro_original.geojson",
                 "px_size": 3,
                 "lake_area_min": 100,
@@ -29,6 +29,22 @@
                 "lake_river_max_dist": 300,
                 "feature_buffer": 1000,
                 "master_roi": "data/testbed15/eval_roi_epsg26918.shp",
+                "srs_target": "2959",
+                "reproj_rasters": false,
+                "display_debug": true,
+                "parallel": 0
+            }
+        },
+        "testbed15_tiled": {
+            "type": "thelper.data.geo.ogc.TB15D104TileDataset",
+            "params": {
+                "raster_path": "data/testbed15/roi_hrdem.tif",
+                "vector_path": "data/testbed15/hydro_original.geojson",
+                "tile_size": [500, 500],
+                "tile_overlap": 100,
+                "px_size": 3,
+                "lake_area_min": 100,
+                "lake_area_max": 200000,
                 "srs_target": "2959",
                 "reproj_rasters": false,
                 "display_debug": true,
@@ -54,6 +70,9 @@
         },
         "valid_split": {
             "testbed15_eval": 1
+        },
+        "test_split": {
+            "testbed15_tiled": 1
         }
     },
     "model": {
@@ -64,6 +83,7 @@
         "epochs": 100,
         "monitor": "mAP",
         "save_freq": 10,
+        "unique_output_dir": true,
         "optimization": {
             "optimizer": {
                 "type": "torch.optim.SGD",
@@ -77,7 +97,9 @@
         "valid_metrics": {
             "mAP": {
                 "type": "thelper.optim.metrics.AveragePrecision"
-            },
+            }
+        },
+        "test_metrics": {
             "detections": {
                 "type": "thelper.data.geo.ogc.TB15D104DetectLogger"
             }
