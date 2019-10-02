@@ -619,7 +619,7 @@ def resolve_import(fullname):
     for old, new in refactor_cases:
         fullname = fullname.replace(old, new)
     if old_name != fullname:
-        logger.warning("class fullname '{!s}' was resolved to '{!s}'.".format(old_name, fullname))
+        logger.warning(f"class fullname '{str(old_name)}' was resolved to '{str(fullname)}'")
     return fullname
 
 

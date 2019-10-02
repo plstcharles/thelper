@@ -112,14 +112,14 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False, task_compat
         compat_task = None if not old_task.check_compat(new_task) else old_task.get_compat(new_task)
         if task_compat in TASK_COMPAT_CHOICES:
             logger.warning("discrepancy between old task from checkpoint and new task from config resolved by " +
-                           "input argument: task_compat={}", task_compat)
+                           f"input argument: task_compat={task_compat}")
             task_compat_mode = task_compat
         else:
             loaders_config = thelper.utils.get_key(["data_config", "loaders"], config)
             task_compat_mode = thelper.utils.get_key_def("task_compat_mode", loaders_config, default=None)
             if task_compat_mode in TASK_COMPAT_CHOICES:
                 logger.warning("discrepancy between old task from checkpoint and new task from config resolved by " +
-                               "config: task_compat_mode={}", task_compat_mode)
+                               f"config: task_compat_mode={task_compat_mode}")
         if task_compat_mode not in TASK_COMPAT_CHOICES:
             task_compat_mode = thelper.utils.query_string(
                 "Found discrepancy between old task from checkpoint and new task from config; " +

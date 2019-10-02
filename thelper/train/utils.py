@@ -385,7 +385,7 @@ class ClassifReport(PredictionConsumer, ClassNamesHandler, FormatHandler):
         # type: () -> Optional[AnyStr]
         """Returns the classification report as a multi-line print-friendly string."""
         report = self.gen_report(as_dict=False)
-        return "\n{}".format(report) if isinstance(report, str) else None
+        return f"\n{report}" if isinstance(report, str) else None
 
     def report_json(self):
         # type: () -> Optional[AnyStr]

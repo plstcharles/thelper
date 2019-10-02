@@ -181,7 +181,7 @@ class FormatHandler(ABC):
         """
         self.solve_format(format or self.format or "text")
         if isinstance(self.format, str):
-            formatter = getattr(self, "report_{}".format(self.format.lower()), None)
+            formatter = getattr(self, f"report_{self.format.lower()}", None)
             if formatter is not None:
                 return formatter()
         return self.report_text()

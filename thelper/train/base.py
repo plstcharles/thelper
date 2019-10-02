@@ -503,10 +503,10 @@ class Trainer:
                         self.monitor_best_epoch = self.current_epoch
                         new_best = True
                 if not isinstance(value, dict):
-                    self.logger.debug(" epoch#{} result =>  {}: {}".format(self.current_epoch, str(key), value))
+                    self.logger.debug(f" epoch#{self.current_epoch} result =>  {str(key)}: {value}")
                 else:
                     for subkey, subvalue in value.items():
-                        self.logger.debug(" epoch#{} result =>  {}:{}: {}".format(self.current_epoch, str(key), str(subkey), subvalue))
+                        self.logger.debug(f" epoch#{self.current_epoch} result =>  {str(key)}:{str(subkey)}: {subvalue}")
             if self.monitor is not None:
                 assert monitor_val is not None, f"training/validation did not evaluate required metric '{self.monitor}'"
                 if new_best:
@@ -566,10 +566,10 @@ class Trainer:
             output_group = "valid/metrics"
         for key, value in result.items():
             if not isinstance(value, dict):
-                self.logger.debug(" final result =>  {}: {}".format(str(key), value))
+                self.logger.debug(f" final result =>  {str(key)}: {value}")
             else:
                 for subkey, subvalue in value.items():
-                    self.logger.debug(" final result =>  {}:{}: {}".format(str(key), str(subkey), subvalue))
+                    self.logger.debug(f" final result =>  {str(key)}:{str(subkey)}: {subvalue}")
         if self.current_epoch not in self.outputs:
             self.outputs[self.current_epoch] = {}
         self.outputs[self.current_epoch][output_group] = result
