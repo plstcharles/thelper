@@ -437,4 +437,4 @@ def export_geojson_with_crs(features, srs_target):
             return res
 
     assert isinstance(features, list), "unexpected feature list type"
-    return geojson.dumps(_FeatureCollection(features, srs=srs_target))
+    return geojson.dumps(_FeatureCollection(features, srs=srs_target), indent=2)

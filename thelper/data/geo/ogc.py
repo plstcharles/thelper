@@ -380,7 +380,7 @@ class TB15D104DetectLogger(thelper.train.utils.DetectLogger):
                                                       bbox_br, (bbox_tl[0], bbox_br[1])])
                 output_features.append(geojson.Feature(geometry=bbox_geom, properties={
                     "image_id": id, "confidence": bbox.confidence}))
-        return geojson.dumps(geojson.FeatureCollection(output_features))
+        return geojson.dumps(geojson.FeatureCollection(output_features), indent=2)
 
 
 def postproc_features(input_file, bboxes_srs, orig_geoms_path, output_file,
