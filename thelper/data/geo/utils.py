@@ -444,7 +444,8 @@ def export_geojson_with_crs(features, srs_target):
 
 def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
                              batch_size=256, num_workers=0, use_gpu=True,
-                             transforms=None, normalize_loss=True):
+                             transforms=None, normalize_loss=True,
+                             sentinel2_format=False):
     """
     This function computes the pixelwise prediction on an image.  It does the prediction per batch size of n pixels.
     It returns the class predicted and its probability.  The results are saved into two images created with
@@ -468,6 +469,14 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
     import torch
     # Create the model
     model = thelper.nn.create_model(config=ckptdata['config'], task=None, save_dir=None, ckptdata=ckptdata)
+    config_file = "config-train.json"
+    config_file_path = os.path.join(save_dir, config_file)
+    config = ckptdata['config']
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    with open(config_file_path, 'w') as f:
+        import json
+        json.dump(config,f, indent=4 )
     if use_gpu:
         model = model.cuda()
     else:
@@ -477,6 +486,18 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
 
     task = eval(ckptdata["task"])
     nclasses = len(task.class_names)
+
+    class_indices = task.class_indices
+    for key in class_indices.keys():
+        class_indices[key]+=1
+    class_indices['no_data'] = 0
+
+    class_indices_file = "config-classes.json"
+    class_indices_file_path = os.path.join(save_dir, class_indices_file)
+    with open(class_indices_file_path, 'w') as f:
+        import json
+        json.dump(class_indices, f, indent=4)
+
     # For each raster image in the list of inputs
     for raster_input in raster_inputs:
         raster_path = raster_input['path']
@@ -487,6 +508,9 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
         georef = ds.GetProjectionRef()
         affine = ds.GetGeoTransform()
         raster_basename = os.path.basename(raster_path).split(".")[0]
+        if sentinel2_format:
+            raster_basename = os.path.basename(os.path.dirname(raster_path.split(":")[1])).split(".")[0]
+
         raster_class_path = os.path.join(save_dir, raster_basename + "_class.tif")
         # Create the class raster output
         class_ds = gdal.GetDriverByName('GTiff').Create(raster_class_path, xsize, ysize, 1, gdal.GDT_Byte)
@@ -518,8 +542,8 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
                                                                 patch_size=patch_size,
                                                                 transforms=transforms)
         # The number of workers shoud be 0 (for windows) are (0,1) for linux.
-        if num_workers > 0:
-            raise Exception("The number of workers should be 0 because of gdal")
+        #if num_workers > 0:
+         #   raise Exception("The number of workers should be 0 because of gdal")
         dataloader = thelper.data.DataLoader(dataset=dataset,
                                                  batch_size=batch_size,
                                                  num_workers=num_workers,

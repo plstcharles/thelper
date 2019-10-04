@@ -456,7 +456,7 @@ def inference_session(ckpt_path, save_dir, raster_inputs, batch_size, patch_size
     else:
         logger.info(f"Found save directory: {save_dir}")
 
-    for raster_input in raster_inputs:
+    for k, raster_input in enumerate(raster_inputs):
         raster_path = raster_input['path']
 
         raster_ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
@@ -464,13 +464,31 @@ def inference_session(ckpt_path, save_dir, raster_inputs, batch_size, patch_size
             logger.fatal(f"File not found: {raster_path}")
             exit(0)
 
+        driver_shortname = raster_ds.GetDriver().ShortName
+
+        sentinel2_format=False
+        if driver_shortname == 'SENTINEL2':
+            got_md = raster_ds.GetMetadata('SUBDATASETS')
+            if got_md is None:
+                logger.fatal(f"Missing metadata: {raster_path}")
+                exit(0)
+            raster_path = got_md["SUBDATASET_1_NAME"]
+            raster_inputs[k]['path'] = raster_path
+            raster_ds = gdal.Open(raster_path , gdal.GA_ReadOnly)
+            if raster_ds is None:
+                logger.fatal(f"File not found: {raster_path}")
+                exit(0)
+            sentinel2_format=True
+
         for k in raster_input['bands']:
-            raster_band = raster_ds.GetRasterBand(k+1)
+            raster_band = raster_ds.GetRasterBand(k)
             if raster_band is None:
                 logger.fatal(f"Raster band {k} not found: {raster_path}")
                 exit(0)
             else:
                 logger.info(f"Using band {k} in {raster_path}")
+
+        raster_ds=None
 
     thelper.data.geo.utils.sliding_window_inference(save_dir=save_dir,
                                                     ckptdata=ckptdata,
@@ -480,7 +498,8 @@ def inference_session(ckpt_path, save_dir, raster_inputs, batch_size, patch_size
                                                     patch_size=patch_size,
                                                     use_gpu=use_gpu,
                                                     transforms=transforms,
-                                                    normalize_loss=normalize_loss)
+                                                    normalize_loss=normalize_loss,
+                                                    sentinel2_format=sentinel2_format)
 
 def main(args=None, argparser=None):
     """Main entrypoint to use with console applications.
@@ -545,6 +564,18 @@ def main(args=None, argparser=None):
         transforms = None
         if transforms_config is not None:
             transforms = thelper.transforms.load_transforms(transforms_config)
+
+        config_name = "config-infer.json"
+        config_name_path = os.path.join(save_dir, config_name)
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        with open(config_name_path, 'w') as f:
+            import json
+            json.dump(config, f,indent=4)
+            print(f"Saving config to: {config_name_path}")
+
+
+
 
         inference_session(ckpt_path=ckpt_path, save_dir=save_dir, raster_inputs=raster_inputs, batch_size=batch_size,
                           num_workers=num_workers, patch_size=patch_size, use_gpu=use_gpu, transforms=transforms,
