@@ -574,9 +574,6 @@ def main(args=None, argparser=None):
             json.dump(config, f,indent=4)
             print(f"Saving config to: {config_name_path}")
 
-
-
-
         inference_session(ckpt_path=ckpt_path, save_dir=save_dir, raster_inputs=raster_inputs, batch_size=batch_size,
                           num_workers=num_workers, patch_size=patch_size, use_gpu=use_gpu, transforms=transforms,
                           normalize_loss=normalize_loss)
