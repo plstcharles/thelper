@@ -18,7 +18,6 @@ requirements:
   host:
     - albumentations
     - cython
-    - geojson
     - gitpython
     - matplotlib
     - lz4
@@ -31,7 +30,6 @@ requirements:
     - pyyaml
     - scikit-learn
     - scipy
-    - shapely
     - six
     - tensorboardx
     - pytorch
@@ -40,7 +38,6 @@ requirements:
   run:
     - albumentations
     - cython
-    - geojson
     - gitpython
     - matplotlib
     - lz4
@@ -53,7 +50,6 @@ requirements:
     - pyyaml
     - scikit-learn
     - scipy
-    - shapely
     - six
     - tensorboardx
     - pytorch

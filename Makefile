@@ -92,13 +92,14 @@ clean-build:
 	@rm -fr $(CUR_DIR)/build/
 	@rm -fr $(CUR_DIR)/dist/
 	@rm -fr $(CUR_DIR)/.eggs/
-	@find . -type f -name '*.egg-info' -exec rm -fr {} +
+	@find . -name '*.egg-info' -exec rm -fr {} +
 	@find . -type f -name '*.egg' -exec rm -f {} +
 
 .PHONY: clean-env
 clean-env:
 	@echo "Cleaning up environment artefacts..."
-	@-test -d $(CONDA_ENV_PATH) && "$(CONDA_HOME)/bin/conda" remove -n $(CONDA_ENV) --yes --all -v
+	@rm -fr $(CUR_DIR)/downloads/
+	@test ! -d $(CONDA_ENV_PATH) || "$(CONDA_HOME)/bin/conda" remove -n $(CONDA_ENV) --yes --all -v
 
 .PHONY: clean-pyc
 clean-pyc:
@@ -114,6 +115,8 @@ clean-test:
 	@rm -fr $(CUR_DIR)/.tox/
 	@rm -f $(CUR_DIR)/.coverage
 	@rm -fr $(CUR_DIR)/coverage/
+	@rm -fr $(CUR_DIR)/htmlcov/
+	@find . -name '.pytest_cache' -exec rm -fr {} +
 
 .PHONY: lint
 lint: conda-env
@@ -168,10 +171,10 @@ install: conda-env
 	@echo "Framework successfully installed. To activate the conda environment, use:"
 	@echo "    source $(CONDA_HOME)/bin/activate $(CONDA_ENV)"
 
-.PHONY: install-dev
-install-dev: conda-env
-	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); pip install -r $(CUR_DIR)/requirements-dev.txt"
-	@echo "Successfully installed dev requirements."
+.PHONY: install-geo
+install-geo: install
+	@"$(CONDA_HOME)/bin/conda" env update --file conda-env-geo.yml
+	@echo "Successfully updated conda environment with geospatial packages."
 
 .PHONY: conda-base
 conda-base:

@@ -1,0 +1,9 @@
+name: thelper
+channels:
+  - conda-forge
+dependencies:
+  - affine
+  - gdal
+  - geojson
+  - pyproj
+  - shapely

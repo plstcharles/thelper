@@ -1,0 +1,3 @@
+cython
+pynput
+tensorboardX

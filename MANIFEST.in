@@ -21,9 +21,11 @@ include Makefile
 include Dockerfile
 include requirements.txt
 include requirements-dev.txt
+include requirements-extra.txt
 
 include tox.ini
 include conda-env.yml
+include conda-env-geo.yml
 include .travis.yml
 include appveyor.yml
 
