@@ -1,5 +1,6 @@
 """Data parsers & utilities module for OGC-related projects."""
 
+import copy
 import functools
 import logging
 
@@ -391,6 +392,7 @@ def postproc_features(input_file, bboxes_srs, orig_geoms_path, output_file,
     import json
     import geojson
     import shapely
+    logger.debug("importing bboxes SRS...")
     assert isinstance(bboxes_srs, (str, int, osr.SpatialReference)), \
         "target EPSG SRS must be given as int/str"
     if isinstance(bboxes_srs, (str, int)):
@@ -399,10 +401,13 @@ def postproc_features(input_file, bboxes_srs, orig_geoms_path, output_file,
         bboxes_srs_obj = osr.SpatialReference()
         bboxes_srs_obj.ImportFromEPSG(bboxes_srs)
         bboxes_srs = bboxes_srs_obj
+    logger.debug("importing lake bboxes geojson...")
     with open(input_file) as bboxes_fd:
         bboxes_geoms = thelper.data.geo.utils.parse_geojson(json.load(bboxes_fd))
+    logger.debug("importing hydro features geojson...")
     with open(orig_geoms_path) as hydro_fd:
         hydro_geoms = thelper.data.geo.utils.parse_geojson(json.load(hydro_fd), srs_target=bboxes_srs)
+    logger.debug("computing global cascade of lake bboxes...")
     detect_roi = shapely.ops.cascaded_union([bbox["geometry"] for bbox in bboxes_geoms])
     output_features = []
 
@@ -422,6 +427,7 @@ def postproc_features(input_file, bboxes_srs, orig_geoms_path, output_file,
     srs_transform = None
     if final_srs is not None:
         import osr
+        logger.debug("importing output SRS...")
         assert isinstance(final_srs, (str, int, osr.SpatialReference)), \
             "target EPSG SRS must be given as int/str"
         if isinstance(final_srs, (str, int)):
@@ -432,13 +438,27 @@ def postproc_features(input_file, bboxes_srs, orig_geoms_path, output_file,
             final_srs = final_srs_obj
         if not bboxes_srs.IsSame(final_srs):
             srs_transform = osr.CoordinateTransformation(bboxes_srs, final_srs)
+    logger.debug("running hydro feature and lake bboxes intersection loop...")
     for hydro_feat in tqdm.tqdm(hydro_geoms, desc="computing bbox intersections"):
+        # find intersection and append to list of 'lakes'
+        intersection = hydro_feat["geometry"].intersection(detect_roi)
         hydro_feat["properties"]["TYPECE"] = TB15D104.TYPECE_LAKE
-        append_poly(hydro_feat["geometry"].intersection(detect_roi), hydro_feat["properties"], srs_transform)
+        append_poly(intersection, copy.deepcopy(hydro_feat["properties"]), srs_transform)
+        if not intersection.is_empty:
+            # subtract bbox region from feature if intersection found (leftovers at end will be 'rivers')
+            hydro_feat["geometry"] = hydro_feat["geometry"].difference(detect_roi)
+    logger.debug("running river cleanup loop...")
+    for hydro_feat in tqdm.tqdm(hydro_geoms, desc="appending leftover geometries as rivers"):
+        if not hydro_feat["geometry"].is_empty:
+            # remark: hydro features outside the original ROI will appear as rivers despite never being processed
+            hydro_feat["properties"]["TYPECE"] = TB15D104.TYPECE_RIVER
+            append_poly(hydro_feat["geometry"], copy.deepcopy(hydro_feat["properties"]), srs_transform)
+    logger.debug("exporting final geojson...")
     with open(output_file, "w") as fd:
         out_srs = final_srs if final_srs is not None else bboxes_srs
         fd.write(geo.utils.export_geojson_with_crs([o[0] for o in output_features], srs_target=out_srs))
     if write_shapefile_copy:
+        logger.debug("exporting final shapefile...")
         driver = ogr.GetDriverByName("ESRI Shapefile")
         data_source = driver.CreateDataSource(output_file + ".shp")
         layer = data_source.CreateLayer("lakes", final_srs if final_srs is not None else bboxes_srs, ogr.wkbPolygon)
