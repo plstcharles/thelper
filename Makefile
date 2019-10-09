@@ -114,6 +114,7 @@ clean-test:
 	@echo "Cleaning up test artefacts..."
 	@rm -fr $(CUR_DIR)/.tox/
 	@rm -f $(CUR_DIR)/.coverage
+	@rm -f $(CUR_DIR)/.coverage.*
 	@rm -fr $(CUR_DIR)/coverage/
 	@rm -fr $(CUR_DIR)/htmlcov/
 	@find . -name '.pytest_cache' -exec rm -fr {} +
