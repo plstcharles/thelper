@@ -1,4 +1,9 @@
+docutils
+check-manifest
 flake8
+readme-renderer
+pygments
+isort
 mock
 pyopenssl
 pytest
@@ -6,3 +11,4 @@ pytest-cov
 pytest-mock
 pytest-travis-fold
 tox
+twine
