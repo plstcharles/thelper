@@ -33,7 +33,7 @@ class VDSR(thelper.nn.Module):
         self.set_task(task)
 
     def forward(self, x):
-        x0 = x.view(x.shape[0]*x.shape[1],1, x.shape[2], x.shape[3])
+        x0 = x.view(x.shape[0] * x.shape[1], 1, x.shape[2], x.shape[3])
         residual = x0
         x0 = self.input_conv(x0)
         if self.num_residuals > 0:

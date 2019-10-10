@@ -951,7 +951,7 @@ class Tile:
         tile_rects, tile_images = self._get_tile_rects(image, mask), []
         for rect in tile_rects:
             tile_images.append(thelper.draw.safe_crop(image, (rect[0], rect[1]),
-                                                      (rect[0]+rect[2], rect[1]+rect[3]),
+                                                      (rect[0] + rect[2], rect[1] + rect[3]),
                                                       self.bordertype, self.borderval))
         return tile_images
 

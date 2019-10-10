@@ -92,7 +92,7 @@ def get_bgr_from_hsl(hue, sat, light):
             return _p + (_q - _p) * (2 / 3 - _t) * 6
         return _p
 
-    q = light * (1 + sat) if (light < 0.5) else light + sat - light*sat
+    q = light * (1 + sat) if (light < 0.5) else light + sat - light * sat
     p = 2 * light - q
     h = hue / 360
     return (int(np.clip(round(h2rgb(p, q, h - 1 / 3) * 255), 0, 255)),

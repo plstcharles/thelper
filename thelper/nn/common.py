@@ -6,7 +6,7 @@ class DenseBlock(torch.nn.Module):
         super(DenseBlock, self).__init__()
         self.fc = torch.nn.Linear(input_size, output_size, bias=bias)
         self.norm = norm
-        if self.norm =='batch':
+        if self.norm == 'batch':
             self.bn = torch.nn.BatchNorm1d(output_size)
         elif self.norm == 'instance':
             self.bn = torch.nn.InstanceNorm1d(output_size)
@@ -38,9 +38,9 @@ class ConvBlock(torch.nn.Module):
                  bias=True, activation='relu', norm='batch', groups=1, prelu_params=1):
         super(ConvBlock, self).__init__()
         self.conv = torch.nn.Conv2d(input_size, output_size, kernel_size,
-                                    stride, padding, bias=bias,groups=groups)
+                                    stride, padding, bias=bias, groups=groups)
         self.norm = norm
-        if self.norm =='batch':
+        if self.norm == 'batch':
             self.bn = torch.nn.BatchNorm2d(output_size)
         elif self.norm == 'instance':
             self.bn = torch.nn.InstanceNorm2d(output_size)
@@ -262,7 +262,7 @@ def weights_init_xavier(m):
 def shave(imgs, border_size=0):
     size = list(imgs.shape)
     if len(size) == 4:
-        shave_imgs = torch.FloatTensor(size[0], size[1], size[2]-border_size*2, size[3]-border_size*2)
+        shave_imgs = torch.FloatTensor(size[0], size[1], size[2] - border_size * 2, size[3] - border_size * 2)
         for i, img in enumerate(imgs):
             shave_imgs[i, :, :, :] = img[:, border_size:-border_size, border_size:-border_size]
         return shave_imgs
