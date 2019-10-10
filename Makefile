@@ -40,51 +40,30 @@ all: help
 
 .PHONY: help
 help:
-	@echo "bump             bump version using version specified as user input"
-	@echo "bump-dry         bump version using version specified as user input (dry-run)"
-	@echo "bump-tag         bump version using version specified as user input, tags it and commits the change in git"
 	@echo "clean            remove all build, test, coverage and Python artifacts"
+	@echo "clean-all        remove EVERYTHING (including the conda environment!)"
 	@echo "clean-build      remove build artifacts"
 	@echo "clean-env        remove conda environment"
 	@echo "clean-pyc        remove Python file artifacts"
 	@echo "clean-test       remove test and coverage artifacts"
-	@echo "lint             check style with flake8"
-	@echo "test             run tests quickly with the default Python"
-	@echo "test-all         run tests on every Python version with tox"
-	@echo "coverage         check code coverage quickly with the default Python"
+	@echo "check            check lots of things with numerous dev tools"
+	@echo "test             run pytest quickly in the installed environment"
+	@echo "test-all         run all checks and tests in the installed environment"
+	@echo "bump             bump version using version specified as user input"
+	@echo "bump-dry         bump version using version specified as user input (dry-run)"
+	@echo "bump-tag         bump version using version specified as user input, tags it and commits the change in git"
+	@echo "run              executes the provided arguments using the framework CLI"
 	@echo "docs             generate Sphinx HTML documentation, including API docs"
+	@echo "install-dev      install dev related components inside the environment"
+	@echo "install-docs     install docs related components inside the environment"
+	@echo "install-geo      install geospatial components inside the environment"
 	@echo "install          install the package inside a conda environment"
-	@echo "install-docs     install docs related components"
-
-.PHONY: bump
-bump: conda-env
-	$(shell bash -c 'read -p "Version: " VERSION_PART; \
-	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
-	test -f $(CONDA_ENV_PATH)/bin/bumpversion || pip install bumpversion; \
-	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg \
-		--verbose --allow-dirty --no-tag --new-version $$VERSION_PART patch;')
-
-.PHONY: bump-dry
-bump-dry: conda-env
-	$(shell bash -c 'read -p "Version: " VERSION_PART; \
-	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
-	test -f $(CONDA_ENV_PATH)/bin/bumpversion || pip install bumpversion; \
-	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg \
-		--verbose --allow-dirty --dry-run --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;')
-
-.PHONY: bump-tag
-bump-tag: conda-env
-	$(shell bash -c 'read -p "Version: " VERSION_PART; \
-	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
-	test -f $(CONDA_ENV_PATH)/bin/bumpversion || pip install bumpversion; \
-	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg \
-		--verbose --allow-dirty --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;')
 
 .PHONY: clean
 clean: clean-build clean-pyc clean-test
 
-.PHONY: uninstall
-uninstall: clean clean-env
+.PHONY: clean-all
+clean-all: clean clean-env
 
 .PHONY: clean-build
 clean-build:
@@ -112,57 +91,75 @@ clean-pyc:
 .PHONY: clean-test
 clean-test:
 	@echo "Cleaning up test artefacts..."
-	@rm -fr $(CUR_DIR)/.tox/
 	@rm -f $(CUR_DIR)/.coverage
 	@rm -f $(CUR_DIR)/.coverage.*
 	@rm -fr $(CUR_DIR)/coverage/
 	@rm -fr $(CUR_DIR)/htmlcov/
 	@find . -name '.pytest_cache' -exec rm -fr {} +
 
-.PHONY: lint
-lint: conda-env
-	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
-		test -f $(CONDA_ENV_PATH)/bin/flake8 || pip install flake8; \
-		flake8 thelper tests || true"
-
 .PHONY: check
-check: install
+check: install-dev
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
-		test -f $(CONDA_ENV_PATH)/bin/tox || pip install tox; \
-		tox -e check"
+		python setup.py sdist && \
+		twine check dist/* && \
+		check-manifest $(CUR_DIR) && \
+		flake8 thelper tests setup.py && \
+		isort --check-only --diff --recursive thelper tests setup.py && \
+		echo 'All checks passed successfully.'"
 
 .PHONY: test
-test: install
+test: install-dev
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
-		test -f $(CONDA_ENV_PATH)/bin/pytest || pip install pytest; \
 		pytest -vvv tests"
 
 .PHONY: test-all
-test-all: install
+test-all: check
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
-		test -f $(CONDA_ENV_PATH)/bin/tox || pip install tox; \
-		tox"
+		pytest --cov --cov-report=term-missing:skip-covered -vv tests"
+
+.PHONY: bump
+bump: install-dev
+	$(shell bash -c 'read -p "Version: " VERSION_PART; \
+	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
+	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg \
+		--verbose --allow-dirty --no-tag --new-version $$VERSION_PART patch;')
+
+.PHONY: bump-dry
+bump-dry: install-dev
+	$(shell bash -c 'read -p "Version: " VERSION_PART; \
+	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
+	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg \
+		--verbose --allow-dirty --dry-run --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;')
+
+.PHONY: bump-tag
+bump-tag: install-dev
+	$(shell bash -c 'read -p "Version: " VERSION_PART; \
+	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
+	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg \
+		--verbose --allow-dirty --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;')
 
 .PHONY: run
 run: install
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 		python $(CUR_DIR)/thelper/cli.py $(ARGS)"
 
-.PHONY: coverage
-coverage: install
-	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); coverage run --source thelper setup.py test"
-	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); coverage report -m"
-	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); coverage html -d coverage"
-	$(BROWSER) coverage/index.html
-
 .PHONY: docs
 docs: install-docs
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); make -C docs clean && make -C docs html"
 	$(BROWSER) $(CUR_DIR)/docs/build/html/index.html
 
+.PHONY: install-dev
+install-dev: install
+	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); pip install -q -r $(CUR_DIR)/requirements-dev.txt"
+
 .PHONY: install-docs
-install-docs: conda-env
-	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); pip install -r $(CUR_DIR)/docs/requirements.txt"
+install-docs: install
+	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); pip install -q -r $(CUR_DIR)/docs/requirements.txt"
+
+.PHONY: install-geo
+install-geo: install
+	@"$(CONDA_HOME)/bin/conda" env update --file conda-env-geo.yml
+	@echo "Successfully updated conda environment with geospatial packages."
 
 .PHONY: install
 install: conda-env
@@ -170,10 +167,8 @@ install: conda-env
 	@echo "Framework successfully installed. To activate the conda environment, use:"
 	@echo "    source $(CONDA_HOME)/bin/activate $(CONDA_ENV)"
 
-.PHONY: install-geo
-install-geo: install
-	@"$(CONDA_HOME)/bin/conda" env update --file conda-env-geo.yml
-	@echo "Successfully updated conda environment with geospatial packages."
+.PHONY: uninstall
+uninstall: clean clean-env
 
 .PHONY: conda-base
 conda-base:

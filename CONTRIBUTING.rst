@@ -51,9 +51,10 @@ To set up `thelper` for local development:
 
    Now you can make your changes locally.
 
-4. When you're done making changes, run all the checks and doc builder with `tox <https://tox.readthedocs.io/en/latest/install.html>`_ via::
+4. When you're done making changes, run all the tests via::
 
     $ make test-all
+    $ make docs
 
 5. Commit your changes and push your branch to GitHub::
 
