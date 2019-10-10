@@ -1,3 +1,4 @@
+bumpversion
 docutils
 check-manifest
 flake8
@@ -10,5 +11,4 @@ pytest
 pytest-cov
 pytest-mock
 pytest-travis-fold
-tox
 twine
