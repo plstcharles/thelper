@@ -22,9 +22,9 @@ notifications:
 jobs:
   include:
     - stage: test
-      script:
-        - make test-all
-        - make docs
+      script: make test-all
+    - # run doc build in parallel during test stage
+      script: make docs
     - stage: deploy
       if: branch = master
       script: skip
