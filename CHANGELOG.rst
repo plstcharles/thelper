@@ -3,6 +3,18 @@
 Changelog
 =========
 
+0.4.0 (2019/10/11)
+------------------
+
+* Added geo subpackage
+* Added geo vector/raster parsing classes
+* Added ogc module for testbed15-specific utilities
+* Added testbed15 train/viz configuration files
+* Cleaned up makefile targets & coverage usage
+* Replaced tox build system with makefile completely
+* Merged 3rdparty configs into setup.cfg
+* Updated travis to rely on makefile directly
+
 0.3.14 (2019/09/30)
 -------------------
 
