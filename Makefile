@@ -146,7 +146,9 @@ run: install
 .PHONY: docs
 docs: install-docs
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); make -C docs clean && make -C docs html"
+ifndef CI
 	$(BROWSER) $(CUR_DIR)/docs/build/html/index.html
+endif
 
 .PHONY: install-dev
 install-dev: install
