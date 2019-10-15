@@ -26,7 +26,6 @@ jobs:
     - # run doc build in parallel during test stage
       script: make docs
     - stage: deploy
-      if: branch = master
       script: skip
       before_deploy:
         - echo "Installing deployment tools..."
