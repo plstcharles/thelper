@@ -3,6 +3,11 @@
 Changelog
 =========
 
+0.4.1 (2019/10/15)
+------------------
+
+* Removed travis check in deploy stage for master branch
+
 0.4.0 (2019/10/11)
 ------------------
 
