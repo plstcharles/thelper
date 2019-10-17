@@ -1,0 +1,48 @@
+{
+    "name": "gdl-segm-viz",
+    "datasets": {
+        "kingston_wv2_40cm_trn": {
+            "type": "thelper.data.geo.gdl.SegmentationDataset",
+            "params": {
+                "class_names": ["1", "2", "3", "4", "5"],
+                "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples-good",
+                "dataset_type": "trn"
+            }
+        },
+        "kingston_wv2_40cm_val": {
+            "type": "thelper.data.geo.gdl.SegmentationDataset",
+            "params": {
+                "class_names": ["1", "2", "3", "4", "5"],
+                "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples-good",
+                "dataset_type": "val"
+            }
+        },
+        "kingston_wv2_40cm_tst": {
+            "type": "thelper.data.geo.gdl.SegmentationDataset",
+            "params": {
+                "class_names": ["1", "2", "3", "4", "5"],
+                "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples-good",
+                "dataset_type": "tst"
+            }
+        }
+    },
+    "loaders": {
+        "workers": 0,
+        "shuffle": false,
+        "train_split": {
+            "kingston_wv2_40cm_trn": 1.0
+        },
+        "valid_split": {
+            "kingston_wv2_40cm_val": 1.0
+        },
+        "test_split": {
+            "kingston_wv2_40cm_tst": 1.0
+        }
+    },
+    "viz": {
+        "kwargs": {
+            "block": true,
+            "ch_transpose": false
+        }
+    }
+}
