@@ -127,7 +127,7 @@ class SqueezeExcitationBlock(Module):
 class ResNet(thelper.nn.Module):
 
     def __init__(self, task, block="thelper.nn.resnet.BasicBlock", layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
-                 flexible_input_res=False, pool_size=7, coordconv=False, radius_channel=True, pretrained=False):
+                 flexible_input_res=False, pool_size=7, head_type=None, coordconv=False, radius_channel=True, pretrained=False):
         # note: must always forward args to base class to keep backup
         super().__init__(task, **{k: v for k, v in vars().items() if k not in ["self", "task", "__class__"]})
         if isinstance(block, str):
@@ -138,9 +138,14 @@ class ResNet(thelper.nn.Module):
             raise AssertionError("expected layers/strides to be provided as list of ints")
         if len(layers) != len(strides):
             raise AssertionError("layer/strides length mismatch")
-        self.inplanes = 64
+        self.input_channels = input_channels
+        self.flexible_input_res = flexible_input_res
+        self.pool_size = pool_size
+        self.head_type = head_type
         self.coordconv = coordconv
         self.radius_channel = radius_channel
+        self.pretrained = pretrained
+        self.inplanes = 64
         self.conv1 = self._make_conv2d(in_channels=input_channels, out_channels=self.inplanes,
                                        kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = torch.nn.BatchNorm2d(self.inplanes)
@@ -187,6 +192,12 @@ class ResNet(thelper.nn.Module):
             weights_url = torchvision.models.resnet.model_urls[default_weights_mapping[tag]]
             state_dict = torchvision.models.utils.load_state_dict_from_url(weights_url)
             self.load_state_dict(state_dict)
+        if isinstance(task, thelper.tasks.Segmentation):
+            # if base task is already associated with segmentation, add head attribute
+            assert isinstance(head_type, str) and head_type in ["fcn", "deeplabv3"], \
+                f"unrecognized head type ('{head_type}') for segmentation resnet"
+            # note: head below will be fully instantiated when the task is assigned
+            self.fc = None
         self.set_task(task)
 
     def _make_conv2d(self, *args, **kwargs):
@@ -208,7 +219,7 @@ class ResNet(thelper.nn.Module):
             layers.append(block(self.inplanes, planes))
         return torch.nn.Sequential(*layers)
 
-    def forward(self, x):
+    def get_embedding(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -219,20 +230,38 @@ class ResNet(thelper.nn.Module):
         x = self.layer4(x)
         if self.layer5 is not None:
             x = self.layer5(x)
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
+        return x
+
+    def forward(self, x):
+        x = self.get_embedding(x)
+        if isinstance(self.task, thelper.tasks.Classification):
+            x = self.avgpool(x)
+            x = x.view(x.size(0), -1)
+            x = self.fc(x)
+        elif isinstance(self.task, thelper.tasks.Segmentation):
+            x = self.fc(x)
         return x
 
     def set_task(self, task):
-        assert isinstance(task, thelper.tasks.Classification), "missing impl for non-classif task type"
+        assert isinstance(task, (thelper.tasks.Classification, thelper.tasks.Segmentation)), \
+            "missing impl for non-classif task type"
         num_classes = len(task.class_names)
-        if self.fc.out_features != num_classes:
-            self.fc = torch.nn.Linear(self.out_features, num_classes)
+        if isinstance(task, thelper.tasks.Classification):
+            if self.fc.out_features != num_classes:
+                self.fc = torch.nn.Linear(self.out_features, num_classes)
+        elif isinstance(task, thelper.tasks.Segmentation):
+            import torchvision.models.segmentation
+            # note: heads below will be fully reinstantiated when the output class count changes
+            if self.fc is None or self.fc[len(self.fc) - 1].out_channels != num_classes:
+                if self.head_type == "fcn":
+                    self.fc = torchvision.models.segmentation.fcn.FCNHead(self.out_features, num_classes)
+                else:
+                    self.fc = torchvision.models.segmentation.deeplabv3.DeepLabHead(self.out_features, num_classes)
         self.task = task
 
 
 class ConvTailNet(torch.nn.Module):
+    """DEPRECATED. Will be removed in a future version."""
 
     def __init__(self, n_inputs, num_classes):
         super(ConvTailNet, self).__init__()
@@ -253,6 +282,7 @@ class ConvTailNet(torch.nn.Module):
 
 
 class ResNetFullyConv(ResNet):
+    """DEPRECATED. Will be removed in a future version. Use the torchvision segmentation models or the ResNet above instead."""
 
     def __init__(self, task, block="thelper.nn.resnet.BasicBlock", layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
                  flexible_input_res=False, pool_size=7, coordconv=False, radius_channel=True, pretrained=False):
@@ -285,6 +315,7 @@ class ResNetFullyConv(ResNet):
 
 
 class FCResNet(ResNet):
+    """Fully Convolutional ResNet converter for pre-trained classification models."""
 
     def __init__(self, task, ckptdata, map_location="cpu", avgpool_size=0):
         if isinstance(ckptdata, str):
@@ -307,16 +338,7 @@ class FCResNet(ResNet):
         self.set_task(task)
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        if self.layer5 is not None:
-            x = self.layer5(x)
+        x = self.get_embedding(x)
         if self.avgpool_size > 0:
             x = torch.nn.functional.avg_pool2d(x, kernel_size=self.avgpool_size, stride=1)
         x = self.finallayer(x)
