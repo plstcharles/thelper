@@ -2,27 +2,45 @@
     "name": "gdl-segm-viz",
     "datasets": {
         "kingston_wv2_40cm_trn": {
-            "type": "thelper.data.geo.gdl.SegmentationDataset",
+            "type": "thelper.data.geo.gdl.MetaSegmentationDataset",
             "params": {
                 "class_names": ["1", "2", "3", "4", "5"],
-                "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples-good",
-                "dataset_type": "trn"
+                "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples",
+                "dataset_type": "trn",
+                "meta_map": {
+                    "properties/eo:off_nadir":  "const_postfix_channel",
+                    "properties/eo:azimuth":  "const_postfix_channel",
+                    "properties/eo:sun_azimuth":  "const_postfix_channel",
+                    "properties/eo:sun_elevation":  "const_postfix_channel"
+                }
             }
         },
         "kingston_wv2_40cm_val": {
-            "type": "thelper.data.geo.gdl.SegmentationDataset",
+            "type": "thelper.data.geo.gdl.MetaSegmentationDataset",
             "params": {
                 "class_names": ["1", "2", "3", "4", "5"],
-                "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples-good",
-                "dataset_type": "val"
+                "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples",
+                "dataset_type": "val",
+                "meta_map": {
+                    "properties/eo:off_nadir":  "const_postfix_channel",
+                    "properties/eo:azimuth":  "const_postfix_channel",
+                    "properties/eo:sun_azimuth":  "const_postfix_channel",
+                    "properties/eo:sun_elevation":  "const_postfix_channel"
+                }
             }
         },
         "kingston_wv2_40cm_tst": {
-            "type": "thelper.data.geo.gdl.SegmentationDataset",
+            "type": "thelper.data.geo.gdl.MetaSegmentationDataset",
             "params": {
                 "class_names": ["1", "2", "3", "4", "5"],
-                "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples-good",
-                "dataset_type": "tst"
+                "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples",
+                "dataset_type": "tst",
+                "meta_map": {
+                    "properties/eo:off_nadir":  "const_postfix_channel",
+                    "properties/eo:azimuth":  "const_postfix_channel",
+                    "properties/eo:sun_azimuth":  "const_postfix_channel",
+                    "properties/eo:sun_elevation":  "const_postfix_channel"
+                }
             }
         }
     },
