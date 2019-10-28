@@ -475,6 +475,17 @@ def migrate_config(config,        # type: thelper.typedefs.ConfigDict
                                 logger.warning("disabling logging via ROCCurve metric")
                                 del mcfg["params"]["log_params"]
         cfg_ver = [0, 3, 6]  # set ver for next update step
+    if cfg_ver[0] <= 0 and cfg_ver[1] <= 4 and cfg_ver[2] < 2:
+        if "model" in config and isinstance(config, dict):
+            model_config = thelper.utils.get_key("model", config)
+            model_type = thelper.utils.get_key_def("type", model_config, None)
+            if model_type == "thelper.nn.resnet.ResNet":
+                model_params = thelper.utils.get_key_def("params", model_config, {})
+                coordconv_flag = thelper.utils.get_key_def("coordconv", model_params, False)
+                if coordconv_flag:
+                    logger.warning("coordconv implementation for resnets changed in v0.4.2; "
+                                   "beware if reloading old model weights!")
+        cfg_ver = [0, 4, 2]
     # if cfg_ver[0] <= x and cfg_ver[1] <= y and cfg_ver[2] <= z:
     #     ... add more compatibility fixes here
     return config
