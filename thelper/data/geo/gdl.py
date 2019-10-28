@@ -22,6 +22,11 @@ class SegmentationDataset(thelper.data.parsers.SegmentationDataset):
 
     def __init__(self, class_names, work_folder, dataset_type, max_sample_count=None,
                  dontcare=None, transforms=None):
+        self.dontcare = dontcare
+        if isinstance(dontcare, (tuple, list)) and len(dontcare) == 2:
+            thelper.data.logger.warning(f"will remap dontcare index from {dontcare[0]} to {dontcare[1]}")
+            dontcare = dontcare[1]
+        assert dontcare is None or isinstance(dontcare, int), "unexpected dontcare type"
         super().__init__(class_names=class_names, input_key="sat_img", label_map_key="map_img",
                          meta_keys=["metadata"], dontcare=dontcare, transforms=transforms)
         # note: if 'max_sample_count' is None, then it will be read from the dataset at runtime
@@ -48,10 +53,23 @@ class SegmentationDataset(thelper.data.parsers.SegmentationDataset):
     def __len__(self):
         return self.max_sample_count
 
+    def _remap_labels(self, map_img):
+        # note: will do nothing if 'dontcare' remap mode is not activated in constructor
+        if not isinstance(self.dontcare, (tuple, list)):
+            return map_img
+        # for now, the current implementation only handles the original 'dontcare' as zero
+        assert self.dontcare[0] == 0, "missing implementation for non-zero original dontcare value"
+        # to keep the impl simple, we just reduce all indices by one and replace -1 by the new value
+        assert map_img.dtype == np.int8 or map_img.dtype == np.int16 or map_img.dtype == np.int32
+        map_img -= 1
+        if self.dontcare[1] != -1:
+            map_img[map_img == -1] = self.dontcare[1]
+        return map_img
+
     def __getitem__(self, index):
         with h5py.File(self.hdf5_path, "r") as hdf5_file:
             sat_img = hdf5_file["sat_img"][index, ...]
-            map_img = hdf5_file["map_img"][index, ...]
+            map_img = self._remap_labels(hdf5_file["map_img"][index, ...])
             meta_idx = int(hdf5_file["meta_idx"][index]) if "meta_idx" in hdf5_file else -1
             metadata = None
             if meta_idx != -1:
@@ -92,7 +110,7 @@ class MetaSegmentationDataset(SegmentationDataset):
     def __getitem__(self, index):
         with h5py.File(self.hdf5_path, "r") as hdf5_file:
             sat_img = hdf5_file["sat_img"][index, ...]
-            map_img = hdf5_file["map_img"][index, ...]
+            map_img = self._remap_labels(hdf5_file["map_img"][index, ...])
             meta_idx = int(hdf5_file["meta_idx"][index]) if "meta_idx" in hdf5_file else -1
             assert meta_idx != -1, f"metadata unvailable in sample #{index}"
             metadata = self.metadata[meta_idx]
