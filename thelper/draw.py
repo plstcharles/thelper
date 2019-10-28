@@ -501,7 +501,7 @@ def draw(task, input, pred=None, target=None, block=False, ch_transpose=True, fl
         return draw_classifs(images=input, preds=pred, labels=target,
                              class_names_map=class_names_map, redraw=redraw, block=block, **kwargs)
     elif isinstance(task, thelper.tasks.Segmentation):
-        color_map = task.color_map if task.color_map else {idx: get_label_color_mapping(idx) for idx in task.class_indices.values()}
+        color_map = task.color_map if task.color_map else {idx: get_label_color_mapping(idx + 1) for idx in task.class_indices.values()}
         if task.dontcare is not None and task.dontcare not in color_map:
             color_map[task.dontcare] = np.asarray([0, 0, 0])
         return draw_segments(images=input, preds=pred, masks=target, color_map=color_map, redraw=redraw, block=block, **kwargs)
