@@ -1,10 +1,9 @@
 {
-    "name": "gdl-segm-viz",
     "datasets": {
         "kingston_wv2_40cm_trn": {
             "type": "thelper.data.geo.gdl.MetaSegmentationDataset",
             "params": {
-                "class_names": ["1", "2", "3", "4", "5"],
+                "class_names": {"_dontcare_": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5},
                 "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples",
                 "dataset_type": "trn",
                 "meta_map": {
@@ -18,7 +17,7 @@
         "kingston_wv2_40cm_val": {
             "type": "thelper.data.geo.gdl.MetaSegmentationDataset",
             "params": {
-                "class_names": ["1", "2", "3", "4", "5"],
+                "class_names": {"_dontcare_": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5},
                 "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples",
                 "dataset_type": "val",
                 "meta_map": {
@@ -32,7 +31,7 @@
         "kingston_wv2_40cm_tst": {
             "type": "thelper.data.geo.gdl.MetaSegmentationDataset",
             "params": {
-                "class_names": ["1", "2", "3", "4", "5"],
+                "class_names": {"_dontcare_": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5},
                 "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples",
                 "dataset_type": "tst",
                 "meta_map": {
