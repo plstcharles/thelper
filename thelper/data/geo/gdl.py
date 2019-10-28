@@ -15,6 +15,7 @@ import h5py
 import numpy as np
 
 import thelper.data
+import thelper.nn.coordconv
 
 
 class SegmentationDataset(thelper.data.parsers.SegmentationDataset):
@@ -83,7 +84,7 @@ class SegmentationDataset(thelper.data.parsers.SegmentationDataset):
 class MetaSegmentationDataset(SegmentationDataset):
     """Semantic segmentation dataset interface that appends metadata under new tensor layers."""
 
-    metadata_handling_modes = ["const_prefix_channel", "const_postfix_channel"]  # TODO: add more
+    metadata_handling_modes = ["const_channel", "scaled_channel"]  # TODO: add more
 
     def __init__(self, class_names, work_folder, dataset_type, meta_map, max_sample_count=None,
                  dontcare=None, transforms=None):
@@ -117,11 +118,14 @@ class MetaSegmentationDataset(SegmentationDataset):
             assert isinstance(metadata, (dict, collections.OrderedDict)), "unexpected metadata type"
         for meta_key, mode in self.meta_map.items():
             meta_val = self.get_meta_value(metadata, meta_key)
-            if mode == "const_prefix_channel" or mode == "const_postfix_channel":
+            if mode == "const_channel":
                 assert np.isscalar(meta_val), "constant channel-wise assignment requires scalar value"
                 layer = np.full(sat_img.shape[0:2], meta_val, dtype=np.float32)
-                layer_idx = 0 if mode == "const_prefix_channel" else sat_img.shape[2]
-                sat_img = np.insert(sat_img, layer_idx, layer, axis=2)
+                sat_img = np.insert(sat_img, sat_img.shape[2], layer, axis=2)
+            elif mode == "scaled_channel":
+                assert np.isscalar(meta_val), "scaled channel-wise coords assignment requires scalar value"
+                layers = thelper.nn.coordconv.get_coords_map(sat_img.shape[0], sat_img.shape[1]) * meta_val
+                sat_img = np.insert(sat_img, sat_img.shape[2], layers, axis=2)
             #else...
         sample = {"sat_img": sat_img, "map_img": map_img}
         if self.transforms:

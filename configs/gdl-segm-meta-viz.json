@@ -3,43 +3,49 @@
         "kingston_wv2_40cm_trn": {
             "type": "thelper.data.geo.gdl.MetaSegmentationDataset",
             "params": {
-                "class_names": {"_dontcare_": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5},
+                "class_names": {"1": 0, "2": 1, "3": 2, "4": 3, "5": 4},
                 "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples",
                 "dataset_type": "trn",
                 "meta_map": {
-                    "properties/eo:off_nadir":  "const_postfix_channel",
-                    "properties/eo:azimuth":  "const_postfix_channel",
-                    "properties/eo:sun_azimuth":  "const_postfix_channel",
-                    "properties/eo:sun_elevation":  "const_postfix_channel"
-                }
+                    "properties/eo:off_nadir": "const_channel",
+                    "properties/eo:azimuth": "const_channel",
+                    "properties/eo:sun_azimuth": "const_channel",
+                    "properties/eo:sun_elevation": "const_channel",
+                    "properties/eo:gsd": "scaled_channel"
+                },
+                "dontcare": [0, -1]
             }
         },
         "kingston_wv2_40cm_val": {
             "type": "thelper.data.geo.gdl.MetaSegmentationDataset",
             "params": {
-                "class_names": {"_dontcare_": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5},
+                "class_names": {"1": 0, "2": 1, "3": 2, "4": 3, "5": 4},
                 "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples",
                 "dataset_type": "val",
                 "meta_map": {
-                    "properties/eo:off_nadir":  "const_postfix_channel",
-                    "properties/eo:azimuth":  "const_postfix_channel",
-                    "properties/eo:sun_azimuth":  "const_postfix_channel",
-                    "properties/eo:sun_elevation":  "const_postfix_channel"
-                }
+                    "properties/eo:off_nadir": "const_channel",
+                    "properties/eo:azimuth": "const_channel",
+                    "properties/eo:sun_azimuth": "const_channel",
+                    "properties/eo:sun_elevation": "const_channel",
+                    "properties/eo:gsd": "scaled_channel"
+                },
+                "dontcare": [0, -1]
             }
         },
         "kingston_wv2_40cm_tst": {
             "type": "thelper.data.geo.gdl.MetaSegmentationDataset",
             "params": {
-                "class_names": {"_dontcare_": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5},
+                "class_names": {"1": 0, "2": 1, "3": 2, "4": 3, "5": 4},
                 "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples",
                 "dataset_type": "tst",
                 "meta_map": {
-                    "properties/eo:off_nadir":  "const_postfix_channel",
-                    "properties/eo:azimuth":  "const_postfix_channel",
-                    "properties/eo:sun_azimuth":  "const_postfix_channel",
-                    "properties/eo:sun_elevation":  "const_postfix_channel"
-                }
+                    "properties/eo:off_nadir": "const_channel",
+                    "properties/eo:azimuth": "const_channel",
+                    "properties/eo:sun_azimuth": "const_channel",
+                    "properties/eo:sun_elevation": "const_channel",
+                    "properties/eo:gsd": "scaled_channel"
+                },
+                "dontcare": [0, -1]
             }
         }
     },
