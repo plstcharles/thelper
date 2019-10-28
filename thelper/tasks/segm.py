@@ -101,7 +101,7 @@ class Segmentation(Task, ClassNamesHandler):
                     val = np.asarray(val)
                 assert isinstance(val, np.ndarray) and val.size == 3, "color values should be given as triplets"
                 self._color_map[key] = val
-            if self.dontcare is not None and self.dontcare not in self._color_map:
+            if self.dontcare is not None and self.dontcare not in self._color_map and self._color_map:
                 self._color_map[self.dontcare] = np.asarray([0, 0, 0])  # use black as default 'dontcare' color
         else:
             self._color_map = {}
