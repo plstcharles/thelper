@@ -127,7 +127,7 @@ class MetaSegmentationDataset(SegmentationDataset):
                 layers = thelper.nn.coordconv.get_coords_map(sat_img.shape[0], sat_img.shape[1]) * meta_val
                 sat_img = np.insert(sat_img, sat_img.shape[2], layers, axis=2)
             #else...
-        sample = {"sat_img": sat_img, "map_img": map_img}
+        sample = {"sat_img": sat_img, "map_img": map_img, "metadata": metadata}
         if self.transforms:
             sample = self.transforms(sample)
         return sample
