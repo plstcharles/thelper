@@ -38,7 +38,7 @@ class ImageSegmTrainer(Trainer):
         """Receives session parameters, parses image/label keys from task object, and sets up metrics."""
         super().__init__(session_name, session_dir, model, task, loaders, config, ckptdata=ckptdata)
         assert isinstance(self.task, thelper.tasks.Segmentation), "expected task to be segmentation"
-        trainer_config = thelper.utils.get_key_def("params", config["trainer"], {})
+        trainer_config = thelper.utils.get_key_def("params", config["trainer"], config["trainer"])
         self.scale_preds = thelper.utils.get_key_def("scale_preds", trainer_config, default=False)
         self.warned_no_shuffling_augments = False
 
@@ -63,7 +63,7 @@ class ImageSegmTrainer(Trainer):
             if self.task.gt_key in sample and sample[self.task.gt_key] is not None:
                 label_map = sample[self.task.gt_key]
                 assert not isinstance(label_map, list), "unexpected label map type"
-                label_map = torch.ByteTensor(label_map)
+                label_map = label_map.long()  # long instead of bytes to support large/negative values for dontcare
         return input_val, label_map
 
     def train_epoch(self, model, epoch, dev, loss, optimizer, loader, metrics):
@@ -119,7 +119,6 @@ class ImageSegmTrainer(Trainer):
                 iter_pred = model(self._move_tensor(input_val, dev))
                 if self.scale_preds:
                     iter_pred = torch.nn.functional.interpolate(iter_pred, size=input_val.shape[-2:], mode="bilinear")
-                # todo: find a more efficient way to compute loss w/ byte vals directly?
                 iter_loss = loss(iter_pred, self._move_tensor(label_map, dev).long())
                 iter_loss.backward()
             optimizer.step()
