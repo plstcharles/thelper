@@ -1,0 +1,93 @@
+{
+    "datasets": {
+        "kingston_wv2_40cm_trn": {
+            "type": "thelper.data.geo.gdl.MetaSegmentationDataset",
+            "params": {
+                "class_names": {"1": 0, "2": 1, "3": 2, "4": 3, "5": 4},
+                "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples",
+                "dataset_type": "trn",
+                "meta_map": {
+                    "properties/eo:sun_elevation": "const_channel",
+                    "properties/eo:gsd": "scaled_channel"
+                },
+                "dontcare": [0, -1]
+            }
+        },
+        "kingston_wv2_40cm_val": {
+            "type": "thelper.data.geo.gdl.MetaSegmentationDataset",
+            "params": {
+                "class_names": {"1": 0, "2": 1, "3": 2, "4": 3, "5": 4},
+                "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples",
+                "dataset_type": "val",
+                "meta_map": {
+                    "properties/eo:sun_elevation": "const_channel",
+                    "properties/eo:gsd": "scaled_channel"
+                },
+                "dontcare": [0, -1]
+            }
+        },
+        "kingston_wv2_40cm_tst": {
+            "type": "thelper.data.geo.gdl.MetaSegmentationDataset",
+            "params": {
+                "class_names": {"1": 0, "2": 1, "3": 2, "4": 3, "5": 4},
+                "work_folder": "data/cccot02/kingston_wv2_40cm/images/samples",
+                "dataset_type": "tst",
+                "meta_map": {
+                    "properties/eo:sun_elevation": "const_channel",
+                    "properties/eo:gsd": "scaled_channel"
+                },
+                "dontcare": [0, -1]
+            }
+        }
+    },
+    "loaders": {
+        "workers": 4,
+        "batch_size": 16,
+        "train_split": {
+            "kingston_wv2_40cm_trn": 1.0
+        },
+        "valid_split": {
+            "kingston_wv2_40cm_val": 1.0
+        },
+        "test_split": {
+            "kingston_wv2_40cm_tst": 1.0
+        },
+        "base_transforms": [
+            {
+                "operation": "torchvision.transforms.ToTensor",
+                "target_key": "sat_img"
+            }
+        ]
+    },
+    "model": {
+        "type" : "thelper.nn.resnet.ResNet",
+        "params": {
+            "input_channels": 6,
+            "head_type": "fcn"
+        }
+    },
+    "trainer": {
+        "epochs": 5,
+        "scale_preds": true,
+        "monitor": "accuracy",
+        "optimization": {
+            "loss": {
+                "type": "torch.nn.CrossEntropyLoss"
+            },
+            "optimizer": {
+                "type": "torch.optim.Adam",
+                "params": {
+                    "lr": 0.001
+                }
+            }
+        },
+        "metrics": {
+            "accuracy": {
+                "type": "thelper.optim.Accuracy",
+                "params": {
+                    "top_k": 1
+                }
+            }
+        }
+    }
+}
