@@ -3,7 +3,7 @@ import torch.nn
 
 
 def get_coords_map(height, width, centered=True, normalized=True, noise=None, dtype=torch.float32):
-    """Returns a HxW intrinsic coordinates map (2xHxW)."""
+    """Returns a HxW intrinsic coordinates map tensor (shape=2xHxW)."""
     x = torch.arange(width, dtype=dtype).unsqueeze(0)
     y = torch.arange(height, dtype=dtype).unsqueeze(0)
     if centered:
@@ -22,6 +22,7 @@ def get_coords_map(height, width, centered=True, normalized=True, noise=None, dt
 
 
 class AddCoords(torch.nn.Module):
+    """Creates a torch-compatible layer that adds intrinsic coordinate layers to input tensors."""
     def __init__(self, centered=True, normalized=True, noise=None, radius_channel=False):
         super().__init__()
         self.centered = centered
@@ -44,12 +45,19 @@ class AddCoords(torch.nn.Module):
 
 
 class CoordConv2d(torch.nn.Module):
-    """ add any additional coordinate channels to the input tensor """
-    def __init__(self, in_channels, *args, radius_channel=False, **kwargs):
+    """CoordConv-equivalent of torch's default Conv2d model layer.
+
+    See Liu et al. (2018), "An intriguing failing of convolutional neural networks..."
+    for more information (https://arxiv.org/abs/1807.03247).
+    """
+
+    def __init__(self, in_channels, *args, centered=True, normalized=True,
+                 noise=None, radius_channel=False, **kwargs):
         super().__init__()
-        self.addcoord = AddCoords(radius_channel=radius_channel)
-        extra_in_channels = 3 if radius_channel else 2
-        self.conv = torch.nn.Conv2d(in_channels + extra_in_channels, *args, **kwargs)
+        self.addcoord = AddCoords(centered=centered, normalized=normalized,
+                                  noise=noise, radius_channel=radius_channel)
+        extra_ch = 3 if radius_channel else 2
+        self.conv = torch.nn.Conv2d(in_channels + extra_ch, *args, **kwargs)
 
     def forward(self, in_tensor):
         out = self.addcoord(in_tensor)
@@ -57,12 +65,20 @@ class CoordConv2d(torch.nn.Module):
         return out
 
 
-class CoordConvTranspose(torch.nn.Module):
-    """CoordConvTranspose layer for segmentation tasks."""
-    def __init__(self, radius_channel, *args, **kwargs):
+class CoordConvTranspose2d(torch.nn.Module):
+    """CoordConv-equivalent of torch's default ConvTranspose2d model layer.
+
+    See Liu et al. (2018), "An intriguing failing of convolutional neural networks..."
+    for more information (https://arxiv.org/abs/1807.03247).
+    """
+
+    def __init__(self, in_channels, *args, centered=True, normalized=True,
+                 noise=None, radius_channel=False, **kwargs):
         super().__init__()
-        self.addcoord = AddCoords(radius_channel=radius_channel)
-        self.convT = torch.nn.ConvTranspose2d(*args, **kwargs)
+        self.addcoord = AddCoords(centered=centered, normalized=normalized,
+                                  noise=noise, radius_channel=radius_channel)
+        extra_ch = 3 if radius_channel else 2
+        self.convT = torch.nn.ConvTranspose2d(in_channels + extra_ch, *args, **kwargs)
 
     def forward(self, in_tensor):
         out = self.addcoord(in_tensor)
