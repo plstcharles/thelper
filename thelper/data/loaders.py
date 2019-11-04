@@ -468,7 +468,7 @@ class LoaderFactory:
                             samples.append({label_key: sample[label_key]})
                         sample_maps[dataset_name] = task.get_class_sample_map(samples, unset_class_key)
                 elif isinstance(dataset, thelper.data.Dataset):
-                    sample_maps[dataset_name] = task.get_class_sample_map(dataset.samples, unset_class_key)
+                    sample_maps[dataset_name] = task.get_class_sample_map(dataset, unset_class_key)
             train_idxs, valid_idxs, test_idxs = {}, {}, {}
             for class_name in global_class_names:
                 curr_class_samples, curr_class_size = {}, {}

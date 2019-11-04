@@ -92,7 +92,7 @@ class Dataset(torch.utils.data.Dataset):
 
     def __iter__(self):
         """Returns an iterator over the dataset's samples."""
-        for idx in range(len(self.samples)):
+        for idx in range(self.__len__()):
             yield self[idx]
 
     @abstractmethod
