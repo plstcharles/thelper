@@ -50,9 +50,7 @@ class SegmentationDataset(thelper.data.parsers.SegmentationDataset):
                     self.metadata.append(metadata)
             if self.max_sample_count is None:
                 self.max_sample_count = hdf5_file["sat_img"].shape[0]
-
-    def __len__(self):
-        return self.max_sample_count
+            self.samples = [{}] * self.max_sample_count
 
     def _remap_labels(self, map_img):
         # note: will do nothing if 'dontcare' remap mode is not activated in constructor
