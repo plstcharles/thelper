@@ -449,26 +449,26 @@ class LoaderFactory:
             global_class_names = task.class_names + [unset_class_key]  # extra name added for unlabeled samples (if needed!)
             sample_maps = {}
             for dataset_name, dataset in datasets.items():
+                # fetching a reference to the list of samples here allows us to bypass the 'loading' process and possibly
+                # directly access sample labels/groundtruth (assuming it is already loaded)
+                samples = dataset.samples if hasattr(dataset, "samples") and len(dataset.samples) == len(dataset) else dataset
                 if isinstance(dataset, thelper.data.ExternalDataset):
-                    if hasattr(dataset.samples, "samples") and isinstance(dataset.samples.samples, list):
-                        sample_maps[dataset_name] = task.get_class_sample_map(dataset.samples.samples, unset_class_key)
+                    if hasattr(samples, "samples") and len(samples.samples) == len(samples):
+                        sample_maps[dataset_name] = task.get_class_sample_map(samples.samples, unset_class_key)
                     else:
                         logger.warning(f"must fully parse the external dataset '{dataset_name}' for balanced intra-class shuffling;" +
                                        " this might take a while!\n\t...consider making a dataset interface that can return labels" +
                                        " only, it would greatly speed up the analysis of class distributions\n\t...you could also" +
                                        " add the 'skip_class_balancing' flag to your data configuration to skip this rebalancing")
-                        label_key = task.gt_key
                         # to allow glitch-less tqdm printing after latest logger output
-                        sys.stdout.flush()
-                        sys.stderr.flush()
-                        time.sleep(0.01)
+                        sys.stdout.flush(), sys.stderr.flush(), time.sleep(0.01)
                         samples = []
                         for sample in tqdm.tqdm(dataset):
-                            assert label_key in sample, f"could not find label key ('{label_key}') in sample dict"
-                            samples.append({label_key: sample[label_key]})
+                            assert task.gt_key in sample, f"could not find label key ('{task.gt_key}') in sample dict"
+                            samples.append({task.gt_key: sample[task.gt_key]})
                         sample_maps[dataset_name] = task.get_class_sample_map(samples, unset_class_key)
-                elif isinstance(dataset, thelper.data.Dataset):
-                    sample_maps[dataset_name] = task.get_class_sample_map(dataset, unset_class_key)
+                else:
+                    sample_maps[dataset_name] = task.get_class_sample_map(samples, unset_class_key)
             train_idxs, valid_idxs, test_idxs = {}, {}, {}
             for class_name in global_class_names:
                 curr_class_samples, curr_class_size = {}, {}
