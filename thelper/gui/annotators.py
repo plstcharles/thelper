@@ -252,7 +252,7 @@ class ImageSegmentAnnotator(Annotator):
                 "version": repover,
                 "dataset": str(dataset),
             }
-            if hasattr(dataset, "samples") and len(dataset.samples) == len(dataset):
+            if hasattr(dataset, "samples") and dataset.samples is not None and len(dataset.samples) == len(dataset):
                 # @@@@ TODO: add util to truncate size of string in each member of samples below?
                 log_content["samples"] = [str(sample) for sample in dataset.samples]
             dataset_log_file = os.path.join(annot_dir, "metadata.log")

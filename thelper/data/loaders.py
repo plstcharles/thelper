@@ -451,9 +451,10 @@ class LoaderFactory:
             for dataset_name, dataset in datasets.items():
                 # fetching a reference to the list of samples here allows us to bypass the 'loading' process and possibly
                 # directly access sample labels/groundtruth (assuming it is already loaded)
-                samples = dataset.samples if hasattr(dataset, "samples") and len(dataset.samples) == len(dataset) else dataset
+                samples = dataset.samples if hasattr(dataset, "samples") and dataset.samples is not None \
+                    and len(dataset.samples) == len(dataset) else dataset
                 if isinstance(dataset, thelper.data.ExternalDataset):
-                    if hasattr(samples, "samples") and len(samples.samples) == len(samples):
+                    if hasattr(samples, "samples") and samples.samples is not None and len(samples.samples) == len(samples):
                         sample_maps[dataset_name] = task.get_class_sample_map(samples.samples, unset_class_key)
                     else:
                         logger.warning(f"must fully parse the external dataset '{dataset_name}' for balanced intra-class shuffling;" +
