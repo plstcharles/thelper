@@ -68,7 +68,7 @@ class Classification(Task, ClassNamesHandler):
         Returns:
             A dictionary that maps each class label to its corresponding list of samples.
         """
-        assert samples is not None and isinstance(samples, list), "invalid sample list "
+        assert samples is not None and len(samples) > 0, "invalid sample list "
         sample_idxs = {class_name: [] for class_name in self.class_names}
         import collections
         if unset_key is not None:

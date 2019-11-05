@@ -108,7 +108,7 @@ class Segmentation(Task, ClassNamesHandler):
 
     def get_class_sizes(self, samples):
         """Given a list of samples, returns a map of element counts for each class label."""
-        assert samples is not None and samples, "provided invalid sample list"
+        assert samples is not None and len(samples) > 0, "provided invalid sample list"
         elem_counts = {class_name: 0 for class_name in self.class_names}
         if self.dontcare is not None:
             elem_counts["dontcare"] = 0
