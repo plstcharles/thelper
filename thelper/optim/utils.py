@@ -6,6 +6,7 @@ import copy
 import inspect
 import logging
 
+import numpy as np
 import torch
 
 import thelper.optim.metrics
@@ -80,9 +81,12 @@ def create_loss_fn(config, model, loader=None, uploader=None):
     logger.debug("loading loss function")
     if isinstance(model, torch.nn.DataParallel):
         model = model.module  # to avoid interface getter issues
-    if uploader is None:
-        def uploader(x):
-            return x
+
+    def converter(x):
+        if isinstance(x, (list, np.ndarray)) and all([np.isscalar(i) and not isinstance(i, str) for i in x]):
+            x = torch.FloatTensor(x)
+        return x if uploader is None else uploader(x)
+
     if not isinstance(config, dict):
         raise AssertionError("config should be provided as a dictionary")
     if "model_getter" in config and "type" in config:
@@ -100,18 +104,15 @@ def create_loss_fn(config, model, loader=None, uploader=None):
         raise AssertionError("loss config missing 'type' or 'model_attrib_name' field")
     loss_params = thelper.utils.get_key_def(["params", "parameters"], config, {})
     loss_params = copy.deepcopy(loss_params)  # required here, we might add some parameters below
+    weight_param_name = thelper.utils.get_key_def("weight_param_name", config, "weight")
     if thelper.utils.str2bool(thelper.utils.get_key_def("weight_classes", config, False)) or \
        thelper.utils.get_key_def("weight_distribution", config, None) is not None:
         if not thelper.utils.str2bool(thelper.utils.get_key_def("weight_classes", config, True)):
             raise AssertionError("'weight_classes' now deprecated, set 'weight_distribution' directly to toggle on")
         if not isinstance(model.task, (thelper.tasks.Classification, thelper.tasks.Segmentation)):
             raise AssertionError("task type does not support class weighting")
-        weight_param_name = "weight"
-        if "weight_param_name" in config:
-            weight_param_name = config["weight_param_name"]
-        if "weight_distribution" not in config:
-            raise AssertionError("missing 'weight_distribution' field in loss config")
-        weight_distrib = config["weight_distribution"]
+        weight_distrib = thelper.utils.get_key("weight_distribution", config,
+                                               msg="missing 'weight_distribution' field in loss config")
         if isinstance(weight_distrib, dict):
             for label, weight in weight_distrib.items():
                 if label not in model.task.class_names:
@@ -143,8 +144,8 @@ def create_loss_fn(config, model, loader=None, uploader=None):
         for label, weight in weight_distrib.items():
             weight_list_str += "\n  \"%s\": %s," % (label, weight)
         logger.info(weight_list_str + "\n}")
-        weight_list = [weight_distrib[label] if label in weight_distrib else 1.0 for label in model.task.class_names]
-        loss_params[weight_param_name] = uploader(torch.FloatTensor(weight_list))
+        loss_params[weight_param_name] = [weight_distrib[label] if label in weight_distrib
+                                          else 1.0 for label in model.task.class_names]
     if isinstance(model.task, thelper.tasks.Segmentation):
         ignore_index_param_name = thelper.utils.get_key_def("ignore_index_param_name", config, "ignore_index")
         ignore_index_label_name = thelper.utils.get_key_def("ignore_index_label_name", config, "dontcare")
@@ -154,6 +155,8 @@ def create_loss_fn(config, model, loader=None, uploader=None):
                 loss_params[ignore_index_param_name] = model.task.class_indices[ignore_index_label_name]
             else:
                 loss_params[ignore_index_param_name] = model.task.dontcare
+    if weight_param_name in loss_params:
+        loss_params[weight_param_name] = converter(loss_params[weight_param_name])
     loss = loss_type(**loss_params)
     return loss
 
