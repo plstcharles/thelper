@@ -252,7 +252,8 @@ class ImageSegmentAnnotator(Annotator):
                 "version": repover,
                 "dataset": str(dataset),
             }
-            if hasattr(dataset, "samples") and isinstance(dataset.samples, list):
+            if hasattr(dataset, "samples") and len(dataset.samples) == len(dataset):
+                # @@@@ TODO: add util to truncate size of string in each member of samples below?
                 log_content["samples"] = [str(sample) for sample in dataset.samples]
             dataset_log_file = os.path.join(annot_dir, "metadata.log")
             thelper.utils.save_config(log_content, dataset_log_file, as_json=True)

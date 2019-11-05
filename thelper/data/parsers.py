@@ -79,7 +79,7 @@ class Dataset(torch.utils.data.Dataset):
         super(Dataset, self).__init__()
         self.transforms = transforms
         self.deepcopy = deepcopy  # will determine if we deepcopy in each loader
-        self.samples = None  # must be set by the derived class as a list of dictionaries
+        self.samples = None  # must be set by the derived class as a array-like object of dictionaries
         self.task = None  # must be set by the derived class as a valid task object
 
     def _get_derived_name(self):

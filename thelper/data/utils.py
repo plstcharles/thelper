@@ -220,7 +220,7 @@ def create_loaders(config, save_dir=None):
                 if "samples" not in log_content or not isinstance(log_content["samples"], list):
                     raise AssertionError("unexpected dataset log content (bad 'samples' field)")
                 samples_old = log_content["samples"]
-                samples_new = dataset.samples if hasattr(dataset, "samples") and isinstance(dataset.samples, list) else []
+                samples_new = dataset.samples if hasattr(dataset, "samples") and len(dataset.samples) == len(dataset) else []
                 if len(samples_old) != len(samples_new):
                     query_msg = "Old sample list for dataset '%s' mismatch with current sample list; proceed anyway?"
                     answer = thelper.utils.query_yes_no(query_msg, bypass="n")
@@ -254,7 +254,7 @@ def create_loaders(config, save_dir=None):
                                 break
         for dataset_name, dataset in datasets.items():
             dataset_log_file = os.path.join(data_logger_dir, dataset_name + ".log")
-            samples = dataset.samples if hasattr(dataset, "samples") and isinstance(dataset.samples, list) else []
+            samples = dataset.samples if hasattr(dataset, "samples") and len(dataset.samples) == len(dataset) else []
             log_content = {
                 "metadata": {
                     "session_name": session_name,
@@ -262,6 +262,7 @@ def create_loaders(config, save_dir=None):
                     "version": repover,
                     "dataset": str(dataset),
                 },
+                # @@@@ TODO: add util to truncate size of string in each member of samples below?
                 "samples": [str(sample) for sample in samples],
                 # index values were paired in tuples earlier, 0=idx, 1=label
                 "train_idxs": [idx for idx, _ in train_idxs[dataset_name]],
