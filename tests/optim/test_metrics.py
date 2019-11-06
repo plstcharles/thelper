@@ -45,8 +45,10 @@ def test_accuracy_1d(mocker):
     assert isinstance(metric, thelper.optim.metrics.Accuracy)
     assert metric.goal == thelper.optim.Metric.maximize
     assert metric.top_k == 3
-    with mocker.patch.object(thelper.optim.metrics.logger, "warning"):
-        assert metric.eval() == 0.0
+    logger_patch = mocker.patch.object(thelper.optim.metrics.logger, "warning")
+    logger_patch.start()
+    assert metric.eval() == 0.0
+    logger_patch.stop()
     assert repr(metric)
     inputs, targets, preds = [], [], []
     tot_idx = 0
@@ -90,8 +92,10 @@ def test_accuracy_nd(mocker):
     assert isinstance(metric, thelper.optim.metrics.Accuracy)
     assert metric.goal == thelper.optim.Metric.maximize
     assert metric.top_k == 3
-    with mocker.patch.object(thelper.optim.metrics.logger, "warning"):
-        assert metric.eval() == 0.0
+    logger_patch = mocker.patch.object(thelper.optim.metrics.logger, "warning")
+    logger_patch.start()
+    assert metric.eval() == 0.0
+    logger_patch.stop()
     assert repr(metric)
     inputs, targets, preds = [], [], []
     tot_idx = 0
@@ -130,9 +134,11 @@ def test_mae_mse(mocker):
     assert isinstance(mse, thelper.optim.metrics.MeanSquaredError)
     assert mae.goal == thelper.optim.Metric.minimize
     assert mse.goal == thelper.optim.Metric.minimize
-    with mocker.patch.object(thelper.optim.metrics.logger, "warning"):
-        assert mae.eval() == 0.0
-        assert mse.eval() == 0.0
+    logger_patch = mocker.patch.object(thelper.optim.metrics.logger, "warning")
+    logger_patch.start()
+    assert mae.eval() == 0.0
+    assert mse.eval() == 0.0
+    logger_patch.stop()
     assert repr(mae) and repr(mse)
     inputs, targets, preds = [], [], []
     tot_idx = 0
@@ -332,8 +338,10 @@ def test_psnr(mocker):
     metric_psnr = thelper.optim.create_metrics(metric_config)["psnr"]
     assert isinstance(metric_psnr, thelper.optim.metrics.PSNR)
     assert metric_psnr.goal == thelper.optim.Metric.maximize
-    with mocker.patch.object(thelper.optim.metrics.logger, "warning"):
-        assert metric_psnr.eval() == 0.0
+    logger_patch = mocker.patch.object(thelper.optim.metrics.logger, "warning")
+    logger_patch.start()
+    assert metric_psnr.eval() == 0.0
+    logger_patch.stop()
     assert repr(metric_psnr)
     inputs, targets, preds = [], [], []
     tot_idx = 0
