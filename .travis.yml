@@ -54,5 +54,5 @@ jobs:
       after_deploy:
         - docker build -t ${DOCKER_REPO}:${TRAVIS_TAG} -t ${DOCKER_REPO}:latest .
         - docker run -t ${DOCKER_REPO}:latest thelper --version
-        - if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then travis_wait 30 docker push ${DOCKER_REPO}; fi
-        - travis_wait 30 conda build --token $CONDA_TOKEN --user $CONDA_USERNAME ci/
+        - if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then travis_wait 50 docker push ${DOCKER_REPO}; fi
+        - travis_wait 50 conda build --token $CONDA_TOKEN --user $CONDA_USERNAME ci/
