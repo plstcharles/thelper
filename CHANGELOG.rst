@@ -3,6 +3,18 @@
 Changelog
 =========
 
+0.4.2 (2019/11/06)
+------------------
+
+* Updated common resnet impl to support segmentation heads
+* Fixed samples usage for auto-weighting of loss functions
+* Cleaned up samples usage in loader factory data splitter
+* Add GDL compatibility module to geo package
+* Fix segmentation task dontcare default color mapping
+* Cleaned up and simplified coordconv implementation
+* Update segmentation trainer to use long-typed label maps
+* Cleaned up augmentor/albumentations demo configurations
+
 0.4.1 (2019/10/15)
 ------------------
 
