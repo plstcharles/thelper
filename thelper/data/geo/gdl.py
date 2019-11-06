@@ -9,23 +9,26 @@ for the validation and testing of new software components.
 """
 
 import collections
+import logging
 import os
 
 import h5py
 import numpy as np
 
-import thelper.data
 import thelper.nn.coordconv
+from thelper.data.parsers import SegmentationDataset
+
+logger = logging.getLogger(__name__)
 
 
-class SegmentationDataset(thelper.data.parsers.SegmentationDataset):
+class SegmentationDataset(SegmentationDataset):
     """Semantic segmentation dataset interface for GDL-based HDF5 parsing."""
 
     def __init__(self, class_names, work_folder, dataset_type, max_sample_count=None,
                  dontcare=None, transforms=None):
         self.dontcare = dontcare
         if isinstance(dontcare, (tuple, list)) and len(dontcare) == 2:
-            thelper.data.logger.warning(f"will remap dontcare index from {dontcare[0]} to {dontcare[1]}")
+            logger.warning(f"will remap dontcare index from {dontcare[0]} to {dontcare[1]}")
             dontcare = dontcare[1]
         assert dontcare is None or isinstance(dontcare, int), "unexpected dontcare type"
         super().__init__(class_names=class_names, input_key="sat_img", label_map_key="map_img",

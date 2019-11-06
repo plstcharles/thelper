@@ -8,9 +8,10 @@ import cv2 as cv
 import numpy as np
 import tqdm
 
-import thelper.data
-import thelper.train.utils
+import thelper.tasks
+import thelper.utils
 from thelper.data.geo.parsers import TileDataset, VectorCropDataset
+from thelper.train.utils import DetectLogger
 
 logger = logging.getLogger(__name__)
 
@@ -354,7 +355,7 @@ class TB15D104TileDataset(TileDataset):
         return sample
 
 
-class TB15D104DetectLogger(thelper.train.utils.DetectLogger):
+class TB15D104DetectLogger(DetectLogger):
 
     def __init__(self, conf_threshold=0.5):
         super().__init__(conf_threshold=conf_threshold, target_name="lake",
@@ -407,10 +408,10 @@ def postproc_features(input_file, bboxes_srs, orig_geoms_path, output_file,
         bboxes_srs = bboxes_srs_obj
     logger.debug("importing lake bboxes geojson...")
     with open(input_file) as bboxes_fd:
-        bboxes_geoms = thelper.data.geo.utils.parse_geojson(json.load(bboxes_fd))
+        bboxes_geoms = geo.utils.parse_geojson(json.load(bboxes_fd))
     logger.debug("importing hydro features geojson...")
     with open(orig_geoms_path) as hydro_fd:
-        hydro_geoms = thelper.data.geo.utils.parse_geojson(json.load(hydro_fd), srs_target=bboxes_srs)
+        hydro_geoms = geo.utils.parse_geojson(json.load(hydro_fd), srs_target=bboxes_srs)
     logger.debug("computing global cascade of lake bboxes...")
     detect_roi = shapely.ops.cascaded_union([bbox["geometry"] for bbox in bboxes_geoms])
     output_features = []

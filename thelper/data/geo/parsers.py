@@ -15,13 +15,14 @@ import osr
 import shapely
 import tqdm
 
-import thelper.data
-import thelper.data.geo as geo
+import thelper.tasks
+import thelper.utils
+from thelper.data import Dataset
 
 logger = logging.getLogger(__name__)
 
 
-class VectorCropDataset(thelper.data.Dataset):
+class VectorCropDataset(Dataset):
     """Abstract dataset used to combine geojson vector data and rasters."""
 
     def __init__(self, raster_path, vector_path, px_size=None, skew=None,
@@ -32,6 +33,7 @@ class VectorCropDataset(thelper.data.Dataset):
                  cleaner=None, cropper=None, force_parse=False,
                  reproj_rasters=False, reproj_all_cpus=True,
                  keep_rasters_open=True, transforms=None):
+        import thelper.data.geo as geo
         # before anything else, create a hash to cache parsed data
         cache_hash = thelper.utils.get_params_hash(
             {k: v for k, v in vars().items() if not k.startswith("_") and k != "self"}) if not force_parse else None
@@ -130,6 +132,7 @@ class VectorCropDataset(thelper.data.Dataset):
     def _default_feature_cropper(features, rasters_data, coverage, srs_target, px_size, skew, feature_buffer):
         """Returns the samples for a set of features (may be modified in derived classes)."""
         # note: default behavior = just center on the feature, and pad if required by user
+        import thelper.data.geo as geo
         samples = []
         clean_feats = [f for f in features if f["clean"]]
         srs_target_wkt = srs_target.ExportToWkt()
@@ -165,6 +168,7 @@ class VectorCropDataset(thelper.data.Dataset):
     @staticmethod
     def _parse_rasters(path, srs, reproj_rasters):
         """Parses rasters (geotiffs) and returns metadata/coverage information."""
+        import thelper.data.geo as geo
         logger.info(f"parsing rasters from path '{path}'...")
         raster_paths = thelper.utils.get_file_paths(path, ".", allow_glob=True)
         rasters_data, coverage = geo.utils.parse_rasters(raster_paths, srs, reproj_rasters)
@@ -186,6 +190,7 @@ class VectorCropDataset(thelper.data.Dataset):
     @staticmethod
     def _parse_features(path, srs, roi, cache_hash, allow_outlying, clip_outlying, cleaner):
         """Parses vector files (geojsons) and returns geometry information."""
+        import thelper.data.geo as geo
         logger.info(f"parsing vectors from path '{path}'...")
         assert os.path.isfile(path) and path.endswith("geojson"), \
             "vector file must be provided as geojson (shapefile support still incomplete)"
@@ -231,6 +236,7 @@ class VectorCropDataset(thelper.data.Dataset):
     def _process_crop(self, sample):
         """Returns a crop for a specific (internal) set of sampled features."""
         # remember: we assume that all rasters have the same intrinsic settings
+        import thelper.data.geo as geo
         crop_datatype = geo.utils.GDAL2NUMPY_TYPE_CONV[self.rasters_data[0]["data_type"]]
         crop_size = (sample["crop_height"], sample["crop_width"], self.rasters_data[0]["band_count"])
         crop = np.ma.array(np.zeros(crop_size, dtype=crop_datatype), mask=np.ones(crop_size, dtype=np.uint8))
@@ -341,6 +347,7 @@ class TileDataset(VectorCropDataset):
         """Returns the ROI information for a given feature (may be modified in derived classes)."""
         # instead of iterating over features to generate samples, we tile the raster(s)
         # note: the 'coverage' geometry should already be in the target srs
+        import thelper.data.geo as geo
         roi_tl, roi_br = geo.utils.get_feature_bbox(coverage)
         roi_geotransform = (roi_tl[0], px_size[0], 0.0,
                             roi_tl[1], 0.0, px_size[1])
