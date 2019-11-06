@@ -237,7 +237,7 @@ autodoc_mock_imports = [
     'pip',
     'pynput',
     'pynput.keyboard',
-    'scipy'
+    'scipy',
     'shapely',  # for geospatial tools
     'sklearn',
     'sklearn.metrics',
