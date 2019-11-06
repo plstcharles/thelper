@@ -6,6 +6,8 @@ and test a model on geospatial data. Importing the modules inside this package r
 
 import logging
 
+import thelper.data.geo.gdl  # noqa: F401
+import thelper.data.geo.ogc  # noqa: F401
 import thelper.data.geo.parsers  # noqa: F401
 import thelper.data.geo.utils  # noqa: F401
 
