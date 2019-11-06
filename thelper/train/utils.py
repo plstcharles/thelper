@@ -384,14 +384,12 @@ class ClassifReport(PredictionConsumer, ClassNamesHandler, FormatHandler):
     def report_text(self):
         # type: () -> Optional[AnyStr]
         """Returns the classification report as a multi-line print-friendly string."""
-        report = self.gen_report(as_dict=False)
-        return f"\n{report}" if isinstance(report, str) else None
+        return f"\n{self.gen_report(as_dict=False)}"
 
     def report_json(self):
         # type: () -> Optional[AnyStr]
         """Returns the classification report as a JSON formatted string."""
-        report = self.gen_report(as_dict=True)
-        return json.dumps(report, indent=4) if isinstance(report, str) else None
+        return json.dumps(self.gen_report(as_dict=True), indent=4)
 
     def reset(self):
         """Toggles a reset of the metric's internal state, emptying queues."""
