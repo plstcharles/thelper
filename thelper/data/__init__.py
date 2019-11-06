@@ -7,6 +7,7 @@ for dataset parsers.
 """
 
 import logging
+import os
 
 import thelper.data.loaders  # noqa: F401
 import thelper.data.parsers  # noqa: F401
@@ -34,3 +35,9 @@ from thelper.data.utils import get_class_weights  # noqa: F401
 from thelper.tasks.detect import BoundingBox  # noqa: F401
 
 logger = logging.getLogger("thelper.data")
+
+on_rtd = os.environ.get('READTHEDOCS') == 'True'
+if on_rtd:
+    # import optional subpackages for doc builds
+    # (autodoc mocks unavailable dependencies anyway)
+    import thelper.data.geo  # noqa: F401
