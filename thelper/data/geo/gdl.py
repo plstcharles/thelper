@@ -16,12 +16,12 @@ import h5py
 import numpy as np
 
 import thelper.nn.coordconv
-from thelper.data.parsers import SegmentationDataset
+from thelper.data.parsers import SegmentationDataset as BaseSegmentationDataset
 
 logger = logging.getLogger(__name__)
 
 
-class SegmentationDataset(SegmentationDataset):
+class SegmentationDataset(BaseSegmentationDataset):
     """Semantic segmentation dataset interface for GDL-based HDF5 parsing."""
 
     def __init__(self, class_names, work_folder, dataset_type, max_sample_count=None,
