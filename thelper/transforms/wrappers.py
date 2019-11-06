@@ -36,7 +36,7 @@ class AlbumentationsWrapper:
         | :func:`thelper.transforms.utils.load_transforms`
     """
 
-    def __init__(self, transforms, to_tensor=None, bbox_params=None, add_targets=None, image_key="image",
+    def __init__(self, transforms, bbox_params=None, add_targets=None, image_key="image",
                  bboxes_key="bboxes", mask_key="mask", keypoints_key="keypoints", probability=1.0,
                  cvt_kpts_to_bboxes=False, linked_fate=False):
         """Receives and stores an augmentor pipeline for later use.
@@ -65,9 +65,9 @@ class AlbumentationsWrapper:
         self.linked_fate = linked_fate
         import albumentations
         self.transforms = transforms
-        self.to_tensor = to_tensor
         self.add_targets = add_targets
-        self.pipeline = albumentations.Compose(transforms, to_tensor=to_tensor, bbox_params=self.bbox_params,
+        self.probability = probability
+        self.pipeline = albumentations.Compose(transforms, bbox_params=self.bbox_params,
                                                additional_targets=add_targets, p=probability)
 
     def __call__(self, sample, force_linked_fate=False, op_seed=None):
@@ -147,7 +147,7 @@ class AlbumentationsWrapper:
         """Create a print-friendly representation of inner augmentation stages."""
         # for debug purposes only, transforms probably cannot be expressed as a string
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
-            f"(transforms={repr(self.transforms)}, to_tensor={repr(self.to_tensor)}, " + \
+            f"(transforms={repr(self.transforms)}, " + \
             f"bbox_params={repr(self.bbox_params)}, add_targets={repr(self.add_targets)}, " + \
             f"image_key={repr(self.image_key)}, bboxes_key={repr(self.bboxes_key)}, " + \
             f"mask_key={repr(self.mask_key)}, keypoints_key={repr(self.keypoints_key)}, " + \

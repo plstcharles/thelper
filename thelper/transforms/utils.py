@@ -123,16 +123,16 @@ def load_transforms(stages, avoid_transform_wrapper=False):
                 op_type = thelper.utils.import_class(op_name)
                 suboperations.append(op_type(**op_params))
             probability = thelper.utils.get_key_def("probability", stage, 1.0)
-            to_tensor = thelper.utils.get_key_def("to_tensor", stage, None)
             bbox_params = thelper.utils.get_key_def("bbox_params", stage, {})
             add_targets = thelper.utils.get_key_def("add_targets", stage, {})
             bboxes_key = thelper.utils.get_key_def("bboxes_key", stage, "bbox")
+            image_key = thelper.utils.get_key_def("image_key", stage, "image")
             mask_key = thelper.utils.get_key_def("mask_key", stage, "mask")
             keypoints_key = thelper.utils.get_key_def("keypoints_key", stage, "keypoints")
             cvt_kpts_to_bboxes = thelper.utils.str2bool(thelper.utils.get_key_def("cvt_kpts_to_bboxes", stage, False))
             operations.append(thelper.transforms.wrappers.AlbumentationsWrapper(
-                transforms=suboperations, to_tensor=to_tensor, bbox_params=bbox_params, add_targets=add_targets,
-                image_key=operation_targets, bboxes_key=bboxes_key, mask_key=mask_key, keypoints_key=keypoints_key,
+                transforms=suboperations, bbox_params=bbox_params, add_targets=add_targets,
+                image_key=image_key, bboxes_key=bboxes_key, mask_key=mask_key, keypoints_key=keypoints_key,
                 probability=probability, cvt_kpts_to_bboxes=cvt_kpts_to_bboxes, linked_fate=linked_fate))
         else:
             operation_type = thelper.utils.import_class(operation_name)
