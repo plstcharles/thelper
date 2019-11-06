@@ -9,8 +9,8 @@ import numpy as np
 import tqdm
 
 import thelper.data
-import thelper.data.geo as geo
 import thelper.train.utils
+from thelper.data.geo.parsers import TileDataset, VectorCropDataset
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class TB15D104:
     LAKE_ID = 1
 
 
-class TB15D104Dataset(geo.parsers.VectorCropDataset):
+class TB15D104Dataset(VectorCropDataset):
     """OGC Testbed-15 dataset parser for D104 (lake/river) segmentation task."""
 
     def __init__(self, raster_path, vector_path, px_size=None,
@@ -114,6 +114,7 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
         srs_target_wkt = srs_target.ExportToWkt()
 
         def crop_feature(feature):
+            import thelper.data.geo as geo
             assert feature["clean"]  # should not get here with bad features
             roi, roi_tl, roi_br, crop_width, crop_height = \
                 geo.utils.get_feature_roi(feature["geometry"], px_size, skew, feature_buffer)
@@ -256,7 +257,7 @@ class TB15D104Dataset(geo.parsers.VectorCropDataset):
         return sample
 
 
-class TB15D104TileDataset(geo.parsers.TileDataset):
+class TB15D104TileDataset(TileDataset):
     """OGC Testbed-15 dataset parser for D104 (lake/river) segmentation task."""
 
     def __init__(self, raster_path, vector_path, tile_size, tile_overlap,
@@ -288,6 +289,7 @@ class TB15D104TileDataset(geo.parsers.TileDataset):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
         if isinstance(idx, slice):
             return self._getitems(idx)
+        import thelper.data.geo as geo
         assert idx < len(self.samples), "sample index is out-of-range"
         if idx < 0:
             idx = len(self.samples) + idx
@@ -362,6 +364,7 @@ class TB15D104DetectLogger(thelper.train.utils.DetectLogger):
         # here, we only care about reporting predictions, we ignore the (possibly missing) gt bboxes
         import shapely
         import geojson
+        import thelper.data.geo as geo
         batch_size = len(self.bbox[0])
         bbox_lists = [bboxes for batch in self.bbox for bboxes in batch]  # one list per crop
         if batch_size > 1:
@@ -392,6 +395,7 @@ def postproc_features(input_file, bboxes_srs, orig_geoms_path, output_file,
     import json
     import geojson
     import shapely
+    import thelper.data.geo as geo
     logger.debug("importing bboxes SRS...")
     assert isinstance(bboxes_srs, (str, int, osr.SpatialReference)), \
         "target EPSG SRS must be given as int/str"
