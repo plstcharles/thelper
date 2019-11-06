@@ -3,6 +3,11 @@
 Changelog
 =========
 
+0.4.3 (2019/11/06)
+------------------
+
+* Fixed pytest-mock scope usage in metrics utests
+
 0.4.2 (2019/11/06)
 ------------------
 
