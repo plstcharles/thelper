@@ -392,7 +392,11 @@ def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, b
         color_map = color_map_new
     if masks is not None:
         if not isinstance(masks, list) and not (isinstance(masks, torch.Tensor) and masks.dim() == 3):
-            raise AssertionError("expected segmentation masks to be in list or 3-d tensor format (BxHxW)")
+            if isinstance(masks, torch.Tensor) and masks.dim() == 4 \
+                    and masks.shape[0] == images.shape[0] and masks.shape[1] == 1:
+                masks = masks.squeeze(axis=1)
+            else:
+                raise AssertionError("expected segmentation masks to be in list or 3-d tensor format (BxHxW)")
         if isinstance(masks, list):
             if all([isinstance(m, list) for m in masks]):
                 masks = list(itertools.chain.from_iterable(masks))  # merge all augmented lists together
