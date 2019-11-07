@@ -79,14 +79,8 @@ def default_collate(batch, force_tensor=True):
                     raise TypeError(error_msg_fmt.format(elem.dtype))
             return default_collate([torch.from_numpy(b) for b in batch], force_tensor=force_tensor)
         if elem.shape == ():  # scalars
-            if torch_ver[0] > 1 or torch_ver[1] > 1:  # ver > 1.1
-                py_type = float if elem.dtype.name.startswith('float') else int
-                if torch_ver[0] > 1 or torch_ver[1] > 0:  # ver > 1.0
-                    return torch.utils.data._utils.collate.numpy_type_map[elem.dtype.name](list(map(py_type, batch)))
-                else:  # ver <= 1.0
-                    return torch.utils.data.dataloader.numpy_type_map[elem.dtype.name](list(map(py_type, batch)))
-            else:  # ver <= 1.1
-                return torch.as_tensor(batch)
+            # simplified as of PyTorch v1.2.0, and similar to <1.1.0
+            return torch.as_tensor(batch)
     elif isinstance(batch[0], float):
         return torch.tensor(batch, dtype=torch.float64)
     elif isinstance(batch[0], int_classes):
