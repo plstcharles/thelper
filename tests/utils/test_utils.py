@@ -27,6 +27,21 @@ def test_import_class_path_qualified():
     assert issubclass(cls, thelper.data.ImageFolderDataset)
 
 
+def test_import_multi_funcs():
+    def callback(ref, key, fake):
+        assert fake == "hello"
+        ref[key] += 1
+    func_config = [
+        {"type": callback, "params": {"key": "a"}},
+        {"type": callback, "params": {"key": "b"}},
+        {"type": callback, "params": {"key": "c"}},
+    ]
+    func = thelper.utils.import_function(func_config, params={"fake": "hello"})
+    refmap = {"a": 0, "b": 1, "c": 2}
+    func(refmap)
+    assert refmap["a"] == 1 and refmap["b"] == 2 and refmap["c"] == 3
+
+
 # noinspection PyUnusedLocal
 @mock.patch('thelper.utils.get_available_cuda_devices', return_value=[])    # no device available
 @mock.patch('torch.load', return_value={'version': thelper.__version__})
