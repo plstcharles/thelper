@@ -686,12 +686,12 @@ class ExternalMetric(Metric, ClassNamesHandler):
                 return
             assert self.target_name is None or self.target_idx is not None, \
                 f"could not map target name '{self.target_name}' to target idx, missing class list"
-            assert pred.dim() == 2 or target.dim() == 1, "current ext metric implementation only supports batched 1D outputs"
             assert pred.shape[0] == target.shape[0], "prediction/gt tensors batch size mismatch"
             if self.target_idx is not None:
-                pred_label = pred.topk(1, dim=1)[1].view(pred.shape[0])
                 y_true, y_pred = [], []
                 if self.metric_type == "classif_best":
+                    assert pred.dim() == 2 and target.dim() == 1, "current ext metric implementation only supports batched 1D outputs"
+                    pred_label = pred.topk(1, dim=1)[1].view(pred.shape[0])
                     assert pred_label.numel() == target.numel(), "pred/target classification element count mismatch"
                     must_keep = [y_pred == self.target_idx or y_true == self.target_idx for y_pred, y_true in zip(pred_label, target)]
                     for idx, keep in enumerate(must_keep):
@@ -702,9 +702,14 @@ class ExternalMetric(Metric, ClassNamesHandler):
                     if self.force_softmax:
                         with torch.no_grad():
                             pred = torch.nn.functional.softmax(pred, dim=1)
-                    for idx, tgt in enumerate(target):
-                        y_true.append(tgt.item() == self.target_idx)
-                        y_pred.append(pred[idx, self.target_idx].item())
+                    if pred.dim() == 2 and target.dim() == 1:
+                        for idx, tgt in enumerate(target):
+                            y_true.append(tgt.item() == self.target_idx)
+                            y_pred.append(pred[idx, self.target_idx].item())
+                    else:
+                        assert pred.dim() > 2 and target.dim() == pred.dim() - 1 and pred.shape[2:] == target.shape[1:]
+                        y_true = (target.reshape(-1) == self.target_idx).cpu().numpy()
+                        y_pred = pred[:, self.target_idx, ...].reshape(-1).cpu().numpy()
                 self.target[curr_idx] = y_true
                 self.pred[curr_idx] = y_pred
             else:
