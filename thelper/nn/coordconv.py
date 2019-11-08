@@ -122,3 +122,13 @@ def swap_coordconv_layers(module, centered=True, normalized=True,
             elif isinstance(m, (torch.nn.Module, collections.OrderedDict)):
                 setattr(module, attrib, swap_coordconv_layers(m, **coordconv_params))
     return module
+
+
+def make_conv2d(*args, coordconv=False, centered=True, normalized=True,
+                noise=None, radius_channel=False, scale=None, **kwargs):
+    """Creates a 2D convolution layer with optional CoordConv support."""
+    if coordconv:
+        return CoordConv2d(*args, centered=centered, normalized=normalized, noise=noise,
+                           radius_channel=radius_channel, scale=scale, **kwargs)
+    else:
+        return torch.nn.Conv2d(*args, **kwargs)
