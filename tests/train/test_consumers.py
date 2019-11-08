@@ -3,6 +3,8 @@ import torch
 
 import thelper
 
+test_save_path = ".pytest_cache"
+
 
 def test_classif_logger():
     # classification results are expected in 1D format; lets build some dummy data...
@@ -35,7 +37,7 @@ def test_classif_logger():
         preds.append(torch.rand((curr_batch_size, class_count)))
         consumer.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                         {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                        None, iter_idx, iter_count, 0, 1)
+                        None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += curr_batch_size
     report = consumer.report()
     assert report is not None and isinstance(report, str)
@@ -49,7 +51,7 @@ def test_classif_logger():
     for iter_idx in range(iter_count):
         consumer.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                         {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]},
-                        None, iter_idx, iter_count, 0, 1)
+                        None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += targets[iter_idx].shape[0]
     assert consumer.report() == report
 
@@ -81,7 +83,7 @@ def test_classif_report():
         preds.append(torch.rand((curr_batch_size, class_count)))
         consumer.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                         {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                        None, iter_idx, iter_count, 0, 1)
+                        None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += curr_batch_size
     report = consumer.report()
     assert report is not None and isinstance(report, str)
@@ -92,7 +94,7 @@ def test_classif_report():
     for iter_idx in range(iter_count):
         consumer.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                         {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]},
-                        None, iter_idx, iter_count, 0, 1)
+                        None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += targets[iter_idx].shape[0]
     assert consumer.report() == report
 
@@ -125,7 +127,7 @@ def test_confmat():
         preds.append(torch.rand((curr_batch_size, class_count)))
         consumer.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                         {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                        None, iter_idx, iter_count, 0, 1)
+                        None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += curr_batch_size
     report = consumer.report()
     assert report is not None and isinstance(report, str)
@@ -139,6 +141,6 @@ def test_confmat():
     for iter_idx in range(iter_count):
         consumer.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                         {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]},
-                        None, iter_idx, iter_count, 0, 1)
+                        None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += targets[iter_idx].shape[0]
     assert consumer.report() == report

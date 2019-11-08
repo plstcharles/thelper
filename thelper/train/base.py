@@ -460,8 +460,8 @@ class Trainer:
             model.train()
             if hasattr(self.train_loader, "set_epoch") and callable(self.train_loader.set_epoch):
                 self.train_loader.set_epoch(self.current_epoch)
-            latest_loss = self.train_epoch(model, self.current_epoch, self.devices,
-                                           loss, optimizer, self.train_loader, self.train_metrics)
+            latest_loss = self.train_epoch(model, self.current_epoch, self.devices, loss, optimizer,
+                                           self.train_loader, self.train_metrics, self.output_paths["train"])
             self._write_epoch_output(self.current_epoch, self.train_metrics,
                                      self.writers["train"], self.output_paths["train"],
                                      loss=latest_loss, optimizer=optimizer)
@@ -477,7 +477,8 @@ class Trainer:
                     metric.reset()  # force reset here, we always evaluate from a clean state
                 if hasattr(self.valid_loader, "set_epoch") and callable(self.valid_loader.set_epoch):
                     self.valid_loader.set_epoch(self.current_epoch)
-                self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader, self.valid_metrics)
+                self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
+                                self.valid_metrics, self.output_paths["valid"])
                 self._write_epoch_output(self.current_epoch, self.valid_metrics,
                                          self.writers["valid"], self.output_paths["valid"])
                 valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()
@@ -535,7 +536,8 @@ class Trainer:
                 metric.reset()  # force reset here, we always evaluate from a clean state
             if hasattr(self.test_loader, "set_epoch") and callable(self.test_loader.set_epoch):
                 self.test_loader.set_epoch(self.current_epoch)
-            self.eval_epoch(model, self.current_epoch, self.devices, self.test_loader, self.test_metrics)
+            self.eval_epoch(model, self.current_epoch, self.devices, self.test_loader,
+                            self.test_metrics, self.output_paths["test"])
             self._write_epoch_output(self.current_epoch, self.test_metrics,
                                      self.writers["test"], self.output_paths["test"], use_suffix=False)
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()
@@ -550,7 +552,8 @@ class Trainer:
                 metric.reset()  # force reset here, we always evaluate from a clean state
             if hasattr(self.valid_loader, "set_epoch") and callable(self.valid_loader.set_epoch):
                 self.valid_loader.set_epoch(self.current_epoch)
-            self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader, self.valid_metrics)
+            self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
+                            self.valid_metrics, self.output_paths["valid"])
             self._write_epoch_output(self.current_epoch, self.valid_metrics,
                                      self.writers["valid"], self.output_paths["valid"], use_suffix=False)
             valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()
@@ -570,7 +573,7 @@ class Trainer:
         return self.outputs
 
     @abstractmethod
-    def train_epoch(self, model, epoch, dev, loss, optimizer, loader, metrics):
+    def train_epoch(self, model, epoch, dev, loss, optimizer, loader, metrics, output_path):
         """Trains the model for a single epoch using the provided objects.
 
         Args:
@@ -581,11 +584,12 @@ class Trainer:
             optimizer: the optimizer used for back propagation.
             loader: the data loader used to get transformed training samples.
             metrics: the dictionary of metrics/consumers to update every iteration.
+            output_path: directory where output files should be written, if necessary.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def eval_epoch(self, model, epoch, dev, loader, metrics):
+    def eval_epoch(self, model, epoch, dev, loader, metrics, output_path):
         """Evaluates the model using the provided objects.
 
         Args:
@@ -594,9 +598,11 @@ class Trainer:
             dev: the target device that tensors should be uploaded to.
             loader: the data loader used to get transformed valid/test samples.
             metrics: the dictionary of metrics/consumers to update every iteration.
+            output_path: directory where output files should be written, if necessary.
         """
         raise NotImplementedError
 
+    # noinspection PyUnusedLocal
     def _iter_logger_callback(self,         # see `thelper.typedefs.IterCallbackParams` for more info
                               task,         # type: thelper.tasks.utils.Task
                               input,        # type: thelper.typedefs.InputType
@@ -608,9 +614,12 @@ class Trainer:
                               max_iters,    # type: int
                               epoch_idx,    # type: int
                               max_epochs,   # type: int
+                              output_path,  # type: AnyStr
+                              # note: kwargs must contain two args here: 'set_name' and 'writers'
                               **kwargs,     # type: Any
                               ):            # type: (...) -> None
         """Receives callback data for logging loss/monitored metric values each training/eval iteration."""
+        # NOTE: THIS FUNCTION IS RESPONSIBLE FOR INCREASING THE INTERNAL ITERATION COUNTER.
         set_name = thelper.utils.get_key("set_name", kwargs, "missing set name in iter logger args")
         assert set_name in ["train", "valid", "test"], "unrecognized iter logger set name"
         metrics = self.train_metrics if set_name == "train" else self.valid_metrics if set_name == "valid" \

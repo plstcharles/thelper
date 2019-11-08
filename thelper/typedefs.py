@@ -78,7 +78,7 @@ if TYPE_CHECKING:
     MultiLoaderType = Tuple[Optional[LoaderType], Optional[LoaderType], Optional[LoaderType]]
 
     IterCallbackType = Callable[[Task, InputType, AnyPredictionType, AnyTargetType,
-                                SampleType, Optional[float], int, int, int, int], None]
+                                SampleType, Optional[float], int, int, int, int, AnyStr], None]
 else:
     IterCallbackParams = [
         "task",         # the task object that defines class names, min/max target values, etc.
@@ -91,4 +91,5 @@ else:
         "max_iters",    # the total number of iterations in the current epoch
         "epoch_idx",    # the index of the current epoch
         "max_epochs",   # the total (maximum) number of epochs the model should be trained for
+        "output_path",  # directory where output files should be written, if necessary
     ]

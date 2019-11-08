@@ -160,19 +160,20 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         else:
             self.target_idx = None
 
-    def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
-               task,        # type: thelper.tasks.utils.Task
-               input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.ClassificationPredictionType
-               target,      # type: thelper.typedefs.ClassificationTargetType
-               sample,      # type: thelper.typedefs.SampleType
-               loss,        # type: Optional[float]
-               iter_idx,    # type: int
-               max_iters,   # type: int
-               epoch_idx,   # type: int
-               max_epochs,  # type: int
-               **kwargs,    # type: Any
-               ):           # type: (...) -> None
+    def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
+               task,         # type: thelper.tasks.utils.Task
+               input,        # type: thelper.typedefs.InputType
+               pred,         # type: thelper.typedefs.ClassificationPredictionType
+               target,       # type: thelper.typedefs.ClassificationTargetType
+               sample,       # type: thelper.typedefs.SampleType
+               loss,         # type: Optional[float]
+               iter_idx,     # type: int
+               max_iters,    # type: int
+               epoch_idx,    # type: int
+               max_epochs,   # type: int
+               output_path,  # type: AnyStr
+               **kwargs,     # type: Any
+               ):            # type: (...) -> None
         """Receives the latest predictions and target values from the training session.
 
         The exact signature of this function should match the one of the callbacks defined in
@@ -325,19 +326,20 @@ class ClassifReport(PredictionConsumer, ClassNamesHandler, FormatHandler):
                f"(class_names={repr(self.class_names)}, sample_weight={repr(self.sample_weight)}, " + \
                f"digits={repr(self.digits)})"
 
-    def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
-               task,        # type: thelper.tasks.utils.Task
-               input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.ClassificationPredictionType
-               target,      # type: thelper.typedefs.ClassificationTargetType
-               sample,      # type: thelper.typedefs.SampleType
-               loss,        # type: Optional[float]
-               iter_idx,    # type: int
-               max_iters,   # type: int
-               epoch_idx,   # type: int
-               max_epochs,  # type: int
-               **kwargs,    # type: Any
-               ):           # type: (...) -> None
+    def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
+               task,         # type: thelper.tasks.utils.Task
+               input,        # type: thelper.typedefs.InputType
+               pred,         # type: thelper.typedefs.ClassificationPredictionType
+               target,       # type: thelper.typedefs.ClassificationTargetType
+               sample,       # type: thelper.typedefs.SampleType
+               loss,         # type: Optional[float]
+               iter_idx,     # type: int
+               max_iters,    # type: int
+               epoch_idx,    # type: int
+               max_epochs,   # type: int
+               output_path,  # type: AnyStr
+               **kwargs,     # type: Any
+               ):            # type: (...) -> None
         """Receives the latest predictions and target values from the training session.
 
         The exact signature of this function should match the one of the callbacks defined in
@@ -499,19 +501,20 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         else:
             self.target_idx = None
 
-    def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
-               task,        # type: thelper.tasks.utils.Task
-               input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.DetectionPredictionType
-               target,      # type: thelper.typedefs.DetectionTargetType
-               sample,      # type: thelper.typedefs.SampleType
-               loss,        # type: Optional[float]
-               iter_idx,    # type: int
-               max_iters,   # type: int
-               epoch_idx,   # type: int
-               max_epochs,  # type: int
-               **kwargs,    # type: Any
-               ):           # type: (...) -> None
+    def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
+               task,         # type: thelper.tasks.utils.Task
+               input,        # type: thelper.typedefs.InputType
+               pred,         # type: thelper.typedefs.DetectionPredictionType
+               target,       # type: thelper.typedefs.DetectionTargetType
+               sample,       # type: thelper.typedefs.SampleType
+               loss,         # type: Optional[float]
+               iter_idx,     # type: int
+               max_iters,    # type: int
+               epoch_idx,    # type: int
+               max_epochs,   # type: int
+               output_path,  # type: AnyStr
+               **kwargs,     # type: Any
+               ):            # type: (...) -> None
         """Receives the latest predictions and target values from the training session.
 
         The exact signature of this function should match the one of the callbacks defined in
@@ -808,19 +811,20 @@ class ConfusionMatrix(PredictionConsumer, ClassNamesHandler):
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
             f"(class_names={repr(self.class_names)}, draw_normalized={repr(self.draw_normalized)})"
 
-    def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
-               task,        # type: thelper.tasks.utils.Task
-               input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.ClassificationPredictionType
-               target,      # type: thelper.typedefs.ClassificationTargetType
-               sample,      # type: thelper.typedefs.SampleType
-               loss,        # type: Optional[float]
-               iter_idx,    # type: int
-               max_iters,   # type: int
-               epoch_idx,   # type: int
-               max_epochs,  # type: int
-               **kwargs,    # type: Any
-               ):           # type: (...) -> None
+    def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
+               task,         # type: thelper.tasks.utils.Task
+               input,        # type: thelper.typedefs.InputType
+               pred,         # type: thelper.typedefs.ClassificationPredictionType
+               target,       # type: thelper.typedefs.ClassificationTargetType
+               sample,       # type: thelper.typedefs.SampleType
+               loss,         # type: Optional[float]
+               iter_idx,     # type: int
+               max_iters,    # type: int
+               epoch_idx,    # type: int
+               max_epochs,   # type: int
+               output_path,  # type: AnyStr
+               **kwargs,     # type: Any
+               ):            # type: (...) -> None
         """Receives the latest predictions and target values from the training session.
 
         The exact signature of this function should match the one of the callbacks defined in
@@ -962,11 +966,12 @@ def _draw_wrapper(task,         # type: thelper.tasks.utils.Task
                   max_iters,    # type: int
                   epoch_idx,    # type: int
                   max_epochs,   # type: int
-                  # extra params added by callback interface below
-                  output_path,  # type: str
+                  output_path,  # type: AnyStr
+                  # extra params added by display callback interface below
                   save,         # type: bool
                   # all extra params will be forwarded to the display call
                   **kwargs,     # type: Any
+                  # see `thelper.typedefs.IterCallbackParams` for more info
                   ):            # type: (...) -> None
     """Wrapper to :func:`thelper.draw.draw` used as a callback entrypoint for trainers."""
     res = thelper.draw.draw(task=task, input=input, pred=pred, target=target, **kwargs)

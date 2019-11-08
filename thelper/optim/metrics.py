@@ -8,7 +8,7 @@ session. For more information on this, refer to :class:`thelper.train.base.Train
 
 import logging
 from abc import abstractmethod
-from typing import Any, Optional  # noqa: F401
+from typing import Any, AnyStr, Optional  # noqa: F401
 
 import numpy as np
 import sklearn.metrics
@@ -40,19 +40,20 @@ class Metric(PredictionConsumer):
     """Possible value of the ``goal`` attribute of this metric."""
 
     @abstractmethod
-    def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
-               task,        # type: thelper.tasks.utils.Task
-               input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.AnyPredictionType
-               target,      # type: thelper.typedefs.AnyTargetType
-               sample,      # type: thelper.typedefs.SampleType
-               loss,        # type: Optional[float]
-               iter_idx,    # type: int
-               max_iters,   # type: int
-               epoch_idx,   # type: int
-               max_epochs,  # type: int
-               **kwargs,    # type: Any
-               ):           # type: (...) -> None
+    def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
+               task,         # type: thelper.tasks.utils.Task
+               input,        # type: thelper.typedefs.InputType
+               pred,         # type: thelper.typedefs.AnyPredictionType
+               target,       # type: thelper.typedefs.AnyTargetType
+               sample,       # type: thelper.typedefs.SampleType
+               loss,         # type: Optional[float]
+               iter_idx,     # type: int
+               max_iters,    # type: int
+               epoch_idx,    # type: int
+               max_epochs,   # type: int
+               output_path,  # type: AnyStr
+               **kwargs,     # type: Any
+               ):            # type: (...) -> None
         """Receives the latest prediction and groundtruth tensors from the training session.
 
         The data given here will be "consumed" internally, but it should NOT be modified. For example,
@@ -167,19 +168,20 @@ class Accuracy(Metric):
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
             f"(top_k={repr(self.top_k)}, max_win_size={repr(self.max_win_size)})"
 
-    def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
-               task,        # type: thelper.tasks.utils.Task
-               input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.ClassificationPredictionType
-               target,      # type: thelper.typedefs.ClassificationTargetType
-               sample,      # type: thelper.typedefs.SampleType
-               loss,        # type: Optional[float]
-               iter_idx,    # type: int
-               max_iters,   # type: int
-               epoch_idx,   # type: int
-               max_epochs,  # type: int
-               **kwargs,    # type: Any
-               ):           # type: (...) -> None
+    def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
+               task,         # type: thelper.tasks.utils.Task
+               input,        # type: thelper.typedefs.InputType
+               pred,         # type: thelper.typedefs.ClassificationPredictionType
+               target,       # type: thelper.typedefs.ClassificationTargetType
+               sample,       # type: thelper.typedefs.SampleType
+               loss,         # type: Optional[float]
+               iter_idx,     # type: int
+               max_iters,    # type: int
+               epoch_idx,    # type: int
+               max_epochs,   # type: int
+               output_path,  # type: AnyStr
+               **kwargs,     # type: Any
+               ):            # type: (...) -> None
         """Receives the latest class prediction and groundtruth labels from the training session.
 
         This function computes and accumulate the number of correct and total predictions in
@@ -302,19 +304,20 @@ class MeanAbsoluteError(Metric):
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
             f"(reduction={repr(self.reduction)}, max_win_size={repr(self.max_win_size)})"
 
-    def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
-               task,        # type: thelper.tasks.utils.Task
-               input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.ClassificationPredictionType
-               target,      # type: thelper.typedefs.ClassificationTargetType
-               sample,      # type: thelper.typedefs.SampleType
-               loss,        # type: Optional[float]
-               iter_idx,    # type: int
-               max_iters,   # type: int
-               epoch_idx,   # type: int
-               max_epochs,  # type: int
-               **kwargs,    # type: Any
-               ):           # type: (...) -> None
+    def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
+               task,         # type: thelper.tasks.utils.Task
+               input,        # type: thelper.typedefs.InputType
+               pred,         # type: thelper.typedefs.ClassificationPredictionType
+               target,       # type: thelper.typedefs.ClassificationTargetType
+               sample,       # type: thelper.typedefs.SampleType
+               loss,         # type: Optional[float]
+               iter_idx,     # type: int
+               max_iters,    # type: int
+               epoch_idx,    # type: int
+               max_epochs,   # type: int
+               output_path,  # type: AnyStr
+               **kwargs,     # type: Any
+               ):            # type: (...) -> None
         """Receives the latest predictions and target values from the training session.
 
         This function computes and accumulates the L1 distance between predictions and targets in the
@@ -429,19 +432,20 @@ class MeanSquaredError(Metric):
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
             f"(reduction={repr(self.reduction)}, max_win_size={repr(self.max_win_size)})"
 
-    def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
-               task,        # type: thelper.tasks.utils.Task
-               input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.ClassificationPredictionType
-               target,      # type: thelper.typedefs.ClassificationTargetType
-               sample,      # type: thelper.typedefs.SampleType
-               loss,        # type: Optional[float]
-               iter_idx,    # type: int
-               max_iters,   # type: int
-               epoch_idx,   # type: int
-               max_epochs,  # type: int
-               **kwargs,    # type: Any
-               ):           # type: (...) -> None
+    def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
+               task,         # type: thelper.tasks.utils.Task
+               input,        # type: thelper.typedefs.InputType
+               pred,         # type: thelper.typedefs.ClassificationPredictionType
+               target,       # type: thelper.typedefs.ClassificationTargetType
+               sample,       # type: thelper.typedefs.SampleType
+               loss,         # type: Optional[float]
+               iter_idx,     # type: int
+               max_iters,    # type: int
+               epoch_idx,    # type: int
+               max_epochs,   # type: int
+               output_path,  # type: AnyStr
+               **kwargs,     # type: Any
+               ):            # type: (...) -> None
         """Receives the latest predictions and target values from the training session.
 
         This function computes and accumulates the mean squared error between predictions and targets in
@@ -642,19 +646,20 @@ class ExternalMetric(Metric, ClassNamesHandler):
             else:
                 self.target_idx = None
 
-    def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
-               task,        # type: thelper.tasks.utils.Task
-               input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.ClassificationTargetType
-               target,      # type: thelper.typedefs.ClassificationPredictionType
-               sample,      # type: thelper.typedefs.SampleType
-               loss,        # type: Optional[float]
-               iter_idx,    # type: int
-               max_iters,   # type: int
-               epoch_idx,   # type: int
-               max_epochs,  # type: int
-               **kwargs,    # type: Any
-               ):           # type: (...) -> None
+    def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
+               task,         # type: thelper.tasks.utils.Task
+               input,        # type: thelper.typedefs.InputType
+               pred,         # type: thelper.typedefs.ClassificationTargetType
+               target,       # type: thelper.typedefs.ClassificationPredictionType
+               sample,       # type: thelper.typedefs.SampleType
+               loss,         # type: Optional[float]
+               iter_idx,     # type: int
+               max_iters,    # type: int
+               epoch_idx,    # type: int
+               max_epochs,   # type: int
+               output_path,  # type: AnyStr
+               **kwargs,     # type: Any
+               ):            # type: (...) -> None
         """Receives the latest predictions and target values from the training session.
 
         The handling of the data received here will depend on the current metric's handling mode.
@@ -880,19 +885,20 @@ class ROCCurve(Metric, ClassNamesHandler):
         else:
             self.target_idx = None
 
-    def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
-               task,        # type: thelper.tasks.utils.Task
-               input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.ClassificationPredictionType
-               target,      # type: thelper.typedefs.ClassificationTargetType
-               sample,      # type: thelper.typedefs.SampleType
-               loss,        # type: Optional[float]
-               iter_idx,    # type: int
-               max_iters,   # type: int
-               epoch_idx,   # type: int
-               max_epochs,  # type: int
-               **kwargs,    # type: Any
-               ):           # type: (...) -> None
+    def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
+               task,         # type: thelper.tasks.utils.Task
+               input,        # type: thelper.typedefs.InputType
+               pred,         # type: thelper.typedefs.ClassificationPredictionType
+               target,       # type: thelper.typedefs.ClassificationTargetType
+               sample,       # type: thelper.typedefs.SampleType
+               loss,         # type: Optional[float]
+               iter_idx,     # type: int
+               max_iters,    # type: int
+               epoch_idx,    # type: int
+               max_epochs,   # type: int
+               output_path,  # type: AnyStr
+               **kwargs,     # type: Any
+               ):            # type: (...) -> None
         """Receives the latest predictions and target values from the training session.
 
         The exact signature of this function should match the one of the callbacks defined in
@@ -1050,19 +1056,20 @@ class PSNR(Metric):
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
             f"(data_range={repr(self.data_range)}, max_win_size={repr(self.max_win_size)})"
 
-    def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
-               task,        # type: thelper.tasks.utils.Task
-               input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.ClassificationPredictionType
-               target,      # type: thelper.typedefs.ClassificationTargetType
-               sample,      # type: thelper.typedefs.SampleType
-               loss,        # type: Optional[float]
-               iter_idx,    # type: int
-               max_iters,   # type: int
-               epoch_idx,   # type: int
-               max_epochs,  # type: int
-               **kwargs,    # type: Any
-               ):           # type: (...) -> None
+    def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
+               task,         # type: thelper.tasks.utils.Task
+               input,        # type: thelper.typedefs.InputType
+               pred,         # type: thelper.typedefs.ClassificationPredictionType
+               target,       # type: thelper.typedefs.ClassificationTargetType
+               sample,       # type: thelper.typedefs.SampleType
+               loss,         # type: Optional[float]
+               iter_idx,     # type: int
+               max_iters,    # type: int
+               epoch_idx,    # type: int
+               max_epochs,   # type: int
+               output_path,  # type: AnyStr
+               **kwargs,     # type: Any
+               ):            # type: (...) -> None
         """Receives the latest predictions and target values from the training session.
 
         The exact signature of this function should match the one of the callbacks defined in
@@ -1165,18 +1172,19 @@ class AveragePrecision(Metric):
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
             f"(target_class={repr(self.target_class)}, max_win_size={repr(self.max_win_size)})"
 
-    def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
-               task,        # type: thelper.tasks.utils.Task
-               input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.DetectionPredictionType
-               target,      # type: thelper.typedefs.DetectionTargetType
-               sample,      # type: thelper.typedefs.SampleType
-               loss,        # type: Optional[float]
-               iter_idx,    # type: int
-               max_iters,   # type: int
-               epoch_idx,   # type: int
-               max_epochs,  # type: int
-               **kwargs):   # type: (...) -> None
+    def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
+               task,         # type: thelper.tasks.utils.Task
+               input,        # type: thelper.typedefs.InputType
+               pred,         # type: thelper.typedefs.DetectionPredictionType
+               target,       # type: thelper.typedefs.DetectionTargetType
+               sample,       # type: thelper.typedefs.SampleType
+               loss,         # type: Optional[float]
+               iter_idx,     # type: int
+               max_iters,    # type: int
+               epoch_idx,    # type: int
+               max_epochs,   # type: int
+               output_path,  # type: AnyStr
+               **kwargs):    # type: (...) -> None
         """Receives the latest bbox predictions and targets from the training session.
 
         The exact signature of this function should match the one of the callbacks defined in

@@ -3,6 +3,8 @@ import torch
 
 import thelper
 
+test_save_path = ".pytest_cache"
+
 
 def test_accuracy_val():
     batch_size = 32
@@ -18,14 +20,16 @@ def test_accuracy_val():
         metric.update(task=None, input=None,
                       pred=torch.from_numpy(preds[iter_idx * batch_size:(iter_idx + 1) * batch_size]),
                       target=torch.from_numpy(targets[iter_idx * batch_size:(iter_idx + 1) * batch_size]),
-                      sample=None, loss=None, iter_idx=iter_idx, max_iters=iter_count, epoch_idx=0, max_epochs=1)
+                      sample=None, loss=None, iter_idx=iter_idx, max_iters=iter_count,
+                      epoch_idx=0, max_epochs=1, output_path=test_save_path)
     assert np.isclose(metric.eval(), (nb_correct / target_count) * 100)
     # try looping over, max window should be just the right size
     for iter_idx in range(iter_count):
         metric.update(task=None, input=None,
                       pred=torch.from_numpy(preds[iter_idx * batch_size:(iter_idx + 1) * batch_size]),
                       target=torch.from_numpy(targets[iter_idx * batch_size:(iter_idx + 1) * batch_size]),
-                      sample=None, loss=None, iter_idx=iter_idx, max_iters=iter_count, epoch_idx=0, max_epochs=1)
+                      sample=None, loss=None, iter_idx=iter_idx, max_iters=iter_count,
+                      epoch_idx=0, max_epochs=1, output_path=test_save_path)
     assert np.isclose(metric.eval(), (nb_correct / target_count) * 100)
 
 
@@ -60,7 +64,7 @@ def test_accuracy_1d(mocker):
         preds.append(torch.rand((curr_batch_size, class_count)))
         metric.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                       {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                      None, iter_idx, iter_count, 0, 1)
+                      None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += curr_batch_size
     res = metric.eval()
     assert res is not None and isinstance(res, float) and 0 <= res <= 100
@@ -70,7 +74,7 @@ def test_accuracy_1d(mocker):
     for iter_idx in range(iter_count):
         metric.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                       {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]},
-                      None, iter_idx, iter_count, 0, 1)
+                      None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += targets[iter_idx].shape[0]
     assert metric.eval() == res
 
@@ -107,7 +111,7 @@ def test_accuracy_nd(mocker):
         preds.append(torch.rand((curr_batch_size, class_count, *output_shape)))
         metric.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                       {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                      None, iter_idx, iter_count, 0, 1)
+                      None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += curr_batch_size
     res = metric.eval()
     assert res is not None and isinstance(res, float) and 0 <= res <= 100
@@ -117,7 +121,7 @@ def test_accuracy_nd(mocker):
     for iter_idx in range(iter_count):
         metric.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                       {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]},
-                      None, iter_idx, iter_count, 0, 1)
+                      None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += targets[iter_idx].shape[0]
     assert metric.eval() == res
 
@@ -150,10 +154,10 @@ def test_mae_mse(mocker):
         preds.append(torch.randn((curr_batch_size, )))
         mae.update(None, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                    {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                   None, iter_idx, iter_count, 0, 1)
+                   None, iter_idx, iter_count, 0, 1, test_save_path)
         mse.update(None, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                    {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                   None, iter_idx, iter_count, 0, 1)
+                   None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += curr_batch_size
     mae_res, mse_res = mae.eval(), mse.eval()
     assert mae_res is not None and isinstance(mae_res, float) and mae_res >= 0
@@ -167,10 +171,10 @@ def test_mae_mse(mocker):
     for iter_idx in range(iter_count):
         mae.update(None, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                    {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]},
-                   None, iter_idx, iter_count, 0, 1)
+                   None, iter_idx, iter_count, 0, 1, test_save_path)
         mse.update(None, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                    {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]},
-                   None, iter_idx, iter_count, 0, 1)
+                   None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += targets[iter_idx].shape[0]
     assert mae.eval() == mae_res
     assert mse.eval() == mse_res
@@ -221,10 +225,10 @@ def test_external_metrics():
         preds.append(torch.rand((curr_batch_size, class_count)))
         metric_f1.update(task, None, preds[iter_idx], targets[iter_idx],
                          {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                         None, iter_idx, iter_count, 0, 1)
+                         None, iter_idx, iter_count, 0, 1, test_save_path)
         metric_auc.update(task, None, preds[iter_idx], targets[iter_idx],
                           {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                          None, iter_idx, iter_count, 0, 1)
+                          None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += curr_batch_size
     f1_res, auc_res = metric_f1.eval(), metric_auc.eval()
     assert f1_res is not None and isinstance(f1_res, float) and 0 <= f1_res <= 1
@@ -234,10 +238,10 @@ def test_external_metrics():
     for iter_idx in range(iter_count):
         metric_f1.update(task, None, preds[iter_idx], targets[iter_idx],
                          {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]},
-                         None, iter_idx, iter_count, 0, 1)
+                         None, iter_idx, iter_count, 0, 1, test_save_path)
         metric_auc.update(task, None, preds[iter_idx], targets[iter_idx],
                           {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]},
-                          None, iter_idx, iter_count, 0, 1)
+                          None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += targets[iter_idx].shape[0]
     assert metric_f1.eval() == f1_res
     assert metric_auc.eval() == auc_res
@@ -292,16 +296,16 @@ def test_roccurve():
         preds.append(torch.rand((curr_batch_size, class_count)))
         metric_tpr.update(task, None, preds[iter_idx], targets[iter_idx],
                           {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                          None, iter_idx, iter_count, 0, 1)
+                          None, iter_idx, iter_count, 0, 1, test_save_path)
         metric_fpr.update(task, None, preds[iter_idx], targets[iter_idx],
                           {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                          None, iter_idx, iter_count, 0, 1)
+                          None, iter_idx, iter_count, 0, 1, test_save_path)
         metric_auc.update(task, None, preds[iter_idx], targets[iter_idx],
                           {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                          None, iter_idx, iter_count, 0, 1)
+                          None, iter_idx, iter_count, 0, 1, test_save_path)
         metric_ref.update(task, None, preds[iter_idx], targets[iter_idx],
                           {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                          None, iter_idx, iter_count, 0, 1)
+                          None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += curr_batch_size
     tpr_res, fpr_res, auc_res, ref_res = metric_tpr.eval(), metric_fpr.eval(), metric_auc.eval(), metric_ref.eval()
 
@@ -317,13 +321,13 @@ def test_roccurve():
     for iter_idx in range(iter_count):
         metric_tpr.update(task, None, preds[iter_idx], targets[iter_idx],
                           {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                          None, iter_idx, iter_count, 0, 1)
+                          None, iter_idx, iter_count, 0, 1, test_save_path)
         metric_fpr.update(task, None, preds[iter_idx], targets[iter_idx],
                           {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                          None, iter_idx, iter_count, 0, 1)
+                          None, iter_idx, iter_count, 0, 1, test_save_path)
         metric_auc.update(task, None, preds[iter_idx], targets[iter_idx],
                           {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                          None, iter_idx, iter_count, 0, 1)
+                          None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += targets[iter_idx].shape[0]
     assert metric_tpr.eval() == tpr_res
     assert metric_fpr.eval() == fpr_res
@@ -353,7 +357,7 @@ def test_psnr(mocker):
         preds.append(torch.rand((curr_batch_size,)))
         metric_psnr.update(None, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                            {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
-                           None, iter_idx, iter_count, 0, 1)
+                           None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += curr_batch_size
     psnr_res = metric_psnr.eval()
     assert psnr_res is not None and isinstance(psnr_res, float) and psnr_res >= 0
@@ -363,6 +367,6 @@ def test_psnr(mocker):
     for iter_idx in range(iter_count):
         metric_psnr.update(None, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
                            {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]},
-                           None, iter_idx, iter_count, 0, 1)
+                           None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += targets[iter_idx].shape[0]
     assert metric_psnr.eval() == psnr_res

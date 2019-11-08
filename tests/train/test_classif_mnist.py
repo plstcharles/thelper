@@ -1,7 +1,7 @@
 import copy
 import os
 import shutil
-from typing import Any, Optional  # noqa: F401
+from typing import Any, AnyStr, Optional  # noqa: F401
 
 import numpy as np
 import pytest
@@ -184,6 +184,7 @@ def test_outputs(config):
                 assert compare_dictionaries(backup_config, override_config) == ""
 
 
+# noinspection PyUnusedLocal
 def callback(task,          # type: thelper.tasks.utils.Task
              input,         # type: thelper.typedefs.InputType
              pred,          # type: thelper.typedefs.AnyPredictionType
@@ -194,7 +195,9 @@ def callback(task,          # type: thelper.tasks.utils.Task
              max_iters,     # type: int
              epoch_idx,     # type: int
              max_epochs,    # type: int
+             output_path,   # type: AnyStr
              **kwargs,      # type: Any
+             # see `thelper.typedefs.IterCallbackParams` for more info
              ):             # type: (...) -> None
     assert isinstance(task, thelper.tasks.Classification)
     assert isinstance(input, torch.Tensor)

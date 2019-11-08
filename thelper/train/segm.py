@@ -66,7 +66,7 @@ class ImageSegmTrainer(Trainer):
                 label_map = label_map.long()  # long instead of bytes to support large/negative values for dontcare
         return input_val, label_map
 
-    def train_epoch(self, model, epoch, dev, loss, optimizer, loader, metrics):
+    def train_epoch(self, model, epoch, dev, loss, optimizer, loader, metrics, output_path):
         """Trains the model for a single epoch using the provided objects.
 
         Args:
@@ -77,6 +77,7 @@ class ImageSegmTrainer(Trainer):
             optimizer: the optimizer used for back propagation.
             loader: the data loader used to get transformed training samples.
             metrics: the dictionary of metrics/consumers to update every iteration.
+            output_path: directory where output files should be written, if necessary.
         """
         assert loss is not None, "missing loss function"
         assert optimizer is not None, "missing optimizer"
@@ -115,7 +116,7 @@ class ImageSegmTrainer(Trainer):
                         iter_pred = torch.cat((aug_pred.detach(), iter_pred), dim=0)
                 iter_loss /= augs_count
                 label_map = torch.cat(label_map, dim=0)
-            else:
+            else:  # this is the default (simple) case where we generate predictions without augmentations
                 iter_pred = model(self._move_tensor(input_val, dev))
                 if self.scale_preds:
                     iter_pred = torch.nn.functional.interpolate(iter_pred, size=input_val.shape[-2:], mode="bilinear")
@@ -128,13 +129,13 @@ class ImageSegmTrainer(Trainer):
             for metric in metrics.values():
                 metric.update(task=self.task, input=input_val, pred=iter_pred_cpu,
                               target=label_map_cpu, sample=sample, loss=iter_loss,
-                              iter_idx=idx, max_iters=epoch_size,
-                              epoch_idx=epoch, max_epochs=self.epochs)
+                              iter_idx=idx, max_iters=epoch_size, epoch_idx=epoch,
+                              max_epochs=self.epochs, output_path=output_path)
             epoch_loss += iter_loss
         epoch_loss /= epoch_size
         return epoch_loss
 
-    def eval_epoch(self, model, epoch, dev, loader, metrics):
+    def eval_epoch(self, model, epoch, dev, loader, metrics, output_path):
         """Evaluates the model using the provided objects.
 
         Args:
@@ -143,6 +144,7 @@ class ImageSegmTrainer(Trainer):
             dev: the target device that tensors should be uploaded to.
             loader: the data loader used to get transformed valid/test samples.
             metrics: the dictionary of metrics/consumers to update every iteration.
+            output_path: directory where output files should be written, if necessary.
         """
         assert loader, "no available data to load"
         assert isinstance(metrics, dict), "expect metrics as dict object"
@@ -170,7 +172,7 @@ class ImageSegmTrainer(Trainer):
                         else:
                             preds = torch.cat((preds, torch.unsqueeze(pred, 0)), 0)
                     pred = torch.mean(preds, dim=0)
-                else:
+                else:  # this is the default (simple) case where we generate predictions without augmentations
                     pred = model(self._move_tensor(input_val, dev))
                 if self.scale_preds:
                     pred = torch.nn.functional.interpolate(pred, size=input_val.shape[-2:], mode="bilinear")
@@ -179,4 +181,5 @@ class ImageSegmTrainer(Trainer):
                 for metric in metrics.values():
                     metric.update(task=self.task, input=input_val, pred=pred_cpu,
                                   target=label_map_cpu, sample=sample, loss=None, iter_idx=idx,
-                                  max_iters=epoch_size, epoch_idx=epoch, max_epochs=self.epochs)
+                                  max_iters=epoch_size, epoch_idx=epoch, max_epochs=self.epochs,
+                                  output_path=output_path)

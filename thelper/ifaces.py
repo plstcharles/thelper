@@ -40,19 +40,20 @@ class PredictionConsumer(ABC):
         pass
 
     @abstractmethod
-    def update(self,        # see `thelper.typedefs.IterCallbackParams` for more info
-               task,        # type: thelper.tasks.utils.Task
-               input,       # type: thelper.typedefs.InputType
-               pred,        # type: thelper.typedefs.AnyPredictionType
-               target,      # type: thelper.typedefs.AnyTargetType
-               sample,      # type: thelper.typedefs.SampleType
-               loss,        # type: Optional[float]
-               iter_idx,    # type: int
-               max_iters,   # type: int
-               epoch_idx,   # type: int
-               max_epochs,  # type: int
-               **kwargs,    # type: Any
-               ):           # type: (...) -> None
+    def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
+               task,         # type: thelper.tasks.utils.Task
+               input,        # type: thelper.typedefs.InputType
+               pred,         # type: thelper.typedefs.AnyPredictionType
+               target,       # type: thelper.typedefs.AnyTargetType
+               sample,       # type: thelper.typedefs.SampleType
+               loss,         # type: Optional[float]
+               iter_idx,     # type: int
+               max_iters,    # type: int
+               epoch_idx,    # type: int
+               max_epochs,   # type: int
+               output_path,  # type: AnyStr
+               **kwargs,     # type: Any
+               ):            # type: (...) -> None
         """Receives the latest prediction and groundtruth tensors from the training session.
 
         The data given here will be "consumed" internally, but it should NOT be modified. For example,
