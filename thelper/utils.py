@@ -30,7 +30,7 @@ import yaml
 import thelper.typedefs  # noqa: F401
 
 if TYPE_CHECKING:
-    from typing import Any, List, Optional, Type  # noqa: F401
+    from typing import Any, AnyStr, Callable, Dict, List, Optional, Type, Union  # noqa: F401
     from types import FunctionType  # noqa: F401
 
 logger = logging.getLogger(__name__)
@@ -677,21 +677,38 @@ def import_class(fullname):
     return getattr(module, class_name)
 
 
-def import_function(fullname, params=None):
-    # type: (str, Optional[thelper.typedefs.ConfigDict]) -> FunctionType
-    """General-purpose runtime function importer, with support for param binding.
+def import_function(func,           # type: Union[Callable, AnyStr, List, Dict]
+                    params=None     # type: Optional[thelper.typedefs.ConfigDict]
+                    ):              # type: (...) -> FunctionType
+    """General-purpose runtime function importer, with support for parameter binding.
 
     Args:
-        fullname: the fully qualified function name to be imported.
+        func: the fully qualified function name to be imported, or a dictionary with
+            two members (a ``type`` and optional ``params``), or a list of any of these.
         params: optional params dictionary to bind to the function call via functools.
+            If a dictionary of parameters is also provided in ``func``, both will be merged.
 
     Returns:
         The imported function, with optionally bound parameters.
     """
-    func = import_class(fullname)
-    if params is not None:
-        if not isinstance(params, dict):
-            raise AssertionError("unexpected params dict type")
+    assert isinstance(func, (str, dict, list)) or callable(func), "invalid target function type"
+    assert params is None or isinstance(params, dict), "invalid target function parameters"
+    params = {} if params is None else params
+    if isinstance(func, list):
+        def multi_caller(funcs, *args, **kwargs):
+            return [fn(*args, **kwargs) for fn in funcs]
+        return functools.partial(multi_caller, [import_function(fn, params) for fn in func])
+    if isinstance(func, dict):
+        errmsg = "dynamic function import via dictionary must provide 'type' and 'params' members"
+        fn_type = thelper.utils.get_key(["type", "func", "op", "name"], func, msg=errmsg)
+        fn_params = thelper.utils.get_key_def(["params", "param", "parameters", "kwargs"], func, None)
+        fn_params = {} if fn_params is None else fn_params
+        fn_params = {**params, **fn_params}
+        return import_function(fn_type, params=fn_params)
+    if isinstance(func, str):
+        func = import_class(func)
+    assert callable(func), f"unsupported function type ({type(func)})"
+    if params:
         return functools.partial(func, **params)
     return func
 
