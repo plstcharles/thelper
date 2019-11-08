@@ -155,6 +155,10 @@ def create_loss_fn(config, model, loader=None, uploader=None):
                 loss_params[ignore_index_param_name] = model.task.class_indices[ignore_index_label_name]
             else:
                 loss_params[ignore_index_param_name] = model.task.dontcare
+            if loss_params[ignore_index_param_name] is None:
+                # some loss functions dont actually accept 'None' as the dontcare value (e.g. cross entropy loss)
+                # ... switch back to the default value in that case
+                loss_params[ignore_index_param_name] = loss_sig.parameters[ignore_index_param_name].default
     if weight_param_name in loss_params:
         loss_params[weight_param_name] = converter(loss_params[weight_param_name])
     loss = loss_type(**loss_params)
