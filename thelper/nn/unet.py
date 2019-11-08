@@ -42,18 +42,42 @@ class UNet(thelper.nn.Module):
         self.mid_channels = mid_channels
         self.coordconv = coordconv
         self.pool = torch.nn.MaxPool2d(2)
-        self.encoder_block1 = BasicBlock(in_channels=in_channels, out_channels=mid_channels // 16, coordconv=coordconv)
-        self.encoder_block2 = BasicBlock(in_channels=mid_channels // 16, out_channels=mid_channels // 8, coordconv=coordconv)
-        self.encoder_block3 = BasicBlock(in_channels=mid_channels // 8, out_channels=mid_channels // 4, coordconv=coordconv)
-        self.encoder_block4 = BasicBlock(in_channels=mid_channels // 4, out_channels=mid_channels // 2, coordconv=coordconv)
-        self.mid_block = BasicBlock(in_channels=mid_channels // 2, out_channels=mid_channels, coordconv=coordconv)
-        self.upsampling_block1 = torch.nn.ConvTranspose2d(in_channels=mid_channels, out_channels=mid_channels // 2, kernel_size=2, stride=2)
-        self.decoder_block1 = BasicBlock(in_channels=mid_channels, out_channels=mid_channels // 2, coordconv=coordconv)
-        self.upsampling_block2 = torch.nn.ConvTranspose2d(in_channels=mid_channels // 2, out_channels=mid_channels // 4, kernel_size=2, stride=2)
-        self.decoder_block2 = BasicBlock(in_channels=mid_channels // 2, out_channels=mid_channels // 4, coordconv=coordconv)
-        self.upsampling_block3 = torch.nn.ConvTranspose2d(in_channels=mid_channels // 4, out_channels=mid_channels // 8, kernel_size=2, stride=2)
-        self.decoder_block3 = BasicBlock(in_channels=mid_channels // 4, out_channels=mid_channels // 8, coordconv=coordconv)
-        self.upsampling_block4 = torch.nn.ConvTranspose2d(in_channels=mid_channels // 8, out_channels=mid_channels // 16, kernel_size=2, stride=2)
+        self.encoder_block1 = BasicBlock(in_channels=in_channels,
+                                         out_channels=mid_channels // 16,
+                                         coordconv=coordconv)
+        self.encoder_block2 = BasicBlock(in_channels=mid_channels // 16,
+                                         out_channels=mid_channels // 8,
+                                         coordconv=coordconv)
+        self.encoder_block3 = BasicBlock(in_channels=mid_channels // 8,
+                                         out_channels=mid_channels // 4,
+                                         coordconv=coordconv)
+        self.encoder_block4 = BasicBlock(in_channels=mid_channels // 4,
+                                         out_channels=mid_channels // 2,
+                                         coordconv=coordconv)
+        self.mid_block = BasicBlock(in_channels=mid_channels // 2,
+                                    out_channels=mid_channels,
+                                    coordconv=coordconv)
+        self.upsampling_block1 = torch.nn.ConvTranspose2d(in_channels=mid_channels,
+                                                          out_channels=mid_channels // 2,
+                                                          kernel_size=2, stride=2)
+        self.decoder_block1 = BasicBlock(in_channels=mid_channels,
+                                         out_channels=mid_channels // 2,
+                                         coordconv=coordconv)
+        self.upsampling_block2 = torch.nn.ConvTranspose2d(in_channels=mid_channels // 2,
+                                                          out_channels=mid_channels // 4,
+                                                          kernel_size=2, stride=2)
+        self.decoder_block2 = BasicBlock(in_channels=mid_channels // 2,
+                                         out_channels=mid_channels // 4,
+                                         coordconv=coordconv)
+        self.upsampling_block3 = torch.nn.ConvTranspose2d(in_channels=mid_channels // 4,
+                                                          out_channels=mid_channels // 8,
+                                                          kernel_size=2, stride=2)
+        self.decoder_block3 = BasicBlock(in_channels=mid_channels // 4,
+                                         out_channels=mid_channels // 8,
+                                         coordconv=coordconv)
+        self.upsampling_block4 = torch.nn.ConvTranspose2d(in_channels=mid_channels // 8,
+                                                          out_channels=mid_channels // 16,
+                                                          kernel_size=2, stride=2)
         self.final_block = None
         self.num_classes = None
         self.set_task(task)
@@ -75,8 +99,12 @@ class UNet(thelper.nn.Module):
         if self.final_block is None or self.num_classes != len(task.class_names):
             self.num_classes = len(task.class_names)
             self.final_block = torch.nn.Sequential(
-                torch.nn.Conv2d(in_channels=self.mid_channels // 8, out_channels=self.mid_channels // 16, kernel_size=3, padding=1),
+                torch.nn.Conv2d(in_channels=self.mid_channels // 8,
+                                out_channels=self.mid_channels // 16,
+                                kernel_size=3, padding=1),
                 torch.nn.ReLU(inplace=True),
-                torch.nn.Conv2d(in_channels=self.mid_channels // 16, out_channels=self.num_classes, kernel_size=1),
+                torch.nn.Conv2d(in_channels=self.mid_channels // 16,
+                                out_channels=self.num_classes,
+                                kernel_size=1),
             )
         self.task = task
