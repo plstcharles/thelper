@@ -70,7 +70,6 @@ def test_classif_report():
     consumer = consumers["consumer"]
     assert isinstance(consumer, thelper.train.utils.ClassifReport)
     assert consumer.class_names == class_names
-    assert consumer.report() is None
     assert repr(consumer)
     inputs, targets, preds = [], [], []
     tot_idx = 0
@@ -88,7 +87,6 @@ def test_classif_report():
     assert report is not None and isinstance(report, str)
     assert report.endswith(f"{tot_idx}\n")  # should be total number of samples in last cell
     consumer.reset()
-    assert consumer.report() is None
     consumer.class_names = None
     tot_idx = 0
     for iter_idx in range(iter_count):
