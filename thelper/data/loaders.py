@@ -198,13 +198,14 @@ class LoaderFactory:
         self.valid_scale = thelper.utils.get_key_def("valid_scale", config, 1.0)
         self.test_scale = thelper.utils.get_key_def("test_scale", config, 1.0)
         default_collate_fn = default_collate
-        if "collate_fn" in config:
-            if any([v in config for v in ["train_collate_fn", "valid_collate_fn", "test_collate_fn"]]):
+        if any([s in config for s in ["collate", "collate_fn"]]):
+            if any([s in config for s in ["train_collate", "valid_collate", "test_collate",
+                                          "train_collate_fn", "valid_collate_fn", "test_collate_fn"]]):
                 raise AssertionError("specifying 'collate_fn' overrides all other (loader-specific) values")
-            default_collate_fn = self._get_collate_fn(config["collate_fn"])
-        self.train_collate_fn = self._get_collate_fn(thelper.utils.get_key_def("train_collate_fn", config, default_collate_fn))
-        self.valid_collate_fn = self._get_collate_fn(thelper.utils.get_key_def("valid_collate_fn", config, default_collate_fn))
-        self.test_collate_fn = self._get_collate_fn(thelper.utils.get_key_def("test_collate_fn", config, default_collate_fn))
+            default_collate_fn = thelper.utils.import_function(config["collate_fn"])
+        self.train_collate_fn = thelper.utils.import_function(thelper.utils.get_key_def("train_collate_fn", config, default_collate_fn))
+        self.valid_collate_fn = thelper.utils.import_function(thelper.utils.get_key_def("valid_collate_fn", config, default_collate_fn))
+        self.test_collate_fn = thelper.utils.import_function(thelper.utils.get_key_def("test_collate_fn", config, default_collate_fn))
         self.train_shuffle = thelper.utils.str2bool(thelper.utils.get_key_def(["shuffle", "train_shuffle"], config, True))
         self.valid_shuffle = thelper.utils.str2bool(thelper.utils.get_key_def(["shuffle", "valid_shuffle"], config, False))
         self.test_shuffle = thelper.utils.str2bool(thelper.utils.get_key_def(["shuffle", "test_shuffle"], config, False))
@@ -298,19 +299,6 @@ class LoaderFactory:
             logger.debug("global sampler will be applied as: %s" % str([self.train_sampler, self.valid_sampler, self.test_sampler]))
         if self.base_transforms:
             logger.debug("base transforms: %s" % str(self.base_transforms))
-
-    @staticmethod
-    def _get_collate_fn(val):
-        if val is torch.utils.data.dataloader.default_collate or val is default_collate or callable(val):
-            return val
-        if isinstance(val, dict):
-            collate_fn_type = thelper.utils.get_key("type", val)
-            collate_fn_params = thelper.utils.get_key_def(["params", "kwargs"], val, None)
-            return thelper.utils.import_function(collate_fn_type, collate_fn_params)
-        elif isinstance(val, str):
-            return thelper.utils.import_function(val)
-        else:
-            raise AssertionError("unexpected collate val type")
 
     @staticmethod
     def _get_seed(prefixes, config, stype):

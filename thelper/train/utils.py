@@ -41,16 +41,12 @@ class PredictionCallback(PredictionConsumer):
 
     def __init__(self, callback_func, callback_kwargs=None):
         # type: (thelper.typedefs.IterCallbackType, thelper.typedefs.IterCallbackParams) -> None
-        assert callback_func is not None and \
-            (isinstance(callback_func, str) or callable(callback_func)), \
-            "invalid callback function, must be importable string or callable object"
-        if isinstance(callback_func, str):
-            callback_func = thelper.utils.import_function(callback_func)
-        thelper.utils.check_func_signature(callback_func, thelper.typedefs.IterCallbackParams)
         assert callback_kwargs is None or \
             (isinstance(callback_kwargs, dict) and
              not any([p in callback_kwargs for p in thelper.typedefs.IterCallbackParams])), \
             "invalid callback kwargs (must be dict, and not contain overlap with default args)"
+        callback_func = thelper.utils.import_function(callback_func, params=callback_kwargs)
+        thelper.utils.check_func_signature(callback_func, thelper.typedefs.IterCallbackParams)
         self.callback_func = callback_func
         self.callback_kwargs = callback_kwargs
 
@@ -61,7 +57,7 @@ class PredictionCallback(PredictionConsumer):
 
     def update(self, *args, **kwargs):
         """Forwards the latest prediction data from the training session to the user callback."""
-        return self.callback_func(*args, **kwargs, **self.callback_kwargs)
+        return self.callback_func(*args, **kwargs)
 
 
 @thelper.concepts.classification

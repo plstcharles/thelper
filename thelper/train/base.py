@@ -271,36 +271,29 @@ class Trainer:
         # parse callbacks (see ``thelper.typedefs.IterCallbackType`` and ``thelper.typedefs.IterCallbackParams`` definitions)
         for cname, mset in zip(["train", "valid", "test"], [self.train_metrics, self.valid_metrics, self.test_metrics]):
             # parse user (custom) callback
-            # TODO: rewrite so that lists of callbacks can be supported @@@@
             user_callback_keys = [f"{cname}_iter_callback", f"{cname}_callback", "callback"]
             user_callback = thelper.utils.get_key_def(user_callback_keys, trainer_config)  # type: Optional[typ.IterCallbackType]
-            user_callback_kwargs_keys = [f"{cname}_iter_callback_kwargs", f"{cname}_callback_kwargs", "callback_kwargs"]
-            user_callback_kwargs = thelper.utils.get_key_def(user_callback_kwargs_keys, trainer_config, {})
             if user_callback is not None:
-                assert "user_callback" not in mset, "metrics set already had a 'user_callback' in it"
-                mset["user_callback"] = thelper.train.utils.PredictionCallback(user_callback, user_callback_kwargs)
+                assert f"{cname}_user_callback" not in mset, f"metrics set already had a '{cname}_user_callback' in it"
+                mset[f"{cname}_user_callback"] = thelper.train.utils.PredictionCallback(user_callback)
             # parse display callback
-            display_flag_keys = [f"display_{cname}_preds", f"display_{cname}_predictions", f"display_{cname}",
-                                 "display_preds", "display_predictions", "display"]
-            display_flag = thelper.utils.get_key_def(display_flag_keys, trainer_config, False)
-            display_kwargs_keys = [f"display_{cname}_preds_kwargs", f"display_{cname}_predictions_kwargs",
-                                   f"display_{cname}_kwargs", "display_preds_kwargs", "display_predictions_kwargs",
-                                   "display_kwargs"]
-            display_kwargs = thelper.utils.get_key_def(display_kwargs_keys, trainer_config, {})
-            if display_flag:
-                assert "display_callback" not in mset, "metrics set already had a 'display_callback' in it"
-                display_kwargs["output_path"] = self.output_paths[cname]
-                display_kwargs["save"] = thelper.utils.get_key_def(["save", "save_draw", "save_draw_output"],
-                                                                   display_kwargs, False)
-                mset["display_callback"] = thelper.train.utils.PredictionCallback("thelper.train.utils._draw_wrapper",
-                                                                                  display_kwargs)
-            # add logging callback (will print to console and update iter metric evals)
-            logging_kwargs = thelper.utils.get_key_def("logging_kwargs", trainer_config, {})
-            logging_kwargs["set_name"] = cname
-            logging_kwargs["writers"] = self.writers  # pass by ref, will be filled later
-            display_kwargs["output_path"] = self.output_paths[cname]
-            mset["logging_callback"] = thelper.train.utils.PredictionCallback(self._iter_logger_callback,
-                                                                              logging_kwargs)
+            display_callback_keys = [f"display_{cname}_preds", f"display_{cname}_predictions", f"display_{cname}",
+                                     "display_preds", "display_predictions", "display"]
+            display_callback = thelper.utils.get_key_def(display_callback_keys, trainer_config)
+            if display_callback:
+                assert f"{cname}_display_callback" not in mset, f"metrics set already had a '{cname}_display_callback' in it"
+                if isinstance(display_callback, bool):  # if simply toggled on, use default draw function wrapper
+                    display_callback = {"type": "thelper.train.utils._draw_wrapper", "params": {"save": False}}
+                mset[f"{cname}_display_callback"] = thelper.train.utils.PredictionCallback(display_callback)
+            # parse logging callback
+            logging_callback_keys = [f"{cname}_logger", f"{cname}_log", f"logger_{cname}", f"log_{cname}", "log", "logger"]
+            logging_callback = thelper.utils.get_key_def(logging_callback_keys, trainer_config, self._iter_logger_callback)
+            if logging_callback:
+                assert f"{cname}_logger_callback" not in mset, f"metrics set already had a '{cname}_logger_callback' in it"
+                logging_kwargs = {"set_name": cname, "writers": self.writers}  # pass writers by ref, will be filled later
+                mset[f"{cname}_logger_callback"] = thelper.train.utils.PredictionCallback(logging_callback, logging_kwargs)
+            else:
+                logger.warning("logging is disabled by user, internal iteration count might never be updated")
 
     def _init_writer(self, writer, path):
         if self.use_tbx and not writer:
