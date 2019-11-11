@@ -1253,3 +1253,162 @@ class AveragePrecision(Metric):
     def live_eval(self):
         """Returns whether this metric can/should be evaluated at every backprop iteration or not."""
         return False  # the current PascalVOC implementation is preeetty slow with lots of bboxes
+
+
+@thelper.concepts.segmentation
+class IntersectionOverUnion(Metric):
+    r"""Computes the intersection over union over image classes.
+
+    It can target a single class at a time, or produce the mean IoU (mIoU) for all classes. It can
+    also average IoU scores from each images, or sum up all intersection and union areas and compute
+    a global score.
+
+    Usage example inside a session configuration file::
+
+        # ...
+        # lists all metrics to instantiate as a dictionary
+        "metrics": {
+            # ...
+            # this is the name of the example metric; it is used for lookup/printing only
+            "mIoU": {
+                # this type is used to instantiate the IoU metric
+                "type": "thelper.optim.metrics.IntersectionOverUnion",
+                # these parameters are passed to the wrapper's constructor
+                "params": {
+                    # no parameters means we will compute the mIoU with global scoring
+                }
+            },
+            # ...
+        }
+        # ...
+
+    Attributes:
+        target_class: name of the class to target; if 'None', will compute mIoU instead of IoU.
+        max_win_size: maximum moving average window size to use (default=None, which equals dataset size).
+        preds: array holding the predicted bounding boxes for all input samples.
+        targets: array holding the target bounding boxes for all input samples.
+    """
+
+    def __init__(self, target_name=None, global_score=True, max_win_size=None):
+        """Initializes metric attributes.
+
+        Note that by default, if ``max_win_size`` is not provided here, the value given to ``max_iters`` on
+        the first update call will be used instead to fix the sliding window length. In any case, the
+        smallest of ``max_iters`` and ``max_win_size`` will be used to determine the actual window size.
+        """
+        assert max_win_size is None or (isinstance(max_win_size, int) and max_win_size > 0), \
+            "invalid max sliding window size (should be positive integer)"
+        self.target_name = target_name
+        self.target_idx = None  # will be updated at runtime
+        self.global_score = global_score
+        self.max_win_size = max_win_size
+        self.inters = None  # will be instantiated on first iter
+        self.unions = None  # will be instantiated on first iter
+        self.task = None
+        self.warned_eval_bad = False
+
+    def __repr__(self):
+        """Returns a generic print-friendly string containing info about this metric."""
+        return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
+            f"(target_name={repr(self.target_name)}, global_score={repr(self.global_score)}, max_win_size={repr(self.max_win_size)})"
+
+    def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
+               task,         # type: thelper.tasks.utils.Task
+               input,        # type: thelper.typedefs.InputType
+               pred,         # type: thelper.typedefs.DetectionPredictionType
+               target,       # type: thelper.typedefs.DetectionTargetType
+               sample,       # type: thelper.typedefs.SampleType
+               loss,         # type: Optional[float]
+               iter_idx,     # type: int
+               max_iters,    # type: int
+               epoch_idx,    # type: int
+               max_epochs,   # type: int
+               output_path,  # type: AnyStr
+               **kwargs):    # type: (...) -> None
+        """Receives the latest bbox predictions and targets from the training session.
+
+        The exact signature of this function should match the one of the callbacks defined in
+        :class:`thelper.train.base.Trainer` and specified by ``thelper.typedefs.IterCallbackParams``.
+        """
+        assert len(kwargs) == 0, "unexpected extra arguments present in update call"
+        assert iter_idx is not None and max_iters is not None and iter_idx < max_iters, \
+            "bad iteration indices given to metric update function"
+        curr_win_size = max_iters if self.max_win_size is None else min(self.max_win_size, max_iters)
+        if self.inters is None or self.inters.size != curr_win_size:
+            # each 'iteration' will have a corresponding bin with counts for that batch
+            self.inters = np.asarray([None] * curr_win_size)
+            self.unions = np.asarray([None] * curr_win_size)
+        curr_idx = iter_idx % curr_win_size
+        if task is not None:
+            assert isinstance(task, thelper.tasks.Segmentation), "unexpected task type with IoU metric"
+            assert self.target_name is None or self.target_name in task.class_names, \
+                f"missing target class {self.target_name} in task"
+            self.target_idx = task.class_names.index(self.target_name)  # will always be kept up to date
+            self.task = task  # keep reference for eval only
+        if target is None or len(target) == 0:
+            # only accumulate results when groundtruth is available (should we though? affects false negative count)
+            self.inters[curr_idx] = None
+            self.unions[curr_idx] = None
+            return
+        assert pred.dim() == target.dim() + 1, "prediction/gt tensors dim mismatch (should be BxCx[...] and Bx[...])"
+        assert pred.shape[0] == target.shape[0], "prediction/gt tensors batch size mismatch"
+        assert pred.dim() <= 2 or pred.shape[2:] == target.shape[1:], "prediction/gt tensors array size mismatch"
+        pred_labels = pred.topk(1, dim=1)[1].view(pred.shape[0], -1).cpu().numpy()
+        true_labels = target.view(target.shape[0], -1).cpu().numpy()
+        assert self.task is not None, "task object necessary at this point since we need to refer to dontcare value"
+        if self.target_name is None:
+            # TODO @@@@@@@@@@@
+            raise NotImplementedError
+        else:
+            assert self.target_idx is not None
+            inters = np.logical_and(pred_labels == self.target_idx, true_labels == self.target_idx)
+            if self.task.dontcare is not None:
+                union = np.logical_or(np.logical_and(pred_labels == self.target_idx,
+                                                     true_labels != self.task.dontcare),
+                                      true_labels == self.target_idx)
+            else:
+                union = np.logical_or(pred_labels == self.target_idx, true_labels == self.target_idx)
+            if self.global_score:
+                self.inters[curr_idx] = np.count_nonzero(inters)
+                self.unions[curr_idx] = np.count_nonzero(union)
+            else:
+                self.inters[curr_idx] = np.count_nonzero(inters) / np.count_nonzero(union)
+
+    def eval(self):
+        """Returns the current IoU ratio based on the accumulated counts.
+
+        Will issue a warning if no predictions have been accumulated yet.
+        """
+        assert self.inters.size == self.unions.size, "internal window size mismatch"
+        if self.target_name is None:
+            # TODO @@@@@@@@@@@
+            raise NotImplementedError
+        else:
+            if self.global_score:
+                counts = np.array([(i, u) for i, u in zip(self.inters, self.unions) if i is not None and u is not None])
+                tot_inters = counts[:, 0].sum()
+                tot_unions = counts[:, 1].sum()
+                if tot_unions == 0:
+                    if not self.warned_eval_bad:
+                        self.warned_eval_bad = True
+                        logger.warning("iou eval result invalid (set as 0.0), no results accumulated")
+                    return 0.0
+                return tot_inters / tot_unions
+            else:
+                ious = [i for i in self.inters if i is not None]
+                if len(ious) == 0:
+                    if not self.warned_eval_bad:
+                        self.warned_eval_bad = True
+                        logger.warning("iou eval result invalid (set as 0.0), no results accumulated")
+                    return 0.0
+                return np.array(ious).mean()
+
+    def reset(self):
+        """Toggles a reset of the metric's internal state, deallocating bbox arrays."""
+        self.inters = None
+        self.unions = None
+
+    @property
+    def goal(self):
+        """Returns the scalar optimization goal of this metric (maximization)."""
+        return Metric.maximize
