@@ -1283,10 +1283,10 @@ class IntersectionOverUnion(Metric):
         # ...
 
     Attributes:
-        target_class: name of the class to target; if 'None', will compute mIoU instead of IoU.
+        target_name: name of the class to target; if 'None', will compute mIoU instead of IoU.
         max_win_size: maximum moving average window size to use (default=None, which equals dataset size).
-        preds: array holding the predicted bounding boxes for all input samples.
-        targets: array holding the target bounding boxes for all input samples.
+        inters: array holding the intesection areas or IoU scores for all input samples.
+        unions: array holding the union areas for all input samples.
     """
 
     def __init__(self, target_name=None, global_score=True, max_win_size=None):
