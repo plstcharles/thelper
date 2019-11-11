@@ -16,16 +16,26 @@ What it is...
     create yourself, or that you import from other libraries or frameworks.
 
   - This framework is used to enforce good reproducibility standards for your experiments via
-    the use of global configuration files and checkpoints.
+    the use of global configuration files, checkpoints, and logs.
 
   - This framework is used to easily swap, split, scale, combine, and augment datasets used in
     your experiments.
 
-  - This framework can help you fine-tune, debug, visualize, and understand the behavior of your
-    models more easily.
+  - This framework can help you fine-tune, debug, measure, visualize, and understand the behavior of
+    your models more easily.
+
+
+What it is **NOT**...
+---------------------
 
   - This framework is **NOT** used to obtain off-the-shelf solutions. In most cases, you will
-    have to put in some work by at least modifying pre-existing configuration files.
+    have to put in some work by at least modifying a pre-existing configuration file to get a
+    solution for a new task (e.g. image classification, segmentation, ...).
+
+  - This framework is **NOT** a model (or model architecture) zoo. By design, importing models
+    for training from 3rd-party packages is easy, and so is importing a model architecture from
+    a local Python file. However, due to the fast-paced nature of deep learning, we do not plan
+    to keep a repository of "state-of-the-art" models in the framework.
 
 
 What it supports...
@@ -35,7 +45,8 @@ What it supports...
     concepts of the PyTorch library (`[more info] <pytorch_>`_).
   
   - Image classification, segmentation, object detection, super-resolution, and generic regression
-    tasks. More types of tasks are planned in the near future.
+    tasks. More types of tasks are planned in the future. Users can also implement their own task
+    interfaces and trainers to support custom scenarios if needed (e.g. for multi-task learning).
 
   - Live evaluation and monitoring of predefined metrics. The framework implements :ref:`[several
     types of metrics] <thelper.optim:thelper.optim.metrics module>`, but custom metrics can also be
