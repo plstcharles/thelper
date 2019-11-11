@@ -45,7 +45,7 @@ def setup_srm_weights(input_channels: int = 3) -> torch.Tensor:
             [ 2., -6.,  8., -6.,  2.],  # noqa: E241,E201
             [-1.,  2., -2.,  2., -1.],  # noqa: E241,E201
         ]
-    ]))
+    ])).float()
     srm_kernel[0] /= 2
     srm_kernel[1] /= 4
     srm_kernel[2] /= 12
