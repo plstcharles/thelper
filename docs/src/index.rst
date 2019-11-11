@@ -14,6 +14,7 @@ Contents
    thelper
    contributing
    authors
+   maintainer-guide
    changelog
 
 
