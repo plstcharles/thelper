@@ -2,6 +2,7 @@ import torch
 import torch.nn
 
 import thelper.nn.coordconv
+import thelper.nn.srm
 
 
 class BasicBlock(torch.nn.Module):
@@ -36,13 +37,15 @@ class UNet(thelper.nn.Module):
     (CoordConv) can also be toggled on if requested (see :mod:`thelper.nn.coordconv` for more information).
     """
 
-    def __init__(self, task, in_channels=3, mid_channels=512, coordconv=False):
+    def __init__(self, task, in_channels=3, mid_channels=512, coordconv=False, srm=False):
         super().__init__(task, **{k: v for k, v in vars().items() if k not in ["self", "task", "__class__"]})
         self.in_channels = in_channels
         self.mid_channels = mid_channels
         self.coordconv = coordconv
+        self.srm = srm
         self.pool = torch.nn.MaxPool2d(2)
-        self.encoder_block1 = BasicBlock(in_channels=in_channels,
+        self.srm_conv = thelper.nn.srm.setup_srm_layer(in_channels) if srm else None
+        self.encoder_block1 = BasicBlock(in_channels=in_channels + 3 if srm else in_channels,
                                          out_channels=mid_channels // 16,
                                          coordconv=coordconv)
         self.encoder_block2 = BasicBlock(in_channels=mid_channels // 16,
@@ -83,6 +86,9 @@ class UNet(thelper.nn.Module):
         self.set_task(task)
 
     def forward(self, x):
+        if self.srm_conv is not None:
+            noise = self.srm_conv(x)
+            x = torch.cat([x, noise], dim=1)
         encoded1 = self.encoder_block1(x)  # 512x512
         encoded2 = self.encoder_block2(self.pool(encoded1))  # 256x256
         encoded3 = self.encoder_block3(self.pool(encoded2))  # 128x128
