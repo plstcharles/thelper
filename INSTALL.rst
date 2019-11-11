@@ -4,26 +4,6 @@
 Installation
 ============
 
-Anaconda
-========
-
-Starting with v0.2.5, the latest stable version of the framework can be installed directly (with its
-dependencies) via `Anaconda <https://docs.anaconda.com/anaconda/install/>`_. In a conda environment,
-simply enter::
-
-  $ conda config --env --add channels plstcharles
-  $ conda config --env --add channels conda-forge
-  $ conda config --env --add channels pytorch
-  $ conda install thelper
-
-This should install the latest stable version of the framework on Windows and Linux, for Python
-3.6 or 3.7. You can check the release notes `on GitHub <github-changelog_>`_, and pre-built packages
-`here <anaconda-hub_>`_.
-
-.. _github-changelog: https://github.com/plstcharles/thelper/blob/master/CHANGELOG.rst
-.. _anaconda-hub: https://anaconda.org/plstcharles/thelper
-
-
 Docker
 ======
 
@@ -47,7 +27,8 @@ instructions <nvidia-docker_>`_, and add ``--runtime=nvidia`` to the arguments g
 Installing from source
 ======================
 
-If you wish to modify the framework's source code, follow the installation instructions below.
+If you wish to modify the framework's source code or develop new modules within the framework itself,
+follow the installation instructions below.
 
 Linux
 -----
@@ -96,6 +77,29 @@ directly through pip::
 
   $ pip install -r <THELPER_ROOT>/requirements.txt
   $ pip install -e <THELPER_ROOT> --no-deps
+
+
+Anaconda
+========
+
+Starting with v0.2.5, a stable version of the framework can be installed directly (with its dependencies)
+via `Anaconda <https://docs.anaconda.com/anaconda/install/>`_. In a conda environment, simply enter::
+
+  $ conda config --env --add channels plstcharles
+  $ conda config --env --add channels conda-forge
+  $ conda config --env --add channels pytorch
+  $ conda install thelper
+
+This should install a stable version of the framework on Windows and Linux for Python 3.6 or 3.7. You
+can check the release notes `on GitHub <github-changelog_>`_, and pre-built packages `here <anaconda-hub_>`_.
+
+Note that due to Travis build limitations (as of November 2019), conda package builds and deployments
+have been stalling and have required manual uploads. This means that the conda packages are fairly likely
+to be out-of-date compared to those on Docker Hub and PyPI. As such, we now recommend users to install the
+framework through the "Install from source" method above.
+
+.. _github-changelog: https://github.com/plstcharles/thelper/blob/master/CHANGELOG.rst
+.. _anaconda-hub: https://anaconda.org/plstcharles/thelper
 
 
 Testing the installation
