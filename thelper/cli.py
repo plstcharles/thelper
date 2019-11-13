@@ -335,6 +335,7 @@ def export_model(config, save_dir):
         task = thelper.tasks.create_task(task)
     if task is None and "datasets" in config:
         _, task = thelper.data.create_parsers(config)  # try to load via datasets...
+    assert task is not None, "could not get proper task object from export config or data parsers"
     if isinstance(trace_input, str):
         trace_input = eval(trace_input)
     logger.info("exporting model '%s'..." % session_name)
@@ -342,9 +343,6 @@ def export_model(config, save_dir):
     save_dir = thelper.utils.get_save_dir(save_dir, session_name, config)
     logger.debug("exported checkpoint will be saved at '%s'" % os.path.abspath(save_dir).replace("\\", "/"))
     model = thelper.nn.create_model(config, task, save_dir=save_dir)
-    if task is None:
-        assert hasattr(model, "task"), "model should have task attrib if not provided already"
-        task = model.task
     log_stamp = thelper.utils.get_log_stamp()
     model_type = model.get_name()
     model_params = model.config if model.config else {}

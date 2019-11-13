@@ -188,6 +188,7 @@ def test_resume_session(simple_config, mocker):
         }
     }
     override_config["datasets"]["dset"]["task"] = new_finetune_task
+    thelper.cli.resume_session(ckptdata, test_save_path, task_compat="new")
     fake_query = mocker.patch("thelper.utils.query_string", return_value="new")
     thelper.cli.resume_session(ckptdata, test_save_path)
     latest_ckptdata = thelper.utils.load_checkpoint(test_create_simple_path, always_load_latest=True)
@@ -197,6 +198,8 @@ def test_resume_session(simple_config, mocker):
     thelper.cli.resume_session(ckptdata, test_save_path)
     latest_ckptdata = thelper.utils.load_checkpoint(test_create_simple_path, always_load_latest=True)
     assert old_task == latest_ckptdata["task"]
+    override_config["loaders"]["task_compat_mode"] = "new"
+    thelper.cli.resume_session(ckptdata, test_save_path)
 
 
 def test_visualize_data(simple_config, mocker):
