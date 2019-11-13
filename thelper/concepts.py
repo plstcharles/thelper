@@ -51,7 +51,7 @@ def apply_support(func_or_cls=None, concept=None):
 
         @functools.wraps(f_or_c)  # lift wrapped object definitions, so that it still looks like the original
         def decorate(*args, **kwargs):
-            return apply_concept(f_or_c, concept, *args, **kwargs)
+            return apply_concept(f_or_c, concept)(*args, **kwargs)
         return decorate
 
     if inspect.isclass(func_or_cls):
