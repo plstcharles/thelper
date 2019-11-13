@@ -37,7 +37,7 @@ from thelper.tasks.detect import BoundingBox  # noqa: F401
 logger = logging.getLogger("thelper.data")
 
 on_rtd = os.environ.get('READTHEDOCS') == 'True'
-if on_rtd:
+if on_rtd:  # pragma: no cover
     # import optional subpackages for doc builds
     # (autodoc mocks unavailable dependencies anyway)
     import thelper.data.geo  # noqa: F401

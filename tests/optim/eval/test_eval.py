@@ -18,7 +18,7 @@ def get_bboxes(dirpath, gt=False):
         with open(filename, "r") as fd:
             for line in fd:
                 line = line.replace("\n", "")
-                if line.replace(" ", "") == "":
+                if line.replace(" ", "") == "":  # pragma: no cover
                     continue
                 split = line.split(" ")
                 if gt:

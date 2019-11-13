@@ -7,7 +7,7 @@ import functools
 import inspect
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from typing import Any, AnyStr, Callable, Optional, Union  # noqa: F401
     from types import FunctionType  # noqa: F401
 

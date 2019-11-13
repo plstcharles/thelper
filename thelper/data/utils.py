@@ -507,19 +507,18 @@ def get_class_weights(label_map, stype, invmax, maxw=float('inf'), minw=0.0, nor
     .. seealso::
         | :class:`thelper.data.samplers.WeightedSubsetRandomSampler`
     """
-    if not isinstance(label_map, dict) or any([not isinstance(val, (list, int)) for val in label_map.values()]):
-        raise AssertionError("unexpected label map type")
+    assert isinstance(label_map, dict) and all([isinstance(val, (list, int)) for val in label_map.values()]), \
+        "unexpected label map type"
+    assert stype in ["uniform", "linear"] or "root" in stype, "unknown label weighting strategy"
     if stype == "uniform":
         label_weights = {label: 1.0 / len(label_map) for label in label_map}
-    elif stype == "linear" or "root" in stype:
+    else:  # if stype == "linear" or "root" in stype:
         if stype == "root" or stype == "linear":
             rpow = 1.0
         else:
             rpow = 1.0 / float(stype.split("root", 1)[1])
         label_sizes = {label: len(v) if isinstance(v, list) else v for label, v in label_map.items()}
         label_weights = {label: (lsize / sum(label_sizes.values())) ** rpow for label, lsize in label_sizes.items()}
-    else:
-        raise AssertionError("unknown label weighting strategy")
     if invmax:
         label_weights = {label: max(label_weights.values()) / max(weight, 1e-6) for label, weight in label_weights.items()}
     label_weights = {label: min(max(weight, minw), maxw) for label, weight in label_weights.items()}

@@ -49,7 +49,7 @@ def default_collate(batch, force_tensor=True):
                 storage = batch[0].storage()._new_shared(numel)
                 out = batch[0].new(storage)
             return torch.stack(batch, 0, out=out)
-        elif torch_ver[0] == 1 and torch_ver[1] == 1:  # ver == 1.1
+        elif torch_ver[0] == 1 and torch_ver[1] == 1:  # ver == 1.1  # pragma: no cover
             if torch.utils.data._utils.collate._use_shared_memory:
                 # If we're in a background process, concatenate directly into a
                 # shared memory tensor to avoid an extra copy
@@ -57,7 +57,7 @@ def default_collate(batch, force_tensor=True):
                 storage = batch[0].storage()._new_shared(numel)
                 out = batch[0].new(storage)
             return torch.stack(batch, 0, out=out)
-        else:  # ver < 1.1
+        else:  # ver < 1.1  # pragma: no cover
             if torch.utils.data.dataloader._use_shared_memory:
                 # If we're in a background process, concatenate directly into a
                 # shared memory tensor to avoid an extra copy
@@ -71,9 +71,9 @@ def default_collate(batch, force_tensor=True):
         if elem_type.__name__ == 'ndarray':
             # array of string classes and object
             if torch_ver[0] > 1 or torch_ver[1] > 0:  # ver > 1.0
-                if torch.utils.data._utils.collate.np_str_obj_array_pattern.search(elem.dtype.str) is not None:
-                    raise TypeError(error_msg_fmt.format(elem.dtype))
-            else:  # ver <= 1.0
+                assert torch.utils.data._utils.collate.np_str_obj_array_pattern.search(elem.dtype.str) is None, \
+                    error_msg_fmt.format(elem.dtype)
+            else:  # ver <= 1.0  # pragma: no cover
                 import re
                 if re.search('[SaUO]', elem.dtype.str) is not None:
                     raise TypeError(error_msg_fmt.format(elem.dtype))
@@ -97,8 +97,7 @@ def default_collate(batch, force_tensor=True):
             return batch
         transposed = zip(*batch)
         return [default_collate(samples, force_tensor=force_tensor) for samples in transposed]
-    if force_tensor:
-        raise TypeError((error_msg_fmt.format(type(batch[0]))))
+    assert not force_tensor, error_msg_fmt.format(type(batch[0]))
     return batch
 
 
@@ -356,10 +355,7 @@ class LoaderFactory:
             for name in self.total_usage.keys():
                 if name in ratio_map:
                     count = int(round(ratio_map[name] * len(indices[name])))
-                    if count < 0:
-                        raise AssertionError("ratios should be non-negative values!")
-                    elif count < 1 and len(indices[name]) > 0:
-                        logger.warning("split ratio for '%s' too small, sample set will be empty" % name)
+                    assert count >= 0, "ratios should be non-negative values"
                     begidx = offsets[name]
                     endidx = min(begidx + count, len(indices[name]))
                     idxs_map[name] = indices[name][begidx:endidx]

@@ -130,7 +130,7 @@ def test_reload(config):
     assert finetune_outputs[0]["train/metrics"]["accuracy"] > train_outputs[1]["train/metrics"]["accuracy"]
 
 
-def compare_dictionaries(dictA, dictB, dictA_name="A", dictB_name="B", path=""):
+def compare_dictionaries(dictA, dictB, dictA_name="A", dictB_name="B", path=""):  # pragma: no cover
     err, key_err, value_err = "", "", ""
     old_path = path
     for k in dictA.keys():
