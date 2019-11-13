@@ -659,7 +659,9 @@ def import_class(fullname):
     Returns:
         The imported class.
     """
-    assert isinstance(fullname, str)
+    if inspect.isclass(fullname):
+        return fullname  # useful shortcut for hacky configs
+    assert isinstance(fullname, str), "should specify class by its (fully qualified) name"
     fullname = pathlib.Path(fullname).as_posix()
     if "/" in fullname:
         mod_path, mod_cls_name = fullname.rsplit("/", 1)
