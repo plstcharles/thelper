@@ -1,3 +1,4 @@
+import collections
 import copy
 import math
 import random
@@ -173,6 +174,132 @@ def test_classif_split_no_balancing(class_split_config):
                 assert name not in samples
                 label = batch["label"][idx].item()
                 samples[name] = label
+    assert not bool(set(train_samples) & set(valid_samples))
+    assert not bool(set(train_samples) & set(test_samples))
+    assert not bool(set(valid_samples) & set(test_samples))
+
+
+def test_default_collate():
+    with pytest.raises(AssertionError):
+        _ = thelper.data.loaders.default_collate([{"a": 1}, None, {"a": 3}])
+    batch = thelper.data.loaders.default_collate([None, None, None])
+    assert batch is None
+    batch = thelper.data.loaders.default_collate([np.uint8(1), np.uint8(2), np.uint8(3)])
+    assert isinstance(batch, torch.Tensor) and batch.dtype == torch.uint8 and len(batch) == 3
+    batch = thelper.data.loaders.default_collate([0.1, 0.2, 0.3])
+    assert isinstance(batch, torch.Tensor) and (batch.dtype == torch.float32 or batch.dtype == torch.float64)
+    ntupl = collections.namedtuple("FIZZ", "buzz bizz bozz")
+    batch = thelper.data.loaders.default_collate([
+        ntupl(buzz=1, bizz=2.0, bozz="3"),
+        ntupl(buzz=4, bizz=5.0, bozz="6")
+    ])
+    assert isinstance(batch, ntupl) and isinstance(batch.buzz, torch.Tensor) and isinstance(batch.bizz, torch.Tensor)
+    BBox = thelper.data.BoundingBox
+    bboxes = [[BBox(0, [0, 0, 1, 1])], [], [BBox(0, [0, 0, 1, 1]), BBox(0, [0, 0, 1, 1])]]
+    batch = thelper.data.loaders.default_collate(bboxes)
+    assert batch == bboxes
+
+    class Potato:
+        def __init__(self):
+            pass
+
+    with pytest.raises(AssertionError):
+        _ = thelper.data.loaders.default_collate([Potato(), Potato(), Potato()])
+    batch = thelper.data.loaders.default_collate([Potato(), Potato(), Potato()], force_tensor=False)
+    assert len(batch) == 3 and all([isinstance(p, Potato) for p in batch])
+
+
+class ExtDataSamples:
+
+    def __init__(self, n=1000, m=10, subset="X", use_samples_attrib=True):
+        self.dataset = [{"in": np.random.rand(), "out": np.random.randint(m),
+                         "subset": subset, "idx": idx} for idx in range(n)]
+        if use_samples_attrib:
+            self.samples = self.dataset
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, item):
+        return self.dataset[item]
+
+
+@pytest.fixture
+def ext_split_config():
+    return {
+        "datasets": {
+            "dataset_A": {
+                "type": ExtDataSamples,
+                "params": {"n": 100, "m": 5, "subset": "A", "use_samples_attrib": True},
+                "task": {
+                    "type": "thelper.tasks.Classification",
+                    "params": {
+                        "class_names": ["0", "1", "2", "3", "4"],
+                        "input_key": "in",
+                        "label_key": "out",
+                        "meta_keys": ["idx"]
+                    }
+                }
+            },
+            "dataset_B": {
+                "type": ExtDataSamples,
+                "params": {"n": 100, "m": 5, "subset": "B", "use_samples_attrib": False},
+                "task": {
+                    "type": "thelper.tasks.Classification",
+                    "params": {
+                        "class_names": ["0", "1", "2", "3", "4"],
+                        "input_key": "in",
+                        "label_key": "out",
+                        "meta_keys": ["idx"]
+                    }
+                }
+            },
+            "dataset_C": {
+                "type": ExtDataSamples,
+                "params": {"n": 100, "m": 5, "subset": "C", "use_samples_attrib": True},
+                "task": {
+                    "type": "thelper.tasks.Classification",
+                    "params": {
+                        "class_names": ["0", "1", "2", "3", "4"],
+                        "input_key": "in",
+                        "label_key": "out",
+                        "meta_keys": ["idx"]
+                    }
+                }
+            },
+        },
+        "loaders": {
+            "batch_size": 32,
+            "train_split": {
+                "dataset_A": 0.5,
+                "dataset_B": 0.7
+            },
+            "valid_split": {
+                "dataset_A": 0.4,
+                "dataset_B": 0.3
+            },
+            "test_split": {
+                "dataset_A": 0.1,
+                "dataset_C": 1.0
+            }
+        }
+    }
+
+
+def test_external_split(ext_split_config, mocker):
+    logger_patch = mocker.patch.object(thelper.data.loaders.logger, "warning")
+    logger_patch.start()
+    task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(ext_split_config)
+    train_samples, valid_samples, test_samples = {}, {}, {}
+    for loader, samples in [(train_loader, train_samples), (valid_loader, valid_samples), (test_loader, test_samples)]:
+        for batch in loader:
+            for idx in range(batch["in"].shape[0]):
+                name = batch["subset"][idx] + str(batch["idx"][idx].item())
+                assert name not in samples
+                samples[name] = batch["out"][idx].item()
+    assert logger_patch.call_count == 1
+    assert logger_patch.call_args[0][0].startswith("must fully parse")
+    logger_patch.stop()
     assert not bool(set(train_samples) & set(valid_samples))
     assert not bool(set(train_samples) & set(test_samples))
     assert not bool(set(valid_samples) & set(test_samples))
