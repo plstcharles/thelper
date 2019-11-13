@@ -33,9 +33,9 @@ def apply_support(func_or_cls=None, concept=None):
 
     # actual function that applies the concept to the decorated 'thing'
     def apply_concept(_thing, _concept, *_args, **_kwargs):
-        if isinstance(_concept, str) and len(_concept):
-            _concept = f"{SUPPORT_PREFIX}{_concept}" if not _concept.startswith(SUPPORT_PREFIX) else _concept
-            setattr(_thing, _concept, True)
+        assert isinstance(_concept, str) and len(_concept)
+        _concept = f"{SUPPORT_PREFIX}{_concept}" if not _concept.startswith(SUPPORT_PREFIX) else _concept
+        setattr(_thing, _concept, True)
         return _thing
 
     # wrapper generator for class types or class instances
