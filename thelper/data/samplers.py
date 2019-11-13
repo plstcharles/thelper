@@ -173,11 +173,11 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
         if "torch" in self.seeds:
             rng_state = torch.random.get_rng_state()
             torch.random.manual_seed(self.seeds["torch"] + self.epoch)
-        result = None
+        assert self.stype in ["random", "uniform"] or "root" in self.stype, "invalid stype"
         if self.stype == "random":
             result = (self.indices[idx] for idx in torch.multinomial(
                 torch.FloatTensor(self.sample_weights), self.nb_samples, replacement=True))
-        elif self.stype == "uniform" or "root" in self.stype:
+        else:  # if self.stype == "uniform" or "root" in self.stype:
             indices = []
             for label, count in self.label_counts.items():
                 while count > 0:
