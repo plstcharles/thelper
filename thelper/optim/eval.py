@@ -10,6 +10,7 @@ import numpy as np
 import thelper
 
 
+#@thelper.concepts.detection
 def compute_iou(bbox1, bbox2):
     # type: (thelper.tasks.detect.BoundingBox, thelper.tasks.detect.BoundingBox) -> float
     """Computes and returns the Intersection over Union (IoU) of two bounding boxes."""
@@ -23,6 +24,7 @@ def compute_iou(bbox1, bbox2):
     return float(intersection_area / float(bbox1.area + bbox2.area - intersection_area))
 
 
+@thelper.concepts.detection
 def compute_pascalvoc_metrics(pred_bboxes, gt_bboxes, task, iou_threshold=0.5, method="all-points"):
     """Computes the metrics used by the VOC Pascal 2012 challenge.
 
@@ -117,6 +119,7 @@ def compute_pascalvoc_metrics(pred_bboxes, gt_bboxes, task, iou_threshold=0.5, m
     return ret
 
 
+#@thelper.concepts.detection
 def compute_average_precision(precision, recall, method="all-points"):
     """Computes the average precision given an array of precision and recall values.
 
