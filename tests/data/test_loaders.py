@@ -252,11 +252,12 @@ def sampler_config():
 
     class FakeSamplerA(torch.utils.data.sampler.Sampler):
 
-        def __init__(self, indices, labels, scale=1.0, seeds=None):
+        def __init__(self, indices, labels, scale=1.0, seeds=None, check=True):
             super().__init__(None)
-            assert scale == 0.5
-            assert seeds is not None
-            assert len(indices) == len(labels)
+            if check:
+                assert scale == 0.5
+                assert seeds is not None
+                assert len(indices) == len(labels)
             self.nb_samples = len(indices)
 
         def __iter__(self):
@@ -270,9 +271,13 @@ def sampler_config():
         def __init__(self, indices):
             super().__init__(None)
             self.nb_samples = len(indices)
+            self.epoch = None
 
         def __iter__(self):
             return iter([13] * self.nb_samples)
+
+        def set_epoch(self, idx):
+            self.epoch = idx
 
         def __len__(self):
             return self.nb_samples
@@ -307,9 +312,21 @@ def test_custom_sampler(sampler_config):
     assert task.check_compat(sampler_config["datasets"]["dataset_A"].task, exact=True)
     for batch in train_loader:
         assert len(batch["transf"]) == 1 and batch["idx"][0].item() == 42
+    train_loader.set_epoch(42)  # sampler does not support it, but it should not crash
     for batch in valid_loader:
         assert len(batch["transf"]) == 1 and batch["idx"][0].item() == 13
+    valid_loader.set_epoch(13)
+    assert valid_loader.sampler.epoch == 13
     assert not test_loader
+    bad_sampler_config = copy.deepcopy(sampler_config)
+    bad_sampler_config["loaders"]["sampler"] = {"type": sampler_config["loaders"]["train_sampler"]["type"]}
+    with pytest.raises(AssertionError):
+        _ = thelper.data.create_loaders(bad_sampler_config)
+    bad_sampler_config = copy.deepcopy(sampler_config)
+    bad_sampler_config["loaders"]["train_sampler"] = \
+        sampler_config["loaders"]["train_sampler"]["type"]([], [], check=False)
+    with pytest.raises(AssertionError):
+        _ = thelper.data.create_loaders(bad_sampler_config)
 
 
 def test_default_collate():
