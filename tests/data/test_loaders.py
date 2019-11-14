@@ -102,10 +102,15 @@ class DummyClassifDataset(thelper.data.Dataset):
         super().__init__(transforms=transforms, deepcopy=deepcopy)
         inputs = torch.randint(0, 2 ** 16 - 1, size=(nb_samples, 1))
         labels = torch.remainder(torch.randperm(nb_samples), nb_classes)
-        self.samples = [{"input": inputs[idx], "label": labels[idx], "idx": idx, "subset": subset} for idx in range(nb_samples)]
-        self.task = thelper.tasks.Classification([str(idx) for idx in range(nb_classes)], "input", "label", meta_keys=["idx", "subset"])
+        self.samples = [{"input": inputs[idx], "label": labels[idx], "transf": f"{idx}",
+                         "idx": idx, "subset": subset} for idx in range(nb_samples)]
+        self.task = thelper.tasks.Classification([str(idx) for idx in range(nb_classes)],
+                                                 "input", "label", meta_keys=["idx", "subset", "transf"])
+        self.transforms_out = None
 
     def __getitem__(self, idx):
+        if self.transforms:
+            return self.transforms(self.samples[idx])
         return self.samples[idx]
 
 
@@ -113,9 +118,9 @@ class DummyClassifDataset(thelper.data.Dataset):
 def class_split_config():
     return {
         "datasets": {
-            "dataset_A": DummyClassifDataset(1000, 10, "A"),
-            "dataset_B": DummyClassifDataset(1000, 10, "B"),
-            "dataset_C": DummyClassifDataset(1000, 10, "C")
+            "dataset_A": DummyClassifDataset(1000, 10, "A", deepcopy=True),
+            "dataset_B": DummyClassifDataset(1000, 10, "B", deepcopy=False),
+            "dataset_C": DummyClassifDataset(1000, 10, "C", transforms=lambda x: x)
         },
         "loaders": {
             "batch_size": 32,
@@ -177,6 +182,134 @@ def test_classif_split_no_balancing(class_split_config):
     assert not bool(set(train_samples) & set(valid_samples))
     assert not bool(set(train_samples) & set(test_samples))
     assert not bool(set(valid_samples) & set(test_samples))
+
+
+@pytest.fixture
+def augm_config():
+
+    def transfA(sample):
+        assert isinstance(sample, dict) and "transf" in sample
+        sample["transf"] += "A"
+        return sample
+
+    def transfB(sample):
+        assert isinstance(sample, dict) and "transf" in sample
+        sample["transf"] += "B"
+        return sample
+
+    return {
+        "datasets": {
+            "dataset_A": DummyClassifDataset(100, 10, "A", transforms=transfA),
+        },
+        "loaders": {
+            "train_split": {
+                "dataset_A": 0.4
+            },
+            "valid_split": {
+                "dataset_A": 0.5
+            },
+            "test_split": {
+                "dataset_A": 0.1
+            },
+            "train_augments": {
+                "append": False,
+                "transforms": [
+                    transfB
+                ]
+            },
+            "valid_augments": {
+                "append": True,
+                "transforms": [
+                    transfB
+                ]
+            }
+        }
+    }
+
+
+def test_augm(augm_config):
+    task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(augm_config)
+    assert task.check_compat(augm_config["datasets"]["dataset_A"].task, exact=True)
+    for batch in train_loader:
+        assert len(batch["transf"]) == 1 and batch["transf"][0].endswith("BA")
+    for batch in valid_loader:
+        assert len(batch["transf"]) == 1 and batch["transf"][0].endswith("AB")
+    for batch in test_loader:
+        assert len(batch["transf"]) == 1 and batch["transf"][0].endswith("A")
+    augm_config["datasets"]["dataset_A"] = DummyClassifDataset(100, 10, "A")
+    task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(augm_config)
+    assert task.check_compat(augm_config["datasets"]["dataset_A"].task, exact=True)
+    for batch in train_loader:
+        assert len(batch["transf"]) == 1 and batch["transf"][0].endswith("B")
+    for batch in valid_loader:
+        assert len(batch["transf"]) == 1 and batch["transf"][0].endswith("B")
+    for batch in test_loader:
+        assert len(batch["transf"]) == 1 and "B" not in batch["transf"][0]
+
+
+@pytest.fixture
+def sampler_config():
+
+    class FakeSamplerA(torch.utils.data.sampler.Sampler):
+
+        def __init__(self, indices, labels, scale=1.0, seeds=None):
+            super().__init__(None)
+            assert scale == 0.5
+            assert seeds is not None
+            assert len(indices) == len(labels)
+            self.nb_samples = len(indices)
+
+        def __iter__(self):
+            return iter([42] * self.nb_samples)
+
+        def __len__(self):
+            return self.nb_samples
+
+    class FakeSamplerB(torch.utils.data.sampler.Sampler):
+
+        def __init__(self, indices):
+            super().__init__(None)
+            self.nb_samples = len(indices)
+
+        def __iter__(self):
+            return iter([13] * self.nb_samples)
+
+        def __len__(self):
+            return self.nb_samples
+
+    return {
+        "datasets": {
+            "dataset_A": DummyClassifDataset(100, 10, "A"),
+        },
+        "loaders": {
+            "train_split": {
+                "dataset_A": 0.4
+            },
+            "train_sampler": {
+                "pass_labels": True,
+                "type": FakeSamplerA,
+            },
+            "train_scale": 0.5,
+            "valid_split": {
+                "dataset_A": 0.15
+            },
+            "valid_sampler": {
+                "type": FakeSamplerB
+            },
+            "valid_scale": 1.0,
+            "skip_norm": True
+        }
+    }
+
+
+def test_custom_sampler(sampler_config):
+    task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(sampler_config)
+    assert task.check_compat(sampler_config["datasets"]["dataset_A"].task, exact=True)
+    for batch in train_loader:
+        assert len(batch["transf"]) == 1 and batch["idx"][0].item() == 42
+    for batch in valid_loader:
+        assert len(batch["transf"]) == 1 and batch["idx"][0].item() == 13
+    assert not test_loader
 
 
 def test_default_collate():
@@ -327,7 +460,6 @@ def test_loader_factory(class_split_config, mocker):
         "type": "torch.utils.data.sampler.RandomSampler"
     }
     factory = thelper.data.loaders.LoaderFactory(loaders_config_sampler)
-    assert factory.sampler_type == torch.utils.data.sampler.RandomSampler
     assert factory.train_sampler
     _ = mocker.patch("thelper.transforms.load_transforms", return_value="dummy")
     loaders_config_transfs = copy.deepcopy(class_split_config["loaders"])
