@@ -51,7 +51,6 @@ class Annotator:
             raise AssertionError("invalid input dataset parser dictionary")
         self.config = config
         self.annotator_config = thelper.utils.get_key_def(["params", "parameters"], config["annotator"], {})
-        self.logger = thelper.utils.get_class_logger()
         self.name = session_name
         self.save_dir = save_dir
         self.datasets = datasets
@@ -61,10 +60,13 @@ class Annotator:
         self.annotations_dir = os.path.join(self.save_dir, "annotations")
         if not os.path.isdir(self.annotations_dir):
             os.makedirs(self.annotations_dir)
+        thelper.utils.init_logger()  # make sure all logging is initialized before attaching this part
         annot_logger_path = os.path.join(self.save_dir, "logs", "annotator.log")
         annot_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         annot_logger_fh = logging.FileHandler(annot_logger_path)
+        annot_logger_fh.setLevel(logging.NOTSET)
         annot_logger_fh.setFormatter(annot_logger_format)
+        self.logger = thelper.utils.get_class_logger()
         self.logger.addHandler(annot_logger_fh)
         self.logger.info("created annotation log for session '%s'" % self.name)
         logstamp = thelper.utils.get_log_stamp()

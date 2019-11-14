@@ -65,9 +65,11 @@ def create_model(config, task, save_dir=None, ckptdata=None):
         | :func:`thelper.utils.load_checkpoint`
     """
     if save_dir is not None:
+        thelper.utils.init_logger()  # make sure all logging is initialized before attaching this part
         modules_logger_path = os.path.join(save_dir, "logs", "modules.log")
         modules_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         modules_logger_fh = logging.FileHandler(modules_logger_path)
+        modules_logger_fh.setLevel(logging.NOTSET)
         modules_logger_fh.setFormatter(modules_logger_format)
         thelper.nn.logger.addHandler(modules_logger_fh)
     logger.debug("loading model")

@@ -179,14 +179,16 @@ def create_loaders(config, save_dir=None):
     session_name = config["name"] if "name" in config else "session"
     data_logger_dir = None
     if save_dir is not None:
+        thelper.utils.init_logger()  # make sure all logging is initialized before attaching this part
         data_logger_dir = os.path.join(save_dir, "logs")
         os.makedirs(data_logger_dir, exist_ok=True)
         data_logger_path = os.path.join(data_logger_dir, "data.log")
         data_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         data_logger_fh = logging.FileHandler(data_logger_path)
+        data_logger_fh.setLevel(logging.NOTSET)
         data_logger_fh.setFormatter(data_logger_format)
         thelper.data.logger.addHandler(data_logger_fh)
-        thelper.data.logger.info("created data log for session '%s'" % session_name)
+        thelper.data.logger.info(f"created data log for session '{session_name}'")
     logger.debug("loading data usage config")
     # todo: 'data_config' field is deprecated, might be removed later
     if "data_config" in config:
@@ -196,29 +198,25 @@ def create_loaders(config, save_dir=None):
     from thelper.data.loaders import LoaderFactory as LoaderFactory
     loader_factory = LoaderFactory(loaders_config)
     datasets, task = create_parsers(config, loader_factory.get_base_transforms())
-    if not datasets or task is None:
-        raise AssertionError("invalid dataset configuration (got empty list)")
+    assert datasets and task is not None, "invalid dataset configuration (got empty list)"
     for dataset_name, dataset in datasets.items():
-        logger.info("parsed dataset: %s" % str(dataset))
-    logger.info("task info: %s" % str(task))
+        logger.info(f"parsed dataset: {str(dataset)}")
+    logger.info(f"task info: {str(task)}")
     logger.debug("splitting datasets and creating loaders...")
     train_idxs, valid_idxs, test_idxs = loader_factory.get_split(datasets, task)
     if save_dir is not None:
         with open(os.path.join(data_logger_dir, "task.log"), "a+") as fd:
-            fd.write("session: %s-%s\n" % (session_name, logstamp))
-            fd.write("version: %s\n" % repover)
+            fd.write(f"session: {session_name}-{logstamp}\n")
+            fd.write(f"version: {repover}\n")
             fd.write(str(task) + "\n")
         for dataset_name, dataset in datasets.items():
             dataset_log_file = os.path.join(data_logger_dir, dataset_name + ".log")
             if not loader_factory.skip_verif and os.path.isfile(dataset_log_file):
-                logger.info("verifying sample list for dataset '%s'..." % dataset_name)
+                logger.info(f"verifying sample list for dataset '{dataset_name}'...")
                 log_content = thelper.utils.load_config(dataset_log_file, as_json=True, add_name_if_missing=False)
-                if not isinstance(log_content, dict):
-                    # could not find new style (json) dataset log, cannot easily parse and compare this log
-                    logger.warning("cannot verify that old split is similar to new split, log is out-of-date")
-                    continue
-                if "samples" not in log_content or not isinstance(log_content["samples"], list):
-                    raise AssertionError("unexpected dataset log content (bad 'samples' field)")
+                assert isinstance(log_content, dict), "old split data logs no longer supported for verification"
+                assert "samples" in log_content and isinstance(log_content["samples"], list), \
+                    "unexpected dataset log content (bad 'samples' field, should be list)"
                 samples_old = log_content["samples"]
                 samples_new = dataset.samples if hasattr(dataset, "samples") and dataset.samples is not None \
                     and len(dataset.samples) == len(dataset) else []
@@ -233,10 +231,10 @@ def create_loaders(config, save_dir=None):
                     breaking = False
                     for set_name, idxs in zip(["train_idxs", "valid_idxs", "test_idxs"],
                                               [train_idxs[dataset_name], valid_idxs[dataset_name], test_idxs[dataset_name]]):
-                        # index values were paired in tuples earlier, 0=idx, 1=label
-                        if log_content[set_name] != [idx for idx, _ in idxs]:
-                            query_msg = "Old indices list for dataset '%s' mismatch with current indices" \
-                                        "list ('%s'); proceed anyway?" % (dataset_name, set_name)
+                        # index values were paired in tuples earlier, 0=idx, 1=label --- we unpack in the miniloop below
+                        if not np.array_equal(np.sort(log_content[set_name]), np.sort([idx for idx, _ in idxs])):
+                            query_msg = f"Old indices list for dataset '{dataset_name}' mismatch with current indices" \
+                                        f"list ('{set_name}'); proceed anyway?"
                             answer = thelper.utils.query_yes_no(query_msg, bypass="n")
                             if not answer:
                                 logger.error("indices list mismatch with previous run; user aborted")
@@ -246,8 +244,8 @@ def create_loaders(config, save_dir=None):
                     if not breaking:
                         for idx, (sample_new, sample_old) in enumerate(zip(samples_new, samples_old)):
                             if str(sample_new) != sample_old:
-                                query_msg = "Old sample #%d for dataset '%s' mismatch with current #%d; proceed anyway?" \
-                                            "\n\told: %s\n\tnew: %s" % (idx, dataset_name, idx, str(sample_old), str(sample_new))
+                                query_msg = f"Old sample #{idx} for dataset '{dataset_name}' mismatch with current #{idx};" \
+                                            f" proceed anyway?\n\told: {str(sample_old)}\n\tnew: {str(sample_new)}"
                                 answer = thelper.utils.query_yes_no(query_msg, bypass="n")
                                 if not answer:
                                     logger.error("sample list mismatch with previous run; user aborted")

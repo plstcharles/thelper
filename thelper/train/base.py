@@ -151,10 +151,12 @@ class Trainer:
         os.makedirs(session_dir, exist_ok=True)
         logs_dir = os.path.join(session_dir, "logs")
         os.makedirs(logs_dir, exist_ok=True)
+        thelper.utils.init_logger()  # make sure all logging is initialized before attaching this part
         thelper.utils.save_env_list(os.path.join(logs_dir, "packages.log"))
         train_logger_path = os.path.join(logs_dir, "trainer.log")
         train_logger_format = logging.Formatter("[%(asctime)s - %(process)s] %(levelname)s : %(message)s")
         train_logger_fh = logging.FileHandler(train_logger_path)
+        train_logger_fh.setLevel(logging.NOTSET)
         train_logger_fh.setFormatter(train_logger_format)
         self.logger = thelper.utils.get_class_logger()
         self.logger.addHandler(train_logger_fh)
