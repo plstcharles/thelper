@@ -43,6 +43,10 @@ def dummy_int():
 
 
 def test_dataset_inteface():
+    with pytest.raises(AssertionError):
+        _ = thelper.data.Dataset(transforms="potato", deepcopy=False)
+    with pytest.raises(AssertionError):
+        _ = thelper.data.Dataset(transforms=["potato"], deepcopy=False)
     transf = thelper.transforms.operations.NoTransform()
     dataset = thelper.data.Dataset(transforms=transf, deepcopy=False)
     assert str(dataset.transforms) == str(thelper.transforms.operations.NoTransform())
