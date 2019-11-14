@@ -90,11 +90,11 @@ def test_tensor_loader_interface(tensor_dataset, num_workers):
         assert loader.dataset.transforms.epoch == 0
         assert batch[0].shape == (2,)
     assert loader.epoch == 1
-    batch = next(loader)
+    batch = next(iter(loader))
     assert not all([torch.all(torch.eq(rand_vals[idx], batch[1:4][idx])) for idx in range(3)])
     assert loader.epoch == 2
     loader.set_epoch(0)
-    batch = next(loader)
+    batch = next(iter(loader))
     assert all([torch.all(torch.eq(rand_vals[idx], batch[1:4][idx])) for idx in range(3)])
     with pytest.raises(AssertionError):
         loader.set_epoch(None)
@@ -559,9 +559,25 @@ def test_sample_data_verif(verif_config, verif_dir_path, mocker):
     task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(bad_config, save_dir=verif_dir_path)
     assert len(test_loader) == 2  # should be 2 batches of 32 samples instead of 4
     assert proceed_query.call_count == 1
+
+    shutil.rmtree(verif_dir_path, ignore_errors=True)  # rebuild correct logs with next call for new test
+    _ = thelper.data.create_loaders(verif_config, save_dir=verif_dir_path)
+    bad_config["datasets"]["dataset_C"] = DummyClassifDataset(100, 3, "C", seed=3)
+    bad_config["loaders"]["test_split"]["dataset_C"] = 0.9
+    bad_config["loaders"]["skip_split_norm"] = True
+    proceed_query = mocker.patch("thelper.utils.query_yes_no", return_value=False)
+    with pytest.raises(SystemExit):
+        _ = thelper.data.create_loaders(bad_config, save_dir=verif_dir_path)
+    assert proceed_query.call_count == 1
+    proceed_query = mocker.patch("thelper.utils.query_yes_no", return_value=True)
+    task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(bad_config, save_dir=verif_dir_path)
+    assert proceed_query.call_count == 1
+    assert sum([subset == "C" for b in test_loader for subset in b["subset"]]) < 100
+
     shutil.rmtree(verif_dir_path, ignore_errors=True)  # rebuild correct logs with next call for new test
     _ = thelper.data.create_loaders(verif_config, save_dir=verif_dir_path)
     bad_config["datasets"]["dataset_C"] = DummyClassifDataset(100, 3, "D", seed=3)
+    bad_config["loaders"]["test_split"]["dataset_C"] = 1.0
     proceed_query = mocker.patch("thelper.utils.query_yes_no", return_value=False)
     with pytest.raises(SystemExit):
         _ = thelper.data.create_loaders(bad_config, save_dir=verif_dir_path)
