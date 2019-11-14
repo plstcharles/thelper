@@ -73,10 +73,10 @@ def test_tensor_loader_interface(tensor_dataset, num_workers):
         _ = thelper.data.DataLoader(tensor_dataset, seeds=0)
     with pytest.raises(AssertionError):
         _ = thelper.data.DataLoader(tensor_dataset, epoch=None)
-    rand_vals = []
+    rand_vals = None
     assert loader.epoch == 0
     for batch_idx, batch in enumerate(loader):
-        if batch_idx == 0:
+        if rand_vals is None:
             rand_vals = batch[1:4]
         else:
             # pretty unlikely to get triple collision...
@@ -86,6 +86,14 @@ def test_tensor_loader_interface(tensor_dataset, num_workers):
         assert loader.dataset.transforms.epoch == 0
         assert batch[0].shape == (2,)
     assert loader.epoch == 1
+    for batch_idx, batch in enumerate(loader):
+        assert not all([torch.all(torch.eq(rand_vals[idx], batch[1:4][idx])) for idx in range(3)])
+        break
+    assert loader.epoch == 2
+    loader.set_epoch(0)
+    for batch_idx, batch in enumerate(loader):
+        assert all([torch.all(torch.eq(rand_vals[idx], batch[1:4][idx])) for idx in range(3)])
+        break
     with pytest.raises(AssertionError):
         loader.set_epoch(None)
     loader.set_epoch(0)
@@ -95,6 +103,21 @@ def test_tensor_loader_interface(tensor_dataset, num_workers):
             assert all([torch.all(torch.eq(rand_vals[idx], batch[1:4][idx])) for idx in range(3)])
         assert batch[0].shape == (2,)
     assert loader.epoch == 1
+    loader = thelper.data.DataLoader(tensor_dataset)  # without fixed seed
+    rand_vals = None
+    assert loader.epoch == 0
+    for loop1 in range(5):
+        for loop2 in range(5):
+            for batch_idx, batch in enumerate(loader):
+                if rand_vals is None:
+                    rand_vals = batch[1:4]
+                else:
+                    # pretty unlikely to get triple collision...
+                    assert not all([torch.all(torch.eq(rand_vals[idx], batch[1:4][idx])) for idx in range(3)])
+                    break
+            if loader.epoch > 1:
+                break
+        loader.set_epoch(0)
 
 
 class DummyClassifDataset(thelper.data.Dataset):
@@ -245,6 +268,7 @@ def test_augm(augm_config):
         assert len(batch["transf"]) == 1 and batch["transf"][0].endswith("B")
     for batch in test_loader:
         assert len(batch["transf"]) == 1 and "B" not in batch["transf"][0]
+    test_loader.set_epoch(0)
 
 
 @pytest.fixture
