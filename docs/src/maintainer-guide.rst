@@ -46,6 +46,22 @@ the middle of a run. To get rid of these, you can use::
     $ make clean-test
 
 
+Releases
+========
+
+To tag a commit for a release, you should use ``bumpversion``. It is pre-configured to update all
+framework version references everywhere and automatically create a new commit with the required tag.
+Bumping the version works by incrementing the patch (v0.0.X), minor (v0.X.0) or major (vX.0.0) integer::
+
+    $ bumpversion patch
+        or
+    $ bumpversion minor
+        or
+    $ bumpversion major
+
+Creating and pushing any tag on GitHub will trigger the deployment phase on Travis CI.
+
+
 Documentation
 =============
 
