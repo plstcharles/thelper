@@ -103,7 +103,7 @@ def test_tensor_loader_interface(tensor_dataset, num_workers):
             assert all([torch.all(torch.eq(rand_vals[idx], batch[1:4][idx])) for idx in range(3)])
         assert batch[0].shape == (2,)
     assert loader.epoch == 1
-    loader = thelper.data.DataLoader(tensor_dataset)  # without fixed seed
+    loader = thelper.data.DataLoader(tensor_dataset, num_workers=num_workers)  # without fixed seed
     rand_vals = None
     assert loader.epoch == 0
     for loop1 in range(5):
