@@ -143,12 +143,11 @@ class DataLoader(torch.utils.data.DataLoader):
         if self.sampler is not None:
             if hasattr(self.sampler, "set_epoch") and callable(self.sampler.set_epoch):
                 self.sampler.set_epoch(self.epoch)
-        if hasattr(self, "dataset"):
-            if hasattr(self.dataset, "set_epoch") and callable(self.dataset.set_epoch):
-                self.dataset.set_epoch(epoch)
-            if hasattr(self.dataset, "transforms"):
-                if hasattr(self.dataset.transforms, "set_epoch") and callable(self.dataset.transforms.set_epoch):
-                    self.dataset.transforms.set_epoch(epoch)
+        if hasattr(self.dataset, "set_epoch") and callable(self.dataset.set_epoch):
+            self.dataset.set_epoch(epoch)
+        if hasattr(self.dataset, "transforms"):
+            if hasattr(self.dataset.transforms, "set_epoch") and callable(self.dataset.transforms.set_epoch):
+                self.dataset.transforms.set_epoch(epoch)
 
     def _worker_init_fn(self, worker_id):
         """Sets up the RNGs state of each worker based on their unique id and the epoch number."""
