@@ -702,7 +702,7 @@ def import_function(func,           # type: Union[Callable, AnyStr, List, Dict]
         return functools.partial(multi_caller, [import_function(fn, params) for fn in func])
     if isinstance(func, dict):
         errmsg = "dynamic function import via dictionary must provide 'type' and 'params' members"
-        fn_type = thelper.utils.get_key(["type", "func", "op", "name"], func, msg=errmsg)
+        fn_type = thelper.utils.get_key(["type", "func", "function", "op", "operation", "name"], func, msg=errmsg)
         fn_params = thelper.utils.get_key_def(["params", "param", "parameters", "kwargs"], func, None)
         fn_params = {} if fn_params is None else fn_params
         fn_params = {**params, **fn_params}

@@ -85,15 +85,20 @@ def load_transforms(stages, avoid_transform_wrapper=False):
         | :func:`thelper.transforms.utils.load_augments`
         | :func:`thelper.data.utils.create_loaders`
     """
+    # NOTE DISTINCTION BETWEEN OPERATORS AND TRANSFORMERS? @@@@@ TODO
     assert isinstance(stages, list), "expected stages to be provided as a list"
     if not stages:
         return None, True  # no-op transform, and dont-care append
-    assert all([isinstance(stage, dict) for stage in stages]), "expected all stages to be provided as dictionaries"
+    assert all([isinstance(stage, dict) or callable(stage) for stage in stages]), \
+        "expected all stages to be provided as dictionaries"
     operations = []
     for stage_idx, stage in enumerate(stages):
+        if callable(stage):  # huge skip, user probably provided ops pipeline as function pointers
+            operations.append(stage)
+            continue
         assert "operation" in stage and stage["operation"], f"stage #{stage_idx} is missing its operation field"
         operation_name = stage["operation"]
-        operation_params = thelper.utils.get_key_def(["params", "parameters"], stage, {})
+        operation_params = thelper.utils.get_key_def(["params", "param", "parameters", "kwargs"], stage, {})
         assert isinstance(operation_params, dict), f"stage #{stage_idx} parameters are not provided as a dictionary"
         operation_targets = None
         if "target_key" in stage:
