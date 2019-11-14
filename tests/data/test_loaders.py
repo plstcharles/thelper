@@ -1,13 +1,17 @@
 import collections
 import copy
 import math
+import os
 import random
+import shutil
 
 import numpy as np
 import pytest
 import torch
 
 import thelper
+
+test_save_path = ".pytest_cache"
 
 
 class CustomSampler(torch.utils.data.sampler.RandomSampler):
@@ -86,14 +90,12 @@ def test_tensor_loader_interface(tensor_dataset, num_workers):
         assert loader.dataset.transforms.epoch == 0
         assert batch[0].shape == (2,)
     assert loader.epoch == 1
-    for batch_idx, batch in enumerate(loader):
-        assert not all([torch.all(torch.eq(rand_vals[idx], batch[1:4][idx])) for idx in range(3)])
-        break
+    batch = next(loader)
+    assert not all([torch.all(torch.eq(rand_vals[idx], batch[1:4][idx])) for idx in range(3)])
     assert loader.epoch == 2
     loader.set_epoch(0)
-    for batch_idx, batch in enumerate(loader):
-        assert all([torch.all(torch.eq(rand_vals[idx], batch[1:4][idx])) for idx in range(3)])
-        break
+    batch = next(loader)
+    assert all([torch.all(torch.eq(rand_vals[idx], batch[1:4][idx])) for idx in range(3)])
     with pytest.raises(AssertionError):
         loader.set_epoch(None)
     loader.set_epoch(0)
@@ -106,7 +108,7 @@ def test_tensor_loader_interface(tensor_dataset, num_workers):
     loader = thelper.data.DataLoader(tensor_dataset, num_workers=num_workers)  # without fixed seed
     rand_vals = None
     assert loader.epoch == 0
-    for loop1 in range(3):
+    for loop1 in range(3):  # pragma: no cover
         for loop2 in range(3):
             for batch_idx, batch in enumerate(loader):
                 if rand_vals is None:
@@ -121,8 +123,10 @@ def test_tensor_loader_interface(tensor_dataset, num_workers):
 
 
 class DummyClassifDataset(thelper.data.Dataset):
-    def __init__(self, nb_samples, nb_classes, subset, transforms=None, deepcopy=False):
+    def __init__(self, nb_samples, nb_classes, subset, transforms=None, deepcopy=False, seed=None):
         super().__init__(transforms=transforms, deepcopy=deepcopy)
+        if seed is not None:
+            torch.manual_seed(seed)
         inputs = torch.randint(0, 2 ** 16 - 1, size=(nb_samples, 1))
         labels = torch.remainder(torch.randperm(nb_samples), nb_classes)
         self.samples = [{"input": inputs[idx], "label": labels[idx], "transf": f"{idx}",
@@ -480,6 +484,92 @@ def test_external_split(ext_split_config, mocker):
     assert not bool(set(train_samples) & set(valid_samples))
     assert not bool(set(train_samples) & set(test_samples))
     assert not bool(set(valid_samples) & set(test_samples))
+
+
+@pytest.fixture
+def verif_dir_path(request):
+    test_verif_path = os.path.join(test_save_path, "verif_data")
+
+    def fin():
+        shutil.rmtree(test_verif_path, ignore_errors=True)
+
+    fin()
+    request.addfinalizer(fin)
+    os.makedirs(test_verif_path, exist_ok=False)
+    return test_verif_path
+
+
+@pytest.fixture
+def verif_config():
+    return {
+        "datasets": {
+            "dataset_A": DummyClassifDataset(100, 3, "A", seed=1),
+            "dataset_B": DummyClassifDataset(100, 3, "B", seed=2),
+            "dataset_C": DummyClassifDataset(100, 3, "C", seed=3)
+        },
+        "loaders": {
+            "test_seed": 0,
+            "valid_seed": 0,
+            "torch_seed": 0,
+            "numpy_seed": 0,
+            "random_seed": 0,
+            "batch_size": 32,
+            "train_split": {
+                "dataset_A": 0.5,
+                "dataset_B": 0.7
+            },
+            "valid_split": {
+                "dataset_A": 0.4,
+                "dataset_B": 0.3
+            },
+            "test_split": {
+                "dataset_A": 0.1,
+                "dataset_C": 1.0
+            }
+        }
+    }
+
+
+def test_deprecated_fields(verif_config, mocker):
+    deprecated_config = copy.deepcopy(verif_config)
+    deprecated_config["data_config"] = deprecated_config["loaders"]
+    del deprecated_config["loaders"]
+    logger_patch = mocker.patch.object(thelper.data.utils.logger, "warning")
+    logger_patch.start()
+    _ = thelper.data.create_loaders(deprecated_config)
+    assert logger_patch.call_count == 1
+    assert logger_patch.call_args[0][0].startswith("using 'data_config")
+    logger_patch.stop()
+
+
+def test_sample_data_verif(verif_config, verif_dir_path, mocker):
+    thelper.utils.init_logger(filename=os.path.join(verif_dir_path, "thelper.log"))
+    _ = thelper.data.create_loaders(verif_config, save_dir=verif_dir_path)
+    # previous call created dataset logs, next call(s) will verify them for matches
+    verif_config["loaders"]["skip_verif"] = False  # true by default, even when missing...
+    _ = thelper.data.create_loaders(verif_config, save_dir=verif_dir_path)
+    # if we get here, the checks worked; now we will make them fail on purpose
+    bad_config = copy.deepcopy(verif_config)
+    bad_config["datasets"]["dataset_C"] = DummyClassifDataset(50, 3, "C", seed=3)
+    proceed_query = mocker.patch("thelper.utils.query_yes_no", return_value=False)
+    with pytest.raises(SystemExit):
+        _ = thelper.data.create_loaders(bad_config, save_dir=verif_dir_path)
+    assert proceed_query.call_count == 1
+    proceed_query = mocker.patch("thelper.utils.query_yes_no", return_value=True)
+    task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(bad_config, save_dir=verif_dir_path)
+    assert len(test_loader) == 2  # should be 2 batches of 32 samples instead of 4
+    assert proceed_query.call_count == 1
+    shutil.rmtree(verif_dir_path, ignore_errors=True)  # rebuild correct logs with next call for new test
+    _ = thelper.data.create_loaders(verif_config, save_dir=verif_dir_path)
+    bad_config["datasets"]["dataset_C"] = DummyClassifDataset(100, 3, "D", seed=3)
+    proceed_query = mocker.patch("thelper.utils.query_yes_no", return_value=False)
+    with pytest.raises(SystemExit):
+        _ = thelper.data.create_loaders(bad_config, save_dir=verif_dir_path)
+    assert proceed_query.call_count == 1
+    proceed_query = mocker.patch("thelper.utils.query_yes_no", return_value=True)
+    task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(bad_config, save_dir=verif_dir_path)
+    assert proceed_query.call_count == 1
+    assert sum([subset == "D" for b in test_loader for subset in b["subset"]]) == 100
 
 
 def collate_fn(*args, **kwargs):  # pragma: no cover
