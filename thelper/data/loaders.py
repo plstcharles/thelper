@@ -78,7 +78,7 @@ def default_collate(batch, force_tensor=True):
                 if re.search('[SaUO]', elem.dtype.str) is not None:
                     raise TypeError(error_msg_fmt.format(elem.dtype))
             return default_collate([torch.from_numpy(b) for b in batch], force_tensor=force_tensor)
-        if elem.shape == ():  # scalars
+        if elem.shape == ():  # scalars  # pragma: no cover
             # simplified as of PyTorch v1.2.0, and similar to <1.1.0
             return torch.as_tensor(batch)
     elif isinstance(batch[0], float):
@@ -228,18 +228,21 @@ class LoaderFactory:
         self.workers = config["workers"] if "workers" in config and config["workers"] >= 0 else 1
         self.pin_memory = thelper.utils.str2bool(config["pin_memory"]) if "pin_memory" in config else False
         self.drop_last = thelper.utils.str2bool(config["drop_last"]) if "drop_last" in config else False
-        self.sampler_type = None
-        self.train_sampler, self.valid_sampler, self.test_sampler = None, None, None
-        sampler_config = thelper.utils.get_key_def("sampler", config, {})
-        if sampler_config:
-            sampler_type = thelper.utils.get_key("type", sampler_config)
-            self.sampler_type = thelper.utils.import_class(sampler_type)
-            self.sampler_params = thelper.utils.get_key_def(["params", "parameters"], sampler_config, {})
-            self.sampler_pass_labels = thelper.utils.str2bool(thelper.utils.get_key_def("pass_labels", sampler_config, False))
-            self.sampler_pass_labels_param_name = thelper.utils.get_key_def("pass_labels_param_name", sampler_config, "labels")
-            self.train_sampler = thelper.utils.str2bool(thelper.utils.get_key_def("apply_train", sampler_config, True))
-            self.valid_sampler = thelper.utils.str2bool(thelper.utils.get_key_def("apply_valid", sampler_config, False))
-            self.test_sampler = thelper.utils.str2bool(thelper.utils.get_key_def("apply_test", sampler_config, False))
+        default_sampler_config = None
+        if "sampler" in config:
+            if any([s in config for s in ["train_sampler", "valid_sampler", "test_sampler"]]):
+                raise AssertionError("specifying 'sampler' overrides all other (loader-specific) values")
+            default_sampler_config = config["sampler"]
+            assert isinstance(default_sampler_config, dict), "invalid sampler config (should be dict)"
+        self.train_sampler = thelper.utils.get_key_def("train_sampler", config, default_sampler_config)
+        assert self.train_sampler is None or isinstance(self.train_sampler, (dict, torch.utils.data.sampler.Sampler)), \
+            "invalid training sampler (should be config dictionary or already-instantiated object)"
+        self.valid_sampler = thelper.utils.get_key_def("valid_sampler", config, default_sampler_config)
+        assert self.valid_sampler is None or isinstance(self.valid_sampler, (dict, torch.utils.data.sampler.Sampler)), \
+            "invalid valid sampler (should be config dictionary or already-instantiated object)"
+        self.test_sampler = thelper.utils.get_key_def("test_sampler", config, default_sampler_config)
+        assert self.test_sampler is None or isinstance(self.test_sampler, (dict, torch.utils.data.sampler.Sampler)), \
+            "invalid test sampler (should be config dictionary or already-instantiated object)"
         train_augs_targets = ["augments", "trainvalid_augments", "train_augments"]
         valid_augs_targets = ["augments", "trainvalid_augments", "eval_augments", "validtest_augments", "valid_augments"]
         test_augs_targets = ["augments", "eval_augments", "validtest_augments", "test_augments"]
@@ -283,19 +286,20 @@ class LoaderFactory:
                     if name in self.test_split:
                         self.test_split[name] /= usage
         self.skip_verif = thelper.utils.str2bool(config["skip_verif"]) if "skip_verif" in config else True
-        logger.debug(f"loaders will use batch sizes:" +
+        logger.debug(f"batch sizes:" +
                      (f"\n\ttrain = {self.train_batch_size}" if self.train_split else "") +
                      (f"\n\tvalid = {self.valid_batch_size}" if self.valid_split else "") +
                      (f"\n\ttest = {self.test_batch_size}" if self.test_split else ""))
-        logger.debug("samplers will use scaling factors:" +
+        logger.debug("samplers configs:" +
+                     (f"\n\ttrain = {self.train_sampler}" if self.train_sampler else "") +
+                     (f"\n\tvalid = {self.valid_sampler}" if self.valid_sampler else "") +
+                     (f"\n\ttest = {self.test_sampler}" if self.test_sampler else ""))
+        logger.debug("scaling factors:" +
                      (f"\n\ttrain = {self.train_scale}" if self.train_split else "") +
                      (f"\n\tvalid = {self.valid_scale}" if self.valid_split else "") +
                      (f"\n\ttest = {self.test_scale}" if self.test_split else ""))
         if self.drop_last:
             logger.debug("loaders will drop last batch if sample count not multiple of batch size")
-        if sampler_config:
-            logger.debug("will use sampler with type '%s' and config : %s" % (str(self.sampler_type), str(self.sampler_params)))
-            logger.debug("global sampler will be applied as: %s" % str([self.train_sampler, self.valid_sampler, self.test_sampler]))
         if self.base_transforms:
             logger.debug("base transforms: %s" % str(self.base_transforms))
 
@@ -497,7 +501,7 @@ class LoaderFactory:
             A three-element tuple containing the training, validation, and test data loaders, respectively.
         """
         loaders = []
-        for idxs_map, (augs, augs_append), shuffle, scale, sampler_apply, batch_size, collate_fn \
+        for idxs_map, (augs, augs_append), shuffle, scale, sampler, batch_size, collate_fn \
                 in zip([train_idxs, valid_idxs, test_idxs],
                        [(self.train_augments, self.train_augments_append),
                         (self.valid_augments, self.valid_augments_append),
@@ -536,18 +540,27 @@ class LoaderFactory:
                 loader_datasets.append(dataset)
             if len(loader_datasets) > 0:
                 dataset = torch.utils.data.ConcatDataset(loader_datasets) if len(loader_datasets) > 1 else loader_datasets[0]
-                if self.sampler_type is not None and sampler_apply:
-                    sampler_params = {**self.sampler_params}
-                    if self.sampler_pass_labels:
-                        sampler_params[self.sampler_pass_labels_param_name] = loader_sample_classes
-                    sampler_sig = inspect.signature(self.sampler_type)
-                    if "seeds" in sampler_sig.parameters:
-                        sampler_params["seeds"] = self.seeds
-                    if "scale" in sampler_sig.parameters:
-                        sampler_params["scale"] = scale
+                if sampler is not None:
+                    if isinstance(sampler, dict):
+                        sampler_type = thelper.utils.get_key("type", sampler, msg="sampler config dict missing 'type' attribute")
+                        sampler_type = thelper.utils.import_class(sampler_type)
+                        sampler_params = thelper.utils.get_key_def(["params", "param", "parameters", "kwargs"], sampler, {})
+                        sampler_pass_labels = thelper.utils.str2bool(thelper.utils.get_key_def("pass_labels", sampler, False))
+                        sampler_pass_labels_param_name = thelper.utils.get_key_def("pass_labels_param_name", sampler, "labels")
+                        if sampler_pass_labels:
+                            sampler_params = {**sampler_params, sampler_pass_labels_param_name: loader_sample_classes}
+                        sampler_sig = inspect.signature(sampler_type)
+                        if "seeds" in sampler_sig.parameters:
+                            sampler_params = {**sampler_params, "seeds": self.seeds}
+                        if "scale" in sampler_sig.parameters:
+                            assert "scale" not in sampler_params, "specified scale in both sampler config and loader config"
+                            sampler_params = {**sampler_params, "scale": scale}
+                        else:
+                            assert scale == 1.0, f"could not apply scale factor to sampler with type '{str(sampler_type)}'"
+                        sampler = sampler_type(loader_sample_idxs, **sampler_params)
                     else:
-                        assert scale == 1.0, f"could not apply scale factor to sample with type '{str(self.sampler_type)}'"
-                    sampler = self.sampler_type(loader_sample_idxs, **sampler_params)
+                        assert scale == 1.0, f"could not apply scale factor to (pre-instantiated) sampler with type '{str(sampler)}'"
+                    assert isinstance(sampler, torch.utils.data.sampler.Sampler), "invalid sampler type (should be torch-compatible)"
                 else:
                     if shuffle:
                         sampler = thelper.data.SubsetRandomSampler(loader_sample_idxs, seeds=self.seeds, scale=scale)

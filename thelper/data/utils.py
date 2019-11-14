@@ -96,7 +96,7 @@ def create_loaders(config, save_dir=None):
             "batch_size": 128,  # batch size to use in data loaders
             "shuffle": true,  # specifies that the data should be shuffled
             "workers": 4,  # number of threads to pre-fetch data batches with
-            "sampler": {  # we can use a data sampler to rebalance classes (optional)
+            "train_sampler": {  # we can use a data sampler to rebalance classes (optional)
                 # see e.g. 'thelper.data.samplers.WeightedSubsetRandomSampler'
                 # ...
             },
