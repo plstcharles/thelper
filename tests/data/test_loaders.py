@@ -106,8 +106,8 @@ def test_tensor_loader_interface(tensor_dataset, num_workers):
     loader = thelper.data.DataLoader(tensor_dataset, num_workers=num_workers)  # without fixed seed
     rand_vals = None
     assert loader.epoch == 0
-    for loop1 in range(5):
-        for loop2 in range(5):
+    for loop1 in range(3):
+        for loop2 in range(3):
             for batch_idx, batch in enumerate(loader):
                 if rand_vals is None:
                     rand_vals = batch[1:4]
@@ -326,6 +326,9 @@ def sampler_config():
                 "type": FakeSamplerB
             },
             "valid_scale": 1.0,
+            "test_split": {
+                "dataset_A": 0.1
+            },
             "skip_norm": True
         }
     }
@@ -341,7 +344,7 @@ def test_custom_sampler(sampler_config):
         assert len(batch["transf"]) == 1 and batch["idx"][0].item() == 13
     valid_loader.set_epoch(13)
     assert valid_loader.sampler.epoch == 13
-    assert not test_loader
+    test_loader.set_epoch(0)  # does not have a sampler, but should not forward the call
     bad_sampler_config = copy.deepcopy(sampler_config)
     bad_sampler_config["loaders"]["sampler"] = {"type": sampler_config["loaders"]["train_sampler"]["type"]}
     with pytest.raises(AssertionError):

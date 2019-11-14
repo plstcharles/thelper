@@ -278,12 +278,9 @@ class LoaderFactory:
                 if (normalize_ratios or usage > 1) and usage > 0:
                     if usage > 1:
                         logger.warning("dataset split for '%s' sums to more than 1; will normalize..." % name)
-                    if name in self.train_split:
-                        self.train_split[name] /= usage
-                    if name in self.valid_split:
-                        self.valid_split[name] /= usage
-                    if name in self.test_split:
-                        self.test_split[name] /= usage
+                    for subset in [self.train_split, self.valid_split, self.test_split]:
+                        if name in subset:
+                            subset[name] /= usage
         self.skip_verif = thelper.utils.str2bool(config["skip_verif"]) if "skip_verif" in config else True
         logger.debug(f"batch sizes:" +
                      (f"\n\ttrain = {self.train_batch_size}" if self.train_split else "") +
