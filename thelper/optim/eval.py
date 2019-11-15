@@ -4,14 +4,16 @@ This module contains procedures used to evaluate models and prediction results o
 tasks or datasets. These procedures may be used as part of metric classes (defined in
 :mod:`thelper.optim.metrics`) or high-level debug/drawing utilities.
 """
+from typing import Dict, List, Optional, Union  # noqa: F401
 
 import numpy as np
+import torch
 
 import thelper
 
 
-#@thelper.concepts.detection
-def compute_iou(bbox1, bbox2):
+@thelper.concepts.detection
+def compute_bbox_iou(bbox1, bbox2):
     # type: (thelper.tasks.detect.BoundingBox, thelper.tasks.detect.BoundingBox) -> float
     """Computes and returns the Intersection over Union (IoU) of two bounding boxes."""
     assert isinstance(bbox1, thelper.data.BoundingBox) and isinstance(bbox2, thelper.data.BoundingBox), \
@@ -22,6 +24,33 @@ def compute_iou(bbox1, bbox2):
     intersection_height = min(bbox1.bottom + bbox1_marg, bbox2.bottom + bbox2_marg) - max(bbox1.top, bbox2.top)
     intersection_area = max(0, intersection_width) * max(0, intersection_height)
     return float(intersection_area / float(bbox1.area + bbox2.area - intersection_area))
+
+
+@thelper.concepts.segmentation
+def compute_mask_iou(mask1, mask2, class_indices=None, dontcare=None):
+    # type: (np.ndarray, np.ndarray, Union[List[int], np.ndarray, torch.Tensor], Optional[int]) -> Dict[int, float]
+    """Computes and returns a map of Intersection over Union (IoU) scores for two segmentation masks."""
+    # untested as of 11/2019; needs utest!
+    assert isinstance(mask1, np.ndarray) and isinstance(mask2, np.ndarray), "invalid mask type"
+    assert mask1.shape == mask2.shape and mask1.dtype == mask2.dtype, "mismatched mask shape/types"
+    if not class_indices:
+        class_indices = np.unique(np.stack([mask1, mask2]))
+    assert isinstance(class_indices, (list, np.ndarray, torch.Tensor)), "invalid class indices array type"
+    iou_dict = {}
+    for class_idx in class_indices:
+        if dontcare is not None:
+            target_c = np.logical_and(mask2 == class_idx, mask1 != dontcare)
+            pred_c = np.logical_and(mask1 == class_idx, mask2 != dontcare)
+        else:
+            target_c = mask2 == class_idx
+            pred_c = mask1 == class_idx
+        intersection = np.logical_and(pred_c, target_c).sum()
+        union = np.logical_or(pred_c, target_c).sum()
+        if float(union) != 0.0:
+            iou_dict[class_idx] = (float(intersection) / float(union))
+        else:
+            iou_dict[class_idx] = 0.0
+    return iou_dict
 
 
 @thelper.concepts.detection
@@ -81,7 +110,7 @@ def compute_pascalvoc_metrics(pred_bboxes, gt_bboxes, task, iou_threshold=0.5, m
             curr_gt_bboxes = gt_used_flags[class_idx][image_ids[pred_bbox.image_id]]
             best_gt_bbox_idx, best_gt_bbox_iou = -1, float("-inf")
             for gt_bbox_idx, (gt_bbox, gt_bbox_flag) in enumerate(curr_gt_bboxes):
-                iou = compute_iou(pred_bbox, gt_bbox)
+                iou = compute_bbox_iou(pred_bbox, gt_bbox)
                 if iou > best_gt_bbox_iou:
                     best_gt_bbox_iou = iou
                     best_gt_bbox_idx = gt_bbox_idx
@@ -119,7 +148,7 @@ def compute_pascalvoc_metrics(pred_bboxes, gt_bboxes, task, iou_threshold=0.5, m
     return ret
 
 
-#@thelper.concepts.detection
+@thelper.concepts.detection
 def compute_average_precision(precision, recall, method="all-points"):
     """Computes the average precision given an array of precision and recall values.
 

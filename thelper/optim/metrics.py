@@ -1283,13 +1283,13 @@ class IntersectionOverUnion(Metric):
         # ...
 
     Attributes:
-        target_name: name of the class to target; if 'None', will compute mIoU instead of IoU.
+        target_names: name(s) of the class(es) to target; if 'None', will compute mIoU instead of IoU.
         max_win_size: maximum moving average window size to use (default=None, which equals dataset size).
         inters: array holding the intesection areas or IoU scores for all input samples.
         unions: array holding the union areas for all input samples.
     """
 
-    def __init__(self, target_name=None, global_score=True, max_win_size=None):
+    def __init__(self, target_names=None, global_score=True, max_win_size=None):
         """Initializes metric attributes.
 
         Note that by default, if ``max_win_size`` is not provided here, the value given to ``max_iters`` on
@@ -1298,8 +1298,10 @@ class IntersectionOverUnion(Metric):
         """
         assert max_win_size is None or (isinstance(max_win_size, int) and max_win_size > 0), \
             "invalid max sliding window size (should be positive integer)"
-        self.target_name = target_name
-        self.target_idx = None  # will be updated at runtime
+        if not isinstance(target_names, (list, np.ndarray, torch.Tensor)):
+            target_names = [target_names]
+        self.target_names = target_names
+        self.target_idxs = None  # will be updated at runtime
         self.global_score = global_score
         self.max_win_size = max_win_size
         self.inters = None  # will be instantiated on first iter
@@ -1310,7 +1312,7 @@ class IntersectionOverUnion(Metric):
     def __repr__(self):
         """Returns a generic print-friendly string containing info about this metric."""
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
-            f"(target_name={repr(self.target_name)}, global_score={repr(self.global_score)}, max_win_size={repr(self.max_win_size)})"
+            f"(target_names={repr(self.target_names)}, global_score={repr(self.global_score)}, max_win_size={repr(self.max_win_size)})"
 
     def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
                task,         # type: thelper.tasks.utils.Task
@@ -1341,9 +1343,11 @@ class IntersectionOverUnion(Metric):
         curr_idx = iter_idx % curr_win_size
         if task is not None:
             assert isinstance(task, thelper.tasks.Segmentation), "unexpected task type with IoU metric"
-            assert self.target_name is None or self.target_name in task.class_names, \
-                f"missing target class {self.target_name} in task"
-            self.target_idx = task.class_names.index(self.target_name)  # will always be kept up to date
+            if self.target_names is not None:
+                assert all([n in task.class_names for n in self.target_name]), f"missing iou target name in task"
+                self.target_idxs = [task.class_names.index(n) for n in self.target_names]
+            else:
+                self.target_idxs = [target_idx for target_idx in range(len(task.class_names))]
             self.task = task  # keep reference for eval only
         if target is None or len(target) == 0:
             # only accumulate results when groundtruth is available (should we though? affects false negative count)
@@ -1353,26 +1357,26 @@ class IntersectionOverUnion(Metric):
         assert pred.dim() == target.dim() + 1, "prediction/gt tensors dim mismatch (should be BxCx[...] and Bx[...])"
         assert pred.shape[0] == target.shape[0], "prediction/gt tensors batch size mismatch"
         assert pred.dim() <= 2 or pred.shape[2:] == target.shape[1:], "prediction/gt tensors array size mismatch"
-        pred_labels = pred.topk(1, dim=1)[1].view(pred.shape[0], -1).cpu().numpy()
-        true_labels = target.view(target.shape[0], -1).cpu().numpy()
+        with torch.no_grad():
+            pred_labels = pred.topk(1, dim=1)[1].view(pred.shape[0], -1).cpu().numpy()
+            true_labels = target.view(target.shape[0], -1).cpu().numpy()
         assert self.task is not None, "task object necessary at this point since we need to refer to dontcare value"
-        if self.target_name is None:
-            # TODO @@@@@@@@@@@
-            raise NotImplementedError
+        assert self.target_idxs, "messed up something internally..."
+        if self.global_score:
+            inters_count_map, union_count_map = {}, {}
+            for target_idx in self.target_idxs:
+                inters = np.logical_and(pred_labels == target_idx, true_labels == target_idx)
+                inters_count_map[target_idx] = np.count_nonzero(inters)
+                if self.task.dontcare is not None:
+                    valid_preds = np.logical_and(pred_labels == target_idx, true_labels != self.task.dontcare)
+                    union = np.logical_or(valid_preds, true_labels == target_idx)
+                else:
+                    union = np.logical_or(pred_labels == target_idx, true_labels == target_idx)
+                union_count_map[target_idx] = np.count_nonzero(union)
+            self.inters[curr_idx] = inters_count_map
+            self.unions[curr_idx] = union_count_map
         else:
-            assert self.target_idx is not None
-            inters = np.logical_and(pred_labels == self.target_idx, true_labels == self.target_idx)
-            if self.task.dontcare is not None:
-                union = np.logical_or(np.logical_and(pred_labels == self.target_idx,
-                                                     true_labels != self.task.dontcare),
-                                      true_labels == self.target_idx)
-            else:
-                union = np.logical_or(pred_labels == self.target_idx, true_labels == self.target_idx)
-            if self.global_score:
-                self.inters[curr_idx] = np.count_nonzero(inters)
-                self.unions[curr_idx] = np.count_nonzero(union)
-            else:
-                self.inters[curr_idx] = np.count_nonzero(inters) / np.count_nonzero(union)
+            self.inters[curr_idx] = thelper.optim.eval.compute_mask_iou(pred_labels, true_labels, self.target_idxs, self.task.dontcare)
 
     def eval(self):
         """Returns the current IoU ratio based on the accumulated counts.
@@ -1380,28 +1384,26 @@ class IntersectionOverUnion(Metric):
         Will issue a warning if no predictions have been accumulated yet.
         """
         assert self.inters.size == self.unions.size, "internal window size mismatch"
-        if self.target_name is None:
-            # TODO @@@@@@@@@@@
-            raise NotImplementedError
+        if self.global_score:
+            counts = np.array([(i, u) for i, u in zip(self.inters, self.unions) if i is not None and u is not None])
+            badbad
+            tot_inters = counts[:, 0].sum()
+            tot_unions = counts[:, 1].sum()
+            if tot_unions == 0:
+                if not self.warned_eval_bad:
+                    self.warned_eval_bad = True
+                    logger.warning("iou eval result invalid (set as 0.0), no results accumulated")
+                return 0.0
+            return tot_inters / tot_unions
         else:
-            if self.global_score:
-                counts = np.array([(i, u) for i, u in zip(self.inters, self.unions) if i is not None and u is not None])
-                tot_inters = counts[:, 0].sum()
-                tot_unions = counts[:, 1].sum()
-                if tot_unions == 0:
-                    if not self.warned_eval_bad:
-                        self.warned_eval_bad = True
-                        logger.warning("iou eval result invalid (set as 0.0), no results accumulated")
-                    return 0.0
-                return tot_inters / tot_unions
-            else:
-                ious = [i for i in self.inters if i is not None]
-                if len(ious) == 0:
-                    if not self.warned_eval_bad:
-                        self.warned_eval_bad = True
-                        logger.warning("iou eval result invalid (set as 0.0), no results accumulated")
-                    return 0.0
-                return np.array(ious).mean()
+            ious = [i for i in self.inters if i is not None]
+            if len(ious) == 0:
+                if not self.warned_eval_bad:
+                    self.warned_eval_bad = True
+                    logger.warning("iou eval result invalid (set as 0.0), no results accumulated")
+                return 0.0
+            badbad
+            return np.array(ious).mean()
 
     def reset(self):
         """Toggles a reset of the metric's internal state, deallocating bbox arrays."""

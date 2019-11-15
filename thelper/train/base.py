@@ -415,8 +415,8 @@ class Trainer:
         if scheduler is not None and self.scheduler_state is not None:
             scheduler.load_state_dict(self.scheduler_state)
             self.scheduler_state = None
-        self.logger.debug(f"loss: {str(loss)}")
-        self.logger.debug(f"optimizer: {str(optimizer)}")
+        self.logger.info(f"loss: {str(loss)}")
+        self.logger.info(f"optimizer: {str(optimizer)}")
         latest_loss = math.inf
         while self.current_epoch < self.epochs:
             self.writers["train"] = self._init_writer(self.writers["train"], self.output_paths["train"])
@@ -499,10 +499,10 @@ class Trainer:
                         self.monitor_best_epoch = self.current_epoch
                         new_best = True
                 if not isinstance(value, dict):
-                    self.logger.debug(f" epoch#{self.current_epoch} result =>  {str(key)}: {value}")
+                    self.logger.info(f" epoch#{self.current_epoch} result =>  {str(key)}: {value}")
                 else:
                     for subkey, subvalue in value.items():
-                        self.logger.debug(f" epoch#{self.current_epoch} result =>  {str(key)}:{str(subkey)}: {subvalue}")
+                        self.logger.info(f" epoch#{self.current_epoch} result =>  {str(key)}:{str(subkey)}: {subvalue}")
             if self.monitor is not None:
                 assert monitor_val is not None, f"training/validation did not evaluate required metric '{self.monitor}'"
                 if new_best:
@@ -564,10 +564,10 @@ class Trainer:
             output_group = "valid/metrics"
         for key, value in result.items():
             if not isinstance(value, dict):
-                self.logger.debug(f" final result =>  {str(key)}: {value}")
+                self.logger.info(f" final result =>  {str(key)}: {value}")
             else:
                 for subkey, subvalue in value.items():
-                    self.logger.debug(f" final result =>  {str(key)}:{str(subkey)}: {subvalue}")
+                    self.logger.info(f" final result =>  {str(key)}:{str(subkey)}: {subvalue}")
         if self.current_epoch not in self.outputs:
             # probably using an 'untrained model' (such as a FCN adapted from a classifier)
             self.outputs[self.current_epoch] = {}

@@ -20,7 +20,7 @@ import thelper.ifaces
 import thelper.typedefs  # noqa: F401
 import thelper.utils
 from thelper.ifaces import ClassNamesHandler, FormatHandler, PredictionConsumer
-from thelper.optim.eval import compute_iou
+from thelper.optim.eval import compute_bbox_iou
 from thelper.tasks.detect import BoundingBox
 
 logger = logging.getLogger(__name__)
@@ -600,7 +600,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         if target_count == 0:
             group_bboxes = [{"target": None, "detect": [{"bbox": bbox, "iou": None} for bbox in group_bboxes]}]
         elif target_count == 1:
-            sorted_detect = [{"bbox": bbox, "iou": compute_iou(bbox, target_bboxes[0])} for bbox in group_bboxes]
+            sorted_detect = [{"bbox": bbox, "iou": compute_bbox_iou(bbox, target_bboxes[0])} for bbox in group_bboxes]
             if sort_by_iou:
                 sorted_detect = list(sorted(sorted_detect, key=lambda d: d["iou"], reverse=True))
             group_bboxes = [{"target": target_bboxes[0], "detect": sorted_detect}]
@@ -611,7 +611,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
                 # FIXME:
                 #  should we do something different if all IoU = 0 (ie: false positive detection)
                 #  for now, they will all be stored in the first target, but can be tracked with IoU = 0
-                det_target_iou = [compute_iou(det, t) for t in target_bboxes]
+                det_target_iou = [compute_bbox_iou(det, t) for t in target_bboxes]
                 best_iou_idx = int(np.argmax(det_target_iou))
                 target_detects[best_iou_idx].append({"bbox": det, "iou": det_target_iou[best_iou_idx]})
             group_bboxes = [{"target": target_bboxes[i],
