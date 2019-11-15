@@ -35,7 +35,7 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
 
       * ``uniform``: will rebalance the dataset by normalizing the sample count of all classes, \
         oversampling and undersampling as required to distribute all samples equally. All \
-        removed or duplicated samples are selected randomly without replacement.
+        removed or duplicated samples are selected randomly without replacement whenever possible.
 
       * ``root``: will rebalance the dataset by normalizing class weight using an n-th degree \
         root. More specifically, for a list of initial class weights :math:`W^0=\{w_1^0, w_2^0, ... w_n^0\}`, \
@@ -46,12 +46,13 @@ class WeightedSubsetRandomSampler(torch.utils.data.sampler.Sampler):
 
         Then, according to the new distribution of weights, all classes are oversampled and
         undersampled as required to reobtain the dataset's total sample count (which may be
-        scaled). All removed or duplicated samples are selected randomly without replacement.
+        scaled). All removed or duplicated samples are selected randomly without replacement
+        whenever possible.
 
         Note that with the ``root`` strategy, if a very large root degree ``n`` is used, this
-        strategy is equivalent to ``uniform``. The ``root`` strategy essentially provides a
-        solution for extremely unbalanced datasets where uniform oversampling and undersampling
-        would be too aggressive.
+        strategy is equivalent to ``uniform``. If the degree is one, the original weights will
+        be used for sampling. The ``root`` strategy essentially provides a flexible solution to
+        rebalance very uneven label sets where uniform over/undersampling would be too aggressive.
 
     By default, this interface will try to keep the dataset size constant and balance oversampling
     with undersampling. If undersampling is undesired, the user can increase the total dataset
