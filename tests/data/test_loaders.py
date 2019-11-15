@@ -133,7 +133,6 @@ class DummyClassifDataset(thelper.data.Dataset):
                          "idx": idx, "subset": subset} for idx in range(nb_samples)]
         self.task = thelper.tasks.Classification([str(idx) for idx in range(nb_classes)],
                                                  "input", "label", meta_keys=["idx", "subset", "transf"])
-        self.transforms_out = None
 
     def __getitem__(self, idx):
         if self.transforms:
