@@ -487,20 +487,23 @@ def create_hdf5(archive_path, task, train_loader, valid_loader, test_loader, com
                 datasets[key].resize(size=(datasets_len[key],))
 
 
-def get_class_weights(label_map, stype, invmax, maxw=float('inf'), minw=0.0, norm=True):
-    """Returns a map of adjusted class weights based on a given rebalancing strategy.
+def get_class_weights(label_map, stype="linear", maxw=float('inf'), minw=0.0, norm=True, invmax=False):
+    """Returns a map of label weights that may be adjusted based on a given rebalancing strategy.
 
     Args:
         label_map: map of index lists or sample counts tied to class labels.
-        stype: weighting strategy ('uniform', 'linear', or 'rootX'); see :class:`thelper.data.samplers.WeightedSubsetRandomSampler`
-            for more information on these.
-        invmax: specifies whether to max-invert the weight vector (thus creating cost factors) or not (default=True).
+        stype: weighting strategy ('uniform', 'linear', or 'rootX'). Using 'uniform' will provide a uniform
+            map of weights. Using 'linear' will return the actual weights, unmodified. Using 'rootX' will
+            rebalance the weights according to factor 'X'. See :class:`thelper.data.samplers.WeightedSubsetRandomSampler`
+            for more information on these strategies.
         maxw: maximum allowed weight value (applied after invmax, if required).
         minw: minimum allowed weight value (applied after invmax, if required).
         norm: specifies whether the returned weights should be normalized (default=True, i.e. normalized).
+        invmax: specifies whether to max-invert the weight vector (thus creating cost factors) or not. Not
+            compatible with ``norm`` (it would return weights again instead of factors).
 
     Returns:
-        Map of adjusted weights tied to class labels.
+        Map of weights tied to class labels.
 
     .. seealso::
         | :class:`thelper.data.samplers.WeightedSubsetRandomSampler`
@@ -521,6 +524,7 @@ def get_class_weights(label_map, stype, invmax, maxw=float('inf'), minw=0.0, nor
         label_weights = {label: max(label_weights.values()) / max(weight, 1e-6) for label, weight in label_weights.items()}
     label_weights = {label: min(max(weight, minw), maxw) for label, weight in label_weights.items()}
     if norm:
+        assert not invmax, "if computing factors, normalizing is useless (you would get weights back again)"
         tot_weight = sum([w for w in label_weights.values()])
         label_weights = {label: weight / tot_weight for label, weight in label_weights.items()}
     return label_weights
