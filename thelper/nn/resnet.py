@@ -219,7 +219,7 @@ class ResNet(thelper.nn.Module):
             layers.append(block(self.inplanes, planes))
         return torch.nn.Sequential(*layers)
 
-    def get_embedding(self, x):
+    def get_embedding(self, x, pool=True):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -230,17 +230,16 @@ class ResNet(thelper.nn.Module):
         x = self.layer4(x)
         if self.layer5 is not None:
             x = self.layer5(x)
+        if pool:
+            x = self.avgpool(x)
+            x = x.view(x.size(0), -1)
         return x
 
     def forward(self, x):
-        x = self.get_embedding(x)
         if isinstance(self.task, thelper.tasks.Classification):
-            x = self.avgpool(x)
-            x = x.view(x.size(0), -1)
-            x = self.fc(x)
+            return self.fc(self.get_embedding(x, pool=True))
         elif isinstance(self.task, thelper.tasks.Segmentation):
-            x = self.fc(x)
-        return x
+            return self.fc(self.get_embedding(x), pool=False)
 
     def set_task(self, task):
         assert isinstance(task, (thelper.tasks.Classification, thelper.tasks.Segmentation)), \
