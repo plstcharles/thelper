@@ -796,6 +796,12 @@ def get_label_color_mapping(idx):
     return np.array([r, g, b], dtype=np.uint8)
 
 
+def get_label_html_color_code(idx):
+    """Returns the PASCAL VOC HTML color code for a given label index."""
+    color_array = get_label_color_mapping(idx)
+    return f"#{color_array[0]:02X}{color_array[1]:02X}{color_array[2]:02X}"
+
+
 def apply_color_map(image, colormap, dst=None):
     """Applies a color map to an image of 8-bit color indices; works similarly to cv2.applyColorMap (v3.3.1)."""
     if not isinstance(image, np.ndarray) or image.ndim != 2:
