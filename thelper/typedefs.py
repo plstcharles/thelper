@@ -75,9 +75,10 @@ if TYPE_CHECKING:
 
     ModelType = Module
     LoaderType = DataLoader
+    TaskType = Task
     MultiLoaderType = Tuple[Optional[LoaderType], Optional[LoaderType], Optional[LoaderType]]
 
-    IterCallbackType = Callable[[Task, InputType, AnyPredictionType, AnyTargetType,
+    IterCallbackType = Callable[[TaskType, InputType, AnyPredictionType, AnyTargetType,
                                 SampleType, Optional[float], int, int, int, int, AnyStr], None]
 else:
     IterCallbackParams = [
