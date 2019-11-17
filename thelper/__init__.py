@@ -17,6 +17,7 @@ import thelper.train  # noqa: F401
 import thelper.transforms  # noqa: F401
 import thelper.typedefs  # noqa: F401
 import thelper.utils  # noqa: F401
+import thelper.viz  # noqa: F401
 
 logger = logging.getLogger("thelper")
 

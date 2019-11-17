@@ -21,6 +21,7 @@ dependencies:
   - six
   - torchvision
   - tqdm
+  - umap-learn
   - pip:
     - augmentor
     - h5py

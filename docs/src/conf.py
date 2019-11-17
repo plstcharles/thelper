@@ -254,6 +254,7 @@ autodoc_mock_imports = [
     'torchvision.transforms',
     'torchvision.utils',
     'tqdm',
+    'umap',
     'yaml',
 ]
 

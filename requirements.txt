@@ -13,3 +13,4 @@ six
 torch
 torchvision
 tqdm
+umap-learn

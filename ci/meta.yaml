@@ -35,6 +35,7 @@ requirements:
     - pytorch
     - torchvision
     - tqdm
+    - umap-learn
   run:
     - albumentations
     - cython
@@ -55,6 +56,7 @@ requirements:
     - pytorch
     - torchvision
     - tqdm
+    - umap-learn
 
 test:
   imports:

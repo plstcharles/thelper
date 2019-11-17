@@ -32,8 +32,14 @@ class Trainer:
     This interface defines the general behavior of a training session which includes configuration parsing, tensorboard
     setup, metrics and goal setup, and loss/optimizer setup. It also provides utilities for uploading models and tensors
     on specific devices, and for saving the state of a session. This interface should be specialized for every task by
-    implementing the ``train_epoch`` and ``eval_epoch`` functions in a derived class. See
-    :class:`thelper.train.classif.ImageClassifTrainer` for an example.
+    implementing the ``train_epoch`` and ``eval_epoch`` functions in a derived class. For better support from visualization
+    utilities, the derived class should also implement ``to_tensor``. See :class:`thelper.train.classif.ImageClassifTrainer`
+    for a complete example.
+
+    Any trainer derived from this class will alternate between training and validation epochs. It will also support
+    post-training (final) evaluation using a separate test set. If requested, visualizations can be computed after
+    the validation epoch during training (e.g. sample activation maps, or t-SNE plots). See :mod:`thelper.viz` for
+    more information on these.
 
     The main parameters that will be parsed by this interface from a configuration dictionary are the following:
 
@@ -82,6 +88,13 @@ class Trainer:
                         "step_size": 10,
                         "step_size": 0.1
                     }
+                }
+            },
+            # visualization block (optional)
+            "viz": {
+                # multiple visualization techniques can be toggled by name
+                "tsne": {
+                    # visualization parameters would be provided here
                 }
             },
             # in this example, we use two consumers in total
@@ -297,6 +310,14 @@ class Trainer:
             else:
                 logger.warning("logging is disabled by user, internal iteration count might never be updated")
 
+        # parse visualization config (if any)
+        self.viz = thelper.utils.get_key_def(["viz", "visualization", "visualizations"], trainer_config, {})
+        assert isinstance(self.viz, dict), "invalid visulaization dictionary config"
+        for viz_key, viz_config in self.viz.items():
+            assert isinstance(viz_key, str) and viz_key in thelper.viz.supported_types, \
+                f"invalid visualization type '{viz_key}' (not in available modules)"
+            assert isinstance(viz_config, dict), f"invalid visualization configuration dictionary for type '{viz_key}'"
+
     def _init_writer(self, writer, path):
         if self.use_tbx and not writer:
             writer = self.tbx.SummaryWriter(path, comment=self.name)
@@ -345,6 +366,19 @@ class Trainer:
         else:
             out = tensor.to(dev)
         return out.detach() if detach else out
+
+    @staticmethod
+    def _loader_viz_wrapper(loader, unpacker, uploader):
+        """Data loader wrapper for visualization module usage."""
+        class LoaderWrapper:
+            def __iter__(self):
+                for sample in loader:
+                    yield uploader(unpacker(sample))
+
+            def __len__(self):
+                return len(loader)
+
+        return LoaderWrapper()
 
     def _load_optimization(self, model, dev):
         """Instantiates and returns all optimization objects required for training the model."""
@@ -487,6 +521,11 @@ class Trainer:
                                      if isinstance(metric, thelper.optim.metrics.Metric)}
                 result = {**result, "valid/metrics": valid_metric_vals}
                 monitor_type_key = "valid/metrics"  # since validation is available, use that to monitor progression
+                uploader = functools.partial(self._move_tensor, dev=self.devices, detach=True)
+                wrapped_loader = self._loader_viz_wrapper(self.valid_loader, self._to_tensor, uploader)
+                for viz, kwargs in self.viz:
+                    # todo: add output export to disk/tbx
+                    thelper.viz.visualize(model, self.task, wrapped_loader, viz, **kwargs)
             new_best = False
             monitor_val = None
             for key, value in result.items():
@@ -546,6 +585,11 @@ class Trainer:
                                 if isinstance(metric, thelper.optim.metrics.Metric)}
             result = {**result, **test_metric_vals}
             output_group = "test/metrics"
+            uploader = functools.partial(self._move_tensor, dev=self.devices, detach=True)
+            wrapped_loader = self._loader_viz_wrapper(self.test_loader, self._to_tensor, uploader)
+            for viz, kwargs in self.viz:
+                # todo: add output export to disk/tbx
+                thelper.viz.visualize(model, self.task, wrapped_loader, viz, **kwargs)
         elif self.valid_loader:
             self._set_rng_state(self.valid_loader.seeds, self.current_epoch)
             model.eval()
@@ -562,6 +606,11 @@ class Trainer:
                                  if isinstance(metric, thelper.optim.metrics.Metric)}
             result = {**result, **valid_metric_vals}
             output_group = "valid/metrics"
+            uploader = functools.partial(self._move_tensor, dev=self.devices, detach=True)
+            wrapped_loader = self._loader_viz_wrapper(self.valid_loader, self._to_tensor, uploader)
+            for viz, kwargs in self.viz:
+                # todo: add output export to disk/tbx
+                thelper.viz.visualize(model, self.task, wrapped_loader, viz, **kwargs)
         for key, value in result.items():
             if not isinstance(value, dict):
                 self.logger.info(f" final result =>  {str(key)}: {value}")
@@ -604,6 +653,26 @@ class Trainer:
             output_path: directory where output files should be written, if necessary.
         """
         raise NotImplementedError
+
+    def _to_tensor(self, sample):
+        """Fetches and returns tensors of input and groundtruth data from a batched sample dictionary.
+
+        The specifics of how to unpack a sample dictionary into usable parts is tied to the trainer, so
+        it cannot be defined in a perfectly generic way here. The implementation below is given as a
+        baseline to support some visualization techniques (see :mod:`thelper.viz` for more info). Derived
+        trainers (both custom and framework-provided) are likely to override this function to properly
+        unpack groundtruth data.
+
+        Args:
+            sample: the (batched) sample to unpack into tensors, obtained directly from a data loader.
+
+        Returns:
+            A tuple of input data and groundtruth data tensors. In this implementation, the groundtruth
+            data tensor is always ``None``.
+        """
+        assert isinstance(sample, dict), "trainer expects samples to come in dicts for key-based usage"
+        assert self.task.input_key in sample, f"could not find input key '{self.task.input_key}' in sample dict"
+        return torch.FloatTensor(sample[self.task.input_key]), None
 
     # noinspection PyUnusedLocal
     def _iter_logger_callback(self,         # see `thelper.typedefs.IterCallbackParams` for more info
