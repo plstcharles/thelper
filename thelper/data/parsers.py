@@ -421,7 +421,13 @@ class ImageFolderDataset(ClassificationDataset):
                             self.path_key: os.path.join(folder, file),
                             self.label_key: class_name
                         })
-        class_map = {k: v for k, v in class_map.items() if len(v) > 0}
+        old_unsorted_class_names = list(class_map.keys())
+        class_map = {k: class_map[k] for k in sorted(class_map.keys()) if len(class_map[k]) > 0}
+        if old_unsorted_class_names != list(class_map.keys()):
+            # new as of v0.4.4; this may only be an issue for old models trained on windows and ported to linux
+            # (this is caused by the way os.walk returns folders in an arbitrary order on some platforms)
+            logger.warning("class name ordering changed due to folder name sorting; this may impact the "
+                           "behavior of previously-trained models as task class indices may be swapped!")
         if not class_map:
             raise AssertionError("could not locate any subdir in '%s' with images to load" % self.root)
         meta_keys = [self.path_key, self.idx_key]
