@@ -1,0 +1,83 @@
+# this is an example configuration file that shows how to use TensorBoardX and a t-SNE visualization
+# during the training of an image classification pipeline on the CIFAR-10 dataset
+
+datasets:
+    # we declare a single dataset parser here that will fetch all available data
+    cifar10:
+        # even though the torchvision CIFAR10 parser is not natively compatible, it will
+        # be automatically wrapped into the 'thelper.data.ExternalDataset' that will fill the gaps
+        type: "torchvision.datasets.CIFAR10"
+        params:
+            # these are the parameters expected by the class in torchvision
+            root: "data/cifar/train"
+            download: true  # download the data if it does not already exist
+        # ...the only extra thing we need to support the external dataset is its task definition
+        task:
+            type: "thelper.tasks.Classification"
+            params:
+                # the order of the class names below is important, and defined by the dataset
+                class_names: ["airplane", "car", "bird", "cat", "deer",
+                              "dog", "frog", "horse", "ship", "truck"]
+                # the data loaded by torchvision is provided in tuples, so we point to indices
+                input_key: "0"  # the 0-th element of the tuple should be the image (or input)
+                label_key: "1"  # the 1-th element of the tuple should be the label (or gt)
+
+loaders:
+    # we will now setup the configuration to load data samples using the parsers defined above
+    batch_size: 32
+    # the 'base' transforms will always be applied to all samples, and before any augmentations
+    base_transforms:
+        # each entry into the 'base_transforms' array is interpreted as an operation (or stage)
+        - operation: "thelper.transforms.NormalizeMinMax"
+          params:
+              # note that here we use triplets since we know the images will be loaded as BGR
+              min: [127, 127, 127]
+              max: [255, 255, 255]
+        - operation: "thelper.transforms.Resize"
+          params:
+              dsize: [224, 224]  # this is a pretty lazy to fit 32x32 images to the standard...
+          # not all operations need to have parameters; the following one does not!
+        - operation: "torchvision.transforms.ToTensor"
+    # the training data will consist of 90% of the samples provided by the CIFAR-10 parser
+    train_split:
+        cifar10: 0.9
+    # the validation data will consist of the remaining 10% of available samples
+    valid_split:
+        cifar10: 0.1
+    # we will skip class rebalancing since it's pretty slow with an external dataset
+    # (hint: always favor datasets that can provide sample class counts to make it way faster!)
+    skip_rebalancing: true
+
+model:
+    # we simply use a pretrained resnet 34 as our model (leaving all default parameters)
+    # (note: for proper t-SNE visualization, the model must expose a 'get_embedding' function)
+    type : "thelper.nn.resnet.ResNet"
+    params:
+        pretrained: true  # this will automatically download imagenet weights from torchvision
+
+trainer:
+    # finally, we will configure the trainer with pretty common hyperparameters...
+    epochs: 5  # train for 5 epochs in total (maximum)
+    optimization:
+        loss:
+            type: "torch.nn.CrossEntropyLoss"
+        optimizer:
+            type: "torch.optim.Adam"
+            params:
+                lr: 0.001
+    metrics:
+        # we will declare a single metric for this example, but activate monitoring & viz below
+        accuracy:
+            type: "thelper.optim.Accuracy"
+            params:
+                top_k: 1
+    monitor: "accuracy"  # this name is actually the name of the metric defined above
+    visualization:
+        # by default, visualizations will always be computed during training on validation data
+        tsne:
+            # we could leave this field empty to use default settings, but we will limit the
+            # total number of embeddings to project via t-SNE to speed things up...
+            max_samples: 25  # this is actually 25 batches of 32 images (as defined earlier)
+            draw: true  # this toggles live display on, but images will always be saved anyway
+    # finally, we turn tensorboard on... (the t-SNE projections will be added as images)
+    tensorboard: true
