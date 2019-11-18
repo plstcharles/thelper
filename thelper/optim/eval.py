@@ -32,7 +32,9 @@ def compute_mask_iou(mask1, mask2, class_indices=None, dontcare=None):
     """Computes and returns a map of Intersection over Union (IoU) scores for two segmentation masks."""
     # untested as of 11/2019; needs utest!
     assert isinstance(mask1, np.ndarray) and isinstance(mask2, np.ndarray), "invalid mask type"
-    assert mask1.shape == mask2.shape and mask1.dtype == mask2.dtype, "mismatched mask shape/types"
+    assert mask1.shape == mask2.shape, "mismatched mask shapes"
+    assert np.issubdtype(mask1.dtype, np.integer), "mask1 dtype should be integer"
+    assert np.issubdtype(mask2.dtype, np.integer), "mask2 dtype should be integer"
     if not class_indices:
         class_indices = np.unique(np.stack([mask1, mask2]))
     assert isinstance(class_indices, (list, np.ndarray, torch.Tensor)), "invalid class indices array type"

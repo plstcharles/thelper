@@ -1298,7 +1298,7 @@ class IntersectionOverUnion(Metric):
         """
         assert max_win_size is None or (isinstance(max_win_size, int) and max_win_size > 0), \
             "invalid max sliding window size (should be positive integer)"
-        if not isinstance(target_names, (list, np.ndarray, torch.Tensor)):
+        if target_names is not None and not isinstance(target_names, (list, np.ndarray, torch.Tensor)):
             target_names = [target_names]
         self.target_names = target_names
         self.target_idxs = None  # will be updated at runtime
@@ -1344,10 +1344,10 @@ class IntersectionOverUnion(Metric):
         if task is not None:
             assert isinstance(task, thelper.tasks.Segmentation), "unexpected task type with IoU metric"
             if self.target_names is not None:
-                assert all([n in task.class_names for n in self.target_name]), f"missing iou target name in task"
-                self.target_idxs = [task.class_names.index(n) for n in self.target_names]
+                assert all([n in task.class_names for n in self.target_names]), f"missing iou target in task class names"
+                self.target_idxs = [task.class_indices[n] for n in self.target_names]
             else:
-                self.target_idxs = [target_idx for target_idx in range(len(task.class_names))]
+                self.target_idxs = list(task.class_indices.values())
             self.task = task  # keep reference for eval only
         if target is None or len(target) == 0:
             # only accumulate results when groundtruth is available (should we though? affects false negative count)
@@ -1376,7 +1376,10 @@ class IntersectionOverUnion(Metric):
             self.inters[curr_idx] = inters_count_map
             self.unions[curr_idx] = union_count_map
         else:
-            self.inters[curr_idx] = thelper.optim.eval.compute_mask_iou(pred_labels, true_labels, self.target_idxs, self.task.dontcare)
+            bious = [thelper.optim.eval.compute_mask_iou(pred_labels[b], true_labels[b], self.target_idxs, self.task.dontcare)
+                     for b in range(pred.shape[0])]
+            self.inters[curr_idx] = {tidx: [ious[tidx] for ious in bious] for tidx in self.target_idxs}
+            self.unions[curr_idx] = None
 
     def eval(self):
         """Returns the current IoU ratio based on the accumulated counts.
@@ -1384,26 +1387,39 @@ class IntersectionOverUnion(Metric):
         Will issue a warning if no predictions have been accumulated yet.
         """
         assert self.inters.size == self.unions.size, "internal window size mismatch"
+        if self.target_idxs is None:
+            if not self.warned_eval_bad:
+                self.warned_eval_bad = True
+                logger.warning("iou eval result invalid (set as 0.0), no results accumulated")
+            return 0.0
+        accum_pairs = {}
+        valid = False
+        for tidx in self.target_idxs:
+            accum_pairs[tidx] = [], []
+            for i, u in zip(self.inters, self.unions):
+                if i is not None or u is not None:
+                    accum_pairs[tidx][0].append(i[tidx] if i is not None else None)
+                    accum_pairs[tidx][1].append(u[tidx] if u is not None else None)
+                    valid = valid or i is not None
+        if not valid:
+            if not self.warned_eval_bad:
+                self.warned_eval_bad = True
+                logger.warning("iou eval result invalid (set as 0.0), no results accumulated")
+            return 0.0
         if self.global_score:
-            counts = np.array([(i, u) for i, u in zip(self.inters, self.unions) if i is not None and u is not None])
-            badbad
-            tot_inters = counts[:, 0].sum()
-            tot_unions = counts[:, 1].sum()
-            if tot_unions == 0:
-                if not self.warned_eval_bad:
-                    self.warned_eval_bad = True
-                    logger.warning("iou eval result invalid (set as 0.0), no results accumulated")
-                return 0.0
-            return tot_inters / tot_unions
+            tot_inters = {tidx: sum(accum_pairs[tidx][0]) for tidx in self.target_idxs}
+            tot_union = {tidx: sum(accum_pairs[tidx][1]) for tidx in self.target_idxs}
+            iou_map = {tidx: (tot_inters[tidx] / tot_union[tidx]) if tot_union[tidx] != 0 else 0.0 for tidx in self.target_idxs}
         else:
-            ious = [i for i in self.inters if i is not None]
-            if len(ious) == 0:
-                if not self.warned_eval_bad:
-                    self.warned_eval_bad = True
-                    logger.warning("iou eval result invalid (set as 0.0), no results accumulated")
-                return 0.0
-            badbad
-            return np.array(ious).mean()
+            iou_map = {}
+            for tidx in self.target_idxs:
+                ious = []
+                for batch_ious in accum_pairs[tidx][0]:
+                    for iou in batch_ious:
+                        ious.append(iou)
+                iou_map[tidx] = 0.0 if not ious else np.mean(ious)
+        # could add per-class IoU scores to some log before averaging below...
+        return np.array(list(iou_map.values())).mean()
 
     def reset(self):
         """Toggles a reset of the metric's internal state, deallocating bbox arrays."""
