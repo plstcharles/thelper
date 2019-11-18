@@ -367,19 +367,6 @@ class Trainer:
             out = tensor.to(dev)
         return out.detach() if detach else out
 
-    @staticmethod
-    def _loader_viz_wrapper(loader, unpacker, uploader):
-        """Data loader wrapper for visualization module usage."""
-        class LoaderWrapper:
-            def __iter__(self):
-                for sample in loader:
-                    yield uploader(unpacker(sample))
-
-            def __len__(self):
-                return len(loader)
-
-        return LoaderWrapper()
-
     def _load_optimization(self, model, dev):
         """Instantiates and returns all optimization objects required for training the model."""
         config = self.optimization_config  # for abbrev only
@@ -522,10 +509,11 @@ class Trainer:
                 result = {**result, "valid/metrics": valid_metric_vals}
                 monitor_type_key = "valid/metrics"  # since validation is available, use that to monitor progression
                 uploader = functools.partial(self._move_tensor, dev=self.devices, detach=True)
-                wrapped_loader = self._loader_viz_wrapper(self.valid_loader, self._to_tensor, uploader)
-                for viz, kwargs in self.viz:
+                converter = thelper.transforms.Compose([self._to_tensor, uploader])
+                wrapped_loader = thelper.data.DataLoaderWrapper(self.valid_loader, converter)
+                for viz, kwargs in self.viz.items():
                     # todo: add output export to disk/tbx
-                    thelper.viz.visualize(model, self.task, wrapped_loader, viz, **kwargs)
+                    thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
             new_best = False
             monitor_val = None
             for key, value in result.items():
@@ -586,10 +574,11 @@ class Trainer:
             result = {**result, **test_metric_vals}
             output_group = "test/metrics"
             uploader = functools.partial(self._move_tensor, dev=self.devices, detach=True)
-            wrapped_loader = self._loader_viz_wrapper(self.test_loader, self._to_tensor, uploader)
-            for viz, kwargs in self.viz:
+            converter = thelper.transforms.Compose([self._to_tensor, uploader])
+            wrapped_loader = thelper.data.DataLoaderWrapper(self.test_loader, converter)
+            for viz, kwargs in self.viz.items():
                 # todo: add output export to disk/tbx
-                thelper.viz.visualize(model, self.task, wrapped_loader, viz, **kwargs)
+                thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
         elif self.valid_loader:
             self._set_rng_state(self.valid_loader.seeds, self.current_epoch)
             model.eval()
@@ -607,10 +596,11 @@ class Trainer:
             result = {**result, **valid_metric_vals}
             output_group = "valid/metrics"
             uploader = functools.partial(self._move_tensor, dev=self.devices, detach=True)
-            wrapped_loader = self._loader_viz_wrapper(self.valid_loader, self._to_tensor, uploader)
-            for viz, kwargs in self.viz:
+            converter = thelper.transforms.Compose([self._to_tensor, uploader])
+            wrapped_loader = thelper.data.DataLoaderWrapper(self.valid_loader, converter)
+            for viz, kwargs in self.viz.items():
                 # todo: add output export to disk/tbx
-                thelper.viz.visualize(model, self.task, wrapped_loader, viz, **kwargs)
+                thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
         for key, value in result.items():
             if not isinstance(value, dict):
                 self.logger.info(f" final result =>  {str(key)}: {value}")
