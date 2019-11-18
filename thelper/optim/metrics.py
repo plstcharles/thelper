@@ -307,8 +307,8 @@ class MeanAbsoluteError(Metric):
     def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
                task,         # type: thelper.tasks.utils.Task
                input,        # type: thelper.typedefs.InputType
-               pred,         # type: thelper.typedefs.ClassificationPredictionType
-               target,       # type: thelper.typedefs.ClassificationTargetType
+               pred,         # type: thelper.typedefs.RegressionPredictionType
+               target,       # type: thelper.typedefs.RegressionTargetType
                sample,       # type: thelper.typedefs.SampleType
                loss,         # type: Optional[float]
                iter_idx,     # type: int
@@ -435,8 +435,8 @@ class MeanSquaredError(Metric):
     def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
                task,         # type: thelper.tasks.utils.Task
                input,        # type: thelper.typedefs.InputType
-               pred,         # type: thelper.typedefs.ClassificationPredictionType
-               target,       # type: thelper.typedefs.ClassificationTargetType
+               pred,         # type: thelper.typedefs.RegressionPredictionType
+               target,       # type: thelper.typedefs.RegressionTargetType
                sample,       # type: thelper.typedefs.SampleType
                loss,         # type: Optional[float]
                iter_idx,     # type: int
@@ -649,8 +649,8 @@ class ExternalMetric(Metric, ClassNamesHandler):
     def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
                task,         # type: thelper.tasks.utils.Task
                input,        # type: thelper.typedefs.InputType
-               pred,         # type: thelper.typedefs.ClassificationTargetType
-               target,       # type: thelper.typedefs.ClassificationPredictionType
+               pred,         # type: thelper.typedefs.AnyTargetType
+               target,       # type: thelper.typedefs.AnyPredictionType
                sample,       # type: thelper.typedefs.SampleType
                loss,         # type: Optional[float]
                iter_idx,     # type: int
@@ -893,8 +893,8 @@ class ROCCurve(Metric, ClassNamesHandler):
     def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
                task,         # type: thelper.tasks.utils.Task
                input,        # type: thelper.typedefs.InputType
-               pred,         # type: thelper.typedefs.ClassificationPredictionType
-               target,       # type: thelper.typedefs.ClassificationTargetType
+               pred,         # type: thelper.typedefs.AnyPredictionType
+               target,       # type: thelper.typedefs.AnyTargetType
                sample,       # type: thelper.typedefs.SampleType
                loss,         # type: Optional[float]
                iter_idx,     # type: int
@@ -1064,8 +1064,8 @@ class PSNR(Metric):
     def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
                task,         # type: thelper.tasks.utils.Task
                input,        # type: thelper.typedefs.InputType
-               pred,         # type: thelper.typedefs.ClassificationPredictionType
-               target,       # type: thelper.typedefs.ClassificationTargetType
+               pred,         # type: thelper.typedefs.RegressionPredictionType
+               target,       # type: thelper.typedefs.RegressionTargetType
                sample,       # type: thelper.typedefs.SampleType
                loss,         # type: Optional[float]
                iter_idx,     # type: int
@@ -1259,9 +1259,9 @@ class AveragePrecision(Metric):
 class IntersectionOverUnion(Metric):
     r"""Computes the intersection over union over image classes.
 
-    It can target a single class at a time, or produce the mean IoU (mIoU) for all classes. It can
-    also average IoU scores from each images, or sum up all intersection and union areas and compute
-    a global score.
+    It can target a single class at a time, or produce the mean IoU (mIoU) for a number of classes. It can
+    also average IoU scores from each images, or sum up all intersection and union areas and compute a
+    global score.
 
     Usage example inside a session configuration file::
 
@@ -1283,13 +1283,13 @@ class IntersectionOverUnion(Metric):
         # ...
 
     Attributes:
-        target_names: name(s) of the class(es) to target; if 'None', will compute mIoU instead of IoU.
+        target_names: name(s) of the class(es) to target; if 'None' or list, will compute mIoU instead of IoU.
         max_win_size: maximum moving average window size to use (default=None, which equals dataset size).
         inters: array holding the intesection areas or IoU scores for all input samples.
         unions: array holding the union areas for all input samples.
     """
 
-    def __init__(self, target_names=None, global_score=True, max_win_size=None):
+    def __init__(self, target_names=None, global_score=False, max_win_size=None):
         """Initializes metric attributes.
 
         Note that by default, if ``max_win_size`` is not provided here, the value given to ``max_iters`` on
@@ -1317,8 +1317,8 @@ class IntersectionOverUnion(Metric):
     def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
                task,         # type: thelper.tasks.utils.Task
                input,        # type: thelper.typedefs.InputType
-               pred,         # type: thelper.typedefs.DetectionPredictionType
-               target,       # type: thelper.typedefs.DetectionTargetType
+               pred,         # type: thelper.typedefs.SegmentationPredictionType
+               target,       # type: thelper.typedefs.SegmentationTargetType
                sample,       # type: thelper.typedefs.SampleType
                loss,         # type: Optional[float]
                iter_idx,     # type: int
