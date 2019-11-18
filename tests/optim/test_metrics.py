@@ -370,3 +370,105 @@ def test_psnr(mocker):
                            None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += targets[iter_idx].shape[0]
     assert metric_psnr.eval() == psnr_res
+
+
+def test_average_precision():
+    # @@@@ TODO
+    pass
+
+
+def test_iou_single_class():
+    # bbox overlap tests @ 0,25,50,75,100%
+    class_names = [str(i) for i in range(11)]
+    task = thelper.tasks.Segmentation(class_names=class_names, input_key="in", label_map_key="gt")
+    shape_gt = np.random.randint(10, size=(500, 500), dtype=np.int32)
+    shape_gt[200:300, 200:300] = 10  # target of interest
+    shape_pred = np.random.rand(5, 11, 500, 500)
+    shape_pred[:, 10, :, :] = 0  # empty out target of interest by default
+    shape_pred[0, 10, 200:300, 100:200] = 2  # for 0% overlap
+    shape_pred[1, 10, 200:300, 125:225] = 2  # for 25% overlap
+    shape_pred[2, 10, 200:300, 150:250] = 2  # for 50% overlap
+    shape_pred[3, 10, 200:300, 175:275] = 2  # for 75% overlap
+    shape_pred[4, 10, 200:300, 200:300] = 2  # for 100% overlap
+    shape_pred /= np.sum(shape_pred, axis=1, keepdims=True)
+    metric = thelper.optim.IntersectionOverUnion(target_names="10", global_score=False)
+    for iter_idx in range(shape_pred.shape[0]):
+        metric.update(task=task, input=None,
+                      pred=torch.from_numpy(shape_pred[iter_idx]).unsqueeze(0),
+                      target=torch.from_numpy(shape_gt).unsqueeze(0),
+                      sample=None, loss=None, iter_idx=iter_idx, max_iters=shape_pred.shape[0],
+                      epoch_idx=0, max_epochs=1, output_path=test_save_path)
+    assert np.isclose(metric.eval(), 0.415238)
+    # try looping over, max window should be just the right size
+    for iter_idx in range(shape_pred.shape[0]):
+        metric.update(task=task, input=None,
+                      pred=torch.from_numpy(shape_pred[iter_idx]).unsqueeze(0),
+                      target=torch.from_numpy(shape_gt).unsqueeze(0),
+                      sample=None, loss=None, iter_idx=iter_idx, max_iters=shape_pred.shape[0],
+                      epoch_idx=0, max_epochs=1, output_path=test_save_path)
+    assert np.isclose(metric.eval(), 0.415238)
+    # re-run with global scoring
+    metric = thelper.optim.IntersectionOverUnion(target_names="10", global_score=True)
+    for iter_idx in range(shape_pred.shape[0]):
+        metric.update(task=task, input=None,
+                      pred=torch.from_numpy(shape_pred[iter_idx]).unsqueeze(0),
+                      target=torch.from_numpy(shape_gt).unsqueeze(0),
+                      sample=None, loss=None, iter_idx=iter_idx, max_iters=shape_pred.shape[0],
+                      epoch_idx=0, max_epochs=1, output_path=test_save_path)
+    assert np.isclose(metric.eval(), 0.333333)
+    # re-run with dontcare
+    task = thelper.tasks.Segmentation(class_names=class_names, input_key="in", label_map_key="gt", dontcare=-1)
+    shape_gt[275:300, :] = -1  # dont care value
+    metric = thelper.optim.IntersectionOverUnion(target_names="10", global_score=False)
+    for iter_idx in range(shape_pred.shape[0]):
+        metric.update(task=task, input=None,
+                      pred=torch.from_numpy(shape_pred[iter_idx]).unsqueeze(0),
+                      target=torch.from_numpy(shape_gt).unsqueeze(0),
+                      sample=None, loss=None, iter_idx=iter_idx, max_iters=shape_pred.shape[0],
+                      epoch_idx=0, max_epochs=1, output_path=test_save_path)
+    assert np.isclose(metric.eval(), 0.415238)
+    shape_gt[:, 200:250] = -1  # dont care value
+    metric = thelper.optim.IntersectionOverUnion(target_names="10", global_score=False)
+    for iter_idx in range(shape_pred.shape[0]):
+        metric.update(task=task, input=None,
+                      pred=torch.from_numpy(shape_pred[iter_idx]).unsqueeze(0),
+                      target=torch.from_numpy(shape_gt).unsqueeze(0),
+                      sample=None, loss=None, iter_idx=iter_idx, max_iters=shape_pred.shape[0],
+                      epoch_idx=0, max_epochs=1, output_path=test_save_path)
+    assert np.isclose(metric.eval(), 0.266666)
+
+
+def test_iou_multi_class():
+    # will use some stochastic tests to see increase/decrease in iou values
+    iter_count = 10
+    batch_size = 4
+    num_classes = 4
+    resolution = 256
+    class_names = [str(i) for i in range(11)]
+    task = thelper.tasks.Segmentation(class_names=class_names, input_key="in", label_map_key="gt")
+    preds = np.random.rand(iter_count, batch_size, num_classes, resolution, resolution)
+    targets = np.random.randint(num_classes, size=(iter_count, batch_size, resolution, resolution))
+
+    def compute_iou():
+        metric = thelper.optim.metrics.IntersectionOverUnion()
+        for iter_idx in range(iter_count):
+            metric.update(task=task, input=None,
+                          pred=torch.from_numpy(preds[iter_idx]),
+                          target=torch.from_numpy(targets[iter_idx]),
+                          sample=None, loss=None, iter_idx=iter_idx, max_iters=iter_count,
+                          epoch_idx=0, max_epochs=1, output_path=test_save_path)
+        return metric.eval()
+
+    def alter_preds(witer, worse=False):
+        for i in range(witer):
+            for iter_idx in range(iter_count):
+                b, y, x = np.random.randint(batch_size), np.random.randint(resolution), np.random.randint(resolution)
+                preds[iter_idx, b, targets[iter_idx, b, y, x], y, x] = 0 if worse else 1
+
+    init_iou = compute_iou()
+    alter_preds(100, worse=True)
+    worse_iou = compute_iou()
+    assert worse_iou < init_iou
+    alter_preds(500, worse=False)
+    better_iou = compute_iou()
+    assert worse_iou < init_iou < better_iou
