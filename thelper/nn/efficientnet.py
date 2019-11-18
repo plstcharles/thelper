@@ -1,6 +1,5 @@
-import torch
-
 import efficientnet_pytorch
+import torch
 
 import thelper.nn
 
@@ -57,7 +56,8 @@ class FCEfficientNet(EfficientNet):
         self.avgpool_size = avgpool_size
         self.load_state_dict(ckptdata["model"], strict=False)  # assumes model always stored as weight dict
         self.finallayer = torch.nn.Conv2d(self.model._fc.in_features, self.model._fc.out_features, kernel_size=1)
-        self.finallayer.weight = torch.nn.Parameter(self.model._fc.weight.view(self.model._fc.out_features, self.model._fc.in_features, 1, 1))
+        self.finallayer.weight = torch.nn.Parameter(self.model._fc.weight.view(self.model._fc.out_features,
+                                                                               self.model._fc.in_features, 1, 1))
         self.finallayer.bias = torch.nn.Parameter(self.model._fc.bias)
         self.set_task(task)
 
@@ -75,6 +75,7 @@ class FCEfficientNet(EfficientNet):
         if self.model._fc.out_features != num_classes:
             self.model._fc = torch.nn.Linear(self.model._fc.in_features, num_classes)
             self.finallayer = torch.nn.Conv2d(self.model._fc.in_features, self.model._fc.out_features, kernel_size=1)
-            self.finallayer.weight = torch.nn.Parameter(self.model._fc.weight.view(self.model._fc.out_features, self.model._fc.in_features, 1, 1))
+            self.finallayer.weight = torch.nn.Parameter(self.model._fc.weight.view(self.model._fc.out_features,
+                                                                                   self.model._fc.in_features, 1, 1))
             self.finallayer.bias = torch.nn.Parameter(self.model._fc.bias)
         self.task = task
