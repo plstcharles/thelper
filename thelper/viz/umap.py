@@ -21,7 +21,7 @@ def visualize(model,             # type: thelper.typedefs.ModelType
               loader,            # type: thelper.typedefs.LoaderType
               draw=False,        # type: bool
               color_map=None,    # type: Optional[Dict[int, np.ndarray]]
-              max_iters=None,    # type: Optional[int]
+              max_samples=None,  # type: Optional[int]
               **kwargs
               ):                 # type: (...) -> np.ndarray  # displayable BGR image
     """
@@ -40,15 +40,15 @@ def visualize(model,             # type: thelper.typedefs.ModelType
         loader: the data loader used to get data samples to project.
         draw: boolean flag used to toggle internal display call on or off.
         color_map: map of RGB triplets used to color predictions (for classification only).
-        max_iters: maximum number of iterations (or samples) to draw from the data loader.
+        max_samples: maximum number of samples to draw from the data loader.
 
     Returns:
-        A displayable BGR image (in np.ndarray format) of the UMAP space.
+        A displayable RGB image (in np.ndarray format) of the UMAP space.
     """
     assert loader is not None and len(loader) > 0, "no available data to load"
     assert model is not None and isinstance(model, torch.nn.Module), "invalid model"
     assert task is not None and isinstance(task, thelper.tasks.Task), "invalid task"
-    assert max_iters is None or max_iters > 0, "invalid maximum loader iteration count"
+    assert max_samples is None or max_samples > 0, "invalid maximum loader sample count"
     thelper.viz.logger.debug("fetching data loader samples for UMAP visualization...")
     embeddings, labels, preds = [], [], []
     if isinstance(task, thelper.tasks.Classification):
@@ -60,7 +60,7 @@ def visualize(model,             # type: thelper.typedefs.ModelType
                 color_map = {idx: thelper.draw.get_label_color_mapping(idx + 1) for idx in task.class_indices.values()}
         color_map = {idx: f"#{c[0]:02X}{c[1]:02X}{c[2]:02X}" for idx, c in color_map.items()}
     for sample_idx, sample in tqdm.tqdm(enumerate(loader), desc="extracting embeddings"):
-        if max_iters is not None and sample_idx > max_iters:
+        if max_samples is not None and sample_idx > max_samples:
             break
         with torch.no_grad():
             input_tensor = sample[task.input_key]
@@ -76,6 +76,9 @@ def visualize(model,             # type: thelper.typedefs.ModelType
             if hasattr(model, "get_embedding"):
                 embedding = model.get_embedding(input_tensor)
             else:
+                if not thelper.viz.warned_missing_get_embedding:
+                    thelper.viz.logger.warning("missing 'get_embedding' function in model object; will use output instead")
+                    thelper.viz.warned_missing_get_embedding = True
                 embedding = model(input_tensor)
             if embedding.dim() > 2:  # reshape to BxC
                 embedding = embedding.view(embedding.size(0), -1)
@@ -100,6 +103,6 @@ def visualize(model,             # type: thelper.typedefs.ModelType
     img = thelper.draw.fig2array(fig).copy()
     if draw:
         thelper.viz.logger.debug("displaying UMAP projection...")
-        cv.imshow("thelper.viz.umap", img[..., ::-1])
-        cv.waitKey(0)
+        cv.imshow("thelper.viz.umap", img[..., ::-1])  # RGB to BGR for opencv display
+        cv.waitKey(1)
     return img

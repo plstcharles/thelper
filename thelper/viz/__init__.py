@@ -21,6 +21,8 @@ logger = logging.getLogger("thelper.viz")
 
 supported_types = ["tsne", "umap"]  # more will be added once properly tested
 
+warned_missing_get_embedding = False
+
 
 def visualize(model,         # type: thelper.typedefs.ModelType
               task,          # type: thelper.typedefs.TaskType
