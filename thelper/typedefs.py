@@ -58,12 +58,24 @@ if TYPE_CHECKING:
 
     SampleType = Dict[Union[AnyStr, int], Any]
     InputType = torch.Tensor
+
     ClassificationPredictionType = torch.Tensor
     ClassificationTargetType = torch.Tensor
+    SegmentationPredictionType = torch.Tensor
+    SegmentationTargetType = torch.Tensor
     DetectionPredictionType = List[List[BoundingBox]]
     DetectionTargetType = List[List[BoundingBox]]
-    AnyPredictionType = Union[ClassificationPredictionType, DetectionPredictionType]
-    AnyTargetType = Union[ClassificationTargetType, DetectionTargetType]
+    RegressionPredictionType = torch.Tensor
+    RegressionTargetType = torch.Tensor
+
+    AnyPredictionType = Union[ClassificationPredictionType,
+                              SegmentationPredictionType,
+                              DetectionPredictionType,
+                              RegressionPredictionType]
+    AnyTargetType = Union[ClassificationTargetType,
+                          SegmentationTargetType,
+                          DetectionTargetType,
+                          RegressionTargetType]
 
     ConfigIndex = AnyStr
     ConfigValue = Union[AnyStr, bool, float, int, List[Any], Dict[Any, Any]]
