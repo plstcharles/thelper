@@ -509,8 +509,7 @@ class Trainer:
                 result = {**result, "valid/metrics": valid_metric_vals}
                 monitor_type_key = "valid/metrics"  # since validation is available, use that to monitor progression
                 uploader = functools.partial(self._move_tensor, dev=self.devices, detach=True)
-                converter = thelper.transforms.Compose([self._to_tensor, uploader])
-                wrapped_loader = thelper.data.DataLoaderWrapper(self.valid_loader, converter)
+                wrapped_loader = thelper.data.DataLoaderWrapper(self.valid_loader, uploader)
                 for viz, kwargs in self.viz.items():
                     # todo: add output export to disk/tbx
                     thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
@@ -574,8 +573,7 @@ class Trainer:
             result = {**result, **test_metric_vals}
             output_group = "test/metrics"
             uploader = functools.partial(self._move_tensor, dev=self.devices, detach=True)
-            converter = thelper.transforms.Compose([self._to_tensor, uploader])
-            wrapped_loader = thelper.data.DataLoaderWrapper(self.test_loader, converter)
+            wrapped_loader = thelper.data.DataLoaderWrapper(self.test_loader, uploader)
             for viz, kwargs in self.viz.items():
                 # todo: add output export to disk/tbx
                 thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
@@ -596,8 +594,7 @@ class Trainer:
             result = {**result, **valid_metric_vals}
             output_group = "valid/metrics"
             uploader = functools.partial(self._move_tensor, dev=self.devices, detach=True)
-            converter = thelper.transforms.Compose([self._to_tensor, uploader])
-            wrapped_loader = thelper.data.DataLoaderWrapper(self.valid_loader, converter)
+            wrapped_loader = thelper.data.DataLoaderWrapper(self.valid_loader, uploader)
             for viz, kwargs in self.viz.items():
                 # todo: add output export to disk/tbx
                 thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
