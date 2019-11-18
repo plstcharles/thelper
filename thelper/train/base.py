@@ -202,14 +202,15 @@ class Trainer:
         self.skip_eval_iter = thelper.utils.get_key_def("skip_eval_iter", trainer_config, 0)
 
         # parse and prepare tbx stuff
-        self.use_tbx = thelper.utils.str2bool(thelper.utils.get_key_def("use_tbx", trainer_config, False))
+        self.use_tbx = thelper.utils.str2bool(thelper.utils.get_key_def(["use_tbx", "tbx", "use_tb", "tb", "tensorboard"],
+                                                                        trainer_config, False))
         if self.use_tbx:
-            import tensorboardX
+            import tensorboardX  # todo: replace w/ pytorch's internal tbx @@@@@
             self.tbx = tensorboardX
-            self.logger.debug(f"tensorboard init : tensorboard --logdir {output_root_dir} --port <your_port>")
+            self.logger.debug(f"tensorboard init : tensorboard --logdir {os.path.abspath(output_root_dir)} --port <your_port>")
         self.skip_tbx_histograms = thelper.utils.str2bool(
             thelper.utils.get_key_def("skip_tbx_histograms", trainer_config, False))
-        self.tbx_histogram_freq = int(thelper.utils.get_key_def("tbx_histogram_freq", trainer_config, 1))
+        self.tbx_histogram_freq = int(thelper.utils.get_key_def("tbx_histogram_freq", trainer_config, 5))
         assert self.tbx_histogram_freq >= 1, "histogram output frequency should be strictly positive integer"
         timestr = time.strftime("%Y%m%d-%H%M%S")
         self.writers, self.output_paths = {}, {}
@@ -511,8 +512,13 @@ class Trainer:
                 uploader = functools.partial(self._move_tensor, dev=self.devices, detach=True)
                 wrapped_loader = thelper.data.DataLoaderWrapper(self.valid_loader, uploader)
                 for viz, kwargs in self.viz.items():
-                    # todo: add output export to disk/tbx
-                    thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
+                    viz_img = thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
+                    if viz_img is not None:
+                        if self.writers["valid"] is not None:
+                            self.writers["valid"].add_image(f"viz/{viz}", viz_img, self.current_epoch, dataformats="HWC")
+                        raw_filepath = os.path.join(self.output_paths["valid"], f"{viz}-{self.current_epoch:04d}.png")
+                        self.logger.debug(f"writing {viz} render output to {os.path.abspath(raw_filepath)}")
+                        cv.imwrite(raw_filepath, viz_img[..., ::-1])
             new_best = False
             monitor_val = None
             for key, value in result.items():
@@ -575,8 +581,13 @@ class Trainer:
             uploader = functools.partial(self._move_tensor, dev=self.devices, detach=True)
             wrapped_loader = thelper.data.DataLoaderWrapper(self.test_loader, uploader)
             for viz, kwargs in self.viz.items():
-                # todo: add output export to disk/tbx
-                thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
+                viz_img = thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
+                if viz_img is not None:
+                    if self.writers["test"] is not None:
+                        self.writers["test"].add_image(f"viz/{viz}", viz_img, self.current_epoch, dataformats="HWC")
+                    raw_filepath = os.path.join(self.output_paths["test"], f"{viz}-{self.current_epoch:04d}.png")
+                    self.logger.debug(f"writing {viz} render output to {os.path.abspath(raw_filepath)}")
+                    cv.imwrite(raw_filepath, viz_img[..., ::-1])
         elif self.valid_loader:
             self._set_rng_state(self.valid_loader.seeds, self.current_epoch)
             model.eval()
@@ -596,8 +607,13 @@ class Trainer:
             uploader = functools.partial(self._move_tensor, dev=self.devices, detach=True)
             wrapped_loader = thelper.data.DataLoaderWrapper(self.valid_loader, uploader)
             for viz, kwargs in self.viz.items():
-                # todo: add output export to disk/tbx
-                thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
+                viz_img = thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
+                if viz_img is not None:
+                    if self.writers["valid"] is not None:
+                        self.writers["valid"].add_image(f"viz/{viz}", viz_img, self.current_epoch, dataformats="HWC")
+                    raw_filepath = os.path.join(self.output_paths["valid"], f"{viz}-{self.current_epoch:04d}.png")
+                    self.logger.debug(f"writing {viz} render output to {os.path.abspath(raw_filepath)}")
+                    cv.imwrite(raw_filepath, viz_img[..., ::-1])
         for key, value in result.items():
             if not isinstance(value, dict):
                 self.logger.info(f" final result =>  {str(key)}: {value}")
