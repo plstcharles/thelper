@@ -699,9 +699,6 @@ class Trainer:
         assert set_name in ["train", "valid", "test"], "unrecognized iter logger set name"
         metrics = self.train_metrics if set_name == "train" else self.valid_metrics if set_name == "valid" \
             else self.test_metrics
-        writers = thelper.utils.get_key("writers", kwargs, "missing writers dict in iter logger args")
-        assert set_name in writers, "expected set name writer match in kwargs"
-        writer = writers[set_name]
         monitor_val = None
         monitor_str = ""
         if self.monitor is not None and self.monitor in metrics:
@@ -718,16 +715,17 @@ class Trainer:
             f"   batch: {iter_idx + 1}/{max_iters} ({((iter_idx + 1) / max_iters) * 100.0:.0f}%)" +
             f"{loss_str}{monitor_str}"
         )
-        if writer:
+        writers = thelper.utils.get_key("writers", kwargs, msg="missing writers dict in iter logger args")
+        if (set_name == "train" or iter_idx == max_iters - 1) and writers[set_name] :
             if loss is not None:
-                writer.add_scalar("iter/loss", loss, self.current_iter)
+                writers[set_name].add_scalar("iter/loss", loss, self.current_iter)
             for metric_name, metric in metrics.items():
                 if isinstance(metric, thelper.optim.metrics.Metric):
                     if metric_name == self.monitor and monitor_val is not None:
-                        writer.add_scalar(f"iter/{self.monitor}", monitor_val, self.current_iter)
+                        writers[set_name].add_scalar(f"iter/{self.monitor}", monitor_val, self.current_iter)
                     elif metric.live_eval:
                         # if live eval is not true, metric might be too heavy to compute at each iteration
-                        writer.add_scalar(f"iter/{metric_name}", metric.eval(), self.current_iter)
+                        writers[set_name].add_scalar(f"iter/{metric_name}", metric.eval(), self.current_iter)
         if set_name == "train":
             self.current_iter += 1
 
