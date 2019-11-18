@@ -57,6 +57,11 @@ class CustomTensorDataset(torch.utils.data.Dataset):
         self.epoch = epoch
 
 
+def fake_sample_wrapper(sample):
+    assert isinstance(sample, (tuple, list)) and len(sample) == 4
+    return [*sample, "fake"]
+
+
 @pytest.fixture
 def tensor_dataset():
     return CustomTensorDataset(torch.Tensor([torch.Tensor([v]) for v in range(100)]))
@@ -105,6 +110,11 @@ def test_tensor_loader_interface(tensor_dataset, num_workers):
             assert all([torch.all(torch.eq(rand_vals[idx], batch[1:4][idx])) for idx in range(3)])
         assert batch[0].shape == (2,)
     assert loader.epoch == 1
+    wrapped_loader = thelper.data.DataLoaderWrapper(loader, fake_sample_wrapper)
+    assert len(wrapped_loader) == len(loader)
+    assert wrapped_loader.dataset == loader.dataset
+    for batch_idx, batch in enumerate(wrapped_loader):
+        assert len(batch) == 5 and batch[4] == "fake"
     loader = thelper.data.DataLoader(tensor_dataset, num_workers=num_workers)  # without fixed seed
     rand_vals = None
     assert loader.epoch == 0

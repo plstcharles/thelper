@@ -165,6 +165,24 @@ class DataLoader(torch.utils.data.DataLoader):
         return len(self.sampler) if self.sampler is not None else len(self.dataset)
 
 
+class DataLoaderWrapper(DataLoader):
+    """Data loader wrapper used to transform all loaded samples with an external function.
+
+    This can be useful to convert the samples before the user gets to access them, or to upload
+    them on a specific device.
+
+    The wrapped data loader should be compatible with :class:`thelper.data.loaders.DataLoader`.
+    """
+
+    def __init__(self, loader, callback):
+        self.__class__ = type(loader.__class__.__name__, (self.__class__, loader.__class__), {})
+        self.__dict__ = {**loader.__dict__, "_wrapped_loader": loader, "_callback": callback}
+
+    def __iter__(self):
+        for sample in self._wrapped_loader:
+            yield self._callback(sample)
+
+
 class LoaderFactory:
     """Factory used for preparing and splitting dataset parsers into usable data loader objects.
 
