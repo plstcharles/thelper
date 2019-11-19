@@ -337,7 +337,7 @@ class FCResNet(ResNet):
         self.set_task(task)
 
     def forward(self, x):
-        x = self.get_embedding(x)
+        x = self.get_embedding(x, pool=False)
         if self.avgpool_size > 0:
             x = torch.nn.functional.avg_pool2d(x, kernel_size=self.avgpool_size, stride=1)
         x = self.finallayer(x)
