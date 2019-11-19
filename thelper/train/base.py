@@ -716,7 +716,7 @@ class Trainer:
             f"{loss_str}{monitor_str}"
         )
         writers = thelper.utils.get_key("writers", kwargs, msg="missing writers dict in iter logger args")
-        if (set_name == "train" or iter_idx == max_iters - 1) and writers[set_name] :
+        if (set_name == "train" or iter_idx == max_iters - 1) and writers[set_name]:
             if loss is not None:
                 writers[set_name].add_scalar("iter/loss", loss, self.current_iter)
             for metric_name, metric in metrics.items():
