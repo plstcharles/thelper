@@ -4,6 +4,8 @@ import torch.nn
 import thelper.nn.coordconv
 import thelper.nn.srm
 
+warned_bad_input_size_power2 = False
+
 
 class BasicBlock(torch.nn.Module):
     """Default (double-conv) block used in U-Net layers."""
@@ -86,6 +88,10 @@ class UNet(thelper.nn.Module):
         self.set_task(task)
 
     def forward(self, x):
+        global warned_bad_input_size_power2
+        if not warned_bad_input_size_power2:
+            warned_bad_input_size_power2 = True
+            thelper.nn.logger.warning("unet input size should be power of 2 (e.g. 256x256, 512x512, ...)")
         if self.srm_conv is not None:
             noise = self.srm_conv(x)
             x = torch.cat([x, noise], dim=1)
