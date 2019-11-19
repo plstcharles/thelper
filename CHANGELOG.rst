@@ -3,6 +3,23 @@
 Changelog
 =========
 
+0.4.4 (2019/11/18)
+------------------
+
+* Added viz pkg w/ t-SNE & UMAP support for in-trainer usage
+* Fixed geo pkg documentation build issue related to mocking
+* Fixed type and output format checks in numerous metrics
+* Updated all callback readers to rely on new utility function
+* Cleaned and optimize coordconv implementation
+* Added U-Net architecture implementation to nn package
+* Added IoU metric implementation
+* Added support for SRM kernels and SRM convolutions
+* Updated documentation (install, faq, maintenance)
+* Added fixed weight sampler to data package
+* Added lots of extra unit tests
+* Added efficientnet 3rd-party module wrapper
+* Fixed potential conflicts in task class names ordering
+
 0.4.3 (2019/11/06)
 ------------------
 
