@@ -376,7 +376,8 @@ def draw_predicts(images, preds=None, targets=None, swap_channels=False, redraw=
                        block=block, grid_size_x=grid_size_x, grid_size_y=grid_size_y, **kwargs)
 
 
-def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, block=False, **kwargs):
+def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, block=False,
+                  segm_threshold=None, target_class=None, target_threshold=None, **kwargs):
     """Draws and returns a set of segmentation results."""
     image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
     image_gray_list = [cv.cvtColor(cv.cvtColor(image, cv.COLOR_BGR2GRAY), cv.COLOR_GRAY2BGR) for image in image_list]
@@ -420,14 +421,12 @@ def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, b
                 preds = list(itertools.chain.from_iterable(preds))  # merge all augmented lists together
             preds = torch.cat(preds, 0)  # merge all preds into a single tensor
         with torch.no_grad():
-            if "segm_threshold" in kwargs:
-                target_class = kwargs["segm_target"]
+            if target_class is not None:
                 assert isinstance(target_class, int), "target class should be index (integer)"
-                target_threshold = kwargs["segm_threshold"]
                 assert isinstance(target_threshold, float), "target threshold should be float"
                 assert 0 < target_threshold < 1, "target threshold should be in [0,1]"
                 preds_softmax = torch.nn.functional.softmax(preds, dim=1)
-                preds = preds_softmax[:, target_class, ...] > target_threshold
+                preds = (preds_softmax[:, target_class, ...] > target_threshold).long()
             else:
                 preds = torch.squeeze(preds.topk(k=1, dim=1)[1], dim=1)  # keep top prediction index only
         if preds.shape[0] != nb_imgs:
