@@ -1354,6 +1354,11 @@ class IntersectionOverUnion(Metric):
             self.inters[curr_idx] = None
             self.unions[curr_idx] = None
             return
+        assert pred.dim() == target.dim() + 1 or pred.dim() == target.dim(), \
+            "prediction/gt tensors dim mismatch (should be BxCx[...] and Bx[...])"
+        if pred.dim() == target.dim():
+            assert target.shape[1] == 1, "unexpected channel count (>1) for target tensor"
+            target = torch.squeeze(target, dim=1)
         assert pred.dim() == target.dim() + 1, "prediction/gt tensors dim mismatch (should be BxCx[...] and Bx[...])"
         assert pred.shape[0] == target.shape[0], "prediction/gt tensors batch size mismatch"
         assert pred.dim() <= 2 or pred.shape[2:] == target.shape[1:], "prediction/gt tensors array size mismatch"
