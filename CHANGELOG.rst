@@ -3,6 +3,15 @@
 Changelog
 =========
 
+0.4.5 (2019/11/18)
+------------------
+
+* Split travis deploy stage into two phases
+* Fixed draw_segment threshold usage & params lookup
+* Fixed FCResNet embedding getter wrt latest pooling update
+* Update all matplotlib plots to use 160 dpi by default
+* Refactor trainer data/metric writer to save all viz data
+
 0.4.4 (2019/11/18)
 ------------------
 
