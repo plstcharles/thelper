@@ -8,6 +8,7 @@ import json
 import logging
 import math
 import os
+import pickle
 import platform
 import random
 import time
@@ -486,7 +487,7 @@ class Trainer:
                 self.train_loader.set_epoch(self.current_epoch)
             latest_loss = self.train_epoch(model, self.current_epoch, self.devices, loss, optimizer,
                                            self.train_loader, self.train_metrics, self.output_paths["train"])
-            self._write_epoch_output(self.current_epoch, self.train_metrics,
+            self._write_metrics_data(self.current_epoch, self.train_metrics,
                                      self.writers["train"], self.output_paths["train"],
                                      loss=latest_loss, optimizer=optimizer)
             train_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.train_metrics.items()
@@ -503,7 +504,7 @@ class Trainer:
                     self.valid_loader.set_epoch(self.current_epoch)
                 self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
                                 self.valid_metrics, self.output_paths["valid"])
-                self._write_epoch_output(self.current_epoch, self.valid_metrics,
+                self._write_metrics_data(self.current_epoch, self.valid_metrics,
                                          self.writers["valid"], self.output_paths["valid"])
                 valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()
                                      if isinstance(metric, thelper.optim.metrics.Metric)}
@@ -512,13 +513,9 @@ class Trainer:
                 uploader = functools.partial(self._move_tensor, dev=self.devices, detach=True)
                 wrapped_loader = thelper.data.DataLoaderWrapper(self.valid_loader, uploader)
                 for viz, kwargs in self.viz.items():
-                    viz_img = thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
-                    if viz_img is not None:
-                        if self.writers["valid"] is not None:
-                            self.writers["valid"].add_image(f"viz/{viz}", viz_img, self.current_epoch, dataformats="HWC")
-                        raw_filepath = os.path.join(self.output_paths["valid"], f"{viz}-{self.current_epoch:04d}.png")
-                        self.logger.debug(f"writing {viz} render output to {os.path.abspath(raw_filepath)}")
-                        cv.imwrite(raw_filepath, viz_img[..., ::-1])
+                    viz_data = thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
+                    self._write_data(viz_data, "epoch/", f"-{self.current_epoch:04d}", self.writers["valid"],
+                                     self.output_paths["valid"], self.current_epoch)
             new_best = False
             monitor_val = None
             for key, value in result.items():
@@ -572,7 +569,7 @@ class Trainer:
                 self.test_loader.set_epoch(self.current_epoch)
             self.eval_epoch(model, self.current_epoch, self.devices, self.test_loader,
                             self.test_metrics, self.output_paths["test"])
-            self._write_epoch_output(self.current_epoch, self.test_metrics,
+            self._write_metrics_data(self.current_epoch, self.test_metrics,
                                      self.writers["test"], self.output_paths["test"], use_suffix=False)
             test_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.test_metrics.items()
                                 if isinstance(metric, thelper.optim.metrics.Metric)}
@@ -581,13 +578,8 @@ class Trainer:
             uploader = functools.partial(self._move_tensor, dev=self.devices, detach=True)
             wrapped_loader = thelper.data.DataLoaderWrapper(self.test_loader, uploader)
             for viz, kwargs in self.viz.items():
-                viz_img = thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
-                if viz_img is not None:
-                    if self.writers["test"] is not None:
-                        self.writers["test"].add_image(f"viz/{viz}", viz_img, self.current_epoch, dataformats="HWC")
-                    raw_filepath = os.path.join(self.output_paths["test"], f"{viz}-{self.current_epoch:04d}.png")
-                    self.logger.debug(f"writing {viz} render output to {os.path.abspath(raw_filepath)}")
-                    cv.imwrite(raw_filepath, viz_img[..., ::-1])
+                viz_data = thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
+                self._write_data(viz_data, "epoch/", "", self.writers["test"], self.output_paths["test"], self.current_epoch)
         elif self.valid_loader:
             self._set_rng_state(self.valid_loader.seeds, self.current_epoch)
             model.eval()
@@ -598,7 +590,7 @@ class Trainer:
                 self.valid_loader.set_epoch(self.current_epoch)
             self.eval_epoch(model, self.current_epoch, self.devices, self.valid_loader,
                             self.valid_metrics, self.output_paths["valid"])
-            self._write_epoch_output(self.current_epoch, self.valid_metrics,
+            self._write_metrics_data(self.current_epoch, self.valid_metrics,
                                      self.writers["valid"], self.output_paths["valid"], use_suffix=False)
             valid_metric_vals = {metric_name: metric.eval() for metric_name, metric in self.valid_metrics.items()
                                  if isinstance(metric, thelper.optim.metrics.Metric)}
@@ -607,13 +599,8 @@ class Trainer:
             uploader = functools.partial(self._move_tensor, dev=self.devices, detach=True)
             wrapped_loader = thelper.data.DataLoaderWrapper(self.valid_loader, uploader)
             for viz, kwargs in self.viz.items():
-                viz_img = thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
-                if viz_img is not None:
-                    if self.writers["valid"] is not None:
-                        self.writers["valid"].add_image(f"viz/{viz}", viz_img, self.current_epoch, dataformats="HWC")
-                    raw_filepath = os.path.join(self.output_paths["valid"], f"{viz}-{self.current_epoch:04d}.png")
-                    self.logger.debug(f"writing {viz} render output to {os.path.abspath(raw_filepath)}")
-                    cv.imwrite(raw_filepath, viz_img[..., ::-1])
+                viz_data = thelper.viz.visualize(model, self.task, wrapped_loader, viz_type=viz, **kwargs)
+                self._write_data(viz_data, "epoch/", "", self.writers["valid"], self.output_paths["valid"], self.current_epoch)
         for key, value in result.items():
             if not isinstance(value, dict):
                 self.logger.info(f" final result =>  {str(key)}: {value}")
@@ -729,41 +716,75 @@ class Trainer:
         if set_name == "train":
             self.current_iter += 1
 
-    def _write_epoch_output(self, epoch, metrics, tbx_writer, output_path, loss=None, optimizer=None, use_suffix=True):
-        """Writes the cumulative evaluation result of all metrics using a specific writer."""
-        self.logger.debug(f"writing epoch metrics to {os.path.abspath(output_path)}")
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
-        if tbx_writer is not None and loss is not None and optimizer is not None:
-            tbx_writer.add_scalar("epoch/loss", loss, epoch)
-            tbx_writer.add_scalar("epoch/lr", thelper.optim.get_lr(optimizer), epoch)
-        for metric_name, metric in metrics.items():
-            if isinstance(metric, thelper.optim.metrics.Metric) and tbx_writer is not None:
-                tbx_writer.add_scalar(f"epoch/{metric_name}", metric.eval(), epoch)
-            if hasattr(metric, "render") and callable(metric.render):
-                img = metric.render()
-                if img is not None:
-                    if tbx_writer is not None:
-                        tbx_writer.add_image(metric_name, img, epoch, dataformats="HWC")
-                    raw_filename = f"{metric_name}{f'-{epoch:04d}' if use_suffix else ''}.png"
-                    raw_filepath = os.path.join(output_path, raw_filename)
-                    self.logger.debug(f"writing metric render output to {os.path.abspath(raw_filepath)}")
-                    cv.imwrite(raw_filepath, img[..., [2, 1, 0]])
-            txt = metric.report() if hasattr(metric, "report") and callable(metric.report) else None
-            ext = getattr(metric, "ext", "txt")
-            if not txt and isinstance(metric, thelper.optim.metrics.Metric):
-                eval_res = metric.eval()
-                if eval_res is not None:
-                    if isinstance(eval_res, float):
-                        txt = f"{eval_res:.4f}"  # make sure we always have decent precision
+    def _write_data(self, data, writer_prefix, file_suffix, writer, output_path, idx=None):
+        """Writes a generic chunk of data passed as a dictionary to the specified output path."""
+        os.makedirs(output_path, exist_ok=True)
+        assert isinstance(data, dict) and all([isinstance(key, str) for key in data]), \
+            "unexpected data chunk formatting (should be dict with str-based keys)"
+        reserved_keys = ["/image", "/extension", "/json", "/text", "/pickle"]
+        for key, val in data.items():
+            if thelper.utils.is_scalar(val) and not any([key.endswith(s) for s in reserved_keys]):
+                if writer is not None:
+                    if isinstance(val, str):
+                        writer.add_text(f"{writer_prefix}{key}", val, idx)
                     else:
-                        txt = str(eval_res)
-            if txt:
-                raw_filename = f"{metric_name}{f'-{epoch:04d}' if use_suffix else ''}.{ext}"
-                raw_filepath = os.path.join(output_path, raw_filename)
-                self.logger.debug(f"writing metric text output to '{os.path.abspath(raw_filepath)}'")
-                with open(raw_filepath, "w") as fd:
-                    fd.write(txt)
+                        writer.add_scalar(f"{writer_prefix}{key}", val, idx)
+            if key.endswith("/image"):
+                assert isinstance(val, np.ndarray) and len(val.shape) == 3 and val.shape[2] == 3, \
+                    "unexpected image format (should be numpy array with RGB channels)"
+                image_ext = thelper.utils.get_key_def(key + "/extension", data, "png")
+                image_path = os.path.join(output_path, f"{''.join(key.rsplit('/image', 1))}{file_suffix}.{image_ext}")
+                self.logger.debug(f"writing {key} to {os.path.abspath(image_path)}")
+                cv.imwrite(image_path, val[..., ::-1])  # flip to BGR for opencv compat
+                if writer is not None:
+                    writer.add_image(f"{writer_prefix}{key}", val, idx, dataformats="HWC")
+            if key.endswith("/json"):
+                json_ext = thelper.utils.get_key_def(key + "/extension", data, "json")
+                json_path = os.path.join(output_path, f"{''.join(key.rsplit('/json', 1))}{file_suffix}.{json_ext}")
+                self.logger.debug(f"writing {key} to {os.path.abspath(json_path)}")
+                with open(json_path, "w") as fd:
+                    json.dump(val, fd)
+            if key.endswith("/text"):
+                txt_ext = thelper.utils.get_key_def(key + "/extension", data, "txt")
+                txt_path = os.path.join(output_path, f"{''.join(key.rsplit('/text', 1))}{file_suffix}.{txt_ext}")
+                self.logger.debug(f"writing {key} to {os.path.abspath(txt_path)}")
+                with open(txt_path, "w") as fd:
+                    fd.write(val)
+            if key.endswith("/pickle"):
+                pkl_ext = thelper.utils.get_key_def(key + "/extension", data, "pkl")
+                pkl_path = os.path.join(output_path, f"{''.join(key.rsplit('/pickle', 1))}{file_suffix}.{pkl_ext}")
+                self.logger.debug(f"writing {key} to {os.path.abspath(pkl_path)}")
+                with open(pkl_path, "wb") as fd:
+                    pickle.dump(val, fd)
+
+    def _write_metrics_data(self, epoch, metrics, tbx_writer, output_path, loss=None, optimizer=None, use_suffix=True):
+        """Writes the cumulative evaluation result of all metrics using a specific writer."""
+        os.makedirs(output_path, exist_ok=True)
+        if tbx_writer is not None:
+            if loss is not None:
+                tbx_writer.add_scalar("epoch/loss", loss, epoch)
+            if optimizer is not None:
+                tbx_writer.add_scalar("epoch/lr", thelper.optim.get_lr(optimizer), epoch)
+        writer_prefix = "epoch/"
+        file_suffix = f"-{epoch:04d}" if use_suffix else ""
+        for metric_name, metric in metrics.items():
+            output = {}
+            if hasattr(metric, "render") and callable(metric.render):
+                output[f"{metric_name}/image"] = metric.render()
+                output[f"{metric_name}/image/extension"] = "png"
+            if hasattr(metric, "report") and callable(metric.report):
+                output[f"{metric_name}/text"] = metric.report()
+                output[f"{metric_name}/text/extension"] = getattr(metric, "ext", "txt")
+            if hasattr(metric, "eval") and callable(metric.eval):
+                eval_res = metric.eval()
+                if f"{metric_name}/text" not in output and eval_res is not None:
+                    if isinstance(eval_res, float):
+                        output[f"{metric_name}/text"] = f"{eval_res:.4f}"
+                    else:
+                        output[f"{metric_name}/text"] = str(eval_res)
+                    output[f"{metric_name}/text/extension"] = getattr(metric, "ext", "txt")
+                output[metric_name] = eval_res
+            self._write_data(output, writer_prefix, file_suffix, tbx_writer, output_path, epoch)
 
     def _save(self, epoch, iter, optimizer, scheduler, save_best=False):
         """Saves a session checkpoint containing all the information required to resume training."""

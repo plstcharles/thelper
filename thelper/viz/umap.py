@@ -4,7 +4,7 @@ For more information on UMAP, see https://github.com/lmcinnes/umap for the origi
 repository.
 """
 
-from typing import Dict, Optional  # noqa: F401
+from typing import Any, AnyStr, Dict, List, Optional, Union  # noqa: F401
 
 import cv2 as cv
 import numpy as np
@@ -16,14 +16,15 @@ import thelper.utils
 from thelper.viz.tsne import plot
 
 
-def visualize(model,             # type: thelper.typedefs.ModelType
-              task,              # type: thelper.typedefs.TaskType
-              loader,            # type: thelper.typedefs.LoaderType
-              draw=False,        # type: bool
-              color_map=None,    # type: Optional[Dict[int, np.ndarray]]
-              max_samples=None,  # type: Optional[int]
+def visualize(model,              # type: thelper.typedefs.ModelType
+              task,               # type: thelper.typedefs.TaskType
+              loader,             # type: thelper.typedefs.LoaderType
+              draw=False,         # type: bool
+              color_map=None,     # type: Optional[Dict[int, np.ndarray]]
+              max_samples=None,   # type: Optional[int]
+              return_meta=False,  # type: Union[bool, List[AnyStr]]
               **kwargs
-              ):                 # type: (...) -> np.ndarray  # displayable BGR image
+              ):                  # type: (...) -> Dict[AnyStr, Any]
     """
     Creates (and optionally displays) a 2D UMAP visualization of sample embeddings.
 
@@ -41,16 +42,18 @@ def visualize(model,             # type: thelper.typedefs.ModelType
         draw: boolean flag used to toggle internal display call on or off.
         color_map: map of RGB triplets used to color predictions (for classification only).
         max_samples: maximum number of samples to draw from the data loader.
+        return_meta: toggles whether sample metadata should be provided as output or not.
 
     Returns:
-        A displayable RGB image (in np.ndarray format) of the UMAP space.
+        A dictionary of the visualization result (an RGB image in numpy format), a list of projected
+        embedding coordinates, the labels of the samples, and the predictions of the samples.
     """
     assert loader is not None and len(loader) > 0, "no available data to load"
     assert model is not None and isinstance(model, torch.nn.Module), "invalid model"
     assert task is not None and isinstance(task, thelper.tasks.Task), "invalid task"
     assert max_samples is None or max_samples > 0, "invalid maximum loader sample count"
     thelper.viz.logger.debug("fetching data loader samples for UMAP visualization...")
-    embeddings, labels, preds = [], [], []
+    embeddings, labels, preds, idxs = [], [], [], []
     if isinstance(task, thelper.tasks.Classification):
         assert all([isinstance(n, str) for n in task.class_names]), "unexpected class name types"
         if not color_map:
@@ -59,6 +62,11 @@ def visualize(model,             # type: thelper.typedefs.ModelType
             else:
                 color_map = {idx: thelper.draw.get_label_color_mapping(idx + 1) for idx in task.class_indices.values()}
         color_map = {idx: f"#{c[0]:02X}{c[1]:02X}{c[2]:02X}" for idx, c in color_map.items()}
+    if isinstance(return_meta, bool):
+        return_meta = task.meta_keys if return_meta else []
+    assert isinstance(return_meta, list) and all([isinstance(key, str) for key in return_meta]), \
+        "sample metadata keys must be provided as a list of strings"
+    meta = {key: [] for key in return_meta}
     for sample_idx, sample in tqdm.tqdm(enumerate(loader), desc="extracting embeddings"):
         if max_samples is not None and sample_idx > max_samples:
             break
@@ -83,6 +91,10 @@ def visualize(model,             # type: thelper.typedefs.ModelType
             if embedding.dim() > 2:  # reshape to BxC
                 embedding = embedding.view(embedding.size(0), -1)
         embeddings.append(embedding.cpu().numpy())
+        idxs.append(sample_idx)
+        for key in return_meta:
+            for v in sample[key]:
+                meta[key].append(v)
     embeddings = np.concatenate(embeddings)
     if labels and preds:
         labels, preds = np.concatenate(labels), np.concatenate(preds)
@@ -97,12 +109,20 @@ def visualize(model,             # type: thelper.typedefs.ModelType
     umap_args = thelper.utils.get_key_def("umap_args", kwargs, default_umap_args)
     umap_engine = umap.UMAP(**umap_args)
     thelper.viz.logger.debug("computing UMAP projection...")
-    projections = umap_engine.fit_transform(embeddings)
+    embeddings = umap_engine.fit_transform(embeddings)
     np.random.set_state(prev_state)
-    fig = plot(projections, labels, preds, color_map=color_map, task=task, **kwargs)
+    fig = plot(embeddings, labels, preds, color_map=color_map, task=task, **kwargs)
     img = thelper.draw.fig2array(fig).copy()
     if draw:
         thelper.viz.logger.debug("displaying UMAP projection...")
         cv.imshow("thelper.viz.umap", img[..., ::-1])  # RGB to BGR for opencv display
         cv.waitKey(1)
-    return img
+    return {
+        # key formatting should be compatible with _write_data in thelper/train/base.py
+        "tsne-projs/pickle": embeddings,
+        "tsne-labels/json": labels.tolist(),
+        "tsne-preds/json": preds.tolist(),
+        "tsne-idxs/json": idxs,
+        "tsne-meta/json": meta,
+        "tsne/image": img
+    }

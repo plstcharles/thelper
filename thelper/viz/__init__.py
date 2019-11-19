@@ -9,9 +9,7 @@ displayed using the :mod:`thelper.draw` module.
 """
 
 import logging
-from typing import AnyStr  # noqa: F401
-
-import numpy as np  # noqa: F401
+from typing import Any, AnyStr  # noqa: F401
 
 import thelper.typedefs  # noqa: F401
 import thelper.viz.tsne  # noqa: F401
@@ -29,7 +27,7 @@ def visualize(model,         # type: thelper.typedefs.ModelType
               loader,        # type: thelper.typedefs.LoaderType
               viz_type,      # type: AnyStr
               **kwargs
-              ):             # type: (...) -> np.ndarray  # displayable BGR image
+              ):             # type: (...) -> Any
     """Dispatches a visualization call to the proper package module."""
     assert viz_type in supported_types, f"unsupported visualization type '{viz_type}'"
     if viz_type == "tsne":
