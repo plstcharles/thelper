@@ -29,7 +29,7 @@ def plot(projs,                # type: np.ndarray
     proj_min, proj_max = np.min(projs, 0), np.max(projs, 0)
     projs = (projs - proj_min) / (proj_max - proj_min)
     figsize = thelper.utils.get_key_def("figsize", kwargs, (6, 6))
-    dpi = thelper.utils.get_key_def("dpi", kwargs, 320)
+    dpi = thelper.utils.get_key_def("dpi", kwargs, 160)
     fig = plt.figure(num="thelper.viz", figsize=figsize, dpi=dpi,
                      facecolor="w", edgecolor="k", clear=True)
     ax = fig.add_subplot(1, 1, 1)

@@ -186,7 +186,7 @@ def draw_popbars(labels,                # type: thelper.typedefs.LabelList
     return fig, ax
 
 
-def draw_pascalvoc_curve(metrics, size_inch=(5, 5), dpi=320, show=False, block=False):
+def draw_pascalvoc_curve(metrics, size_inch=(5, 5), dpi=160, show=False, block=False):
     """Draws and returns a precision-recall curve according to pascalvoc metrics."""
     # note: the 'metrics' must correspond to a single class output produced by pascalvoc evaluator
     assert isinstance(metrics, dict), "unexpected metrics format"
@@ -581,7 +581,7 @@ def draw_errbars(labels,                # type: thelper.typedefs.LabelList
     return fig, axs
 
 
-def draw_roc_curve(fpr, tpr, labels=None, size_inch=(5, 5), dpi=320, show=False, block=False):
+def draw_roc_curve(fpr, tpr, labels=None, size_inch=(5, 5), dpi=160, show=False, block=False):
     """Draws and returns an ROC curve figure using pyplot."""
     if not isinstance(fpr, np.ndarray) or not isinstance(tpr, np.ndarray):
         raise AssertionError("invalid inputs")
@@ -624,7 +624,7 @@ def draw_roc_curve(fpr, tpr, labels=None, size_inch=(5, 5), dpi=320, show=False,
     return fig, ax
 
 
-def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=320, normalize=False,
+def draw_confmat(confmat, class_list, size_inch=(5, 5), dpi=160, normalize=False,
                  keep_unset=False, show=False, block=False):
     """Draws and returns an a confusion matrix figure using pyplot."""
     if not isinstance(confmat, np.ndarray) or not isinstance(class_list, list):
