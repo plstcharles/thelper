@@ -23,12 +23,29 @@ jobs:
   include:
     - stage: test
       script: make test-all
-    - # run doc build in parallel during test stage
+    - stage: test
       script: make docs
     - stage: deploy
+      if: branch = master AND type = push AND fork = false AND tag IS present
       script: skip
       before_deploy:
-        - echo "Installing deployment tools..."
+        - docker --version
+        - echo "$DOCKER_PASSWORD" | docker login --username="$DOCKER_USERNAME" --password-stdin
+        - echo "ENV GIT_SHA ${TRAVIS_COMMIT}" >> Dockerfile
+      deploy:
+        provider: pypi
+        user: "${PYPI_USERNAME}"
+        password: "${PYPI_PASSWORD}"
+        skip_existing: true
+        on:
+          tags: true
+      after_deploy:
+        - docker build -t ${DOCKER_REPO}:${TRAVIS_TAG} -t ${DOCKER_REPO}:latest .
+        - docker run -t ${DOCKER_REPO}:latest thelper --version
+        - travis_wait 50 docker push ${DOCKER_REPO}
+    - stage: conda_deploy
+      if: branch = master AND type = push AND fork = false AND tag IS present
+      script:
         - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
         - bash miniconda.sh -b -p $HOME/miniconda
         - export PATH="$HOME/miniconda/bin:$PATH"
@@ -41,18 +58,4 @@ jobs:
         - conda update -q conda
         - conda install conda-build conda-verify anaconda-client
         - conda info -a
-        - docker --version
-        - if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then echo "$DOCKER_PASSWORD" | docker login --username="$DOCKER_USERNAME" --password-stdin; fi
-        - echo "ENV GIT_SHA ${TRAVIS_COMMIT}" >> Dockerfile
-      deploy:
-        provider: pypi
-        user: "${PYPI_USERNAME}"
-        password: "${PYPI_PASSWORD}"
-        skip_existing: true
-        on:
-          tags: true
-      after_deploy:
-        - docker build -t ${DOCKER_REPO}:${TRAVIS_TAG} -t ${DOCKER_REPO}:latest .
-        - docker run -t ${DOCKER_REPO}:latest thelper --version
-        - if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then travis_wait 50 docker push ${DOCKER_REPO}; fi
         - travis_wait 50 conda build --token $CONDA_TOKEN --user $CONDA_USERNAME ci/
