@@ -3,6 +3,11 @@
 Changelog
 =========
 
+0.4.6 (2019/11/20)
+------------------
+
+* Travis deploy test w/ split conda/docker stages
+
 0.4.5 (2019/11/18)
 ------------------
 
