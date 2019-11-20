@@ -803,16 +803,16 @@ def get_label_html_color_code(idx):
 
 def apply_color_map(image, colormap, dst=None):
     """Applies a color map to an image of 8-bit color indices; works similarly to cv2.applyColorMap (v3.3.1)."""
-    if not isinstance(image, np.ndarray) or image.ndim != 2:
-        raise AssertionError("invalid input image")
-    if not isinstance(colormap, np.ndarray) or colormap.shape != (256, 1, 3) or (colormap.dtype != np.uint8 and
-                                                                                 colormap.dtype != np.float32):
-        raise AssertionError("invalid color map")
+    assert isinstance(image, np.ndarray) and image.ndim == 2 and \
+        np.issubdtype(image.dtype, np.integer), "invalid input image"
+    assert isinstance(colormap, np.ndarray) and colormap.shape == (256, 1, 3) and \
+        (colormap.dtype == np.uint8 or colormap.dtype == np.float32), "invalid color map"
     out_shape = (image.shape[0], image.shape[1], 3)
     if dst is None:
         dst = np.empty(out_shape, dtype=colormap.dtype)
-    elif not isinstance(dst, np.ndarray) or dst.shape != out_shape or dst.dtype != colormap.dtype:
-        raise AssertionError("invalid output image")
+    else:
+        assert isinstance(dst, np.ndarray) and dst.shape == out_shape and \
+            dst.dtype == colormap.dtype, "invalid output image"
     # using np.take might avoid an extra allocation...
     np.copyto(dst, colormap.squeeze()[image.ravel(), :].reshape(out_shape))
     return dst
