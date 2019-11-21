@@ -43,6 +43,8 @@ class AlbumentationsWrapper:
 
         The pipeline itself is instantiated in :func:`thelper.transforms.utils.load_transforms`.
         """
+        assert thelper.utils.check_installed("albumentations"), \
+            "could not import optional 3rd-party dependency 'albumentations'; make sure you install it first!"
         if bbox_params is None or not bbox_params:
             bbox_params = {"format": "coco"}  # i.e. opencv format (X,Y,W,H)
         if add_targets is None:

@@ -10,7 +10,6 @@ import cv2 as cv
 import numpy as np
 import torch
 import tqdm
-import umap
 
 import thelper.utils
 from thelper.viz.tsne import plot
@@ -50,6 +49,7 @@ def visualize(model,              # type: thelper.typedefs.ModelType
     """
     assert thelper.utils.check_installed("umap"), \
         "could not import optional 3rd-party dependency 'umap-learn'; make sure you install it first!"
+    import umap
     assert loader is not None and len(loader) > 0, "no available data to load"
     assert model is not None and isinstance(model, torch.nn.Module), "invalid model"
     assert task is not None and isinstance(task, thelper.tasks.Task), "invalid task"
