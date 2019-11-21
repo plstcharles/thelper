@@ -16,12 +16,11 @@ build:
 
 requirements:
   host:
-    - albumentations
     - cython
     - gitpython
-    - matplotlib
-    - lz4
     - h5py
+    - lz4
+    - matplotlib
     - numpy
     - opencv
     - pillow
@@ -29,20 +28,17 @@ requirements:
     - python {{ python }}
     - pyyaml
     - scikit-learn
-    - scipy
     - six
     - tensorboardx
     - pytorch
     - torchvision
     - tqdm
-    - umap-learn
   run:
-    - albumentations
     - cython
     - gitpython
-    - matplotlib
-    - lz4
     - h5py
+    - lz4
+    - matplotlib
     - numpy
     - opencv
     - pillow
@@ -50,24 +46,15 @@ requirements:
     - python
     - pyyaml
     - scikit-learn
-    - scipy
     - six
     - tensorboardx
     - pytorch
     - torchvision
     - tqdm
-    - umap-learn
 
 test:
   imports:
     - thelper
-    - thelper.data
-    - thelper.gui
-    - thelper.nn
-    - thelper.optim
-    - thelper.tasks
-    - thelper.train
-    - thelper.transforms
   commands:
     - thelper --help
 

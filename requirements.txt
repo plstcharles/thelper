@@ -7,10 +7,8 @@ opencv-python
 Pillow
 pip
 pyyaml
-scipy
 scikit-learn
 six
 torch
 torchvision
 tqdm
-umap-learn

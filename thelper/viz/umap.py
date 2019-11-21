@@ -48,6 +48,8 @@ def visualize(model,              # type: thelper.typedefs.ModelType
         A dictionary of the visualization result (an RGB image in numpy format), a list of projected
         embedding coordinates, the labels of the samples, and the predictions of the samples.
     """
+    assert thelper.utils.check_installed("umap"), \
+        "could not import optional 3rd-party dependency 'umap-learn'; make sure you install it first!"
     assert loader is not None and len(loader) > 0, "no available data to load"
     assert model is not None and isinstance(model, torch.nn.Module), "invalid model"
     assert task is not None and isinstance(task, thelper.tasks.Task), "invalid task"

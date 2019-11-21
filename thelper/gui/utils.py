@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 def create_key_listener(callback):
     """Returns a key press listener based on pynput.keyboard (used for mocking)."""
+    assert thelper.utils.check_installed("pynput.keyboard"), \
+        "could not import optional 3rd-party dependency 'pynput'; make sure you install it first!"
     import pynput.keyboard
     return pynput.keyboard.Listener(on_press=callback)
 

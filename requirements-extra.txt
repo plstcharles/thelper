@@ -1,3 +1,6 @@
+augmentor
 cython
+imgaug==0.2.5
 pynput
 tensorboardX
+umap-learn

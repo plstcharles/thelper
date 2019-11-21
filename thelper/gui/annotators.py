@@ -351,6 +351,8 @@ class ImageSegmentAnnotator(Annotator):
 
     def handle_keys(self):
         """Fetches the latest keyboard press and updates the annotator state accordingly."""
+        assert thelper.utils.check_installed("pynput.keyboard"), \
+            "could not import optional 3rd-party dependency 'pynput'; make sure you install it first!"
         import pynput.keyboard
         cls = ImageSegmentAnnotator
         nb_labels = len(self.labels)

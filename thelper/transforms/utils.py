@@ -107,6 +107,8 @@ def load_transforms(stages, avoid_transform_wrapper=False):
             operation_targets = stage["target_key"] if isinstance(stage["target_key"], list) else [stage["target_key"]]
         linked_fate = thelper.utils.str2bool(stage["linked_fate"]) if "linked_fate" in stage else True
         if operation_name == "Augmentor.Pipeline":
+            assert thelper.utils.check_installed("Augmentor"), \
+                "could not import optional 3rd-party dependency 'Augmentor'; make sure you install it first!"
             import Augmentor
             pipeline = Augmentor.Pipeline()
             assert isinstance(operation_params, dict) and operation_params, \
@@ -119,6 +121,8 @@ def load_transforms(stages, avoid_transform_wrapper=False):
             if "output_tensor" in stage and thelper.utils.str2bool(stage["output_tensor"]):
                 operations.append(torchvision.transforms.ToTensor())
         elif operation_name == "albumentations.Compose":
+            assert thelper.utils.check_installed("albumentations"), \
+                "could not import optional 3rd-party dependency 'albumentations'; make sure you install it first!"
             assert isinstance(operation_params, dict) and operation_params, \
                 "albumentations pipeline 'params' field should contain dictionary of suboperations"
             suboperations = []

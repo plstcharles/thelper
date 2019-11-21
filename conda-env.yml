@@ -3,7 +3,6 @@ channels:
   - pytorch
   - conda-forge
 dependencies:
-  - albumentations
   - cython
   - ddt
   - gitdb
@@ -16,16 +15,11 @@ dependencies:
   - pip
   - pytorch<1.3
   - pyyaml
-  - scipy
   - scikit-learn
   - six
   - torchvision
   - tqdm
-  - umap-learn
   - pip:
-    - augmentor
     - h5py
-    - imgaug==0.2.5
     - opencv-python
-    - pynput
     - tensorboardX

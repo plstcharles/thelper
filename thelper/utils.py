@@ -1404,3 +1404,12 @@ def get_params_hash(*args, **kwargs):
     # by default, will use the repr of all params but remove the 'at 0x00000000' addresses
     clean_str = re.sub(r" at 0x[a-fA-F\d]+", "", str(args) + str(kwargs))
     return hashlib.sha1(clean_str.encode()).hexdigest()
+
+
+def check_installed(package_name):
+    """Attempts to import a specified package by name, returning a boolean indicating success."""
+    try:
+        importlib.import_module(package_name)
+        return True
+    except ImportError:
+        return False
