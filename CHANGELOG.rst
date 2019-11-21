@@ -3,6 +3,11 @@
 Changelog
 =========
 
+0.4.7 (2019/11/20)
+------------------
+
+* Removed optional dependencies from conda build env
+
 0.4.6 (2019/11/20)
 ------------------
 
