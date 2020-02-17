@@ -431,34 +431,7 @@ def create_hdf5(archive_path, task, train_loader, valid_loader, test_loader, com
         fd.attrs["task"] = str(task)
         fd.attrs["config"] = str(config_backup)
         fd.attrs["compression"] = str(compression)
-        dtype = h5py.special_dtype(vlen=np.uint8)
         target_keys = task.keys
-
-        def create_dataset(name, max_len, array_template, compr_args):
-            if array_template.ndim > 1:
-                dset = fd.create_dataset(name, shape=(max_len,), maxshape=(max_len,), dtype=dtype)
-                dset.attrs["orig_dtype"] = str(array_template.dtype)
-                dset.attrs["orig_shape"] = array_template.shape[1:]  # removes batch dim
-            else:
-                assert thelper.utils.is_scalar(array_template[0])
-                if "type" in compr_args and compr_args["type"] != "none":
-                    raise AssertionError("cannot compress scalar elements")
-                if np.issubdtype(array_template.dtype, np.number):
-                    dset = fd.create_dataset(name, shape=(max_len,), maxshape=(max_len,), dtype=array_template.dtype)
-                else:
-                    dset = fd.create_dataset(name, shape=(max_len,), maxshape=(max_len,), dtype=dtype)
-                    dset.attrs["orig_dtype"] = str(array_template.dtype)
-                    dset.attrs["orig_shape"] = ()
-            return dset
-
-        def fill_dataset(dset, dset_idx, array_idx, array, compr, **compr_kwargs):
-            if array.ndim > 1:
-                dset[dset_idx] = np.frombuffer(thelper.utils.encode_data(array[array_idx], compr, **compr_kwargs), dtype=np.uint8)
-            elif not np.issubdtype(array.dtype, np.number):
-                sample = array[array_idx].tobytes() if np.issubdtype(array[array_idx].dtype, np.dtype(str).type) else array[array_idx]
-                dset[dset_idx] = np.frombuffer(sample, dtype=np.uint8)
-            else:
-                dset[dset_idx] = array[array_idx]
 
         def get_compr_args(key, config):
             config = thelper.utils.get_key_def(key, config, default={})
@@ -477,9 +450,13 @@ def create_hdf5(archive_path, task, train_loader, valid_loader, test_loader, com
                 for key in target_keys:
                     tensor = thelper.utils.to_numpy(batch[key])
                     if datasets[key] is None:
-                        datasets[key] = create_dataset(group + "/" + key, max_dataset_len, tensor, datasets_compr[key])
+                        datasets[key] = thelper.utils.create_hdf5_dataset(
+                            fd, group + "/" + key, max_dataset_len, tensor, datasets_compr[key])
                     for idx in range(tensor.shape[0]):
-                        fill_dataset(datasets[key], datasets_len[key], idx, tensor, datasets_compr[key][0], **datasets_compr[key][1])
+                        thelper.utils.fill_hdf5_sample(
+                            datasets[key], datasets_len[key], idx,
+                            tensor, datasets_compr[key][0],
+                            **datasets_compr[key][1])
                         datasets_len[key] += 1
             assert len(set(datasets_len.values())) == 1
             fd[group].attrs["count"] = datasets_len[task.input_key]

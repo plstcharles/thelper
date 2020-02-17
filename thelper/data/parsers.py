@@ -220,26 +220,17 @@ class HDF5Dataset(Dataset):
             compr_kwargs = thelper.utils.get_key_def(["decode_params", "decode_kwargs"], compr_config, default={})
             self.target_args[key] = {"dset": dset, "dtype": dtype, "shape": shape, "compr_type": compr_type, "compr_kwargs": compr_kwargs}
 
-    def _unpack(self, dset, idx, dtype=None, shape=None, compr_type="none", **compr_kwargs):
-        if dtype is not None:
-            array = np.frombuffer(thelper.utils.decode_data(dset[idx], compr_type, **compr_kwargs), dtype=dtype)
-        else:
-            array = dset[idx]
-        if shape is not None:
-            if np.issubdtype(dtype, np.dtype(str).type) and len(shape) == 0:
-                array = "".join(array)  # reassemble string if needed
-            else:
-                array = array.reshape(shape)
-        return array
-
     def __getitem__(self, idx):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
         if isinstance(idx, slice):
             return self._getitems(idx)
         if idx >= len(self.samples):
             raise AssertionError("sample index is out-of-range")
-        sample = {key: self._unpack(args["dset"], idx, args["dtype"], args["shape"],
-                                    args["compr_type"], **args["compr_kwargs"]) for key, args in self.target_args.items()}
+        sample = {
+            key: thelper.utils.fetch_hdf5_sample(args["dset"], idx, args["dtype"], args["shape"],
+                                                 args["compr_type"], **args["compr_kwargs"])
+            for key, args in self.target_args.items()
+        }
         if self.transforms:
             sample = self.transforms(sample)
         return sample
