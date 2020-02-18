@@ -1536,7 +1536,8 @@ def fill_hdf5_sample(dset, dset_idx, array_idx, array, compression="chunk_lz4", 
             sample = np.frombuffer(sample, dtype=np.uint8)
     if not np.issubdtype(array.dtype, np.number):
         if np.issubdtype(array.dtype, np.dtype(str).type):
-            sample = sample.tobytes()
+            assert len(array.shape) == 1, "missing impl for string array reconstr"
+            sample = sample.encode()
         sample = np.frombuffer(sample, dtype=np.uint8)
     dset[dset_idx] = sample
 
@@ -1544,19 +1545,22 @@ def fill_hdf5_sample(dset, dset_idx, array_idx, array, compression="chunk_lz4", 
 def fetch_hdf5_sample(dset, idx, dtype="auto", shape="auto", compression="auto", **decompr_kwargs):
     """Returns a sample from the specified HDF5 dataset object."""
     if compression == "auto":
-        compression = dset.attr.get("compression")
+        compression = dset.attrs.get("compression")
+    if shape == "auto":
+        shape = dset.attrs.get("orig_shape")
     sample = dset[idx]
     if compression not in chunk_compression_flags:
         sample = thelper.utils.decode_data(sample, compression, **decompr_kwargs)
-    if dtype == "auto":
-        dtype = np.dtype(dset.attr.get("orig_dtype"))
-    if dtype is not None:
-        sample = np.frombuffer(sample, dtype=dtype)
-    if shape == "auto":
-        shape = np.dtype(dset.attr.get("orig_shape"))
-    if shape is not None:
-        if np.issubdtype(dtype, np.dtype(str).type) and len(shape) == 0:
-            sample = "".join(sample)  # reassemble string if needed
-        else:
-            sample = sample.reshape(shape)
+        if dtype == "auto":
+            dtype = np.dtype(dset.attrs.get("orig_dtype"))
+        if dtype is not None:
+            if np.issubdtype(dtype, np.dtype(str).type):
+                assert shape is None or len(shape) == 0, "missing impl for string array reconstr"
+                sample = sample.tobytes().decode()
+            elif sample.dtype != dtype:
+                sample = np.frombuffer(sample, dtype=dtype)
+    else:
+        assert dtype == "auto" or dtype == sample.dtype
+    if shape is not None and len(shape) > 0 and sample.shape != tuple(shape):
+        sample = sample.reshape(shape)
     return sample
