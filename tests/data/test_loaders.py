@@ -225,7 +225,6 @@ def test_classif_split_no_balancing(class_split_config):
     assert not bool(set(valid_samples) & set(test_samples))
 
 
-
 @pytest.fixture
 def class_split_multilabel_config():
     return {

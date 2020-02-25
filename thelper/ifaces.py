@@ -8,10 +8,11 @@ import abc
 import collections
 import copy
 import logging
-import numpy as np
 import os
 import pprint
 import typing
+
+import numpy as np
 
 import thelper.concepts
 import thelper.typedefs
