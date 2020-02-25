@@ -355,7 +355,8 @@ def migrate_checkpoint(ckptdata,  # type: thelper.typedefs.CheckpointContentType
             ckptdata["task"] = str(thelper.tasks.classif.Classification(class_names=ckptdata["task"].class_names,
                                                                         input_key=ckptdata["task"].input_key,
                                                                         label_key=ckptdata["task"].label_key,
-                                                                        meta_keys=ckptdata["task"].meta_keys))
+                                                                        meta_keys=ckptdata["task"].meta_keys,
+                                                                        multi_label=False))
         # move 'state_dict' field to 'model'
         if "state_dict" in ckptdata:
             ckptdata["model"] = ckptdata["state_dict"]

@@ -180,7 +180,8 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         :class:`thelper.train.base.Trainer` and specified by ``thelper.typedefs.IterCallbackParams``.
         """
         assert len(kwargs) == 0, "unexpected extra arguments present in update call"
-        assert isinstance(task, thelper.tasks.Classification), "classif report only impl for classif tasks"
+        assert isinstance(task, thelper.tasks.Classification), "classif logger only impl for classif tasks"
+        assert not task.multi_label, "classif logger only impl for non-multi-label classif tasks"
         assert iter_idx is not None and max_iters is not None and iter_idx < max_iters, \
             "bad iteration indices given to update function"
         if self.score is None or self.score.size != max_iters:
@@ -359,6 +360,7 @@ class ClassifReport(PredictionConsumer, ClassNamesHandler, FormatHandler):
         """
         assert len(kwargs) == 0, "unexpected extra arguments present in update call"
         assert isinstance(task, thelper.tasks.Classification), "classif report only impl for classif tasks"
+        assert not task.multi_label, "classif report only impl for non-multi-label classif tasks"
         assert iter_idx is not None and max_iters is not None and iter_idx < max_iters, \
             "bad iteration indices given to update function"
         if self.pred is None or self.pred.size != max_iters:
@@ -845,6 +847,7 @@ class ConfusionMatrix(PredictionConsumer, ClassNamesHandler):
         """
         assert len(kwargs) == 0, "unexpected extra arguments present in update call"
         assert isinstance(task, thelper.tasks.Classification), "confmat only impl for classif tasks"
+        assert not task.multi_label, "confmat only impl for non-multi-label classif tasks"
         assert iter_idx is not None and max_iters is not None and iter_idx < max_iters, \
             "bad iteration indices given to update function"
         if self.pred is None or self.pred.size != max_iters:

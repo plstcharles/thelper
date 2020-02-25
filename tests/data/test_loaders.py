@@ -133,16 +133,21 @@ def test_tensor_loader_interface(tensor_dataset, num_workers):
 
 
 class DummyClassifDataset(thelper.data.Dataset):
-    def __init__(self, nb_samples, nb_classes, subset, transforms=None, deepcopy=False, seed=None):
+    def __init__(self, nb_samples, nb_classes, subset, transforms=None, deepcopy=False, seed=None, multi_label=False):
         super().__init__(transforms=transforms, deepcopy=deepcopy)
         if seed is not None:
             torch.manual_seed(seed)
         inputs = torch.randint(0, 2 ** 16 - 1, size=(nb_samples, 1))
-        labels = torch.remainder(torch.randperm(nb_samples), nb_classes)
+        if multi_label:
+            labels = np.random.randint(2, size=(nb_samples, nb_classes), dtype=np.int32)
+        else:
+            labels = torch.remainder(torch.randperm(nb_samples), nb_classes)
         self.samples = [{"input": inputs[idx], "label": labels[idx], "transf": f"{idx}",
                          "idx": idx, "subset": subset} for idx in range(nb_samples)]
         self.task = thelper.tasks.Classification([str(idx) for idx in range(nb_classes)],
-                                                 "input", "label", meta_keys=["idx", "subset", "transf"])
+                                                 "input", "label",
+                                                 meta_keys=["idx", "subset", "transf"],
+                                                 multi_label=multi_label)
 
     def __getitem__(self, idx):
         if self.transforms:
@@ -214,6 +219,52 @@ def test_classif_split_no_balancing(class_split_config):
                 name = batch["subset"][idx] + str(batch["idx"][idx].item())
                 assert name not in samples
                 label = batch["label"][idx].item()
+                samples[name] = label
+    assert not bool(set(train_samples) & set(valid_samples))
+    assert not bool(set(train_samples) & set(test_samples))
+    assert not bool(set(valid_samples) & set(test_samples))
+
+
+
+@pytest.fixture
+def class_split_multilabel_config():
+    return {
+        "datasets": {
+            "dataset_A": DummyClassifDataset(1000, 10, "A", multi_label=True),
+            "dataset_B": DummyClassifDataset(1000, 10, "B", multi_label=True),
+            "dataset_C": DummyClassifDataset(1000, 10, "C", multi_label=True),
+        },
+        "loaders": {
+            "batch_size": 32,
+            "train_split": {
+                "dataset_A": 0.5,
+                "dataset_B": 0.7
+            },
+            "valid_split": {
+                "dataset_A": 0.4,
+                "dataset_B": 0.3
+            },
+            "test_split": {
+                "dataset_A": 0.1,
+                "dataset_C": 1.0
+            }
+        }
+    }
+
+
+def test_classif_multilabel_split(class_split_multilabel_config):
+    task, train_loader, valid_loader, test_loader = \
+        thelper.data.create_loaders(class_split_multilabel_config)
+    train_samples, valid_samples, test_samples = {}, {}, {}
+    for loader, samples in [(train_loader, train_samples),
+                            (valid_loader, valid_samples),
+                            (test_loader, test_samples)]:
+        for batch in loader:
+            for idx in range(batch["input"].size(0)):
+                name = batch["subset"][idx] + str(batch["idx"][idx].item())
+                assert name not in samples
+                label = batch["label"][idx]
+                assert label.shape == (10,)
                 samples[name] = label
     assert not bool(set(train_samples) & set(valid_samples))
     assert not bool(set(train_samples) & set(test_samples))

@@ -911,6 +911,7 @@ class ROCCurve(Metric, ClassNamesHandler):
         """
         assert len(kwargs) == 0, "unexpected extra arguments present in update call"
         assert isinstance(task, thelper.tasks.Classification), "roc curve only impl for classif tasks"
+        assert not task.multi_label, "roc curve only impl for non-multi-label classif tasks"
         assert iter_idx is not None and max_iters is not None and iter_idx < max_iters, \
             "bad iteration indices given to metric update function"
         if self.score is None or self.score.size != max_iters:

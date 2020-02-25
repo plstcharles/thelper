@@ -42,7 +42,8 @@ def plot(projs,                # type: np.ndarray
         target_color = color_map[targets[i]] if color_map else default_color
         plt.plot(projs[i, 0], projs[i, 1], "o", color=target_color, MarkerSize=4)
     fig.set_tight_layout(True)
-    if task is not None and isinstance(task, thelper.tasks.Classification):
+    if task is not None and isinstance(task, thelper.tasks.Classification) and \
+            not task.multi_label:
         ax.set_xlabel("Center: Label, Border: Prediction")
         assert color_map is not None, "should provide color map is classif task"
         legend_handles = [matplotlib.patches.Patch(facecolor=color_map[idx], label=lbl)
@@ -92,7 +93,7 @@ def visualize(model,              # type: thelper.typedefs.ModelType
     assert max_samples is None or max_samples > 0, "invalid maximum loader sample count"
     thelper.viz.logger.debug("fetching data loader samples for t-SNE visualization...")
     embeddings, labels, preds, idxs = [], [], [], []
-    if isinstance(task, thelper.tasks.Classification):
+    if isinstance(task, thelper.tasks.Classification) and not task.multi_label:
         assert all([isinstance(n, str) for n in task.class_names]), "unexpected class name types"
         if not color_map:
             if hasattr(task, "color_map"):
@@ -110,7 +111,8 @@ def visualize(model,              # type: thelper.typedefs.ModelType
             break
         with torch.no_grad():
             input_tensor = sample[task.input_key]
-            if task is not None and isinstance(task, thelper.tasks.Classification) and task.gt_key in sample:
+            if task is not None and isinstance(task, thelper.tasks.Classification) and \
+                    not task.multi_label and task.gt_key in sample:
                 label = sample[task.gt_key]
                 if isinstance(label, torch.Tensor):
                     label = label.cpu().numpy()

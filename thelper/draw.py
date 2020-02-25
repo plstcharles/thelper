@@ -444,26 +444,41 @@ def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, b
                        grid_size_x=grid_size_x, grid_size_y=grid_size_y, **kwargs)
 
 
-def draw_classifs(images, preds=None, labels=None, class_names_map=None, redraw=None, block=False, **kwargs):
+def draw_classifs(images, preds=None, labels=None, is_multi_label=False, class_names_map=None, redraw=None, block=False, **kwargs):
     """Draws and returns a set of classification results."""
     image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
     caption_list = [""] * len(image_list)
     if labels is not None:  # convert labels to flat list, if available
-        if not isinstance(labels, list) and not (isinstance(labels, torch.Tensor) and labels.dim() == 1):
-            raise AssertionError("expected classification labels to be in list or 1-d tensor format")
-        if isinstance(labels, list):
-            if all([isinstance(lbl, list) for lbl in labels]):
-                labels = list(itertools.chain.from_iterable(labels))  # merge all augmented lists together
-            if all([isinstance(t, torch.Tensor) for t in labels]):
-                labels = torch.cat(labels, 0)
-        if isinstance(labels, torch.Tensor):
-            labels = labels.tolist()
-        if images.shape[0] != len(labels):
-            raise AssertionError("images/labels count mismatch")
-        if class_names_map is not None:
-            labels = [class_names_map[lbl] if lbl in class_names_map else lbl for lbl in labels]
-        for idx in range(len(image_list)):
-            caption_list[idx] = f"GT={labels[idx]}"
+        if is_multi_label:
+            # curr impl does not support augmented labels (will throw)
+            assert class_names_map is not None, "multi-label classif display requires class name map"
+            assert isinstance(labels, torch.Tensor) and labels.dim() == 2 and labels.dtype == torch.int32, \
+                "unexpected labels array type/dims"
+            assert len(images) == len(labels) and labels.shape[1] == len(class_names_map), "invalid labels array shape"
+            for image_idx in range(len(image_list)):
+                caption_list[image_idx] = ""
+                for class_idx in range(len(class_names_map)):
+                    if labels[image_idx][class_idx]:
+                        if len(caption_list[image_idx]) > 0:
+                            caption_list[image_idx] += ", "
+                        caption_list[image_idx] += str(class_names_map[class_idx])
+                caption_list[image_idx] = "GT=" + caption_list[image_idx]
+        else:
+            if not isinstance(labels, list) and not (isinstance(labels, torch.Tensor) and labels.dim() == 1):
+                raise AssertionError("expected classification labels to be in list or 1-d tensor format")
+            if isinstance(labels, list):
+                if all([isinstance(lbl, list) for lbl in labels]):
+                    labels = list(itertools.chain.from_iterable(labels))  # merge all augmented lists together
+                if all([isinstance(t, torch.Tensor) for t in labels]):
+                    labels = torch.cat(labels, 0)
+            if isinstance(labels, torch.Tensor):
+                labels = labels.tolist()
+            if images.shape[0] != len(labels):
+                raise AssertionError("images/labels count mismatch")
+            if class_names_map is not None:
+                labels = [class_names_map[lbl] if lbl in class_names_map else lbl for lbl in labels]
+            for idx in range(len(image_list)):
+                caption_list[idx] = f"GT={labels[idx]}"
     if preds is not None:  # convert predictions to flat list, if available
         if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and preds.dim() == 2):
             raise AssertionError("expected classification predictions to be in list or 2-d tensor format (BxC)")
@@ -510,7 +525,7 @@ def draw(task, input, pred=None, target=None, block=False, ch_transpose=True, fl
         target = target.cpu().detach()  # avoid latency for preprocessing on gpu
     if isinstance(task, thelper.tasks.Classification):
         class_names_map = {idx: name for name, idx in task.class_indices.items()}
-        return draw_classifs(images=input, preds=pred, labels=target,
+        return draw_classifs(images=input, preds=pred, labels=target, is_multi_label=task.multi_label,
                              class_names_map=class_names_map, redraw=redraw, block=block, **kwargs)
     elif isinstance(task, thelper.tasks.Segmentation):
         color_map = task.color_map if task.color_map else {idx: get_label_color_mapping(idx + 1) for idx in task.class_indices.values()}
@@ -703,9 +718,9 @@ def draw_bbox(image, tl, br, text, color, box_thickness=2, font_thickness=1,
     return win_name, image
 
 
-def draw_bboxes(images,                 # type: thelper.typedefs.ImageArray
-                preds=None,             # type: Optional[thelper.typedefs.BoundingBoxArray]
-                bboxes=None,            # type: Optional[thelper.typedefs.BoundingBoxArray]
+def draw_bboxes(images,
+                preds=None,
+                bboxes=None,
                 color_map=None,         # type: Optional[thelper.typedefs.ClassColorMap]
                 redraw=None,            # type: Optional[thelper.typedefs.DrawingType]
                 block=False,            # type: Optional[bool]

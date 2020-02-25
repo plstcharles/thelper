@@ -1,10 +1,12 @@
+import numpy as np
+
 import thelper
 
 
 class DummyClassifDataset(thelper.data.Dataset):
     def __init__(self, nb_samples, nb_classes):
         super().__init__()
-        # let's create a wierd deterministic label distribution...
+        # let's create a weird deterministic label distribution...
         labels = []
         for idx in range(nb_classes):
             labels += [idx] * (idx + 1) ** 3
@@ -58,3 +60,32 @@ def test_class_weights_root_vs_linear():
         elif lbl_count > len(dataset) / len(dataset.task.class_names):
             assert linear_weights[lbl] > root2_weights[lbl]
             assert root3_weights[lbl] < root2_weights[lbl]
+
+
+class DummyMultiLabelClassifDataset(thelper.data.Dataset):
+    def __init__(self, nb_samples, nb_classes):
+        super().__init__()
+        labels = []
+        for idx in range(nb_samples):
+            labels.append([np.random.randint(2) for _ in range(nb_classes)])
+        self.samples = [{"input": 0, "labels": v} for v in labels]
+        self.task = thelper.tasks.Classification([str(idx) for idx in range(nb_classes)],
+                                                 "input", "labels", multi_label=True)
+
+    def __getitem__(self, idx):
+        return self.samples[idx]
+
+
+def test_class_multilabel_support():
+    nb_samples = 10000
+    nb_classes = 5
+    dataset = DummyMultiLabelClassifDataset(nb_samples, nb_classes)
+    assert len(dataset) == nb_samples
+    task_label_counts = dataset.task.get_class_sizes(dataset)
+    assert len(task_label_counts) == nb_classes
+    assert sum(task_label_counts.values()) > nb_samples
+    task_label_idxs = dataset.task.get_class_sample_map(dataset)
+    assert len(task_label_idxs) == nb_classes
+    local_counts = [len(v) for v in task_label_idxs.values()]
+    assert sum(local_counts) > nb_samples
+    assert all([c1 == c2 for c1, c2 in zip(local_counts, task_label_counts.values())])

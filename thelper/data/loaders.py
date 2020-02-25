@@ -416,6 +416,10 @@ class LoaderFactory:
 
                 \text{test loader} = {5A + 3B + 2C}
 
+        In the case of multi-label classification datasets, there is no guarantee that the classes will
+        be balanced across the training/validation/test sets. Instead, for a given class list, the classes
+        with fewer samples will be split first.
+
         Args:
             datasets: the map of datasets to split, where each has a name (key) and a parser (value).
             task: a task object that should be compatible with all provided datasets (can be ``None``).
@@ -443,7 +447,7 @@ class LoaderFactory:
             logger.debug("will split evenly over %d classes..." % len(task.class_names))
             unset_class_key = "<unset>"
             global_class_names = task.class_names + [unset_class_key]  # extra name added for unlabeled samples (if needed!)
-            sample_maps = {}
+            sample_maps, sample_counts = {}, {cname: 0 for cname in global_class_names}
             for dataset_name, dataset in datasets.items():
                 # fetching a reference to the list of samples here allows us to bypass the 'loading' process and possibly
                 # directly access sample labels/groundtruth (assuming it is already loaded)
@@ -466,28 +470,35 @@ class LoaderFactory:
                         sample_maps[dataset_name] = task.get_class_sample_map(samples, unset_class_key)
                 else:
                     sample_maps[dataset_name] = task.get_class_sample_map(samples, unset_class_key)
-            train_idxs, valid_idxs, test_idxs = {}, {}, {}
-            for class_name in global_class_names:
-                curr_class_samples, curr_class_size = {}, {}
+                for class_name, class_samples in sample_maps[dataset_name].items():
+                    assert class_name in sample_counts
+                    sample_counts[class_name] += len(class_samples)
+            sample_counts = {k: v for k, v in sorted(sample_counts.items(), key=lambda i: i[1])}
+            backlist_idxs = {d: np.asarray([], np.int32) for d in datasets}
+            train_idxs, valid_idxs, test_idxs = {d: [] for d in datasets}, {d: [] for d in datasets}, {d: [] for d in datasets}
+            for class_name in sample_counts.keys():
+                curr_class_samples = {}
                 for dataset_name in datasets:
                     class_samples = sample_maps[dataset_name][class_name] if class_name in sample_maps[dataset_name] else []
-                    samples_pairs = list(zip(class_samples, [class_name] * len(class_samples)))
-                    curr_class_samples[dataset_name] = samples_pairs
-                    curr_class_size[dataset_name] = len(curr_class_samples[dataset_name])
-                    logger.debug("dataset '{}' class '{}' sample count: {} ({}% of local, {}% of total)".format(
+                    if task.multi_label:
+                        class_samples = np.setdiff1d(class_samples, backlist_idxs[dataset_name])
+                    else:
+                        assert np.intersect1d(class_samples, backlist_idxs[dataset_name]), "duplicated sample idx across classes"
+                    curr_class_samples[dataset_name] = class_samples
+                    logger.debug("dataset '{}' class #{} '{}' sample count: {}  ({:0.1f}% of dataset, {:0.1f}% of total)".format(
                         dataset_name,
+                        global_class_names.index(class_name),
                         class_name,
-                        curr_class_size[dataset_name],
-                        int(100 * curr_class_size[dataset_name] / dataset_sizes[dataset_name]),
-                        int(100 * curr_class_size[dataset_name] / global_size)))
+                        len(class_samples),
+                        int(100 * len(class_samples) / dataset_sizes[dataset_name]),
+                        int(100 * len(class_samples) / global_size)))
                 class_train_idxs, class_valid_idxs, class_test_idxs = self._get_raw_split(curr_class_samples)
-                for idxs_dict_list, class_idxs_dict_list in zip([train_idxs, valid_idxs, test_idxs],
-                                                                [class_train_idxs, class_valid_idxs, class_test_idxs]):
-                    for dataset_name in datasets:
-                        if dataset_name in idxs_dict_list:
-                            idxs_dict_list[dataset_name] += class_idxs_dict_list[dataset_name]
-                        else:
-                            idxs_dict_list[dataset_name] = class_idxs_dict_list[dataset_name]
+                for dname in datasets:
+                    for subset_idxs, class_subset_idxs in zip([train_idxs[dname], valid_idxs[dname], test_idxs[dname]],
+                                                              [class_train_idxs[dname], class_valid_idxs[dname], class_test_idxs[dname]]):
+                        # idx-label pairs below are passed through to the sampler for label-specific indexing (if needed)
+                        subset_idxs.extend(list(zip(class_subset_idxs, [class_name] * len(class_subset_idxs))))
+                        backlist_idxs[dname] = np.append(backlist_idxs[dname].astype(np.int32), np.asarray(class_subset_idxs))
         else:  # no balancing to be done
             dataset_indices = {}
             for dataset_name in datasets:
