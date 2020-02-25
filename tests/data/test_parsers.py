@@ -33,6 +33,7 @@ def mnist(request):
     def fin():
         shutil.rmtree(test_mnist_path, ignore_errors=True)
     fin()
+    os.makedirs(test_save_path, exist_ok=True)
     request.addfinalizer(fin)
     return torchvision.datasets.MNIST(root=test_mnist_path, train=False, download=True)
 
@@ -124,6 +125,7 @@ def dummy_hdf5(request):
             os.remove(test_hdf5_path)
 
     fin()
+    os.makedirs(test_save_path, exist_ok=True)
     request.addfinalizer(fin)
 
     class DummyDataset(thelper.data.Dataset):
