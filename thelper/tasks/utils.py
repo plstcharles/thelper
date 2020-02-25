@@ -125,7 +125,7 @@ class Task:
     def __init__(self,
                  input_key: typing.Hashable,
                  gt_key: typing.Optional[typing.Hashable] = None,
-                 meta_keys: typing.Optional[typing.Hashable] = None,
+                 meta_keys: typing.Optional[typing.Iterable[typing.Hashable]] = None,
                  ):
         """Receives and stores the keys used to index dataset sample contents."""
         self.input_key = input_key
@@ -179,6 +179,7 @@ class Task:
         be empty if no extra data is available.
         """
         assert value is None or isinstance(value, typing.Iterable), "meta keys should be an iterable"
+        assert not isinstance(value, str), "meta keys should be list/tuple/array/... of strings"
         value = [] if value is None else value
         assert all([v is not None and isinstance(v, typing.Hashable) for v in value]), \
             "all meta key types must be hashable"
