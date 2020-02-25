@@ -91,7 +91,7 @@ class BigEarthNetPatch:
                     assert band.ndim == 2 and band.shape[0] == band.shape[1] and band.dtype == np.uint16
                     if band.shape[0] != target_size:
                         band = cv.resize(band, (target_size, target_size), interpolation=cv.INTER_CUBIC)
-                    if norm_meanstddev:
+                    if norm_meanstddev is not None and len(norm_meanstddev) > 0:
                         band = (band.astype(np.float) - norm_meanstddev[0]) / norm_meanstddev[1]
                     if band.dtype != target_dtype:
                         band = band.astype(target_dtype)
@@ -101,28 +101,97 @@ class BigEarthNetPatch:
 
 class BigEarthNet(Dataset):
 
-    def __init__(self, hdf5_path):
-        # open HDF5 and read only metadata for now...
-        logger.info(f"reading BigEarthNet metadata from: {hdf5_path}")
+    def __init__(self,
+                 hdf5_path: typing.AnyStr,
+                 cache_path: typing.AnyStr = None,
+                 transforms: typing.Any = None,
+                 meta_keys: typing.Optional[typing.List[str]] = None,
+                 use_global_normalization: bool = True,
+                 keep_file_open: bool = False,
+                 ):
+        super().__init__(transforms, deepcopy=False)
+        logger.info(f"reading BigEarthNet data from: {hdf5_path}")
         self.hdf5_path = hdf5_path
-        with h5py.File(self.hdf5_path, "r") as fd:
-            self.target_size = fd.attrs["target_size"]
-            self.target_bands = fd.attrs["target_bands"]
-            self.target_dtype = np.dtype(fd.attrs["target_dtype"])
-            self.norm_meanstddev = fd.attrs["norm_meanstddev"]
-            patch_count = fd.attrs["patch_count"]
-            metadata_dataset = fd["metadata"]
-            self.patches = []
-            for sample_idx in range(patch_count):
-                self.patches.append(thelper.utils.fetch_hdf5_sample(metadata_dataset, sample_idx))
+        metadata_file = "bigearthnet-meta.pkl"
+        self.metadata_cache = os.path.join(cache_path, metadata_file) if cache_path else None
+        with h5py.File(self.hdf5_path, "r") as hdf5:
+            self.target_size = hdf5.attrs["target_size"]
+            self.target_bands = hdf5.attrs["target_bands"]
+            self.target_dtype = np.dtype(hdf5.attrs["target_dtype"])
+            self.norm_meanstddev = hdf5.attrs["norm_meanstddev"]
+            patch_count = hdf5.attrs["patch_count"]
+            metadata_dataset = hdf5["metadata"]
+            self.samples = []
+            if self.metadata_cache is not None and os.path.exists(self.metadata_cache):
+                logger.debug(f"parsing metadata from cache file: {self.metadata_cache}")
+                with open(self.metadata_cache, "rb") as cache:
+                    self.samples = pickle.load(cache)
+                assert len(self.samples) == patch_count, "unexpected metadata sample count"
+            else:
+                for sample_idx in tqdm.tqdm(range(patch_count), desc="parsing metadata"):
+                    meta_str = thelper.utils.fetch_hdf5_sample(metadata_dataset, sample_idx)
+                    assert meta_str.startswith("BigEarthNetPatch(")
+                    self.samples.append(eval(meta_str))
+                if self.metadata_cache:
+                    with open(self.metadata_cache, "wb") as cache:
+                        pickle.dump(self.samples, cache)
+        assert len(self.samples) > 0, "could not load any bigearthnet samples"
+        class_names = []
+        for sample in self.samples:
+            class_names.extend(sample.labels)
+        self.class_names, self.class_counts = np.unique(class_names, return_counts=True)
+        class_map_str = pprint.pformat({n: c for n, c in
+                                        zip(self.class_names, self.class_counts)}, indent=2)
+        logger.debug(f"bigearthnet class sample split:\n{class_map_str}")
+        self.meta_keys = meta_keys if meta_keys is not None else []
+        for meta_key in self.meta_keys:
+            assert hasattr(self.samples[0], meta_key), f"sample missing meta key '{meta_key}'"
+        self.task = thelper.tasks.Classification(class_names=self.class_names, input_key="image",
+                                                 label_key="labels", meta_keys=self.meta_keys,
+                                                 multi_label=True)
+        self.use_global_normalization = use_global_normalization
+        self.image_mean = np.asarray([
+            721.2257105159645,  # B02
+            878.5158627345414,  # B03
+            869.6805989741447,  # B04
+            2432.328152023904,  # B08
+        ], dtype=np.float32)
+        self.image_stddev = np.asarray([
+            1465.656553928543,  # B02
+            1359.523897551790,  # B03
+            1452.286444583796,  # B04
+            1702.876207365026,  # B08
+        ], dtype=np.float32)
+        self.hdf5_handle = h5py.File(self.hdf5_path, "r") if keep_file_open else None
 
     def __len__(self):
-        return len(self.patches)
+        return len(self.samples)
 
-    def __getitem__(self, sample_idx):
+    def __getitem__(self, idx):
+        if isinstance(idx, slice):
+            return self._getitems(idx)
+        assert idx < len(self.samples), "sample index is out-of-range"
+        if idx < 0:
+            idx = len(self.samples) + idx
         # we should try to optimize the I/O... keep file handle open somehow, despite threading?
-        with h5py.File(self.hdf5_path, "r") as fd:
-            return thelper.utils.fetch_hdf5_sample(fd["imgdata"], sample_idx)
+        if self.hdf5_handle is not None:
+            image = thelper.utils.fetch_hdf5_sample(self.hdf5_handle["imgdata"], idx)
+        else:
+            with h5py.File(self.hdf5_path, "r") as fd:
+                image = thelper.utils.fetch_hdf5_sample(fd["imgdata"], idx)
+        assert image.shape[0] == 4, "unexpected band count (curr version supports BGRNIR only)"
+        image = np.transpose(image, (1, 2, 0))
+        if self.use_global_normalization:
+            image = (image.astype(np.float32) - self.image_mean) / self.image_stddev
+        labels = np.asarray([label in self.samples[idx].labels for label in self.class_names])
+        sample = {
+            "image": image,
+            "labels": labels.astype(np.int32),
+            **{meta_key: getattr(self.samples[idx], meta_key) for meta_key in self.meta_keys}
+        }
+        if self.transforms:
+            sample = self.transforms(sample)
+        return sample
 
 
 class HDF5Compactor:
@@ -298,12 +367,44 @@ class HDF5Compactor:
                 assert np.isclose(generated_array, loaded_array).all()
 
 
+def _compute_statistics(dset: BigEarthNet) -> typing.Dict:
+    array_alloc_size = len(dset)
+    stat_map = {
+        # alloc three vals per item: px-wise sum, px-wise sqsum, px count
+        band: np.zeros((array_alloc_size, 3), dtype=np.float64)
+        for band in bgrnir_band_names
+    }
+    for batch_idx, sample in enumerate(tqdm.tqdm(dataset)):
+        image = sample["image"]
+        assert image.ndim == 3 and image.shape[-1] == len(bgrnir_band_names)
+        for ch_idx, ch in enumerate(bgrnir_band_names):
+            image_ch = image[..., ch_idx]
+            stat_map[ch][batch_idx] = (
+                np.sum(image_ch, dtype=np.float64),
+                np.sum(np.square(image_ch, dtype=np.float64)),
+                np.float64(image_ch.size),
+            )
+    for key, array in stat_map.items():
+        tot_size = np.sum(array[:, 2])
+        mean = np.sum(array[:, 0]) / tot_size
+        stddev = np.sqrt(np.sum(array[:, 1]) / tot_size - np.square(mean))
+        stat_map[key] = {"mean": mean, "stddev": stddev}
+    return stat_map
+
+
 if __name__ == "__main__":
     # @@@@ TODO: CONVERT TO PROPER TEST
     logging.basicConfig()
     logging.getLogger().setLevel(logging.NOTSET)
-    root_path = "/shared/data_ufast_ext4/datasets/bigearthnet/BigEarthNet-v1.0"
-    dataset = HDF5Compactor(root_path)
-    dataset.export("/shared/data_sfast/datasets/bigearthnet/bigearthnet-thelper.hdf5")
-    dataset._test_close_vals("/shared/data_sfast/datasets/bigearthnet/bigearthnet-thelper.hdf5")
+    #root_path = "/shared/data_ufast_ext4/datasets/bigearthnet/BigEarthNet-v1.0"
+    #dataset = HDF5Compactor(root_path)
+    #dataset.export("/shared/data_sfast/datasets/bigearthnet/bigearthnet-thelper.hdf5")
+    #dataset._test_close_vals("/shared/data_sfast/datasets/bigearthnet/bigearthnet-thelper.hdf5")
+    dataset = BigEarthNet(
+        hdf5_path="/shared/data_sfast/datasets/bigearthnet/bigearthnet-thelper.hdf5",
+        cache_path="data/cache",
+        keep_file_open=True,
+    )
+    stat_map = _compute_statistics(dataset)
+    logging.info(f"stat_map =\n{pprint.pformat(stat_map, indent=4)}")
     print("all done")
