@@ -1,0 +1,36 @@
+datasets:
+  bigearthnet:
+    type: thelper.data.geo.bigearthnet.BigEarthNet
+    params:
+      hdf5_path: "/shared/data_sfast/datasets/bigearthnet/bigearthnet-thelper.hdf5"
+      cache_path: "data/cache"
+      keep_file_open: true
+loaders:
+  batch_size: 4
+  train_shuffle: true
+  valid_shuffle: false
+  test_shuffle: false
+  valid_seed: 0
+  test_seed: 0
+  torch_seed: 0
+  numpy_seed: 0
+  random_seed: 0
+  workers: 6
+  pin_memory: false
+  drop_last: false
+  base_transforms:
+      - operation: torchvision.transforms.ToTensor
+        target_key: image
+  train_split:
+    bigearthnet: 0.8
+  valid_split:
+    bigearthnet: 0.2
+model:
+  type: thelper.nn.resnet.ResNet
+trainer:
+  epochs: 5
+  optimization:
+    loss:
+      type: torch.nn.CrossEntropyLoss
+    optimizer:
+      type: torch.optim.Adam
