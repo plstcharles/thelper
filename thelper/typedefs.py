@@ -8,101 +8,74 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from typing import (TYPE_CHECKING, Any, AnyStr, Callable, Dict,  # isort:skip
+from typing import (Any, AnyStr, Callable, Dict,  # isort:skip
                     Generic, Iterable, List, Optional, Tuple, TypeVar, Union)  # noqa: F401
 
-if TYPE_CHECKING:
-    from thelper.tasks.utils import Task
-    from thelper.nn.utils import Module
-    from thelper.data.loaders import DataLoader
-    from thelper.tasks.detect import BoundingBox
+ModelType = "thelper.nn.Module"
+LoaderType = "thelper.data.loaders.DataLoader"
+TaskType = "thelper.tasks.Task"
+BoundingBox = "thelper.tasks.detect.BoundingBox"
 
-    ArrayType = np.ndarray  # generic definition
-    ArrayShapeType = Union[List[int], Tuple[int]]
-    OneOrManyArrayType = Union[List[ArrayType], ArrayType]
+ArrayType = np.ndarray  # generic definition
+ArrayShapeType = Union[List[int], Tuple[int]]
+OneOrManyArrayType = Union[List[ArrayType], ArrayType]
 
-    # FIXME: experimental
-    #  more verbatim than 'Any' or plain 'ndarray', but could flag invalid types in come places
-    # more explicit definition, ex: ArrayOfType[myClass, ArrayShape[10, 10]]
-    # more examples: https://github.com/python/typing/issues/516#issuecomment-350745218
-    ArrayDType = TypeVar('ArrayDType', bound=np.generic)
-    ArrayShape = TypeVar('ArrayShape', bound=Iterable[int])
-    T = TypeVar('T')
+ClassIdType = Union[AnyStr, int]
+LabelColorMapType = Union[ArrayType, Dict[int, ArrayType]]
+LabelIndex = AnyStr
+LabelType = AnyStr
+LabelDict = Dict[LabelIndex, LabelType]
+LabelList = List[LabelType]
+DrawingType = Optional[Tuple[plt.Figure, plt.Axes]]
+ClassColorMap = Dict[ClassIdType, Union[int, Tuple[int, int, int]]]
 
-    class ndarray(Generic[ArrayDType, ArrayShape]):  # noqa: E306  # name must match original exactly
-        @property
-        def shape(self):    # type: (...) -> Union[Tuple[int], Tuple[()]]
-            return ()
+Number = Union[int, float]
+_literalJSON = Optional[Union[AnyStr, Number, bool]]
+JSON = Union[_literalJSON, List[Union[_literalJSON, "JSON"]], Dict[AnyStr, Union[_literalJSON, "JSON"]]]
 
-    ArrayOfType = ndarray
+SampleType = Dict[Union[AnyStr, int], Any]
+InputType = torch.Tensor
 
-    # specialized arrays
-    W = TypeVar('W', bound=int)
-    H = TypeVar('H', bound=int)
-    C = TypeVar('C', bound=int)
-    BoundingBoxArray = ArrayOfType[BoundingBox]
-    ImageArray = ArrayOfType[ArrayType, ArrayShape[W, H, C]]
+ClassificationPredictionType = torch.Tensor
+ClassificationTargetType = torch.Tensor
+SegmentationPredictionType = torch.Tensor
+SegmentationTargetType = torch.Tensor
+DetectionPredictionType = List[List[BoundingBox]]
+DetectionTargetType = List[List[BoundingBox]]
+RegressionPredictionType = torch.Tensor
+RegressionTargetType = torch.Tensor
 
-    ClassIdType = Union[AnyStr, int]
-    LabelColorMapType = Union[ArrayType, Dict[int, ArrayType]]
-    LabelIndex = AnyStr
-    LabelType = AnyStr
-    LabelDict = Dict[LabelIndex, LabelType]
-    LabelList = List[LabelType]
-    DrawingType = Optional[Tuple[plt.Figure, plt.Axes]]
-    ClassColorMap = Dict[ClassIdType, Union[int, Tuple[int, int, int]]]
+AnyPredictionType = Union[ClassificationPredictionType,
+                          SegmentationPredictionType,
+                          DetectionPredictionType,
+                          RegressionPredictionType]
+AnyTargetType = Union[ClassificationTargetType,
+                      SegmentationTargetType,
+                      DetectionTargetType,
+                      RegressionTargetType]
 
-    Number = Union[int, float]
-    _literalJSON = Optional[Union[AnyStr, Number, bool]]
-    JSON = Union[_literalJSON, List[Union[_literalJSON, "JSON"]], Dict[AnyStr, Union[_literalJSON, "JSON"]]]
+ConfigIndex = AnyStr
+ConfigValue = Union[AnyStr, bool, float, int, List[Any], Dict[Any, Any]]
+ConfigDict = Dict[ConfigIndex, Union[ConfigValue, "ConfigDict"]]
 
-    SampleType = Dict[Union[AnyStr, int], Any]
-    InputType = torch.Tensor
+CheckpointLoadingType = Union[AnyStr, io.FileIO]
+CheckpointContentType = Dict[AnyStr, Any]
+MapLocationType = Union[Callable, AnyStr, Dict[AnyStr, AnyStr]]
 
-    ClassificationPredictionType = torch.Tensor
-    ClassificationTargetType = torch.Tensor
-    SegmentationPredictionType = torch.Tensor
-    SegmentationTargetType = torch.Tensor
-    DetectionPredictionType = List[List[BoundingBox]]
-    DetectionTargetType = List[List[BoundingBox]]
-    RegressionPredictionType = torch.Tensor
-    RegressionTargetType = torch.Tensor
+MultiLoaderType = Tuple[Optional[LoaderType], Optional[LoaderType], Optional[LoaderType]]
 
-    AnyPredictionType = Union[ClassificationPredictionType,
-                              SegmentationPredictionType,
-                              DetectionPredictionType,
-                              RegressionPredictionType]
-    AnyTargetType = Union[ClassificationTargetType,
-                          SegmentationTargetType,
-                          DetectionTargetType,
-                          RegressionTargetType]
-
-    ConfigIndex = AnyStr
-    ConfigValue = Union[AnyStr, bool, float, int, List[Any], Dict[Any, Any]]
-    ConfigDict = Dict[ConfigIndex, Union[ConfigValue, "ConfigDict"]]
-
-    CheckpointLoadingType = Union[AnyStr, io.FileIO]
-    CheckpointContentType = Dict[AnyStr, Any]
-    MapLocationType = Union[Callable, AnyStr, Dict[AnyStr, AnyStr]]
-
-    ModelType = Module
-    LoaderType = DataLoader
-    TaskType = Task
-    MultiLoaderType = Tuple[Optional[LoaderType], Optional[LoaderType], Optional[LoaderType]]
-
-    IterCallbackType = Callable[[TaskType, InputType, AnyPredictionType, AnyTargetType,
-                                SampleType, Optional[float], int, int, int, int, AnyStr], None]
-else:
-    IterCallbackParams = [
-        "task",         # the task object that defines class names, min/max target values, etc.
-        "input",        # the (batched) input tensor given to the model in order to generate a prediction
-        "pred",         # the (batched) tensor generated by the model containing predicted value(s)
-        "target",       # the (batched) tensor containing target (groundtruth) prediction value(s)
-        "sample",       # the mini-batch sample dictionary assembled by the data loader
-        "loss",         # the loss computed by the model for the current iteration (may be None)
-        "iter_idx",     # the index of the iteration (or sample index) in the current epoch
-        "max_iters",    # the total number of iterations in the current epoch
-        "epoch_idx",    # the index of the current epoch
-        "max_epochs",   # the total (maximum) number of epochs the model should be trained for
-        "output_path",  # directory where output files should be written, if necessary
-    ]
+IterCallbackType = Callable[[TaskType, InputType, AnyPredictionType, AnyTargetType,
+                            SampleType, Optional[float], int, int, int, int, AnyStr], None]
+IterCallbackParams = [
+    "task",         # the task object that defines class names, min/max target values, etc.
+    "input",        # the (batched) input tensor given to the model in order to generate a prediction
+    "pred",         # the (batched) tensor generated by the model containing predicted value(s)
+    "target",       # the (batched) tensor containing target (groundtruth) prediction value(s)
+    "sample",       # the mini-batch sample dictionary assembled by the data loader
+    "loss",         # the loss computed by the model for the current iteration (may be None)
+    "iter_idx",     # the index of the iteration (or sample index) in the current epoch
+    "max_iters",    # the total number of iterations in the current epoch
+    "epoch_idx",    # the index of the current epoch
+    "max_epochs",   # the total (maximum) number of epochs the model should be trained for
+    "output_path",  # directory where output files should be written, if necessary
+]

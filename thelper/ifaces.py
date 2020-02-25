@@ -4,20 +4,23 @@ The interfaces defined here are fairly generic and used to eliminate
 issues related to circular module importation.
 """
 
+import abc
+import collections
 import copy
 import logging
+import numpy as np
 import os
-from abc import ABC, abstractmethod
-from typing import Any, AnyStr, List, Optional  # noqa: F401
+import pprint
+import typing
 
 import thelper.concepts
-import thelper.typedefs  # noqa: F401
+import thelper.typedefs
 import thelper.utils
 
 logger = logging.getLogger(__name__)
 
 
-class PredictionConsumer(ABC):
+class PredictionConsumer(abc.ABC):
     """Abstract model prediction consumer class.
 
     This interface defines basic functions required so that :class:`thelper.train.base.Trainer` can
@@ -27,11 +30,11 @@ class PredictionConsumer(ABC):
     :mod:`thelper.train.utils` will instead log predictions to local files, create graphs, etc.
     """
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Returns a generic print-friendly string containing info about this consumer."""
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + "()"
 
-    def reset(self):
+    def reset(self) -> None:
         """Resets the internal state of the consumer.
 
         May be called for example by the trainer between two evaluation epochs. The default implementation
@@ -39,21 +42,22 @@ class PredictionConsumer(ABC):
         """
         pass
 
-    @abstractmethod
-    def update(self,         # see `thelper.typedefs.IterCallbackParams` for more info
-               task,         # type: thelper.tasks.utils.Task
-               input,        # type: thelper.typedefs.InputType
-               pred,         # type: thelper.typedefs.AnyPredictionType
-               target,       # type: thelper.typedefs.AnyTargetType
-               sample,       # type: thelper.typedefs.SampleType
-               loss,         # type: Optional[float]
-               iter_idx,     # type: int
-               max_iters,    # type: int
-               epoch_idx,    # type: int
-               max_epochs,   # type: int
-               output_path,  # type: AnyStr
-               **kwargs,     # type: Any
-               ):            # type: (...) -> None
+    @abc.abstractmethod
+    def update(
+        self,  # see `thelper.typedefs.IterCallbackParams` for more info
+        task: "thelper.tasks.Task",
+        input: thelper.typedefs.InputType,
+        pred: thelper.typedefs.AnyPredictionType,
+        target: thelper.typedefs.AnyTargetType,
+        sample: thelper.typedefs.SampleType,
+        loss: typing.Optional[float],
+        iter_idx: int,
+        max_iters: int,
+        epoch_idx: int,
+        max_epochs: int,
+        output_path: typing.AnyStr,
+        **kwargs,
+    ) -> None:
         """Receives the latest prediction and groundtruth tensors from the training session.
 
         The data given here will be "consumed" internally, but it should NOT be modified. For example,
@@ -68,7 +72,7 @@ class PredictionConsumer(ABC):
         raise NotImplementedError
 
 
-class ClassNamesHandler(ABC):
+class ClassNamesHandler(abc.ABC):
     """Generic interface to handle class names operations for inheriting classes.
 
     Attributes:
@@ -77,18 +81,22 @@ class ClassNamesHandler(ABC):
     """
 
     # args and kwargs are for additional inputs that could be passed down involuntarily, but that are not necessary
-    def __init__(self, class_names=None, *args, **kwargs):
-        # type: (Optional[List[AnyStr]], Any, Any) -> None
+    def __init__(
+        self,
+        class_names: typing.Optional[typing.Iterable[typing.AnyStr]] = None,
+        *args,
+        **kwargs
+    ) -> None:
         """Initializes the class names array, if an object is provided."""
         self.class_names = class_names
 
     @property
-    def class_names(self):
+    def class_names(self) -> typing.List[str]:
         """Returns the list of class names considered "of interest" by the derived class."""
         return self._class_names
 
     @class_names.setter
-    def class_names(self, class_names):
+    def class_names(self, class_names) -> None:
         """Sets the list of class names considered "of interest" by the derived class."""
         if class_names is None:
             self._class_names = None
@@ -112,30 +120,35 @@ class ClassNamesHandler(ABC):
             elif all(indices_as_values):
                 class_names = [k for idx in range(len(class_names))
                                for k, v in class_names.items() if v == idx or v == str(idx)]
+        if isinstance(class_names, np.ndarray):
+            assert class_names.ndim == 1, "class names array should be 1-dimensional"
+            class_names = class_names.tolist()
         assert isinstance(class_names, list), "expected class names to be provided as an array"
         assert all([isinstance(name, str) for name in class_names]), "all classes must be named with strings"
         assert len(class_names) >= 1, "should have at least one class!"
         if len(class_names) != len(set(class_names)):
             # no longer throwing here, imagenet possesses such a case ('crane#134' and 'crane#517')
-            logger.warning("found duplicated name in class list, might be a data entry problem...")
+            logger.warning("found duplicated name(s) in class list, might be a data entry problem...")
+            dupes = {name: count for name, count in collections.Counter(class_names).items() if count > 1}
+            logger.debug(f"duplicated classes:\n{pprint.pformat(dupes, indent=2)}")
             class_names = [name if class_names.count(name) == 1 else name + "#" + str(idx)
                            for idx, name in enumerate(class_names)]
         self._class_names = copy.deepcopy(class_names)
         self._class_indices = {class_name: idx for idx, class_name in enumerate(class_names)}
 
     @property
-    def class_indices(self):
+    def class_indices(self) -> typing.Dict[str, int]:
         """Returns the class-name-to-index map used for encoding labels as integers."""
         return self._class_indices
 
     @class_indices.setter
-    def class_indices(self, class_indices):
+    def class_indices(self, class_indices: typing.Dict[str, int]) -> None:
         """Sets the class-name-to-index map used for encoding labels as integers."""
         assert class_indices is None or isinstance(class_indices, dict), "indices must be provided as dictionary"
         self.class_names = class_indices
 
 
-class FormatHandler(ABC):
+class FormatHandler(abc.ABC):
     """Generic interface to handle format output operations for inheriting classes.
 
     If :attr:`format` is specified and matches a supported one (with a matching ``report_<format>`` method), this
@@ -162,19 +175,27 @@ class FormatHandler(ABC):
     __fmt_ext__ = {fmt: ext for ext, fmt in __formats__.items()}
 
     # args and kwargs are for additional inputs that could be passed down involuntarily, but that are not necessary
-    def __init__(self, format="text", *args, **kwargs):
-        # type: (AnyStr, Any, Any) -> None
+    def __init__(
+        self,
+        format: typing.Optional[typing.AnyStr] = "text",
+        *args,
+        **kwargs
+    ) -> None:
         self.format = None
         self.ext = None
         self.solve_format(format)
 
-    def solve_format(self, format):
-        # type: (Optional[AnyStr]) -> None
+    def solve_format(
+        self,
+        format: typing.Optional[typing.AnyStr]
+    ) -> None:
         self.format = self.__formats__.get(format, "text")
         self.ext = self.__fmt_ext__.get(self.format, "txt")
 
-    def report(self, format=None):
-        # type: (AnyStr) -> Optional[AnyStr]
+    def report(
+        self,
+        format: typing.Optional[typing.AnyStr] = None,
+    ) -> typing.Optional[typing.AnyStr]:
         """
         Returns the report as a print-friendly string, matching the specified format if specified in configuration.
 
@@ -188,8 +209,7 @@ class FormatHandler(ABC):
                 return formatter()
         return self.report_text()
 
-    @abstractmethod
-    def report_text(self):
-        # type: () -> Optional[AnyStr]
+    @abc.abstractmethod
+    def report_text(self) -> typing.Optional[typing.AnyStr]:
         """Must be implemented by inheriting classes. Default report text representation."""
         raise NotImplementedError
