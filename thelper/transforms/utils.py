@@ -100,11 +100,11 @@ def load_transforms(stages, avoid_transform_wrapper=False):
         operation_name = stage["operation"]
         operation_params = thelper.utils.get_key_def(["params", "param", "parameters", "kwargs"], stage, {})
         assert isinstance(operation_params, dict), f"stage #{stage_idx} parameters are not provided as a dictionary"
-        operation_targets = None
-        if "target_key" in stage:
-            assert isinstance(stage["target_key"], (list, str, int)), \
+        operation_targets = thelper.utils.get_key_def(["target_key", "target_keys", "key", "keys",], stage)
+        if operation_targets is not None:
+            assert isinstance(operation_targets, (list, str, int)), \
                 f"stage #{stage_idx} target keys are not provided as a list or string/int"
-            operation_targets = stage["target_key"] if isinstance(stage["target_key"], list) else [stage["target_key"]]
+            operation_targets = operation_targets if isinstance(operation_targets, list) else [operation_targets]
         linked_fate = thelper.utils.str2bool(stage["linked_fate"]) if "linked_fate" in stage else True
         if operation_name == "Augmentor.Pipeline":
             assert thelper.utils.check_installed("Augmentor"), \
