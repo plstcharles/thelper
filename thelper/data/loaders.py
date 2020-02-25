@@ -483,7 +483,8 @@ class LoaderFactory:
                     if task.multi_label:
                         class_samples = np.setdiff1d(class_samples, backlist_idxs[dataset_name])
                     else:
-                        assert np.intersect1d(class_samples, backlist_idxs[dataset_name]), "duplicated sample idx across classes"
+                        assert len(np.intersect1d(class_samples, backlist_idxs[dataset_name])) == 0, \
+                            "duplicated sample idx across classes"
                     curr_class_samples[dataset_name] = class_samples
                     logger.debug("dataset '{}' class #{} '{}' sample count: {}  ({:0.1f}% of dataset, {:0.1f}% of total)".format(
                         dataset_name,
