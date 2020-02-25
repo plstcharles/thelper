@@ -3,13 +3,11 @@ Typing definitions for thelper.
 """
 
 import io
+import typing
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-
-from typing import (Any, AnyStr, Callable, Dict,  # isort:skip
-                    Generic, Iterable, List, Optional, Tuple, TypeVar, Union)  # noqa: F401
 
 ModelType = "thelper.nn.Module"
 LoaderType = "thelper.data.loaders.DataLoader"
@@ -17,55 +15,72 @@ TaskType = "thelper.tasks.Task"
 BoundingBox = "thelper.tasks.detect.BoundingBox"
 
 ArrayType = np.ndarray  # generic definition
-ArrayShapeType = Union[List[int], Tuple[int]]
-OneOrManyArrayType = Union[List[ArrayType], ArrayType]
+ArrayShapeType = typing.Union[typing.List[int], typing.Tuple[int]]
+OneOrManyArrayType = typing.Union[typing.List[ArrayType], ArrayType]
 
-ClassIdType = Union[AnyStr, int]
-LabelColorMapType = Union[ArrayType, Dict[int, ArrayType]]
-LabelIndex = AnyStr
-LabelType = AnyStr
-LabelDict = Dict[LabelIndex, LabelType]
-LabelList = List[LabelType]
-DrawingType = Optional[Tuple[plt.Figure, plt.Axes]]
-ClassColorMap = Dict[ClassIdType, Union[int, Tuple[int, int, int]]]
+ClassIdType = typing.Union[typing.AnyStr, int]
+LabelColorMapType = typing.Union[ArrayType, typing.Dict[int, ArrayType]]
+LabelIndex = typing.AnyStr
+LabelType = typing.AnyStr
+LabelDict = typing.Dict[LabelIndex, LabelType]
+LabelList = typing.List[LabelType]
+DrawingType = typing.Optional[typing.Tuple[plt.Figure, plt.Axes]]
+ClassColorMap = typing.Dict[ClassIdType, typing.Union[int, typing.Tuple[int, int, int]]]
 
-Number = Union[int, float]
-_literalJSON = Optional[Union[AnyStr, Number, bool]]
-JSON = Union[_literalJSON, List[Union[_literalJSON, "JSON"]], Dict[AnyStr, Union[_literalJSON, "JSON"]]]
+Number = typing.Union[int, float]
+_literalJSON = typing.Optional[typing.Union[typing.AnyStr, Number, bool]]
+JSON = typing.Union[_literalJSON, typing.List[typing.Union[_literalJSON, "JSON"]],
+                    typing.Dict[typing.AnyStr, typing.Union[_literalJSON, "JSON"]]]
 
-SampleType = Dict[Union[AnyStr, int], Any]
+SampleType = typing.Dict[typing.Union[typing.AnyStr, int], typing.Any]
 InputType = torch.Tensor
 
 ClassificationPredictionType = torch.Tensor
 ClassificationTargetType = torch.Tensor
 SegmentationPredictionType = torch.Tensor
 SegmentationTargetType = torch.Tensor
-DetectionPredictionType = List[List[BoundingBox]]
-DetectionTargetType = List[List[BoundingBox]]
+DetectionPredictionType = typing.List[typing.List[BoundingBox]]
+DetectionTargetType = typing.List[typing.List[BoundingBox]]
 RegressionPredictionType = torch.Tensor
 RegressionTargetType = torch.Tensor
 
-AnyPredictionType = Union[ClassificationPredictionType,
-                          SegmentationPredictionType,
-                          DetectionPredictionType,
-                          RegressionPredictionType]
-AnyTargetType = Union[ClassificationTargetType,
-                      SegmentationTargetType,
-                      DetectionTargetType,
-                      RegressionTargetType]
+AnyPredictionType = typing.Union[ClassificationPredictionType,
+                                 SegmentationPredictionType,
+                                 DetectionPredictionType,
+                                 RegressionPredictionType]
+AnyTargetType = typing.Union[ClassificationTargetType,
+                             SegmentationTargetType,
+                             DetectionTargetType,
+                             RegressionTargetType]
 
-ConfigIndex = AnyStr
-ConfigValue = Union[AnyStr, bool, float, int, List[Any], Dict[Any, Any]]
-ConfigDict = Dict[ConfigIndex, Union[ConfigValue, "ConfigDict"]]
+ConfigIndex = typing.AnyStr
+ConfigValue = typing.Union[typing.AnyStr, bool, float, int, typing.List[typing.Any],
+                           typing.Dict[typing.Any, typing.Any]]
+ConfigDict = typing.Dict[ConfigIndex, typing.Union[ConfigValue, "ConfigDict"]]
 
-CheckpointLoadingType = Union[AnyStr, io.FileIO]
-CheckpointContentType = Dict[AnyStr, Any]
-MapLocationType = Union[Callable, AnyStr, Dict[AnyStr, AnyStr]]
+CheckpointLoadingType = typing.Union[typing.AnyStr, io.FileIO]
+CheckpointContentType = typing.Dict[typing.AnyStr, typing.Any]
+MapLocationType = typing.Union[typing.Callable, typing.AnyStr,
+                               typing.Dict[typing.AnyStr, typing.AnyStr]]
 
-MultiLoaderType = Tuple[Optional[LoaderType], Optional[LoaderType], Optional[LoaderType]]
+MultiLoaderType = typing.Tuple[typing.Optional[LoaderType],
+                               typing.Optional[LoaderType],
+                               typing.Optional[LoaderType]]
 
-IterCallbackType = Callable[[TaskType, InputType, AnyPredictionType, AnyTargetType,
-                            SampleType, Optional[float], int, int, int, int, AnyStr], None]
+IterCallbackType = typing.Callable[
+    [TaskType,
+     InputType,
+     AnyPredictionType,
+     AnyTargetType,
+     SampleType,
+     typing.Optional[float],
+     int,
+     int,
+     int,
+     int,
+     typing.AnyStr],
+    None
+]
 IterCallbackParams = [
     "task",         # the task object that defines class names, min/max target values, etc.
     "input",        # the (batched) input tensor given to the model in order to generate a prediction
