@@ -1483,18 +1483,24 @@ def set_matplotlib_agg():
 def create_hdf5_dataset(fd, name, max_len, batch_like, compression="chunk_lz4", chunk_size=None, flatten=True):
     """Creates an HDF5 dataset inside the provided HDF5.File object descriptor."""
     assert batch_like.ndim >= 1, "minibatch must always contain at least batch dim"
+    compression_args = {}
+    if isinstance(compression, (tuple, list)) and len(compression) == 2:
+        compression_args = compression[1]
+        compression = compression[0]
     flat_dtype = h5py.special_dtype(vlen=np.uint8)
     if batch_like.ndim > 1 and flatten:
-        dset = fd.create_dataset(name, shape=(max_len,), dtype=flat_dtype)
+        dset = fd.create_dataset(name, shape=(max_len,), maxshape=(max_len,), dtype=flat_dtype)
         dset.attrs["orig_shape"] = batch_like.shape[1:]  # removes batch dim
     elif batch_like.ndim > 1:
         assert compression in no_compression_flags or compression in chunk_compression_flags, \
             f"unsupported chunk-compress filter '{compression}'"
         assert np.issubdtype(batch_like.dtype, np.number), "invalid non-flattened array subtype"
+        auto_chunker = False
         if chunk_size is None:
+            auto_chunker = True
             chunk_size = (1, *batch_like.shape[1:])
         chunk_byte_size = np.multiply.reduce(chunk_size) * batch_like.dtype.itemsize
-        assert 10 * (2 ** 10) <= chunk_byte_size < 2 ** 20, \
+        assert auto_chunker or 10 * (2 ** 10) <= chunk_byte_size < 2 ** 20, \
             f"unrecommended chunk byte size ({chunk_byte_size}) should be in [10KiB,1MiB];" \
             " see http://docs.h5py.org/en/stable/high/dataset.html#chunked-storage"
         if compression == "chunk_lz4":
@@ -1506,23 +1512,24 @@ def create_hdf5_dataset(fd, name, max_len, batch_like, compression="chunk_lz4", 
                 **hdf5plugin.LZ4(nbytes=0)
             )
         else:
+            assert compression not in no_compression_flags or len(compression_args) == 0
             dset = fd.create_dataset(
                 name=name,
                 shape=(max_len, *batch_like.shape[1:]),
                 chunks=chunk_size,
                 dtype=batch_like.dtype,
-                compression=compression
+                compression=compression if compression not in no_compression_flags else None,
+                **compression_args
             )
         dset.attrs["orig_shape"] = batch_like.shape[1:]  # removes batch dim
     else:
-        assert thelper.utils.is_scalar(batch_like[0]) and flatten
+        assert thelper.utils.is_scalar(batch_like[0])
         if np.issubdtype(batch_like.dtype, np.number):
             assert compression in no_compression_flags, "cannot compress scalar elements"
-            dset = fd.create_dataset(name, shape=(max_len,), dtype=batch_like.dtype)
-            dset.attrs["orig_shape"] = batch_like.shape[1:]  # removes batch dim
+            dset = fd.create_dataset(name, shape=(max_len,), maxshape=(max_len,), dtype=batch_like.dtype)
         else:
-            dset = fd.create_dataset(name, shape=(max_len,), dtype=flat_dtype)
-            dset.attrs["orig_shape"] = ()
+            dset = fd.create_dataset(name, shape=(max_len,), maxshape=(max_len,), dtype=flat_dtype)
+        dset.attrs["orig_shape"] = ()
     dset.attrs["orig_dtype"] = batch_like.dtype.str
     dset.attrs["compression"] = "none" if compression in no_compression_flags else compression
     return dset

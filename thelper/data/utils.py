@@ -437,7 +437,8 @@ def create_hdf5(archive_path, task, train_loader, valid_loader, test_loader, com
             config = thelper.utils.get_key_def(key, config, default={})
             compr_type = thelper.utils.get_key_def("type", config, default="none")
             encode_params = thelper.utils.get_key_def("encode_params", config, default={})
-            return compr_type, encode_params
+            flatten_arrays = thelper.utils.get_key_def("flatten", config, default=False)
+            return compr_type, encode_params, flatten_arrays
 
         for loader, group in [(train_loader, "train"), (valid_loader, "valid"), (test_loader, "test")]:
             if loader is None:
@@ -451,17 +452,26 @@ def create_hdf5(archive_path, task, train_loader, valid_loader, test_loader, com
                     tensor = thelper.utils.to_numpy(batch[key])
                     if datasets[key] is None:
                         datasets[key] = thelper.utils.create_hdf5_dataset(
-                            fd, group + "/" + key, max_dataset_len, tensor, datasets_compr[key])
+                            fd=fd,
+                            name=group + "/" + key,
+                            max_len=max_dataset_len,
+                            batch_like=tensor,
+                            compression=datasets_compr[key][:2],
+                            chunk_size=None,  # will auto-compute
+                            flatten=datasets_compr[key][2])
                     for idx in range(tensor.shape[0]):
                         thelper.utils.fill_hdf5_sample(
-                            datasets[key], datasets_len[key], idx,
-                            tensor, datasets_compr[key][0],
+                            dset=datasets[key],
+                            dset_idx=datasets_len[key],
+                            array_idx=idx,
+                            array=tensor,
+                            compression=datasets_compr[key][0],
                             **datasets_compr[key][1])
                         datasets_len[key] += 1
             assert len(set(datasets_len.values())) == 1
             fd[group].attrs["count"] = datasets_len[task.input_key]
             for key in target_keys:
-                datasets[key].resize(size=(datasets_len[key],))
+                datasets[key].resize(size=(datasets_len[key], *datasets[key].attrs["orig_shape"],))
 
 
 def get_class_weights(label_map, stype="linear", maxw=float('inf'), minw=0.0, norm=True, invmax=False):
