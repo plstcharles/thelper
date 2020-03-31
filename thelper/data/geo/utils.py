@@ -154,7 +154,7 @@ def parse_rasters(raster_paths, srs_target=None, reproj=False):
             "file_path": raster_path,
             "reproj_path": reproj_path
         })
-        rasterfile = None  # close input fd
+        rasterfile = None  # noqa # close input fd
     target_coverage = shapely.ops.cascaded_union(target_rois)
     return rasters_data, target_coverage
 
@@ -392,8 +392,7 @@ def export_geotiff(filepath, crop, srs, geotransform):
     assert isinstance(filepath, str), "filepath should be given as string"
     assert isinstance(crop, np.ndarray), "crop data should be given as numpy array"
     assert crop.ndim == 2 or crop.ndim == 3, "crop array should be 2D or 3D"
-    assert isinstance(srs, (str, int, osr.SpatialReference)), \
-        "target EPSG SRS must be given as int/str"
+    assert isinstance(srs, (str, int, osr.SpatialReference)), "target EPSG SRS must be given as int/str"
     if isinstance(srs, (str, int)):
         if isinstance(srs, str):
             srs = int(srs.replace("EPSG:", ""))
@@ -411,7 +410,7 @@ def export_geotiff(filepath, crop, srs, geotransform):
     for b in range(raster_bands):
         dataset.GetRasterBand(b + 1).WriteArray(crop[:, :, b])
     dataset.FlushCache()
-    dataset = None  # close fd
+    dataset = None  # noqa # close fd
 
 
 def export_geojson_with_crs(features, srs_target):
@@ -442,27 +441,76 @@ def export_geojson_with_crs(features, srs_target):
     return geojson.dumps(_FeatureCollection(features, srs=srs_target), indent=2)
 
 
+def prepare_raster_metadata(raster_inputs):
+    """Prepares the provided raster inputs by adding extra metadata to help later parsing.
+
+    The provided list of rasters is updated directly.
+
+    Args:
+        raster_inputs (list):
+            list of raster metadata specified as dictionaries with minimally a file 'path' and 'bands' to process.
+
+    Raises:
+        ValueError: at least one input raster was missing a required metadata parameter or a parameter is erroneous.
+        IOError: the raster path could not be found or reading it did not generate a valid raster using GDAL.
+    """
+    for k, raster_input in enumerate(raster_inputs):
+        raster_path = raster_input['path']
+
+        raster_ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
+        if raster_ds is None:
+            logger.fatal(f"File not found: {raster_path}")
+            raise IOError(f"Missing raster file could not be loaded: [{raster_path}]")
+
+        driver_shortname = raster_ds.GetDriver().ShortName
+        raster_inputs[k]['raster_format'] = 'DEFAULT'
+        if driver_shortname == 'SENTINEL2':
+            got_md = raster_ds.GetMetadata('SUBDATASETS')
+            if got_md is None:
+                logger.fatal(f"Missing metadata: {raster_path}")
+                raise ValueError("Missing raster metadata with expected Sentinel-2 format")
+            raster_path = got_md["SUBDATASET_1_NAME"]
+            raster_inputs[k]['raw_path'] = raster_path
+            raster_inputs[k]['path'] = os.path.dirname(raster_path.split(":")[1])
+            raster_ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
+            if raster_ds is None:
+                logger.fatal(f"File not found: {raster_path}")
+                exit(0)
+            raster_inputs[k]['raster_format'] = 'SENTINEL2'
+
+        for b in raster_input['bands']:
+            raster_band = raster_ds.GetRasterBand(b)
+            if raster_band is None:
+                logger.fatal(f"Raster band {b} not found: {raster_path}")
+                raise ValueError("Invalid raster band missing")
+            else:
+                logger.info(f"Using band {b} in {raster_path}")
+
+        raster_ds = None  # noqa # flush
+
+
 def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
                              batch_size=256, num_workers=0, use_gpu=True,
-                             transforms=None, normalize_loss=True,
-                             sentinel2_format=False):
-    """
-    This function computes the pixelwise prediction on an image.  It does the prediction per batch size of n pixels.
-    It returns the class predicted and its probability.  The results are saved into two images created with
-    the same size and projection info as the input rasters: the class image gives the class id, a number between 1 and
-    the number of classes. The 0 is reserverd for nodata.  The probs image contains nclass channels with the probability
-    values of the pixels for each class.  The probabilities by default are normalised.
+                             transforms=None, normalize_loss=True):
+    """Computes the pixelwise prediction on an image.
 
-    :param save_dir: (string) path to where the outputs are daved
-    :param ckptdata: (string) path to the thelper checkpoint
-    :param raster_inputs: (list) path to the image, and bands used
-    :param patch_size: (int) patch size used during the classification
-    :param batch_size: (int) batch size to used to the prediction
-    :param num_workers: (int) number of workers.  Due to limitation of gdal, the number of threads must be set to 0
-    :param use_gpu: (bool) use the gpu to do the prediction (faster)
-    :param transforms: (Compose class) basic and nesessary transforms on data
-    :param normalize_loss: (bool) use sofmax to normalised otherwise return the cross entropy loss
-    :return:
+    It does the prediction per batch size of n pixels. It returns the class predicted and its probability.
+    The results are saved into two images created with the same size and projection info as the input rasters:
+        the class image gives the class id, a number between 1 and the number of classes.
+
+    Class id 0 is reserved for 'nodata'. The 'probs' image contains N-class channels with the probability
+    values of the pixels for each class. The probabilities by default are normalised.
+
+    Args:
+        save_dir: (string) path to where the outputs are saved
+        ckptdata (dict): checkpoint data to be loaded to retrieve configuration and model for inference
+        raster_inputs (list): path to the image, and bands used
+        patch_size (int): patch size used during the classification
+        batch_size (int): batch size to used to the prediction
+        num_workers (int): number of workers.  Due to limitation of gdal, the number of threads must be set to 0
+        use_gpu (bool): use the gpu to do the prediction (faster)
+        transforms (Compose class): basic and necessary transforms on data
+        normalize_loss (bool): use sofmax to normalised otherwise return the cross entropy loss
     """
 
     import thelper.data.geo
@@ -476,7 +524,7 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
         os.makedirs(save_dir)
     with open(config_file_path, 'w') as f:
         import json
-        json.dump(config,f, indent=4 )
+        json.dump(config, f, indent=4)
     if use_gpu:
         model = model.cuda()
     else:
@@ -489,7 +537,7 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
 
     class_indices = task.class_indices
     for key in class_indices.keys():
-        class_indices[key]+=1
+        class_indices[key] += 1
     class_indices['no_data'] = 0
 
     class_indices_file = "config-classes.json"
@@ -498,19 +546,17 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
         import json
         json.dump(class_indices, f, indent=4)
 
-    # For each raster image in the list of inputs
+    prepare_raster_metadata(raster_inputs)
     for raster_input in raster_inputs:
         raster_path = raster_input['path']
         raster_bands = raster_input['bands']
-        ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
+        raw_raster_path = raster_input.get('raw_raster_path', raster_path)
+        ds = gdal.Open(raw_raster_path, gdal.GA_ReadOnly)
         xsize = ds.RasterXSize
         ysize = ds.RasterYSize
         georef = ds.GetProjectionRef()
         affine = ds.GetGeoTransform()
         raster_basename = os.path.basename(raster_path).split(".")[0]
-        if sentinel2_format:
-            raster_basename = os.path.basename(os.path.dirname(raster_path.split(":")[1])).split(".")[0]
-
         raster_class_path = os.path.join(save_dir, raster_basename + "_class.tif")
         # Create the class raster output
         class_ds = gdal.GetDriverByName('GTiff').Create(raster_class_path, xsize, ysize, 1, gdal.GDT_Byte)
@@ -537,17 +583,17 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
         probs_ds = gdal.Open(raster_prob_path, gdal.GA_Update)
 
         # Specialized Sliding Window Dataset
-        dataset = thelper.data.geo.parsers.SlidingWindowDataset(raster_path=raster_path,
+        dataset = thelper.data.geo.parsers.SlidingWindowDataset(raster_path=raw_raster_path,
                                                                 raster_bands=raster_bands,
                                                                 patch_size=patch_size,
                                                                 transforms=transforms)
-        # The number of workers shoud be 0 (for windows) are (0,1) for linux.
+        # The number of workers should be 0 (for windows) are (0,1) for linux.
         #if num_workers > 0:
          #   raise Exception("The number of workers should be 0 because of gdal")
         dataloader = thelper.data.DataLoader(dataset=dataset,
-                                                 batch_size=batch_size,
-                                                 num_workers=num_workers,
-                                                 shuffle=False)
+                                             batch_size=batch_size,
+                                             num_workers=num_workers,
+                                             shuffle=False)
         nbatches = len(dataloader)
         model.eval()
 
@@ -576,8 +622,5 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
                 # Not sure if it works
                 class_ds.FlushCache()
                 probs_ds.FlushCache()
-        # Close files
-        class_ds=None
-        probs_ds=None
-
-
+        class_ds = None  # noqa # close file
+        probs_ds = None  # noqa # close file

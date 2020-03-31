@@ -13,6 +13,7 @@ RUN curl -o ~/miniconda.sh -O  https://repo.continuum.io/miniconda/Miniconda3-la
 
 ENV CONDA_HOME /opt/conda
 ENV PATH /opt/conda/bin:$PATH
+ENV PROJ_LIB ${CONDA_HOME}/share/proj
 
 WORKDIR /opt/thelper
 COPY . .

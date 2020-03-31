@@ -273,13 +273,13 @@ class VectorCropDataset(Dataset):
                 flag_mask = curr_band_array != curr_band.GetNoDataValue()
                 np.copyto(dst=crop.data[:, :, raster_band_idx], src=curr_band_array, where=flag_mask)
                 np.bitwise_and(crop.mask[:, :, raster_band_idx], np.invert(flag_mask), out=crop.mask[:, :, raster_band_idx])
-        # ogr_dataset = None # close local fd
+        # ogr_dataset = None  # noqa # close local fd
         # noinspection PyUnusedLocal
-        crop_raster_gdal = None  # close local fd
+        crop_raster_gdal = None  # noqa # close local fd
         # noinspection PyUnusedLocal
-        crop_mask_gdal = None  # close local fd
+        crop_mask_gdal = None  # noqa # close local fd
         # noinspection PyUnusedLocal
-        rasterfile = None  # close input fd
+        rasterfile = None  # noqa # close input fd
         return crop, mask
 
     def __getitem__(self, idx):
@@ -506,15 +506,29 @@ class SlidingWindowDataset(Dataset):
         self.raster_ds = None
         self.samples = []
         logger.info(f"Creating samples coordinate")
-        for y in np.arange(0, ysize - self.patch_size):
-            for x in np.arange(0, xsize - self.patch_size):
-                self.samples.append((int(x), int(y)))
-        logger.info(f"Number of samples: {len(self.samples)} ")
+        self.samples.append((0, 0)) #fake
+        #for y in np.arange(0, ysize - self.patch_size):
+        #    for x in np.arange(0, xsize - self.patch_size):
+        #        self.samples.append((int(x), int(y)))
+
+        self.lines = ysize - self.patch_size
+        self.cols = xsize - self.patch_size
+        self.n_samples = self.lines * self.cols
+
+        #logger.info(f"Number of samples: {len(self.samples)}, {self.n_samples } ")
+        logger.info(f"Number of samples:  {self.n_samples} ")
         self.raster_bands = raster_bands
         self.done = False
 
+    def __len__(self):
+        return self.n_samples
+
     def __getitem__(self, idx):
-        offsets = self.samples[idx]
+        #offsets = self.samples[idx]
+
+        y = idx // self.lines
+        x = idx-y * self.cols
+        offsets = (x, y)
         # Get the number n of workers and the current worker's id
         info = torch.utils.data.get_worker_info()
         # Open the data with gdal n times in multithread shared mode
