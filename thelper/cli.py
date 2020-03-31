@@ -17,9 +17,6 @@ import tqdm
 
 import thelper
 
-import matplotlib
-matplotlib.use('Agg')
-
 TASK_COMPAT_CHOICES = frozenset(["old", "new", "compat"])
 
 
@@ -370,28 +367,6 @@ def inference_session(config, save_dir=None):
                                                     normalize_loss=normalize_loss)
 
 
-def setup(args=None, argparser=None):
-    # type: (Any, argparse.ArgumentParser) -> Union[int, argparse.Namespace]
-    """Sets up the argument parser (if not already done externally) and parses the input CLI arguments.
-
-    This function may return an error code (integer) if the program should exit immediately. Otherwise, it will return
-    the parsed arguments to use in order to redirect the execution flow of the entrypoint.
-    """
-    argparser = argparser or make_argparser()
-    args = argparser.parse_args(args=args)
-    if args.version:
-        print(thelper.__version__)
-        return 0
-    if args.mode is None:
-        argparser.print_help()
-        return 1
-    if args.silent and args.verbose > 0:
-        raise AssertionError("contradicting verbose/silent arguments provided")
-    log_level = logging.INFO if args.verbose < 1 else logging.DEBUG if args.verbose < 2 else logging.NOTSET
-    thelper.utils.init_logger(log_level, args.log, args.force_stdout)
-    return args
-
-
 def export_model(config, save_dir):
     """Launches a model exportation session.
 
@@ -509,6 +484,28 @@ def make_argparser():
     infer_ap.add_argument("save_dir", type=str, help="path to the session output root directory")
 
     return ap
+
+
+def setup(args=None, argparser=None):
+    # type: (Any, argparse.ArgumentParser) -> Union[int, argparse.Namespace]
+    """Sets up the argument parser (if not already done externally) and parses the input CLI arguments.
+
+    This function may return an error code (integer) if the program should exit immediately. Otherwise, it will return
+    the parsed arguments to use in order to redirect the execution flow of the entrypoint.
+    """
+    argparser = argparser or make_argparser()
+    args = argparser.parse_args(args=args)
+    if args.version:
+        print(thelper.__version__)
+        return 0
+    if args.mode is None:
+        argparser.print_help()
+        return 1
+    if args.silent and args.verbose > 0:
+        raise AssertionError("contradicting verbose/silent arguments provided")
+    log_level = logging.INFO if args.verbose < 1 else logging.DEBUG if args.verbose < 2 else logging.NOTSET
+    thelper.utils.init_logger(log_level, args.log, args.force_stdout)
+    return args
 
 
 def main(args=None, argparser=None):

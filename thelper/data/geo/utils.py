@@ -612,7 +612,7 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
                 y_class_idxs = torch.argmax(y_prob, dim=1).cpu().data.numpy()
                 y_prob = y_prob.cpu().data.numpy()
                 for j in range(ndata):
-                    class_id = np.array( [[y_class_idxs[j] + 1]])
+                    class_id = np.array([[y_class_idxs[j] + 1]])
                     x0 = int(centerX0[j])
                     y0 = int(centerY0[j])
                     class_ds.GetRasterBand(1).WriteArray(class_id, x0, y0)
