@@ -1,4 +1,8 @@
 FROM nvidia/cuda:10.0-cudnn7-devel-ubuntu16.04
+LABEL name="thelper"
+LABEL description="Training framework and CLI for PyTorch-based machine learning projects"
+LABEL vendor="Centre de Recherche Informatique de Montréal / Computer Research Institute of Montreal (CRIM)"
+LABEL version="0.4.7"
 
 ARG PYTHON_VERSION=3.7
 
@@ -14,11 +18,14 @@ RUN curl -o ~/miniconda.sh -O  https://repo.continuum.io/miniconda/Miniconda3-la
 ENV CONDA_HOME /opt/conda
 ENV PATH /opt/conda/bin:$PATH
 ENV PROJ_LIB ${CONDA_HOME}/share/proj
+ENV THELPER_HOME /opt/thelper
 
-WORKDIR /opt/thelper
+WORKDIR ${THELPER_HOME}
 COPY . .
 RUN sed -i 's/thelper/base/g' conda-env.yml
-RUN conda env update --file conda-env.yml && pip install opencv-python-headless
+RUN conda env update --file conda-env.yml \
+    && pip install opencv-python-headless \
+    && conda clean --all -f -y
 RUN pip install -q -e . --no-deps
 
 WORKDIR /workspace

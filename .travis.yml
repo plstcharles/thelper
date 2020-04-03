@@ -40,7 +40,8 @@ jobs:
         on:
           tags: true
       after_deploy:
-        - docker build -t ${DOCKER_REPO}:${TRAVIS_TAG} -t ${DOCKER_REPO}:latest .
+        - docker build -t ${DOCKER_REPO}:${TRAVIS_TAG} -t ${DOCKER_REPO}:latest -t thelper:base -f Dockerfile .
+        - docker build -t ${DOCKER_REPO}:${TRAVIS_TAG}-geo -t ${DOCKER_REPO}:latest-geo -t thelper:geo -f Dockerfile-geo .
         - docker run -t ${DOCKER_REPO}:latest thelper --version
         - travis_wait 50 docker push ${DOCKER_REPO}
     - stage: conda_deploy
@@ -59,3 +60,4 @@ jobs:
         - conda install conda-build conda-verify anaconda-client
         - conda info -a
         - travis_wait 50 conda build --token $CONDA_TOKEN --user $CONDA_USERNAME ci/
+
