@@ -512,7 +512,6 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
         transforms (Compose class): basic and necessary transforms on data
         normalize_loss (bool): use sofmax to normalised otherwise return the cross entropy loss
     """
-
     import thelper.data.geo
     import torch
     # Create the model
@@ -547,6 +546,7 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
         json.dump(class_indices, f, indent=4)
 
     prepare_raster_metadata(raster_inputs)
+    logger.info("Rasters to process:\n%s", "\n  ".join(raster_inputs))
     for raster_input in raster_inputs:
         raster_path = raster_input['path']
         raster_bands = raster_input['bands']

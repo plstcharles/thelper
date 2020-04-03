@@ -19,8 +19,11 @@ ENV CONDA_HOME /opt/conda
 ENV PATH /opt/conda/bin:$PATH
 ENV PROJ_LIB ${CONDA_HOME}/share/proj
 ENV THELPER_HOME /opt/thelper
-
 WORKDIR ${THELPER_HOME}
+
+# NOTE: 
+#  force full reinstall with *possibly* updated even if just changing source
+#  this way we make sure that it works with any recent dependency update
 COPY . .
 RUN sed -i 's/thelper/base/g' conda-env.yml
 RUN conda env update --file conda-env.yml \
@@ -32,10 +35,10 @@ WORKDIR /workspace
 RUN chmod -R a+w /workspace
 
 # set default command
-# NOTE: 
+# NOTE:
 #   avoid using 'entrypoint' as it requires explicit override which not all services do automatically
 #   command is easier to override as it is the default docker run CLI input after option flags
-#       ie: 
+#       ie:
 #           command:        docker run [options] <your-cmd-override>
 #       vs:
 #           entrypoint:     docker run [options] --entrypoint="" <your-cmd-override>

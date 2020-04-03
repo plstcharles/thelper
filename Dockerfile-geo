@@ -13,4 +13,3 @@ RUN conda env update --file ${THELPER_HOME}/conda-env-geo.yml \
     && conda clean --all -f -y
 
 # note: command is the same as base thelper
-
