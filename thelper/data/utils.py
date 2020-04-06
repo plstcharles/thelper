@@ -7,6 +7,7 @@ import inspect
 import json
 import logging
 import os
+import pprint
 import sys
 
 import numpy as np
@@ -209,6 +210,8 @@ def create_loaders(config, save_dir=None):
             fd.write(f"session: {session_name}-{logstamp}\n")
             fd.write(f"version: {repover}\n")
             fd.write(str(task) + "\n")
+        log_sample_metadata = thelper.utils.get_key_def(["log_samples", "log_samples_metadata"],
+                                                        config, default=False)
         for dataset_name, dataset in datasets.items():
             dataset_log_file = os.path.join(data_logger_dir, dataset_name + ".log")
             if not loader_factory.skip_verif and os.path.isfile(dataset_log_file):
@@ -251,6 +254,7 @@ def create_loaders(config, save_dir=None):
                                     logger.error("sample list mismatch with previous run; user aborted")
                                     sys.exit(1)
                                 break
+        printer = pprint.PrettyPrinter(indent=2)
         for dataset_name, dataset in datasets.items():
             dataset_log_file = os.path.join(data_logger_dir, dataset_name + ".log")
             samples = dataset.samples if hasattr(dataset, "samples") and dataset.samples is not None \
@@ -262,13 +266,13 @@ def create_loaders(config, save_dir=None):
                     "version": repover,
                     "dataset": str(dataset),
                 },
-                # @@@@ TODO: add util to truncate size of string in each member of samples below?
-                "samples": [str(sample) for sample in samples],
                 # index values were paired in tuples earlier, 0=idx, 1=label
-                "train_idxs": [idx for idx, _ in train_idxs[dataset_name]],
-                "valid_idxs": [idx for idx, _ in valid_idxs[dataset_name]],
-                "test_idxs": [idx for idx, _ in test_idxs[dataset_name]]
+                "train_idxs": [int(idx) for idx, _ in train_idxs[dataset_name]],
+                "valid_idxs": [int(idx) for idx, _ in valid_idxs[dataset_name]],
+                "test_idxs": [int(idx) for idx, _ in test_idxs[dataset_name]]
             }
+            if log_sample_metadata:
+                log_content["samples"] = [printer.pformat(sample) for sample in samples]
             # now, always overwrite, as it can get too big otherwise
             with open(dataset_log_file, "w") as fd:
                 json.dump(log_content, fd, indent=4, sort_keys=False)
