@@ -115,8 +115,9 @@ class SessionRunner:
         self.skip_eval_iter = thelper.utils.get_key_def("skip_eval_iter", trainer_config, 0)
 
         # parse and prepare tbx stuff
-        self.use_tbx = thelper.utils.str2bool(thelper.utils.get_key_def(["use_tbx", "tbx", "use_tb", "tb", "tensorboard"],
-                                                                        trainer_config, False))
+        self.use_tbx = \
+            thelper.utils.get_key_def(["use_tbx", "tbx", "use_tb", "tb", "tensorboard"], trainer_config, False)
+        self.use_tbx = thelper.utils.str2bool(self.use_tbx)
         if self.use_tbx:
             try:
                 import tensorboardX
@@ -183,17 +184,21 @@ class SessionRunner:
         self.monitor, self.monitor_best, self.monitor_best_epoch = None, None, -1
         if "monitor" in trainer_config and trainer_config["monitor"]:
             self.monitor = trainer_config["monitor"]
-            assert any([self.monitor in mset for mset in [self.train_metrics, self.valid_metrics]]), \
-                f"metric with name '{self.monitor}' could not be found in training/validation metrics"
-            metric = self.valid_metrics[self.monitor] if self.monitor in self.valid_metrics \
-                else self.train_metrics[self.monitor]  # makes no sense to search for it in test metrics...
-            assert isinstance(metric, thelper.optim.metrics.Metric), \
-                "monitoring target should be an actual 'metric' class that returns a scalar!"
-            assert metric.goal in [thelper.optim.Metric.minimize, thelper.optim.Metric.maximize], \
-                "monitored metric does not return proper optimization goal"
-            self.monitor_goal = metric.goal
-            self.monitor_best = thelper.optim.Metric.minimize if metric.goal == thelper.optim.Metric.maximize \
-                else thelper.optim.Metric.maximize
+            if self.monitor == "loss":
+                self.monitor_goal = thelper.optim.Metric.minimize
+                self.monitor_best = thelper.optim.Metric.maximize
+            else:
+                assert any([self.monitor in mset for mset in [self.train_metrics, self.valid_metrics]]), \
+                    f"metric with name '{self.monitor}' could not be found in training/validation metrics"
+                metric = self.valid_metrics[self.monitor] if self.monitor in self.valid_metrics \
+                    else self.train_metrics[self.monitor]  # makes no sense to search for it in test metrics...
+                assert isinstance(metric, thelper.optim.metrics.Metric), \
+                    "monitoring target should be an actual 'metric' class that returns a scalar!"
+                assert metric.goal in [thelper.optim.Metric.minimize, thelper.optim.Metric.maximize], \
+                    "monitored metric does not return proper optimization goal"
+                self.monitor_goal = metric.goal
+                self.monitor_best = thelper.optim.Metric.minimize if metric.goal == thelper.optim.Metric.maximize \
+                    else thelper.optim.Metric.maximize
             self.logger.debug(f"will monitor metric '{self.monitor}' for best state checkpointing/early stopping")
 
         # parse checkpoint data from previous run (if available)
@@ -211,8 +216,8 @@ class SessionRunner:
             # parse user (custom) callback
             user_callback_keys = [f"{cname}_iter_callback", f"{cname}_callback", "callback"]
             user_callback = \
-                thelper.utils.get_key_def(user_callback_keys,
-                                          trainer_config)  # type: Optional[thelper.typedefs.IterCallbackType]
+                thelper.utils.get_key_def(user_callback_keys, trainer_config) \
+                # type: Optional[thelper.typedefs.IterCallbackType]
             if user_callback is not None:
                 assert f"{cname}_user_callback" not in mset, f"metrics set already had a '{cname}_user_callback' in it"
                 mset[f"{cname}_user_callback"] = thelper.train.utils.PredictionCallback(user_callback)
