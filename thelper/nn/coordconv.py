@@ -85,11 +85,11 @@ class CoordConvTranspose2d(torch.nn.Module):
         self.addcoord = AddCoords(centered=centered, normalized=normalized, noise=noise,
                                   radius_channel=radius_channel, scale=scale)
         extra_ch = 3 if radius_channel else 2
-        self.convT = torch.nn.ConvTranspose2d(in_channels + extra_ch, *args, **kwargs)
+        self.conv = torch.nn.ConvTranspose2d(in_channels + extra_ch, *args, **kwargs)
 
     def forward(self, in_tensor):
         out = self.addcoord(in_tensor)
-        out = self.convT(out)
+        out = self.conv(out)
         return out
 
 
