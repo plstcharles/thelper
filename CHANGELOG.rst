@@ -10,6 +10,7 @@ Changelog
 * Add ``infer`` mode for classification of geo-referenced rasters
 * Add ``Dockerfile-geo`` to build thelper with pre-installed geo packages
 * Add geo-related build instructions to travis-ci build steps 
+* Add auto-documentation of makefile targets and docker related targets
 
 `0.4.7 <http://github.com/plstcharles/thelper/tree/0.4.7>`_ (2019/11/20)
 ----------------------------------------------------------------------------------

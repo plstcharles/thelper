@@ -1,3 +1,9 @@
+# Included custom configs change the value of MAKEFILE_LIST
+# Extract the required reference beforehand so we can use it for help target
+MAKEFILE_NAME := $(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST))
+# Include custom config if it is available
+-include Makefile.config
+
 define BROWSER_PYSCRIPT
 import os, webbrowser, sys
 try:
@@ -10,7 +16,8 @@ endef
 export BROWSER_PYSCRIPT
 BROWSER := python -c "$$BROWSER_PYSCRIPT"
 
-CUR_DIR := $(abspath $(lastword $(MAKEFILE_LIST))/..)
+# Application
+CUR_DIR := $(abspath $(lastword $(MAKEFILE_NAME))/..)
 APP_ROOT := $(CURDIR)
 APP_NAME := thelper
 
@@ -32,41 +39,46 @@ else
 FN := unknown
 endif
 
-
 .DEFAULT_GOAL := help
 
 .PHONY: all
 all: help
 
+# Auto documented help targets & sections from comments
+#	- detects lines marked by double octothorpe (#), then applies the corresponding target/section markup
+#   - target comments must be defined after their dependencies (if any)
+#	- section comments must have at least a double dash (-)
+#
+# 	Original Reference:
+#		https://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
+# 	Formats:
+#		https://misc.flogisoft.com/bash/tip_colors_and_formatting
+_SECTION := \033[34m
+_TARGET  := \033[36m
+_NORMAL  := \033[0m
 .PHONY: help
-help:
-	@echo "clean            remove all build, test, coverage and Python artifacts"
-	@echo "clean-all        remove EVERYTHING (including the conda environment!)"
-	@echo "clean-build      remove build artifacts"
-	@echo "clean-env        remove conda environment"
-	@echo "clean-pyc        remove Python file artifacts"
-	@echo "clean-test       remove test and coverage artifacts"
-	@echo "check            check lots of things with numerous dev tools"
-	@echo "test             run pytest quickly in the installed environment"
-	@echo "test-all         run all checks and tests in the installed environment"
-	@echo "bump             bump version using version specified as user input"
-	@echo "bump-dry         bump version using version specified as user input (dry-run)"
-	@echo "bump-tag         bump version using version specified as user input, tags it and commits the change in git"
-	@echo "run              executes the provided arguments using the framework CLI"
-	@echo "docs             generate Sphinx HTML documentation, including API docs"
-	@echo "install-dev      install dev related components inside the environment"
-	@echo "install-docs     install docs related components inside the environment"
-	@echo "install-geo      install geospatial components inside the environment"
-	@echo "install          install the package inside a conda environment"
+# note: use "\#\#" to escape results that would self-match in this target's search definition
+help:	## print this help message (default)
+	@echo "$(_SECTION)=== $(APP_NAME) help ===$(_NORMAL)"
+	@echo "Please use 'make <target>' where <target> is one of:"
+#	@grep -E '^[a-zA-Z_-]+:.*?\#\# .*$$' $(MAKEFILE_LIST) \
+#		| awk 'BEGIN {FS = ":.*?\#\# "}; {printf "    $(_TARGET)%-24s$(_NORMAL) %s\n", $$1, $$2}'
+	@grep -E '\#\#.*$$' "$(APP_ROOT)/$(MAKEFILE_NAME)" \
+		| awk ' BEGIN {FS = "(:|\\-\\-\\-)+.*?\\#\\# "}; \
+			/\--/ {printf "$(_SECTION)%s$(_NORMAL)\n", $$1;} \
+			/:/   {printf "    $(_TARGET)%-24s$(_NORMAL) %s\n", $$1, $$2} \
+		'
+
+## --- clean targets --- ##
 
 .PHONY: clean
-clean: clean-build clean-pyc clean-test
+clean: clean-build clean-pyc clean-test     ## remove all build, test, coverage and Python artifacts
 
 .PHONY: clean-all
-clean-all: clean clean-env
+clean-all: clean clean-env   ## remove EVERYTHING (including the conda environment!)
 
 .PHONY: clean-build
-clean-build:
+clean-build:    ## remove build artifacts
 	@echo "Cleaning up build artefacts..."
 	@rm -fr $(CUR_DIR)/build/
 	@rm -fr $(CUR_DIR)/dist/
@@ -75,13 +87,13 @@ clean-build:
 	@find . -type f -name '*.egg' -exec rm -f {} +
 
 .PHONY: clean-env
-clean-env:
+clean-env:  ## remove conda environment
 	@echo "Cleaning up environment artefacts..."
 	@rm -fr $(CUR_DIR)/downloads/
 	@test ! -d $(CONDA_ENV_PATH) || "$(CONDA_HOME)/bin/conda" remove -n $(CONDA_ENV) --yes --all -v
 
 .PHONY: clean-pyc
-clean-pyc:
+clean-pyc:  ## remove Python file artifacts
 	@echo "Cleaning up cache artefacts..."
 	@find . -type f -name '*.pyc' -exec rm -f {} +
 	@find . -type f -name '*.pyo' -exec rm -f {} +
@@ -89,7 +101,7 @@ clean-pyc:
 	@find . -type f -name '__pycache__' -exec rm -fr {} +
 
 .PHONY: clean-test
-clean-test:
+clean-test: ## remove test and coverage artifacts
 	@echo "Cleaning up test artefacts..."
 	@rm -f $(CUR_DIR)/.coverage
 	@rm -f $(CUR_DIR)/.coverage.*
@@ -97,8 +109,10 @@ clean-test:
 	@rm -fr $(CUR_DIR)/htmlcov/
 	@find . -name '.pytest_cache' -exec rm -fr {} +
 
+## --- test targets --- ##
+
 .PHONY: check
-check: install-dev
+check: install-dev  ## check lots of things with numerous dev tools
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 		python setup.py sdist && \
 		twine check dist/* && \
@@ -108,74 +122,96 @@ check: install-dev
 		echo 'All checks passed successfully.'"
 
 .PHONY: test
-test: install-dev
+test: install-dev   ## run pytest quickly in the installed environment
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 		pytest -vvv tests"
 
 .PHONY: test-all
-test-all: check
+test-all: check     ## run all checks and tests in the installed environment
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 		pytest --cov --cov-report=term-missing:skip-covered -vv tests"
 
+## --- version targets --- ##
+
 .PHONY: bump
-bump: install-dev
+bump: install-dev   ## bump version using version specified as user input
 	$(shell bash -c 'read -p "Version: " VERSION_PART; \
 	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg \
 		--verbose --allow-dirty --no-tag --new-version $$VERSION_PART patch;')
 
 .PHONY: bump-dry
-bump-dry: install-dev
+bump-dry: install-dev   ## bump version using version specified as user input (dry-run)
 	$(shell bash -c 'read -p "Version: " VERSION_PART; \
 	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg \
 		--verbose --allow-dirty --dry-run --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;')
 
 .PHONY: bump-tag
-bump-tag: install-dev
+bump-tag: install-dev   ## bump version using version specified as user input, tags it and commits the change in git
 	$(shell bash -c 'read -p "Version: " VERSION_PART; \
 	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/.bumpversion.cfg \
 		--verbose --allow-dirty --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;')
 
+## --- execution targets --- ##
+
 .PHONY: run
-run: install
+run: install    ## executes the provided arguments using the framework CLI
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 		python $(CUR_DIR)/thelper/cli.py $(ARGS)"
 
 .PHONY: docs
-docs: install-docs
+docs: install-docs  ## generate Sphinx HTML documentation, including API docs
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); make -C docs clean && make -C docs html"
 ifndef CI
 	$(BROWSER) $(CUR_DIR)/docs/build/html/index.html
 endif
 
+## --- install targets --- ##
+
 .PHONY: install-dev
-install-dev: install
+install-dev: install    ## install dev related components inside the environment
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); pip install -q -r $(CUR_DIR)/requirements-dev.txt"
 
 .PHONY: install-docs
-install-docs: install
+install-docs: install   ## install docs related components inside the environment
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); pip install -q -r $(CUR_DIR)/docs/requirements.txt"
 
 .PHONY: install-geo
-install-geo: install
+install-geo: install    ## install geospatial components inside the environment
 	@"$(CONDA_HOME)/bin/conda" env update --file conda-env-geo.yml
 	@echo "Successfully updated conda environment with geospatial packages."
 
 .PHONY: install
-install: conda-env
+install: conda-env      ## install the package inside a conda environment
 	@bash -c "source $(CONDA_HOME)/bin/activate $(CONDA_ENV); pip install -q -e $(CUR_DIR) --no-deps"
 	@echo "Framework successfully installed. To activate the conda environment, use:"
 	@echo "    source $(CONDA_HOME)/bin/activate $(CONDA_ENV)"
 
-.PHONY: uninstall
+.PHONY: uninstall       ## cleans all artifacts and conda environment (alias: clean-all)
 uninstall: clean clean-env
+
+## --- docker targets --- ##
+
+.PHONY: docker-build-base
+docker-build-base:   ## builds the base docker image of thelper from source
+    docker build -t thelper:base -f Dockerfile "$(CUR_DIR)"
+
+.PHONY: docker-build-geo
+docker-build-geo: docker-build-base   ## builds the docker image of thelper with geospatial components from source
+    docker build -t thelper:base -f Dockerfile "$(CUR_DIR)"
+
+.PHONY: docker-build
+docker-build: docker-build-base docker-build-geo   ## builds all docker images of thelper from source
+
+## --- conda targets --- ##
 
 .PHONY: conda-base
 conda-base:
 	@test -d $(CONDA_HOME) || test -d $(DOWNLOAD_CACHE) || mkdir $(DOWNLOAD_CACHE)
-	@test -d $(CONDA_HOME) || test -f "$(DOWNLOAD_CACHE)/$(FN)" || curl $(CONDA_URL)/$(FN) --insecure --output "$(DOWNLOAD_CACHE)/$(FN)"
+	@test -d $(CONDA_HOME) || test -f "$(DOWNLOAD_CACHE)/$(FN)" || \
+	    curl $(CONDA_URL)/$(FN) --insecure --output "$(DOWNLOAD_CACHE)/$(FN)"
 	@test -d $(CONDA_HOME) || (bash "$(DOWNLOAD_CACHE)/$(FN)" -b -p $(CONDA_HOME) && \
 		echo "Make sure to add '$(CONDA_HOME)/bin' to your PATH variable in '~/.bashrc'.")
 
