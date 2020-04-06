@@ -8,6 +8,7 @@ outputs, the path to a directory where to save the data is also needed.
 """
 
 import argparse
+import json
 import logging
 import os
 from typing import Any, Union
@@ -336,27 +337,26 @@ def inference_session(config, save_dir=None):
     if save_dir is None:
         save_dir = thelper.utils.get_checkpoint_session_root(ckpt_path)
     save_dir = os.path.join(save_dir, session_name)
-
-    config_name = "config-infer.json"
-    config_name_path = os.path.join(save_dir, config_name)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    with open(config_name_path, 'w') as f:
-        import json
+
+    config_name = "config-infer.json"
+    config_file_path = os.path.join(save_dir, config_name)
+    logger.debug("Writing employed infer config: [%s]", config_file_path)
+    with open(config_file_path, 'w') as f:
         json.dump(config, f, indent=4)
-        logger.info(f"Saving config to: {config_name_path}")
 
     if not os.path.exists(ckpt_path):
         logger.fatal(f"Model not found: {ckpt_path}")
         raise AssertionError("Model checkpoint missing to run inference")
 
     ckptdata = thelper.utils.load_checkpoint(ckpt_path)
-
-    if not os.path.exists(save_dir):
-        logger.info(f"Create save directory: {save_dir}")
-        os.makedirs(save_dir)
-    else:
-        logger.info(f"Found save directory: {save_dir}")
+    config_file = "config-train.json"
+    config_file_path = os.path.join(save_dir, config_file)
+    config = ckptdata['config']
+    logger.debug("Writing employed train config: [%s]", config_file_path)
+    with open(config_file_path, 'w') as f:
+        json.dump(config, f, indent=4)
 
     thelper.data.geo.utils.sliding_window_inference(save_dir=save_dir,
                                                     ckptdata=ckptdata,

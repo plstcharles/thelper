@@ -13,6 +13,7 @@ import shapely
 import shapely.geometry
 import shapely.ops
 import shapely.wkt
+import torch
 import tqdm
 
 logger = logging.getLogger(__name__)
@@ -471,20 +472,22 @@ def prepare_raster_metadata(raster_inputs):
                 logger.fatal(f"Missing metadata: {raster_path}")
                 raise ValueError("Missing raster metadata with expected Sentinel-2 format")
             raster_path = got_md["SUBDATASET_1_NAME"]
-            raster_inputs[k]['path'] = os.path.dirname(raster_path.split(":")[1])
+            # path has prefix and can have suffix such that path is formatted as:
+            #   '<sensor-info>:<data-path>[:<resolution>:<csr>]'
+            raster_inputs[k]['path'] = os.path.dirname(raster_path.split(":", 1)[1])
             raster_ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
             if raster_ds is None:
-                logger.fatal(f"File not found: {raster_path}")
+                logger.fatal(f"File not found: [{raster_path}]")
                 exit(0)
             raster_inputs[k]['raster_format'] = 'SENTINEL2'
 
         for b in raster_input['bands']:
             raster_band = raster_ds.GetRasterBand(b)
             if raster_band is None:
-                logger.fatal(f"Raster band {b} not found: {raster_path}")
+                logger.fatal(f"Raster band {b} not found: [{raster_path}]")
                 raise ValueError("Invalid raster band missing")
             else:
-                logger.info(f"Using band {b} in {raster_path}")
+                logger.debug(f"Using band {b} in [{raster_path}]")
 
         raster_ds = None  # noqa # flush
 
@@ -495,14 +498,19 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
     """Computes the pixelwise prediction on an image.
 
     It does the prediction per batch size of n pixels. It returns the class predicted and its probability.
-    The results are saved into two images created with the same size and projection info as the input rasters:
-        the class image gives the class id, a number between 1 and the number of classes.
+    The results are saved into two images created with the same size and projection info as the input rasters.
 
-    Class id 0 is reserved for 'nodata'. The 'probs' image contains N-class channels with the probability
+    The 'class' image gives the class id, a number between 1 and the number of classes for corresponding pixels.
+    Class id 0 is reserved for 'nodata'.
+
+    The 'probs' image contains N-class channels with the probability
     values of the pixels for each class. The probabilities by default are normalised.
 
+    Also, a 'config-classes.json' file is created listing the ``name-to-class-id`` mapping that was used to generate
+    the values in the 'class' image.
+
     Args:
-        save_dir: (string) path to where the outputs are saved
+        save_dir: (string) path to where the outputs are saved (expected to exist)
         ckptdata (dict): checkpoint data to be loaded to retrieve configuration and model for inference
         raster_inputs (list): path to the image, and bands used
         patch_size (int): patch size used during the classification
@@ -510,26 +518,18 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
         num_workers (int): number of workers.  Due to limitation of gdal, the number of threads must be set to 0
         use_gpu (bool): use the gpu to do the prediction (faster)
         transforms (Compose class): basic and necessary transforms on data
-        normalize_loss (bool): use sofmax to normalised otherwise return the cross entropy loss
+        normalize_loss (bool): use softmax to normalize otherwise return the cross entropy loss
     """
     import thelper.data.geo
-    import torch
+
     # Create the model
     model = thelper.nn.create_model(config=ckptdata['config'], task=None, save_dir=None, ckptdata=ckptdata)
-    config_file = "config-train.json"
-    config_file_path = os.path.join(save_dir, config_file)
-    config = ckptdata['config']
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    with open(config_file_path, 'w') as f:
-        import json
-        json.dump(config, f, indent=4)
     if use_gpu:
         model = model.cuda()
     else:
         model = model.cpu()
     # Normalizing function
-    sofmax = torch.nn.Softmax(dim=1)
+    softmax = torch.nn.Softmax(dim=1)
 
     task = eval(ckptdata["task"])
     nclasses = len(task.class_names)
@@ -541,29 +541,33 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
 
     class_indices_file = "config-classes.json"
     class_indices_file_path = os.path.join(save_dir, class_indices_file)
+    logger.debug("Writing class indices: [%s]", class_indices_file_path)
     with open(class_indices_file_path, 'w') as f:
-        import json
         json.dump(class_indices, f, indent=4)
 
     prepare_raster_metadata(raster_inputs)
-    logger.info("Rasters to process (%s):\n%s", len(raster_inputs), "\n  ".join([r["path"] for r in raster_inputs]))
+    logger.info("Rasters to process (%s):\n  %s", len(raster_inputs), "\n  ".join(
+        [r["path"] + (" [raw: " + r["path_raw"] + "]" if "path_raw" in r else "") for r in raster_inputs]))
     for raster_input in raster_inputs:
         raster_path = raster_input['path']
         raster_bands = raster_input['bands']
-        raw_raster_path = raster_input.get('raw_raster_path', raster_path)
+        raw_raster_path = raster_input.get('path_raw', raster_path)
         ds = gdal.Open(raw_raster_path, gdal.GA_ReadOnly)
+        if ds is None:
+            RuntimeError(f"GDAL could not read raster: [{raw_raster_path}]")
         xsize = ds.RasterXSize
         ysize = ds.RasterYSize
         georef = ds.GetProjectionRef()
         affine = ds.GetGeoTransform()
         raster_basename = os.path.basename(raster_path).split(".")[0]
-        raster_class_path = os.path.join(save_dir, raster_basename + "_class.tif")
+        raster_class_name = f"{raster_basename}_class.tif"
+        raster_class_path = os.path.join(save_dir, raster_class_name)
         # Create the class raster output
         class_ds = gdal.GetDriverByName('GTiff').Create(raster_class_path, xsize, ysize, 1, gdal.GDT_Byte)
         if class_ds is None:
-            raise Exception(f"Unable to create: {raster_class_path}")
+            raise IOError(f"Unable to create: [{raster_class_path}]")
         else:
-            logger.info(f"Creating: {raster_class_path}")
+            logger.debug(f"Creating: [{raster_class_path}]")
         class_ds.SetGeoTransform(affine)
         class_ds.SetProjection(georef)
         band = class_ds.GetRasterBand(1)
@@ -571,12 +575,13 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
         class_ds = 0
         class_ds = gdal.Open(raster_class_path, gdal.GA_Update)
         # Create the probabilities raster output
-        raster_prob_path = os.path.join(save_dir, raster_basename + "_probs.tif")
+        raster_prob_name = f"{raster_basename}_probs.tif"
+        raster_prob_path = os.path.join(save_dir, raster_prob_name)
         probs_ds = gdal.GetDriverByName('GTiff').Create(raster_prob_path, xsize, ysize, nclasses, gdal.GDT_Float32)
         if probs_ds is None:
-            raise Exception(f"Unable to create: {raster_prob_path}")
+            raise IOError(f"Unable to create: [{raster_prob_path}]")
         else:
-            logger.info(f"Creating: {raster_prob_path}")
+            logger.debug(f"Creating: [{raster_prob_path}]")
         probs_ds.SetGeoTransform(affine)
         probs_ds.SetProjection(georef)
         probs_ds = 0
@@ -599,7 +604,7 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
 
         with torch.no_grad():
             for k, sample in enumerate(dataloader):
-                logging.info(f"Batch {k+1} of {nbatches}: {(k+1)/nbatches:4.1%}")
+                logger.info(f"Batch {k+1} of {nbatches}: {(k+1)/nbatches:4.1%}")
                 centerX0 = sample["center"][0].cpu().data.numpy()
                 centerY0 = sample["center"][1].cpu().data.numpy()
                 ndata = centerX0.shape[0]
@@ -608,7 +613,7 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
                     x_data = x_data.cuda()
                 y_prob = model(x_data)
                 if normalize_loss:
-                    y_prob = sofmax(y_prob)
+                    y_prob = softmax(y_prob)
                 y_class_idxs = torch.argmax(y_prob, dim=1).cpu().data.numpy()
                 y_prob = y_prob.cpu().data.numpy()
                 for j in range(ndata):
@@ -616,8 +621,8 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
                     x0 = int(centerX0[j])
                     y0 = int(centerY0[j])
                     class_ds.GetRasterBand(1).WriteArray(class_id, x0, y0)
-                    for l in range(y_prob.shape[1]):
-                        probs_ds.GetRasterBand(l+1).WriteArray(np.array([[y_prob[j, l]]], dtype='float32'),
+                    for p in range(y_prob.shape[1]):
+                        probs_ds.GetRasterBand(p+1).WriteArray(np.array([[y_prob[j, p]]], dtype='float32'),
                                                                int(centerX0[j]), int(centerY0[j]))
                 # Not sure if it works
                 class_ds.FlushCache()

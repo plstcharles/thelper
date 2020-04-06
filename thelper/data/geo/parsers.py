@@ -426,13 +426,15 @@ class TileDataset(VectorCropDataset):
 
 
 class ImageFolderGDataset(ImageFolderDataset):
-    """Image folder dataset specialization interface for classification tasks.
+    """Image folder dataset specialization interface for classification tasks on geospatial images.
 
     This specialization is used to parse simple image subfolders, and it essentially replaces the very
     basic ``torchvision.datasets.ImageFolder`` interface with similar functionalities. It it used to provide
-    a proper task interface as well as path metadata in each loaded packet for metrics/logging output.  The difference
-    with the parent class ImageFolderDataset is the used of gdal to manage multi channels images found in remote
-    sensing domain.  The user can specify the channels to load.  By default the first three channels are loaded [1,2,3].
+    a proper task interface as well as path metadata in each loaded packet for metrics/logging output.
+
+    The difference with the parent class ImageFolderDataset is the used of gdal to manage multi channels images found
+    in remote sensing domain. The user can specify the channels to load. By default the first three channels are
+    loaded [1,2,3].
 
     .. seealso::
         | :class:`thelper.data.parsers.ImageDataset`
@@ -440,12 +442,13 @@ class ImageFolderGDataset(ImageFolderDataset):
         | :class:`thelper.data.parsers.ImageFolderDataset`
     """
 
-    def __init__(self, root, transforms=None, image_key="image", label_key="label", path_key="path", idx_key="idx", channels=[1,2,3]):
+    def __init__(self, root, transforms=None, image_key="image", label_key="label",
+                 path_key="path", idx_key="idx", channels=None):
         """Image folder dataset parser constructor."""
 
         super(ImageFolderGDataset, self).__init__(root=root, transforms=transforms, image_key=image_key,
-                                                 label_key=label_key, idx_key=idx_key)
-        self.channels=channels
+                                                  path_key=path_key, label_key=label_key, idx_key=idx_key)
+        self.channels = channels if channels else [1, 2, 3]
 
     def __getitem__(self, idx):
         """Returns the data sample (a dictionary) for a specific (0-based) index."""
@@ -468,7 +471,7 @@ class ImageFolderGDataset(ImageFolderDataset):
                 logger.fatal(f"Band not found: {channel}")
             image.append(image_arr)
         image = np.dstack(image)
-        raster_ds=None
+        raster_ds = None  # noqa # flush
 
         sample = {
             self.image_key: image,
@@ -481,8 +484,13 @@ class ImageFolderGDataset(ImageFolderDataset):
 
 
 class SlidingWindowDataset(Dataset):
+    """Sliding window dataset specialization interface for classification tasks over a geospatial image.
 
+    The dataset runs a sliding window over the whole geospatial image in order to return tile patches.
+    The operation can be accomplished over multiple raster bands if they can be found in the provided raster container.
+    """
     def __init__(self, raster_path, raster_bands, patch_size, transforms=None, image_key="image"):
+        logger.debug("Creating %s with [%s]", type(self).__name__, raster_path)
         super().__init__(transforms=transforms)
         self.image_key = image_key
         self.raster_path = raster_path
@@ -490,8 +498,9 @@ class SlidingWindowDataset(Dataset):
         self.raster_dss = []
         self.center_key = "center"
         if self.raster_ds is None:
-            logger.fatal(f"File not found: {raster_path}")
-            exit(0)
+            msg = f"Raster file not found or could not be parsed by GDAL: [{raster_path}]"
+            logger.fatal(msg)
+            raise IOError(msg)
         xsize = self.raster_ds.RasterXSize
         ysize = self.raster_ds.RasterYSize
         self.patch_size = patch_size
@@ -499,14 +508,15 @@ class SlidingWindowDataset(Dataset):
         for k in raster_bands:
             raster_band = self.raster_ds.GetRasterBand(k)
             if raster_band is None:
-                logger.fatal(f"Raster band {k} not found: {raster_path}")
-                exit(0)
+                msg = f"Raster band {k} not found: [{raster_path}]"
+                logger.fatal(msg)
+                RuntimeError(msg)
             else:
-                logger.info(f"Using band {k} in {raster_path}")
+                logger.debug(f"Using band {k} in [{raster_path}]")
         self.raster_ds = None
         self.samples = []
         logger.info(f"Creating samples coordinate")
-        self.samples.append((0, 0)) #fake
+        self.samples.append((0, 0))  # fake
         #for y in np.arange(0, ysize - self.patch_size):
         #    for x in np.arange(0, xsize - self.patch_size):
         #        self.samples.append((int(x), int(y)))
@@ -534,8 +544,8 @@ class SlidingWindowDataset(Dataset):
         # Open the data with gdal n times in multithread shared mode
         # The operation is done once
         if not self.done:
-            for j in np.arange(0, info.num_workers):
-                self.raster_dss.append(gdal.OpenShared( self.raster_path, gdal.GA_ReadOnly))
+            for _ in range(info.num_workers):
+                self.raster_dss.append(gdal.OpenShared(self.raster_path, gdal.GA_ReadOnly))
             self.done = True
 
         # Do your processing with the gdal dataset associated with the worker's id
