@@ -316,6 +316,8 @@ def inference_session(config, save_dir=None):
     logger = thelper.utils.get_func_logger()
 
     session_name = thelper.utils.get_config_session_name(config)
+    thelper.utils.setup_globals(config)
+
     normalize_loss = thelper.utils.get_key_def("normalize_loss", config, True)
     raster_inputs = thelper.utils.get_key_def(["raster_inputs", "inputs", "samples", "input_samples"], config, [])
     batch_size = thelper.utils.get_key_def("batch_size", config, 256)
