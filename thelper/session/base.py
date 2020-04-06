@@ -284,7 +284,7 @@ class SessionRunner:
             return model.to(dev)
 
     @staticmethod
-    def _move_tensor(tensor, dev, detach=False):
+    def _move_tensor(tensor, dev, non_blocking=True, detach=False):
         """Uploads a tensor to a specific device."""
         if isinstance(tensor, (list, tuple)):
             return [SessionRunner._move_tensor(t, dev) for t in tensor]
@@ -297,9 +297,9 @@ class SessionRunner:
                 out = tensor.cpu()
             else:
                 # no reason to have multiple devices if not cuda-enabled GPUs
-                out = tensor.cuda(dev[0])
+                out = tensor.cuda(dev[0], non_blocking=non_blocking)
         else:
-            out = tensor.to(dev)
+            out = tensor.to(dev, non_blocking=non_blocking)
         return out.detach() if detach else out
 
     def _load_optimization(self, model, dev):
