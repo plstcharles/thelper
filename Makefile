@@ -196,11 +196,11 @@ uninstall: clean clean-env
 
 .PHONY: docker-build-base
 docker-build-base:   ## builds the base docker image of thelper from source
-    docker build -t thelper:base -f Dockerfile "$(CUR_DIR)"
+	docker build -t thelper:base -f Dockerfile "$(CUR_DIR)"
 
 .PHONY: docker-build-geo
 docker-build-geo: docker-build-base   ## builds the docker image of thelper with geospatial components from source
-    docker build -t thelper:base -f Dockerfile "$(CUR_DIR)"
+	docker build -t thelper:base -f Dockerfile "$(CUR_DIR)"
 
 .PHONY: docker-build
 docker-build: docker-build-base docker-build-geo   ## builds all docker images of thelper from source

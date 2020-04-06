@@ -456,6 +456,7 @@ def prepare_raster_metadata(raster_inputs):
     """
     for k, raster_input in enumerate(raster_inputs):
         raster_path = raster_input['path']
+        raster_inputs[k]['path_raw'] = raster_path
 
         raster_ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
         if raster_ds is None:
@@ -470,7 +471,6 @@ def prepare_raster_metadata(raster_inputs):
                 logger.fatal(f"Missing metadata: {raster_path}")
                 raise ValueError("Missing raster metadata with expected Sentinel-2 format")
             raster_path = got_md["SUBDATASET_1_NAME"]
-            raster_inputs[k]['raw_path'] = raster_path
             raster_inputs[k]['path'] = os.path.dirname(raster_path.split(":")[1])
             raster_ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
             if raster_ds is None:
@@ -546,7 +546,7 @@ def sliding_window_inference(save_dir, ckptdata, raster_inputs, patch_size,
         json.dump(class_indices, f, indent=4)
 
     prepare_raster_metadata(raster_inputs)
-    logger.info("Rasters to process:\n%s", "\n  ".join(raster_inputs))
+    logger.info("Rasters to process (%s):\n%s", len(raster_inputs), "\n  ".join([r["path"] for r in raster_inputs]))
     for raster_input in raster_inputs:
         raster_path = raster_input['path']
         raster_bands = raster_input['bands']
