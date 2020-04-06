@@ -905,6 +905,7 @@ def create_consumers(config):
     assert isinstance(config, dict), "config should be provided as a dictionary"
     consumers = {}
     for name, consumer_config in config.items():
+        assert name != "loss", "metric name 'loss' is reserved"
         assert isinstance(consumer_config, dict), "consumer config should be provided as a dictionary"
         assert "type" in consumer_config and consumer_config["type"], "consumer config missing 'type' field"
         consumer_type = thelper.utils.import_class(consumer_config["type"])
