@@ -399,3 +399,62 @@ class FCResNet(ResNet):
                 torch.nn.Parameter(self.fc.weight.view(self.fc.out_features, self.out_features, 1, 1))
             self.finallayer.bias = torch.nn.Parameter(self.fc.bias)
         self.task = task
+
+
+class AEResNet(ResNet):
+    """Autoencoder architecture based on ResNet blocks+layers configurations."""
+
+    # FOR CHALLENGE: SHOULD BE **VERY** SHALLOW (small patches can give all the semantic info there is to use)
+    # stick with very small kernels, too (no need for diluted stuff)
+    # concat several layers outputs into embedding (keep 1:1 mapping for each pixel in latentrepr?)
+
+    # BEN = 120x120x4, could do 120x120x4 -> 60x60x64 -> 30x30x128 -> 15x15x256 -> decoder? or w/ extra per-layer depth?
+
+    def __init__(self, task, output_pads=None, **kwargs):
+        assert isinstance(task, thelper.tasks.Classification)
+        super().__init__(task, activation="leaky_relu", **kwargs)
+        convt = thelper.nn.coordconv.CoordConvTranspose2d if self.coordconv else torch.nn.ConvTranspose2d
+        self.decoder_top = torch.nn.Sequential(
+            thelper.nn.coordconv.CoordConv2d(
+                self.out_features, self.out_features, kernel_size=1, stride=1, padding=0
+            ),
+            torch.nn.BatchNorm2d(self.out_features),
+            torch.nn.LeakyReLU(),
+        )
+        self.decoder_depths = [
+            self.out_features,
+            self.out_features // 2,
+            self.out_features // 4,
+            self.out_features // 8,
+            self.out_features // 16,
+        ]
+        self.output_pads = output_pads if not None else [1, 1, 1, 1, 1]
+        self.decoder_layers = torch.nn.ModuleList([
+            torch.nn.Sequential(
+                convt(depth, depth // 2, kernel_size=3, stride=2, padding=1, output_padding=out_pad),
+                torch.nn.BatchNorm2d(depth // 2),
+                torch.nn.LeakyReLU(),
+            )
+            for depth, out_pad in zip(self.decoder_depths, self.output_pads)
+        ])
+        self.decoder_bottom = torch.nn.Sequential(
+            thelper.nn.coordconv.CoordConv2d(
+                self.decoder_depths[-1] // 2, self.input_channels,
+                kernel_size=3, stride=1, padding=1,
+            ),
+            torch.nn.Tanh()
+        )
+        self._init_weights(activation="leaky_relu")
+        # note: cannot rely on pretrained imagenet weights since we reset just above
+
+    def forward(self, input):
+        # forward while keeping refs for latent build? @@@
+        featmap = self.get_embedding(input, pool=False)
+        embedding = self.avgpool(featmap)
+        embedding = embedding.view(embedding.size(0), -1)
+        classif_logits = self.fc(embedding)
+        featmap = self.decoder_top(featmap)
+        for decoder_layer in self.decoder_layers:
+            featmap = decoder_layer(featmap)
+        reconstruction = self.decoder_bottom(featmap)
+        return classif_logits, reconstruction
