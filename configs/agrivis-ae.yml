@@ -1,0 +1,90 @@
+overwrite: true
+datasets:
+  agrivis_train:
+    type: thelper.data.geo.agrivis.Hdf5AgricultureDataset
+    params:
+      hdf5_path: "/shared/data_ufast_ext4/datasets/agrivis/agri_v2.hdf5"
+      group_name: train
+  agrivis_valid:
+    type: thelper.data.geo.agrivis.Hdf5AgricultureDataset
+    params:
+      hdf5_path: "/shared/data_ufast_ext4/datasets/agrivis/agri_v2.hdf5"
+      group_name: val
+  #agrivis_test:
+  #  type: thelper.data.geo.agrivis.Hdf5AgricultureDataset
+  #  params:
+  #    hdf5_path: "/shared/data_ufast_ext4/datasets/agrivis/agri_v2.hdf5"
+  #    group_name: test
+loaders:
+  batch_size: 20
+  train_shuffle: true
+  valid_shuffle: false
+  test_shuffle: false
+  valid_seed: 0
+  test_seed: 0
+  torch_seed: 0
+  workers: 6
+  pin_memory: true
+  drop_last: false
+  base_transforms:
+    - operation: thelper.transforms.operations.Resize
+      target_key: image
+      params:
+        dsize: [256, 256]
+    - operation: thelper.transforms.operations.Resize
+      target_key: [mask, label_map]
+      params:
+        dsize: [256, 256]
+        interp: cv2.INTER_NEAREST
+    - operation: torchvision.transforms.ToTensor
+      target_key: [image, mask, label_map]
+  train_augments:
+    append: false
+    transforms:
+      - operation: albumentations.Compose
+        params:
+          Flip:
+            p: 0.5
+          RandomRotate90:
+            p: 0.5
+        image_key: image
+        mask_key: label_map
+  train_split:
+    agrivis_train: 1.0
+  valid_split:
+    agrivis_valid: 1.0
+  #test_split:
+  #  agrivis_test: 1.0
+model:
+  type: thelper.nn.resnet.AESkipResNet
+  params:
+    block: thelper.nn.resnet.SqueezeExcitationBlock
+    layers: [2, 2, 2, 2]
+    strides: [1, 2, 2, 2]
+    input_channels: 4
+    flexible_input_res: false
+    conv1_kernel_size: 5
+    conv1_stride: 2
+    pool_size: 4
+    coordconv: true
+    output_pads: [1, 1, 1, 1, 1]
+trainer:
+  type: thelper.train.ae.AETrainer
+  reconstr_display_count: 16
+  reconstr_display_mean: loader.dataset.image_mean
+  reconstr_display_stddev: loader.dataset.image_stddev
+  reconstr_edges: true
+  reconstr_scale: 1.0
+  classif_loss:
+    type: torch.nn.CrossEntropyLoss
+    weight_distribution:
+      background: 0.2
+  use_tbx: true
+  epochs: 30
+  monitor: accuracy
+  optimization:
+    optimizer:
+      type: torch.optim.Adam
+  metrics:
+    accuracy:
+      type: thelper.optim.Accuracy
