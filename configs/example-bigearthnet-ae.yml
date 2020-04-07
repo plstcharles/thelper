@@ -39,7 +39,7 @@ model:
     coordconv: true
     output_pads: [1, 0, 1, 1, 1]  # for 120x120
 trainer:
-  type: thelper.train.aeclassif.AEClassifTrainer
+  type: thelper.train.ae.AETrainer
   reconstr_display_count: 16
   reconstr_display_mean: "loader.dataset.image_mean"
   reconstr_display_stddev: "loader.dataset.image_stddev"
