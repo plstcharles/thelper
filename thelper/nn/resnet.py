@@ -227,8 +227,9 @@ class ResNet(thelper.nn.Module):
             self.load_state_dict(state_dict)
         if isinstance(task, thelper.tasks.Segmentation):
             # if base task is already associated with segmentation, add head attribute
-            assert isinstance(head_type, str) and head_type in ["fcn", "deeplabv3"], \
-                f"unrecognized head type ('{head_type}') for segmentation resnet"
+            if head_type is not None:  # can also be manually defined (e.g. in autoencoder)
+                assert isinstance(head_type, str) and head_type in ["fcn", "deeplabv3"], \
+                    f"unrecognized head type ('{head_type}') for segmentation resnet"
             # note: head below will be fully instantiated when the task is assigned
             self.fc = None
         self.set_task(task)
@@ -305,7 +306,7 @@ class ResNet(thelper.nn.Module):
             if self.fc is None or self.fc[len(self.fc) - 1].out_channels != num_classes:
                 if self.head_type == "fcn":
                     self.fc = torchvision.models.segmentation.fcn.FCNHead(self.out_features, num_classes)
-                else:
+                elif self.head_type == "deeplabv3":
                     self.fc = torchvision.models.segmentation.deeplabv3.DeepLabHead(self.out_features, num_classes)
         self.task = task
 
