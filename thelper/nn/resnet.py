@@ -403,13 +403,7 @@ class FCResNet(ResNet):
 
 
 class AEResNet(ResNet):
-    """Autoencoder architecture based on ResNet blocks+layers configurations."""
-
-    # FOR CHALLENGE: SHOULD BE **VERY** SHALLOW (small patches can give all the semantic info there is to use)
-    # stick with very small kernels, too (no need for diluted stuff)
-    # concat several layers outputs into embedding (keep 1:1 mapping for each pixel in latentrepr?)
-
-    # BEN = 120x120x4, could do 120x120x4 -> 60x60x64 -> 30x30x128 -> 15x15x256 -> decoder? or w/ extra per-layer depth?
+    """Autoencoder-classifier architecture based on ResNet blocks+layers configurations."""
 
     def __init__(self, task, output_pads=None, **kwargs):
         assert isinstance(task, thelper.tasks.Classification)
@@ -422,13 +416,7 @@ class AEResNet(ResNet):
             torch.nn.BatchNorm2d(self.out_features),
             torch.nn.LeakyReLU(),
         )
-        self.decoder_depths = [
-            self.out_features,
-            self.out_features // 2,
-            self.out_features // 4,
-            self.out_features // 8,
-            self.out_features // 16,
-        ]
+        self.decoder_depths = [self.out_features // 2 ** d for d in range(0, 5)]
         self.output_pads = output_pads if not None else [1, 1, 1, 1, 1]
         self.decoder_layers = torch.nn.ModuleList([
             torch.nn.Sequential(
@@ -449,13 +437,95 @@ class AEResNet(ResNet):
         # note: cannot rely on pretrained imagenet weights since we reset just above
 
     def forward(self, input):
-        # forward while keeping refs for latent build? @@@
         featmap = self.get_embedding(input, pool=False)
         embedding = self.avgpool(featmap)
         embedding = embedding.view(embedding.size(0), -1)
-        classif_logits = self.fc(embedding)
+        class_logits = self.fc(embedding)
         featmap = self.decoder_top(featmap)
         for decoder_layer in self.decoder_layers:
             featmap = decoder_layer(featmap)
         reconstruction = self.decoder_bottom(featmap)
-        return classif_logits, reconstruction
+        return class_logits, reconstruction
+
+
+class AESkipResNet(ResNet):
+    """Autoencoder-U-Net architecture based on ResNet blocks+layers configurations."""
+
+    def __init__(self, task, output_pads=None, **kwargs):
+        assert isinstance(task, thelper.tasks.Segmentation)
+        super().__init__(task, activation="leaky_relu", **kwargs)
+        convt = thelper.nn.coordconv.CoordConvTranspose2d if self.coordconv else torch.nn.ConvTranspose2d
+        self.decoder_top = torch.nn.Sequential(
+            thelper.nn.coordconv.CoordConv2d(
+                self.out_features, self.out_features, kernel_size=1, stride=1, padding=0
+            ),
+            torch.nn.BatchNorm2d(self.out_features),
+            torch.nn.LeakyReLU(),
+        )
+        self.output_pads = output_pads if not None else [1, 1, 1, 1, 1]
+        self.ae_decoder_depths = [self.out_features // 2 ** d for d in range(0, 5)]
+        self.ae_decoder_layers = torch.nn.ModuleList([
+            torch.nn.Sequential(
+                convt(depth, depth // 2, kernel_size=3, stride=2, padding=1, output_padding=out_pad),
+                torch.nn.BatchNorm2d(depth // 2),
+                torch.nn.LeakyReLU(),  # try w/ regular? @@@@
+            )
+            for depth, out_pad in zip(self.ae_decoder_depths, self.output_pads)
+        ])
+        self.ae_decoder_bottom = torch.nn.Sequential(
+            thelper.nn.coordconv.CoordConv2d(
+                self.ae_decoder_depths[-1] // 2, self.input_channels,
+                kernel_size=3, stride=1, padding=1,
+            ),
+            torch.nn.Tanh()
+        )
+        self.unet_decoder_depths = [
+            (self.out_features, self.out_features // 2, self.out_features // 2),
+            (self.out_features, self.out_features // 4, self.out_features // 4),
+            (self.out_features // 2, self.out_features // 8, self.out_features // 8),
+            (self.out_features // 4, self.out_features // 8, self.out_features // 8),
+            (self.out_features // 4, self.out_features // 8, self.out_features // 8),
+        ]
+        self.unet_decoder_layers = torch.nn.ModuleList([
+            torch.nn.Sequential(
+                convt(d_in, d_mid, kernel_size=3, stride=2, padding=1, output_padding=out_pad),
+                torch.nn.BatchNorm2d(d_mid),
+                torch.nn.LeakyReLU(),  # try w/ regular? @@@@
+                self._make_conv2d(d_mid, d_out, kernel_size=3, stride=1, padding=1, bias=False),
+                torch.nn.BatchNorm2d(d_out),
+                torch.nn.LeakyReLU(),  # try w/ regular? @@@@
+                # try dropout? @@@@
+            )
+            for (d_in, d_mid, d_out), out_pad in zip(self.unet_decoder_depths, self.output_pads)
+        ])
+        assert self.unet_decoder_depths[-1][2] > len(self.task.class_names), "woopsie"
+        self.unet_decoder_bottom = torch.nn.Conv2d(
+            self.unet_decoder_depths[-1][2], len(self.task.class_names),
+            kernel_size=1, stride=1, padding=0,
+        )
+        self._init_weights(activation="leaky_relu")
+        # note: cannot rely on pretrained imagenet weights since we reset just above
+
+    def forward(self, input):
+        # forward while keeping refs for latent build? @@@
+        encoder1 = self.activ(self.bn1(self.conv1(input)))
+        if self.maxpool is not None:
+            encoder2 = self.layer1(self.maxpool(encoder1))
+        else:
+            encoder2 = self.layer1(encoder1)
+        encoder3 = self.layer2(encoder2)
+        encoder4 = self.layer3(encoder3)
+        encoder5 = self.layer4(encoder4)
+        assert self.layer5 is None, "missing e5+ impl"
+        featmap = self.decoder_top(encoder5)
+        reconstruction = featmap
+        for decoder_layer in self.ae_decoder_layers:
+            reconstruction = decoder_layer(reconstruction)
+        reconstruction = self.ae_decoder_bottom(reconstruction)
+        encoder_maps = [None, encoder4, encoder3, encoder2, encoder1]
+        for decoder_layer, encoder_map in zip(self.unet_decoder_layers, encoder_maps):
+            if encoder_map is not None:
+                featmap = torch.cat([featmap, encoder_map], dim=1)
+            featmap = decoder_layer(featmap)
+        class_logits = self.unet_decoder_bottom(featmap)
+        return class_logits, reconstruction
