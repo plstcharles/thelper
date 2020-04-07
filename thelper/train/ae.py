@@ -1,5 +1,6 @@
+import functools
 import logging
-from typing import AnyStr  # noqa: F401
+import typing
 
 import cv2 as cv
 import kornia
@@ -16,11 +17,12 @@ logger = logging.getLogger(__name__)
 
 
 @thelper.concepts.classification
-class AEClassifTrainer(Trainer):
+@thelper.concepts.segmentation
+class AETrainer(Trainer):
 
     def __init__(self,
-                 session_name,    # type: AnyStr
-                 session_dir,     # type: AnyStr
+                 session_name,    # type: typing.AnyStr
+                 session_dir,     # type: typing.AnyStr
                  model,           # type: thelper.typedefs.ModelType
                  task,            # type: thelper.tasks.Task
                  loaders,         # type: thelper.typedefs.MultiLoaderType
@@ -29,7 +31,8 @@ class AEClassifTrainer(Trainer):
                  ):
         """Receives session parameters, parses image/label keys from task object, and sets up metrics."""
         super().__init__(session_name, session_dir, model, task, loaders, config, ckptdata=ckptdata)
-        assert isinstance(self.task, thelper.tasks.Classification), "expected task to be classification"
+        assert isinstance(self.task, (thelper.tasks.Classification, thelper.tasks.Segmentation)), \
+            "expected task to be classification/segmentation only"
         self.warned_no_shuffling_augments = False
         self.reconstr_display_count = thelper.utils.get_key("reconstr_display_count", config["trainer"])
         self.reconstr_display_mean = thelper.utils.get_key("reconstr_display_mean", config["trainer"])
@@ -39,9 +42,9 @@ class AEClassifTrainer(Trainer):
         if self.reconstr_edges_layer:
             self.reconstr_edges_layer = kornia.filters.SpatialGradient()
         self.reconstr_l2_loss, self.reconstr_l1_loss = torch.nn.MSELoss(), torch.nn.L1Loss()
-        self.use_multilabel = thelper.utils.get_key("use_multilabel", config["trainer"])
-        classif_loss_fn = torch.nn.BCEWithLogitsLoss if self.use_multilabel else torch.nn.CrossEntropyLoss
-        self.classif_loss = classif_loss_fn()
+        classif_loss_config = thelper.utils.get_key("classif_loss", config["trainer"])
+        uploader = functools.partial(self._move_tensor, dev=self.devices)
+        self.classif_loss = thelper.optim.utils.create_loss_fn(classif_loss_config, model, uploader=uploader)
 
     def _to_tensor(self, sample):
         """Fetches and returns tensors of input images and class labels from a batched sample dictionary."""
@@ -55,29 +58,36 @@ class AEClassifTrainer(Trainer):
             if isinstance(gt_tensor, torch.Tensor) and gt_tensor.dtype == torch.int64:
                 target_val = gt_tensor  # shortcut with less checks (dataset is already using tensor'd indices)
             else:
-                if self.task.multi_label:
-                    assert isinstance(gt_tensor, torch.Tensor) and \
-                        gt_tensor.shape == (len(input_val), len(self.task.class_names)), \
-                        "gt tensor for multi-label classification should be 2d array (batch size x nbclasses)"
-                    target_val = gt_tensor.float()
-                else:
-                    target_val = []
-                    for class_name in gt_tensor:
-                        assert isinstance(class_name, (int, torch.Tensor, str)), \
-                            "expected gt tensor to be an array of names (string) or indices (int)"
-                        if isinstance(class_name, (int, torch.Tensor)):
-                            if isinstance(class_name, torch.Tensor):
-                                assert torch.numel(class_name) == 1, "unexpected scalar label, got vector"
-                                class_name = class_name.item()
-                            # dataset must already be using indices, we will forgive this...
-                            assert 0 <= class_name < len(self.task.class_names), \
-                                "class name given as out-of-range index (%d) for class list" % class_name
-                            target_val.append(class_name)
-                        else:
-                            assert class_name in self.task.class_names, \
-                                "got unexpected label '%s' for a sample (unknown class)" % class_name
-                            target_val.append(self.task.class_indices[class_name])
-                    target_val = torch.LongTensor(target_val)
+                if isinstance(self.task, thelper.tasks.Classification):
+                    if self.task.multi_label:
+                        assert isinstance(gt_tensor, torch.Tensor) and \
+                            gt_tensor.shape == (len(input_val), len(self.task.class_names)), \
+                            "gt tensor for multi-label classification should be 2d array (batch size x nbclasses)"
+                        target_val = gt_tensor.float()
+                    else:
+                        target_val = []
+                        for class_name in gt_tensor:
+                            assert isinstance(class_name, (int, torch.Tensor, str)), \
+                                "expected gt tensor to be an array of names (string) or indices (int)"
+                            if isinstance(class_name, (int, torch.Tensor)):
+                                if isinstance(class_name, torch.Tensor):
+                                    assert torch.numel(class_name) == 1, "unexpected scalar label, got vector"
+                                    class_name = class_name.item()
+                                # dataset must already be using indices, we will forgive this...
+                                assert 0 <= class_name < len(self.task.class_names), \
+                                    "class name given as out-of-range index (%d) for class list" % class_name
+                                target_val.append(class_name)
+                            else:
+                                assert class_name in self.task.class_names, \
+                                    "got unexpected label '%s' for a sample (unknown class)" % class_name
+                                target_val.append(self.task.class_indices[class_name])
+                        target_val = torch.LongTensor(target_val)
+                elif isinstance(self.task, thelper.tasks.Segmentation):
+                    assert not isinstance(gt_tensor, list), "unexpected label map type"
+                    if gt_tensor.ndim == 4:
+                        assert gt_tensor.shape[1] == 1, "unexpected channel count (should be index map)"
+                        gt_tensor = gt_tensor.squeeze(1)
+                    target_val = gt_tensor.long()  # long instead of bytes to support large/negative values for dontcare
         return input_val, target_val
 
     def train_epoch(self, model, epoch, dev, classif_loss, optimizer, loader, metrics, output_path):
