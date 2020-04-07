@@ -44,6 +44,8 @@ approx_weight_map = {
     "weed_cluster": 0.1573061193628617
 }
 
+dontcare = 255
+
 
 class Hdf5AgricultureDataset(Dataset):
 
@@ -88,7 +90,7 @@ class Hdf5AgricultureDataset(Dataset):
         logger.info(f"loaded metadata for {len(self.samples)} patches")
         self.task = thelper.tasks.Segmentation(
             class_names=class_names, input_key="image", label_map_key="label_map",
-            meta_keys=["key", "mask", "pxcounts"],
+            meta_keys=["key", "mask", "pxcounts"], dontcare=dontcare,
         )
         self.use_global_normalization = use_global_normalization
         self.image_mean = np.asarray([
@@ -140,6 +142,7 @@ class Hdf5AgricultureDataset(Dataset):
                 # self.squished += np.count_nonzero(overlap)
                 out_label_map = np.where(curr_label_map, np.int16(label_idx), out_label_map)
             label_map = out_label_map
+            label_map = np.where(mask, label_map, np.int16(dontcare))
         sample = {
             "image": image,
             "label_map": label_map,
