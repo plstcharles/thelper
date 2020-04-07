@@ -16,6 +16,7 @@ from typing import Any, Union
 import torch
 import tqdm
 
+import data.geo.infer
 import thelper
 
 TASK_COMPAT_CHOICES = frozenset(["old", "new", "compat"])
@@ -295,12 +296,15 @@ def split_data(config, save_dir):
     logger.debug("all done")
 
 
-def inference_session(config, save_dir=None):
+def inference_session(config, save_dir=None, ckpt_path=None):
     """Executes an inference session on samples with a trained model checkpoint.
 
     In order to run inference, a model is mandatory and therefore expected to be provided in the configuration.
     Similarly, a list of input sample file paths are expected for which to run inference on. These inputs can provide
-    additional data according to how they are being parsed by lower level operations`
+    additional data according to how they are being parsed by lower level operations.
+
+    The session will save the current configuration as `config-infer.json` and the employed model's training
+    configuration as `config-train.json`. Other outputs depend on the specific implementation of the session runner.
 
     Args:
         config: a dictionary that provides all required data configuration.
@@ -308,11 +312,107 @@ def inference_session(config, save_dir=None):
             this is not the path to the session directory itself, but its parent, which may also contain
             other session directories. If not provided, will use the best value extracted from either the
             configuration path or the configuration dictionary itself.
+        ckpt_path: explicit checkpoint path to use for loading a model to execute inference. Otherwise look for a
+            model definition in the configuration.
 
     .. seealso::
         | :func:`thelper.data.geo.utils.prepare_raster_metadata`
         | :func:`thelper.data.geo.utils.sliding_window_inference`
     """
+    import thelper.data.geo
+    logger = thelper.utils.get_func_logger()
+
+    session_name = thelper.utils.get_config_session_name(config)
+    thelper.utils.setup_globals(config)
+
+    def is_defined_dict(container, section):
+        # type: (thelper.typedefs.ConfigDict, str) -> bool
+        return section in container and isinstance(container[section], dict) and bool(len(container[section]))
+
+    if ckpt_path is not None and os.path.exists(ckpt_path):
+        logger.warning("Overriding model definition with explicit checkpoint path argument")
+        config["model"] = {"ckpt_path": ckpt_path, "params": {"pretrained": True}}
+    if not is_defined_dict(config, "model") or "ckpt_path" not in config["model"]:
+        raise RuntimeError("Missing a model checkpoint definition with which to run inference")
+    ckpt_path = config["model"]["ckpt_path"]
+    if not is_defined_dict(config["model"], "params") or "pretrained" not in config["model"]["params"]:
+        logger.warning("Adding model pretrained flag to definition")
+        config["model"].setdefault("params", {})
+        config["model"]["params"].setdefault("pretrained", True)
+    if not config["model"]["params"]["pretrained"]:
+        raise RuntimeError("Model checkpoint was explicitly defined as not pretrained. It must be for inference.")
+
+    if not os.path.exists(ckpt_path):
+        logger.fatal(f"Model not found: {ckpt_path}")
+        raise AssertionError("Model checkpoint missing to run inference")
+    ckptdata = thelper.utils.load_checkpoint(ckpt_path, map_location=None, always_load_latest=False)
+    if "task" not in ckptdata or not isinstance(ckptdata["task"], (thelper.tasks.Task, str)):
+        raise AssertionError("invalid checkpoint, cannot reload model task")
+    task = ckptdata["task"]
+    task = thelper.tasks.create_task(task)  # make sure the task is instantiated if string
+
+    if save_dir is None:
+        save_dir = thelper.utils.get_checkpoint_session_root(ckpt_path)
+    save_dir = os.path.join(save_dir, session_name)
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    if not is_defined_dict(config, "datasets"):
+        raise RuntimeError("Missing at least one dataset definition in configuration.")
+    logger.info("Updating configuration with loaders inputs...")
+    if not is_defined_dict(config, "loaders"):
+        logger.warning("Missing loaders definition in configuration. Using default.")
+        config["loaders"] = dict()
+    loaders = config["loaders"]
+    if "batch_size" not in loaders or not (isinstance(loaders["batch_size"], int) and loaders["batch_size"] > 0):
+        logger.warning("Missing loader 'batch_size' definition in configuration. Using default (batch_size=1).")
+        loaders["batch_size"] = 1
+    if not is_defined_dict(loaders, "test_split"):
+        logger.warning("Missing loader 'test_split' definition in configuration. Using all found datasets.")
+        loaders["test_split"] = {dataset_name: 1.0 for dataset_name in config["datasets"].keys()}
+    if "task_compat_mode" not in loaders:
+        logger.warning("Missing loader 'task_compat_mode' definition in configuration. Using compatible mode.")
+        loaders["task_compat_mode"] = "compat"
+    if "shuffle" not in loaders:
+        logger.warning("Missing loader 'shuffle' definition in configuration. Using 'false' for inference.")
+        loaders["shuffle"] = False
+    # Because loaders require a 'task' but that we are doing inference instead of training, all class-names are
+    # enforced by the model's task definition (cannot adapt). Override datasets' task to make sure of this and to
+    # avoid having the user needing to plug us a dummy task just to meet the loader requirement.
+    all_datasets = config["datasets"]
+    for dataset_name in all_datasets:
+        dataset = all_datasets[dataset_name]
+        if is_defined_dict(dataset, "task"):
+            logger.warning("Overriding task of dataset '%s' with model's task", dataset_name)
+        all_datasets[dataset_name]["task"] = str(task)  # use str to allow both json dump and parsing by dataset loader
+    _, _, _, test_loader = thelper.data.create_loaders(config, save_dir)
+    if not test_loader or not len(test_loader):
+        raise RuntimeError("Could not define a test loader for model inference")
+
+    model = thelper.nn.create_model(config, task, save_dir=save_dir, ckptdata=ckptdata)
+    loaders = (None, None, test_loader)
+    # Avoid passing any checkpoint data so that any argument don't get incorrectly used by the session runner.
+    # Since we only call test/eval, these values don't matter but they still get generated otherwise and this leads
+    # to weird internal values such as test starting at 'current_epoch' == 'best_epoch' from checkpoint training or
+    # optimizers being instantiated.
+    tester = thelper.infer.create_tester(session_name, save_dir, config, model, task, loaders)  # ckptdata=ckptdata)
+
+    config_file = "config-train.json"
+    config_file_path = os.path.join(save_dir, config_file)
+    train_config = ckptdata['config']
+    logger.debug("Writing employed train config: [%s]", config_file_path)
+    with open(config_file_path, 'w') as f:
+        json.dump(train_config, f, indent=4)
+    config_name = "config-infer.json"
+    config_file_path = os.path.join(save_dir, config_name)
+    logger.debug("Writing employed infer config: [%s]", config_file_path)
+    with open(config_file_path, 'w') as f:
+        json.dump(config, f, indent=4)
+
+    tester.test()
+
+
+def old_infer(config, save_dir=None):
     import thelper.data.geo
     logger = thelper.utils.get_func_logger()
 
@@ -358,15 +458,15 @@ def inference_session(config, save_dir=None):
     with open(config_file_path, 'w') as f:
         json.dump(config, f, indent=4)
 
-    thelper.data.geo.utils.sliding_window_inference(save_dir=save_dir,
-                                                    ckptdata=ckptdata,
-                                                    raster_inputs=raster_inputs,
-                                                    batch_size=batch_size,
-                                                    num_workers=num_workers,
-                                                    patch_size=patch_size,
-                                                    use_gpu=use_gpu,
-                                                    transforms=transforms,
-                                                    normalize_loss=normalize_loss)
+    data.geo.infer.sliding_window_inference(save_dir=save_dir,
+                                            ckptdata=ckptdata,
+                                            raster_inputs=raster_inputs,
+                                            batch_size=batch_size,
+                                            num_workers=num_workers,
+                                            patch_size=patch_size,
+                                            use_gpu=use_gpu,
+                                            transforms=transforms,
+                                            normalize_loss=normalize_loss)
 
 
 def export_model(config, save_dir):
@@ -484,7 +584,9 @@ def make_argparser():
     infer_ap = subparsers.add_parser("infer", help="creates a inference session from a config file")
     infer_ap.add_argument("cfg_path", type=str, help="path to the session configuration file (or session directory)")
     infer_ap.add_argument("save_dir", type=str, help="path to the session output root directory")
-
+    infer_ap.add_argument("--ckpt-path", type=str,
+                          help="path to the checkpoint (or directory) to use for inference "
+                               "(otherwise uses model checkpoint from configuration)")
     return ap
 
 
@@ -557,7 +659,7 @@ def main(args=None, argparser=None):
     elif args.mode == "infer":
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
         config = thelper.utils.load_config(args.cfg_path)
-        inference_session(config, save_dir=args.save_dir)
+        inference_session(config, save_dir=args.save_dir, ckpt_path=args.ckpt_path)
     else:
         thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
         config = thelper.utils.load_config(args.cfg_path)

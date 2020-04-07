@@ -1,11 +1,44 @@
-Dockerfile
+# Docker
+[Dd]ocker
+[Dd]ockerfile
 .dockerignore
+
+# Git
 .git
+.github
+.gitignore
+
+# Travis
 .travis.yml
-*.py[cod]
+
+# installer
+#Makefile
+[Mm]akefile.config
+downloads
+
+# Environments
+env
+.ve
+.env
+venv*/
+pyvenv*/
+.mr.developer.cfg
+.project
+.pydevproject
+
+# Python / Extensions etc.
+*~
+.*.sw[po]
+.build
+.cache
+*.mo
 *.so
-*.egg
+*.py[cod]
+*.bak
+*.sqlite
+*.egg[s]
 *.egg-info
+*egg[s]__pycache__
 dist
 build
 downloads
@@ -17,41 +50,87 @@ var
 sdist
 wheelhouse
 develop-eggs
+
+# installation
+[Bb]in
 .installed.cfg
 lib
 lib64
 /data/
 /src
-venv*/
-pyvenv*/
-pip-log.txt
-*.log
+
+# Unit test / Coverage reports
+.cache
 .coverage
-.tox
+coverage
+coverage.*
 .coverage.*
+.pytest
+.pytest_cache
 .pytest_cache/
+.tox
 nosetests.xml
-coverage.xml
+unit_tests/testdata.json
+**/*.log
+**/*.lock
+testdata.json
 htmlcov
-*.mo
-.mr.developer.cfg
+reports
+tests
+
+# R
+*.Rhistory
+
+# Eclipse / PyDev
 .project
 .pydevproject
-.idea
+.settings
+
+# vscode
 .vscode
+
+# PyCharm
+*.idea
+
+# Intellij
 *.iml
+
+# Kate
+*.kate-swp
+
+# Sublime Text Editor
+*.sublime*
+
+# other
 *.komodoproject
+
+# sphinx
+docs
+docs/_build
+
+# External Sources
+src
+
+# IPython
+.ipynb_checkpoints
+
+# gcc/fortran
+**/*.o
+**/*.a
+**/*.mod
+**/*.out
+
+workflows
+**/*.tif
+**/*.zip
+
+# project outputs
+*.bak
+pip-log.txt
+*.log
+output/**
 output/*.html
 output/*/index.html
-docs/_build
 .DS_Store
-*~
-.*.sw[po]
-.build
-.ve
-.env
-.cache
-.pytest
 .bootstrap
 .appveyor.token
-*.bak

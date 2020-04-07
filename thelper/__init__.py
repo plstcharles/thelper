@@ -10,6 +10,7 @@ import thelper.concepts  # noqa: F401
 import thelper.data  # noqa: F401
 import thelper.draw  # noqa: F401
 import thelper.ifaces  # noqa: F401
+import thelper.infer  # noqa: F401
 import thelper.nn  # noqa: F401
 import thelper.optim  # noqa: F401
 import thelper.tasks  # noqa: F401

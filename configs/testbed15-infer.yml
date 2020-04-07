@@ -1,0 +1,47 @@
+name: "testbed15-infer"
+datasets:
+  testbed15:
+    type: "thelper.data.geo.ogc.TB15D104TileDataset"
+    params:
+      # enforce parsing to avoid write error of cached files when running in CWL
+      force_parse: true
+      raster_path: "data/testbed15/roi_hrdem.tif"
+      vector_path: "data/testbed15/hydro_original.geojson"
+      tile_size: [500, 500]
+      tile_overlap: 100
+      px_size: 3
+      lake_area_min: 100
+      lake_area_max: 200000
+      srs_target: "2959"
+      reproj_rasters: false
+      display_debug: true
+      parallel: 0
+loaders:
+  workers: 0
+  shuffle: false
+  # setting required to avoid assertion error with batch-size = 0
+  # adjust according to available processing memory and workers of your machine or server
+  batch_size: 1
+  base_transforms:
+    - operation: torchvision.transforms.ToTensor
+      target_key: input
+  collate_fn:
+    type: thelper.data.loaders.default_collate
+    params:
+      force_tensor: false
+  # this section should normally be omitted, which will automatically ensure that thelper tests all images that could
+  # be found with the data loaders, and this for every defined dataset in the 'datasets' section
+  # here we can define it to complete execution quickly with a very small subset for demonstration (for debug purpose)
+  test_split:
+    testbed15: 0.01
+# with this section, we define the metrics that will be used by the test 'runner' (aka. 'trainer' when doing training)
+# this is basically the prediction outputs that the model will produce during inference
+runner:
+  metrics:
+    output:
+      type: "thelper.data.geo.ogc.TB15D104DetectLogger"
+# details about the model
+model:
+  type: torchvision.models.detection.fasterrcnn_resnet50_fpn
+  params:
+    pretrained: true

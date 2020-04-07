@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_task(config):
-    # type: (Union[thelper.typedefs.ConfigDict, str]) -> Task
+    # type: (Union[Task, thelper.typedefs.ConfigDict, str]) -> Task
     """Parses a configuration dictionary or repr string and instantiates a task from it.
 
     If a string is provided, it will first be parsed to get the task type, and then the object will be
@@ -27,9 +27,13 @@ def create_task(config):
     If a dict is provided, it should contain a 'type' and a 'params' field with the values required
     for direct instantiation.
 
+    If a :class:`Task` instance was specified, it is directly returned.
+
     .. seealso::
         | :class:`thelper.tasks.utils.Task`
     """
+    if isinstance(config, Task):
+        return config
     assert config is not None and isinstance(config, (str, dict)), \
         "unexpected config type (should be str or dict)"
     if isinstance(config, dict):
