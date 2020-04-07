@@ -182,6 +182,12 @@ def create_model(config, task, save_dir=None, ckptdata=None):
         model.config = model_params
     if hasattr(model, "summary"):
         model.summary()
+    param_count = get_learnable_param_count(model)
+    if param_count > 10 ** 5:
+        param_count_str = f"{(param_count // 10 ** 5) / 10}M"
+    else:
+        param_count_str = f"{param_count}"
+    logger.debug(f"model has {param_count_str} learnable parameters")
     return model
 
 
@@ -384,3 +390,8 @@ class ExternalDetectModule(ExternalModule):
                 logger.warning("unexpected box predictor type (missing impl)")  # @@@@@@ TODO
         else:
             logger.warning("could not reconnect fully connected layer for new classes; hope your model is already compatible...")
+
+
+def get_learnable_param_count(model: torch.nn.Module) -> int:
+    """Returns the learnable (grad-enabled) parameter count in a module."""
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
