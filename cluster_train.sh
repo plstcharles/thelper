@@ -3,7 +3,7 @@
 #SBATCH --output=sessions/logs/%j.log
 #SBATCH --error=sessions/logs/%j.log
 #SBATCH --mem-per-cpu=8GB
-#SBATCH --gres=gpu:16gb:1
+#SBATCH --gres=gpu:24gb:1
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=main
 #SBATCH --time=23:00:00
