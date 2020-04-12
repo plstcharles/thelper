@@ -181,9 +181,8 @@ class AETrainer(Trainer):
                     reconstr_edge_loss = self.reconstr_l1_loss(reconstr_gradients, input_gradients)
                     reconstr_loss += reconstr_edge_loss
                 iter_loss = (classif_loss + self.reconstr_scale * reconstr_loss).item()
-                class_logits_cpu = self._move_tensor(class_logits, dev="cpu", detach=True)
                 for metric in metrics.values():
-                    metric.update(task=self.task, input=input_val, pred=class_logits_cpu,
+                    metric.update(task=self.task, input=input_val, pred=class_logits,
                                   target=target_val, sample=sample, loss=iter_loss, iter_idx=idx,
                                   max_iters=epoch_size, epoch_idx=epoch, max_epochs=self.epochs,
                                   output_path=output_path)
