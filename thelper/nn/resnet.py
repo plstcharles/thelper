@@ -160,6 +160,12 @@ class ResNet(thelper.nn.Module):
             block = thelper.utils.import_class(block)
         if not issubclass(block, Module):
             raise AssertionError("block type must be subclass of thelper.nn.resnet.Module")
+        if isinstance(layers, str):
+            assert layers in ["18", "34"], "unknown basic block layer depth string postfix"
+            if layers == "18":
+                layers = [2, 2, 2, 2]
+            elif layers == "34":
+                layers = [3, 4, 6, 3]
         if not isinstance(layers, list) or not isinstance(strides, list):
             raise AssertionError("expected layers/strides to be provided as list of ints")
         if len(layers) != len(strides):
@@ -451,7 +457,7 @@ class AEResNet(ResNet):
 class AESkipResNet(ResNet):
     """Autoencoder-U-Net architecture based on ResNet blocks+layers configurations."""
 
-    def __init__(self, task, output_pads=None, **kwargs):
+    def __init__(self, task, output_pads=None, decoder_dropout=False, dropout_prob=0.1, **kwargs):
         assert isinstance(task, thelper.tasks.Segmentation)
         super().__init__(task, activation="leaky_relu", **kwargs)
         convt = thelper.nn.coordconv.CoordConvTranspose2d if self.coordconv else torch.nn.ConvTranspose2d
@@ -460,6 +466,7 @@ class AESkipResNet(ResNet):
                 self.out_features, self.out_features, kernel_size=1, stride=1, padding=0
             ),
             torch.nn.BatchNorm2d(self.out_features),
+            torch.nn.Dropout2d(p=dropout_prob) if decoder_dropout else lambda x: x,
             torch.nn.LeakyReLU(),
         )
         self.output_pads = output_pads if not None else [1, 1, 1, 1, 1]
@@ -468,6 +475,7 @@ class AESkipResNet(ResNet):
             torch.nn.Sequential(
                 convt(depth, depth // 2, kernel_size=3, stride=2, padding=1, output_padding=out_pad),
                 torch.nn.BatchNorm2d(depth // 2),
+                torch.nn.Dropout2d(p=dropout_prob) if decoder_dropout else lambda x: x,
                 torch.nn.LeakyReLU(),  # try w/ regular? @@@@
             )
             for depth, out_pad in zip(self.ae_decoder_depths, self.output_pads)
@@ -493,8 +501,8 @@ class AESkipResNet(ResNet):
                 torch.nn.LeakyReLU(),  # try w/ regular? @@@@
                 self._make_conv2d(d_mid, d_out, kernel_size=3, stride=1, padding=1, bias=False),
                 torch.nn.BatchNorm2d(d_out),
+                torch.nn.Dropout2d(p=dropout_prob) if decoder_dropout else lambda x: x,
                 torch.nn.LeakyReLU(),  # try w/ regular? @@@@
-                # try dropout? @@@@
             )
             for (d_in, d_mid, d_out), out_pad in zip(self.unet_decoder_depths, self.output_pads)
         ])
