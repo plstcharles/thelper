@@ -1,21 +1,22 @@
 name: agrivis-ae
+overwrite: true
 datasets:
   agrivis_train:
     type: thelper.data.geo.agrivis.Hdf5AgricultureDataset
     params:
-      hdf5_path: "~/dev/agri_v2.hdf5"
+      hdf5_path: "/network/home/stcharlp/dev/agri_v2.hdf5"
       group_name: train
       copy_to_slurm_tmpdir: true
   agrivis_valid:
     type: thelper.data.geo.agrivis.Hdf5AgricultureDataset
     params:
-      hdf5_path: "~/dev/agri_v2.hdf5"
+      hdf5_path: "/network/home/stcharlp/dev/agri_v2.hdf5"
       group_name: val
       copy_to_slurm_tmpdir: true
   #agrivis_test:
   #  type: thelper.data.geo.agrivis.Hdf5AgricultureDataset
   #  params:
-  #    hdf5_path: "/shared/data_ufast_ext4/datasets/agrivis/agri_v2.hdf5"
+  #    hdf5_path: "/network/home/stcharlp/dev/agri_v2.hdf5"
   #    group_name: test
 loaders:
   batch_size: 32
