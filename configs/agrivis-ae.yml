@@ -1,4 +1,4 @@
-overwrite: true
+name: agrivis-ae
 datasets:
   agrivis_train:
     type: thelper.data.geo.agrivis.Hdf5AgricultureDataset
@@ -16,14 +16,14 @@ datasets:
   #    hdf5_path: "/shared/data_ufast_ext4/datasets/agrivis/agri_v2.hdf5"
   #    group_name: test
 loaders:
-  batch_size: 20
+  batch_size: 20 #32
   train_shuffle: true
   valid_shuffle: false
   test_shuffle: false
   valid_seed: 0
   test_seed: 0
   torch_seed: 0
-  workers: 6
+  workers: 4
   pin_memory: true
   drop_last: false
   base_transforms:
@@ -59,15 +59,16 @@ model:
   type: thelper.nn.resnet.AESkipResNet
   params:
     block: thelper.nn.resnet.SqueezeExcitationBlock
-    layers: [2, 2, 2, 2]
+    layers: "18" #'orion~choices(["18", "34"])'
     strides: [1, 2, 2, 2]
     input_channels: 4
     flexible_input_res: false
     conv1_kernel_size: 5
     conv1_stride: 2
     pool_size: 4
-    coordconv: true
+    coordconv: true  #'orion~choices([0, 1])'
     output_pads: [1, 1, 1, 1, 1]
+    decoder_dropout: true  #'orion~choices([0, 1])'
 trainer:
   type: thelper.train.ae.AETrainer
   reconstr_display_count: 16
@@ -78,15 +79,16 @@ trainer:
   classif_loss:
     type: torch.nn.CrossEntropyLoss
     weight_distribution:
-      background: 0.25
-      cloud_shadow: 1.5
-      double_plant: 3.0
-      planter_skip: 3.5
-      standing_water: 2.0
-      waterway: 2.0
-      weed_cluster: 1.0
+      background: 0.25  #'orion~uniform(0.20,1.00)'
+      cloud_shadow: 1.5  #'orion~uniform(1.00,2.00)'
+      double_plant: 3.0  #'orion~uniform(1.00,3.00)'
+      planter_skip: 3.5  #'orion~uniform(1.00,4.00)'
+      standing_water: 2.0  #'orion~uniform(1.00,2.50)'
+      waterway: 2.0  #'orion~uniform(1.00,2.50)'
+      weed_cluster: 1.0  #'orion~uniform(1.00,1.50)'
+  save_freq: 100  # only keep best checkpoints
   use_tbx: true
-  epochs: 30
+  epochs: 32  #'orion~fidelity(2,32)'
   monitor: mIoU
   optimization:
     optimizer:

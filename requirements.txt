@@ -4,12 +4,14 @@ lz4
 matplotlib
 numpy
 opencv-python
+orion
 # PILLOW_VERSION removed which causes import to fail with torchvision
 pillow<7
 pip
 pyyaml
 scikit-learn
 six
+tensorboardX
 torch
 # requirements at least needed for segmentation tasks
 torchvision>=0.6
