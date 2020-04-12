@@ -6,7 +6,9 @@ Updated by Pierre-Luc St-Charles (April 2020)
 """
 
 import copy
+import os
 import pprint
+import shutil
 import typing
 
 import h5py
@@ -57,8 +59,16 @@ class Hdf5AgricultureDataset(Dataset):
             use_global_normalization: bool = True,
             keep_file_open: bool = False,
             load_meta_keys: bool = False,
+            copy_to_slurm_tmpdir: bool = False,
     ):
         super().__init__(transforms, deepcopy=False)
+        if copy_to_slurm_tmpdir:
+            assert os.path.isfile(hdf5_path), f"invalid input hdf5 path: {hdf5_path}"
+            slurm_tmpdir = thelper.utils.get_slurm_tmpdir()
+            assert slurm_tmpdir is not None, "undefined SLURM_TMPDIR env variable"
+            dest_hdf5_path = os.path.join(slurm_tmpdir, "agrivis.hdf5")
+            shutil.copyfile(hdf5_path, dest_hdf5_path)
+            hdf5_path = dest_hdf5_path
         logger.info(f"reading AgriVis challenge {group_name} data from: {hdf5_path}")
         self.hdf5_path = hdf5_path
         self.group_name = group_name
