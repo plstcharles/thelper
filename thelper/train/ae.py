@@ -133,10 +133,9 @@ class AETrainer(Trainer):
             iter_loss = classif_loss + self.reconstr_scale * reconstr_loss
             iter_loss.backward()
             optimizer.step()
-            class_logits_cpu = self._move_tensor(class_logits, dev="cpu", detach=True)
             iter_loss = iter_loss.item()
             for metric in metrics.values():
-                metric.update(task=self.task, input=input_val, pred=class_logits_cpu,
+                metric.update(task=self.task, input=input_val, pred=class_logits,
                               target=target_val, sample=sample, loss=iter_loss, iter_idx=idx,
                               max_iters=epoch_size, epoch_idx=epoch, max_epochs=self.epochs,
                               output_path=output_path)
