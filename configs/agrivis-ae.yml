@@ -78,13 +78,49 @@ trainer:
   classif_loss:
     type: torch.nn.CrossEntropyLoss
     weight_distribution:
-      background: 0.2
+      background: 0.25
+      cloud_shadow: 1.5
+      double_plant: 3.0
+      planter_skip: 3.5
+      standing_water: 2.0
+      waterway: 2.0
+      weed_cluster: 1.0
   use_tbx: true
   epochs: 30
-  monitor: accuracy
+  monitor: mIoU
   optimization:
     optimizer:
       type: torch.optim.Adam
   metrics:
     accuracy:
       type: thelper.optim.Accuracy
+    mIoU:
+      type: thelper.optim.IntersectionOverUnion
+    background_IoU:
+      type: thelper.optim.IntersectionOverUnion
+      params:
+        target_names: background
+    cloud_shadow_IoU:
+      type: thelper.optim.IntersectionOverUnion
+      params:
+        target_names: cloud_shadow
+    double_plant_IoU:
+      type: thelper.optim.IntersectionOverUnion
+      params:
+        target_names: double_plant
+    planter_skip_IoU:
+      type: thelper.optim.IntersectionOverUnion
+      params:
+        target_names: planter_skip
+    standing_water_IoU:
+      type: thelper.optim.IntersectionOverUnion
+      params:
+        target_names: standing_water
+    waterway_IoU:
+      type: thelper.optim.IntersectionOverUnion
+      params:
+        target_names: waterway
+    weed_cluster_IoU:
+      type: thelper.optim.IntersectionOverUnion
+      params:
+        target_names: weed_cluster
