@@ -111,6 +111,9 @@ environment.yml
 env
 venv
 
+# orion
+/sessions
+
 # project sources
 demo
 projects
