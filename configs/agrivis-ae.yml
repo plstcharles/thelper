@@ -96,6 +96,8 @@ trainer:
   optimization:
     optimizer:
       type: torch.optim.Adam
+      params:
+        lr: 1e-3  #'loguniform(1e-5, 1e-2)'
   metrics:
     accuracy:
       type: thelper.optim.Accuracy
