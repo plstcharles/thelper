@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=thelper-orion
-#SBATCH --partition=long
+#SBATCH --partition=main
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:24gb:1
 #SBATCH --mem-per-cpu=8gb
 #SBATCH --time=23:00:00
 #SBATCH --output=sessions/orion/logs/%A_%a.log
 #SBATCH --error=sessions/orion/logs/%A_%a.log
-#SBATCH --array=1-40%4
+#SBATCH --array=1-40%2
 
 echo    "Arguments: $@"
 echo -n "Date:      "; date

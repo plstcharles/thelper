@@ -1,4 +1,4 @@
-name: agrivis-ae
+name: agrivis-ae-hunt
 overwrite: true
 datasets:
   agrivis_train:
