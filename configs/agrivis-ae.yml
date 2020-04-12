@@ -19,7 +19,7 @@ datasets:
   #    hdf5_path: "/network/home/stcharlp/dev/agri_v2.hdf5"
   #    group_name: test
 loaders:
-  batch_size: 32
+  batch_size: 48
   train_shuffle: true
   valid_shuffle: false
   test_shuffle: false
