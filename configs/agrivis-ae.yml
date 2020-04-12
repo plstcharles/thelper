@@ -62,16 +62,16 @@ model:
   type: thelper.nn.resnet.AESkipResNet
   params:
     block: thelper.nn.resnet.SqueezeExcitationBlock
-    layers: "34" #'orion~choices(["18", "34"])'
+    layers: 'orion~choices(["18", "34"])'
     strides: [1, 2, 2, 2]
     input_channels: 4
     flexible_input_res: false
     conv1_kernel_size: 5
     conv1_stride: 2
     pool_size: 4
-    coordconv: true  #'orion~choices([0, 1])'
+    coordconv: 'orion~choices([0, 1])'
     output_pads: [1, 1, 1, 1, 1]
-    decoder_dropout: true  #'orion~choices([0, 1])'
+    decoder_dropout: 'orion~choices([0, 1])'
 trainer:
   type: thelper.train.ae.AETrainer
   reconstr_display_count: 16
@@ -82,22 +82,22 @@ trainer:
   classif_loss:
     type: torch.nn.CrossEntropyLoss
     weight_distribution:
-      background: 0.25  #'orion~uniform(0.20,1.00)'
-      cloud_shadow: 1.5  #'orion~uniform(1.00,2.00)'
-      double_plant: 3.0  #'orion~uniform(1.00,3.00)'
-      planter_skip: 3.5  #'orion~uniform(1.00,4.00)'
-      standing_water: 2.0  #'orion~uniform(1.00,2.50)'
-      waterway: 2.0  #'orion~uniform(1.00,2.50)'
-      weed_cluster: 1.0  #'orion~uniform(1.00,1.50)'
+      background: 'orion~uniform(0.20,1.00)'
+      cloud_shadow: 'orion~uniform(1.00,2.00)'
+      double_plant: 'orion~uniform(1.00,3.00)'
+      planter_skip: 'orion~uniform(1.00,4.00)'
+      standing_water: 'orion~uniform(1.00,2.50)'
+      waterway: 'orion~uniform(1.00,2.50)'
+      weed_cluster: 'orion~uniform(1.00,1.50)'
   save_freq: 100  # only keep best checkpoints
   use_tbx: true
-  epochs: 32  #'orion~fidelity(2,32)'
+  epochs: 'orion~fidelity(2,32)'
   monitor: mIoU
   optimization:
     optimizer:
       type: torch.optim.Adam
       params:
-        lr: 1e-3  #'loguniform(1e-5, 1e-2)'
+        lr: 'loguniform(1e-5, 1e-2)'
   metrics:
     accuracy:
       type: thelper.optim.Accuracy
