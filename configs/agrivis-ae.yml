@@ -3,20 +3,22 @@ datasets:
   agrivis_train:
     type: thelper.data.geo.agrivis.Hdf5AgricultureDataset
     params:
-      hdf5_path: "/shared/data_ufast_ext4/datasets/agrivis/agri_v2.hdf5"
+      hdf5_path: "~/dev/agri_v2.hdf5"
       group_name: train
+      copy_to_slurm_tmpdir: true
   agrivis_valid:
     type: thelper.data.geo.agrivis.Hdf5AgricultureDataset
     params:
-      hdf5_path: "/shared/data_ufast_ext4/datasets/agrivis/agri_v2.hdf5"
+      hdf5_path: "~/dev/agri_v2.hdf5"
       group_name: val
+      copy_to_slurm_tmpdir: true
   #agrivis_test:
   #  type: thelper.data.geo.agrivis.Hdf5AgricultureDataset
   #  params:
   #    hdf5_path: "/shared/data_ufast_ext4/datasets/agrivis/agri_v2.hdf5"
   #    group_name: test
 loaders:
-  batch_size: 20 #32
+  batch_size: 32
   train_shuffle: true
   valid_shuffle: false
   test_shuffle: false
@@ -59,7 +61,7 @@ model:
   type: thelper.nn.resnet.AESkipResNet
   params:
     block: thelper.nn.resnet.SqueezeExcitationBlock
-    layers: "18" #'orion~choices(["18", "34"])'
+    layers: "34" #'orion~choices(["18", "34"])'
     strides: [1, 2, 2, 2]
     input_channels: 4
     flexible_input_res: false
