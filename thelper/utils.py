@@ -1572,3 +1572,12 @@ def fetch_hdf5_sample(dset, idx, dtype="auto", shape="auto", compression="auto",
     if shape is not None and len(shape) > 0 and sample.shape != tuple(shape):
         sample = sample.reshape(shape)
     return sample
+
+
+def get_slurm_tmpdir() -> str:
+    """Returns the local SLURM_TMPDIR path if available, or ``None``."""
+    slurm_tmpdir = os.getenv("SLURM_TMPDIR")
+    if slurm_tmpdir is not None:
+        assert os.path.isdir(slurm_tmpdir), "invalid SLURM_TMPDIR path (not directory)"
+        assert os.access(slurm_tmpdir, os.W_OK), "invalid SLURM_TMPDIR path (not writable)"
+    return slurm_tmpdir
