@@ -1,5 +1,6 @@
 gitpython
 h5py
+kornia
 lz4
 matplotlib
 numpy
