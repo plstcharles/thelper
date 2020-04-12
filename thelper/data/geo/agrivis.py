@@ -67,7 +67,8 @@ class Hdf5AgricultureDataset(Dataset):
             slurm_tmpdir = thelper.utils.get_slurm_tmpdir()
             assert slurm_tmpdir is not None, "undefined SLURM_TMPDIR env variable"
             dest_hdf5_path = os.path.join(slurm_tmpdir, "agrivis.hdf5")
-            shutil.copyfile(hdf5_path, dest_hdf5_path)
+            if not os.path.isfile(dest_hdf5_path):
+                shutil.copyfile(hdf5_path, dest_hdf5_path)
             hdf5_path = dest_hdf5_path
         logger.info(f"reading AgriVis challenge {group_name} data from: {hdf5_path}")
         self.hdf5_path = hdf5_path
