@@ -1295,7 +1295,7 @@ class IntersectionOverUnion(Metric):
         unions: array holding the union areas for all input samples.
     """
 
-    def __init__(self, target_names=None, global_score=False, max_win_size=None):
+    def __init__(self, target_names=None, global_score=True, max_win_size=None):
         """Initializes metric attributes.
 
         Note that by default, if ``max_win_size`` is not provided here, the value given to ``max_iters`` on
