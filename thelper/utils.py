@@ -1311,7 +1311,7 @@ def load_config(path, as_json=False, add_name_if_missing=True, **kwargs):
             list(u'-+0123456789.'))
         fixed_yaml_parsing = True
     ext = os.path.splitext(path)[-1]
-    if ext in [".json", ".yml", ".yaml"] or as_json:
+    if ext in [".json", ".yml", ".yaml", ".conf"] or as_json:
         with open(path) as fd:
             assert not kwargs, "yaml safe load takes no extra args"
             config = yaml.safe_load(fd)  # also supports json
