@@ -516,7 +516,7 @@ def make_argparser():
     ap = argparse.ArgumentParser(description='thelper model trainer application')
     ap.add_argument("--version", default=False, action="store_true", help="prints the version of the library and exits")
     ap.add_argument("-l", "--log", default=None, type=str, help="path to the top-level log file (default: None)")
-    ap.add_argument("-v", "--verbose", action="count", default=0, help="set logging terminal verbosity level (additive)")
+    ap.add_argument("-v", "--verbose", action="count", default=3, help="set logging terminal verbosity level (additive)")
     ap.add_argument("--silent", action="store_true", default=False, help="deactivates all console logging activities")
     ap.add_argument("--force-stdout", action="store_true", default=False, help="force logging output to stdout instead of stderr")
     subparsers = ap.add_subparsers(title="Operating mode", dest="mode")
