@@ -97,7 +97,7 @@ trainer:
     optimizer:
       type: torch.optim.Adam
       params:
-        lr: 'loguniform(0.00001, 0.01)'
+        lr: 'orion~loguniform(1e-5, 1e-2)'
   metrics:
     accuracy:
       type: thelper.optim.Accuracy
