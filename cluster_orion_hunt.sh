@@ -25,7 +25,7 @@ source $CONDA_ACTIVATE
 conda activate thelper
 
 export ORION_DB_ADDRESS='sessions/orion/database.pkl'
-export ORION_DB_TYPE='sessions/orion/pickleddb'
+export ORION_DB_TYPE='pickleddb'
 
 "$CONDA_PREFIX/bin/orion" hunt -n thelper --worker-trials 1 thelper/cli.py -vvv new configs/agrivis-ae.yml sessions/orion/
 
