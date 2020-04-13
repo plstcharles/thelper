@@ -78,7 +78,7 @@ trainer:
   reconstr_display_mean: loader.dataset.image_mean
   reconstr_display_stddev: loader.dataset.image_stddev
   reconstr_edges: true
-  reconstr_scale: 1.0
+  reconstr_scale: 'orion~uniform(0.10, 2.00)'
   classif_loss:
     type: torch.nn.CrossEntropyLoss
     weight_distribution:
