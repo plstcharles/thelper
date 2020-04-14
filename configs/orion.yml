@@ -1,4 +1,4 @@
 name: thelper
 algorithms:
     asha:
-        num_brackets: 4
+        num_brackets: 16

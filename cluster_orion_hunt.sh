@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:24gb:1
 #SBATCH --mem-per-cpu=4gb
-#SBATCH --time=23:00:00
+#SBATCH --time=20:00:00
 #SBATCH --output=sessions/orion/logs/%A_%a.log
 #SBATCH --error=sessions/orion/logs/%A_%a.log
 #SBATCH --array=1-40%2
@@ -27,5 +27,5 @@ conda activate thelper
 export ORION_DB_ADDRESS='sessions/orion/database.pkl'
 export ORION_DB_TYPE='pickleddb'
 
-"$CONDA_PREFIX/bin/orion" hunt --config configs/orion.yml --worker-trials 1 --working-dir 'sessions/orion' "$CONDA_PREFIX/bin/python" thelper/cli.py new --config 'configs/agrivis-ae.yml' --save-dir 'sessions/orion/trial_{trial.id}/'
+"$CONDA_PREFIX/bin/orion" hunt --config configs/orion.yml --worker-trials 1 --working-dir 'sessions/orion' "$CONDA_PREFIX/bin/python" thelper/cli.py new --config 'configs/agrivis-ae.yml' --save-dir 'sessions/orion/thelper_{trial.id}/'
 

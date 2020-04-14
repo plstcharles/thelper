@@ -97,7 +97,12 @@ trainer:
     optimizer:
       type: torch.optim.Adam
       params:
-        lr: 'orion~loguniform(1e-5, 1e-2)'
+        lr: 'orion~loguniform(1e-4, 1e-2)'
+    scheduler:
+      type: torch.optim.lr_scheduler.MultiStepLR
+      params:
+        milestones: [12, 20, 28]
+        gamma: 0.5
   metrics:
     accuracy:
       type: thelper.optim.Accuracy
