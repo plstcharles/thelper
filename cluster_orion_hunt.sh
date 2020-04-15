@@ -4,10 +4,10 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:24gb:1
 #SBATCH --mem-per-cpu=4gb
-#SBATCH --time=20:00:00
+#SBATCH --time=4:00:00
 #SBATCH --output=sessions/orion/logs/%A_%a.log
 #SBATCH --error=sessions/orion/logs/%A_%a.log
-#SBATCH --array=1-40%2
+#SBATCH --array=1-80%2
 
 echo    "Arguments: $@"
 echo -n "Date:      "; date
