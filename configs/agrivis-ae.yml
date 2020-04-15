@@ -91,7 +91,7 @@ trainer:
       weed_cluster: 'orion~uniform(1.00,1.50)'
   save_freq: 100  # only keep best checkpoints
   use_tbx: true
-  epochs: 'orion~fidelity(4,32)'
+  epochs: 20
   monitor: mIoU
   optimization:
     optimizer:
