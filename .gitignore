@@ -113,7 +113,9 @@ venv
 
 # project sources
 demo
-data
+# ignore both root data dir and root data symlink
+# but not lower level data dirs (ie: thelper.data)
+/data
 *.tif
 *.zip
 ./workflow[s]

@@ -16,7 +16,6 @@ from typing import Any, Union
 import torch
 import tqdm
 
-import data.geo.infer
 import thelper
 
 TASK_COMPAT_CHOICES = frozenset(["old", "new", "compat"])
@@ -410,63 +409,6 @@ def inference_session(config, save_dir=None, ckpt_path=None):
         json.dump(config, f, indent=4)
 
     tester.test()
-
-
-def old_infer(config, save_dir=None):
-    import thelper.data.geo
-    logger = thelper.utils.get_func_logger()
-
-    session_name = thelper.utils.get_config_session_name(config)
-    thelper.utils.setup_globals(config)
-
-    normalize_loss = thelper.utils.get_key_def("normalize_loss", config, True)
-    raster_inputs = thelper.utils.get_key_def(["raster_inputs", "inputs", "samples", "input_samples"], config, [])
-    batch_size = thelper.utils.get_key_def("batch_size", config, 256)
-    num_workers = thelper.utils.get_key_def("num_workers", config, 8)
-    use_gpu = thelper.utils.get_key_def("use_gpu", config, True)
-    patch_size = thelper.utils.get_key("patch_size", config)
-    if not isinstance(raster_inputs, list) or not len(raster_inputs):
-        raise AssertionError("Missing raster inputs, cannot complete inference")
-
-    transforms_config = thelper.utils.get_key_def("base_transforms", config, None)
-    transforms = None
-    if transforms_config is not None:
-        transforms = thelper.transforms.load_transforms(transforms_config)
-
-    ckpt_path = config["ckpt_path"]
-    if save_dir is None:
-        save_dir = thelper.utils.get_checkpoint_session_root(ckpt_path)
-    save_dir = os.path.join(save_dir, session_name)
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-
-    config_name = "config-infer.json"
-    config_file_path = os.path.join(save_dir, config_name)
-    logger.debug("Writing employed infer config: [%s]", config_file_path)
-    with open(config_file_path, 'w') as f:
-        json.dump(config, f, indent=4)
-
-    if not os.path.exists(ckpt_path):
-        logger.fatal(f"Model not found: {ckpt_path}")
-        raise AssertionError("Model checkpoint missing to run inference")
-
-    ckptdata = thelper.utils.load_checkpoint(ckpt_path)
-    config_file = "config-train.json"
-    config_file_path = os.path.join(save_dir, config_file)
-    config = ckptdata['config']
-    logger.debug("Writing employed train config: [%s]", config_file_path)
-    with open(config_file_path, 'w') as f:
-        json.dump(config, f, indent=4)
-
-    data.geo.infer.sliding_window_inference(save_dir=save_dir,
-                                            ckptdata=ckptdata,
-                                            raster_inputs=raster_inputs,
-                                            batch_size=batch_size,
-                                            num_workers=num_workers,
-                                            patch_size=patch_size,
-                                            use_gpu=use_gpu,
-                                            transforms=transforms,
-                                            normalize_loss=normalize_loss)
 
 
 def export_model(config, save_dir):

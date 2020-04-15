@@ -62,6 +62,12 @@ class Tester(Trainer):
                  ):
         super(Trainer, self).__init__(session_name, session_dir, model, task, loaders, config, ckptdata=ckptdata)
 
+    def train(self):
+        raise RuntimeError(f"Invalid call to 'train' using '{type(self).__name__}' (Tester)")
+
+    def train_epoch(self, model, epoch, dev, loss, optimizer, loader, metrics, output_path):
+        raise RuntimeError(f"Invalid call to 'train_epoch' using '{type(self).__name__}' (Tester)")
+
     def test(self):
         __doc__ = self.eval.__doc__
         return self.eval()
@@ -75,11 +81,12 @@ class Tester(Trainer):
         """Evaluates the model using the provided objects.
 
         Args:
-            model: the model to evaluate that is already uploaded to the target device(s).
-            epoch: the epoch index we are training for (0-based).
-            dev: the target device that tensors should be uploaded to.
-            loader: the data loader used to get transformed valid/test samples.
-            metrics: the dictionary of metrics/consumers to update every iteration.
+            model: the model with which to run inference that is already uploaded to the target device(s).
+            epoch: the epoch index we are training for (0-based, and should normally only be 0 for single test pass).
+            dev: the target device that tensors should be uploaded to (corresponding to model's device(s)).
+            loader: the data loader used to get transformed test samples.
+            metrics: the dictionary of metrics/consumers to report inference results (mostly loggers and basic report
+                generator in this case since there shouldn't be ground truth labels to validate against).
             output_path: directory where output files should be written, if necessary.
         """
         raise NotImplementedError

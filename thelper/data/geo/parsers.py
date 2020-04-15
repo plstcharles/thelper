@@ -20,6 +20,7 @@ import tqdm
 import thelper.tasks
 import thelper.utils
 from thelper.data import Dataset, ImageFolderDataset
+from thelper.data.geo.utils import parse_raster_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -490,74 +491,64 @@ class SlidingWindowDataset(Dataset):
     The operation can be accomplished over multiple raster bands if they can be found in the provided raster container.
     """
     def __init__(self, raster_path, raster_bands, patch_size, transforms=None, image_key="image"):
-        logger.debug("Creating %s with [%s]", type(self).__name__, raster_path)
         super().__init__(transforms=transforms)
+        self.logger.debug("Creating %s with [%s]", type(self).__name__, raster_path)
         self.image_key = image_key
-        self.raster_path = raster_path
-        self.raster_ds = gdal.OpenShared(self.raster_path, gdal.GA_ReadOnly)
-        self.raster_dss = []
         self.center_key = "center"
-        if self.raster_ds is None:
-            msg = f"Raster file not found or could not be parsed by GDAL: [{raster_path}]"
-            logger.fatal(msg)
-            raise IOError(msg)
-        xsize = self.raster_ds.RasterXSize
-        ysize = self.raster_ds.RasterYSize
+        self.raster_dss = []
+
+        # update raster metadata that can be used by other objects
+        self.raster = {"path": raster_path, "bands": raster_bands}
+        raster_ds = gdal.OpenShared(raster_path, gdal.GA_ReadOnly)
+        parse_raster_metadata(self.raster, raster_ds)
+        xsize = raster_ds.RasterXSize
+        ysize = raster_ds.RasterYSize
         self.patch_size = patch_size
-        self.hpatch_size = self.patch_size // 2
-        for k in raster_bands:
-            raster_band = self.raster_ds.GetRasterBand(k)
-            if raster_band is None:
-                msg = f"Raster band {k} not found: [{raster_path}]"
-                logger.fatal(msg)
-                RuntimeError(msg)
-            else:
-                logger.debug(f"Using band {k} in [{raster_path}]")
-        self.raster_ds = None
+        self.raster["xsize"] = xsize
+        self.raster["ysize"] = ysize
+        self.raster["georef"] = raster_ds.GetProjectionRef()
+        self.raster["affine"] = raster_ds.GetGeoTransform()
+        raster_ds = None  # noqa # flush dataset
+
+        # generate patch samples
+        lines = ysize - self.patch_size
+        cols = xsize - self.patch_size
+        self.n_samples = lines * cols
         self.samples = []
-        logger.info(f"Creating samples coordinate")
-        self.samples.append((0, 0))  # fake
-        #for y in np.arange(0, ysize - self.patch_size):
-        #    for x in np.arange(0, xsize - self.patch_size):
-        #        self.samples.append((int(x), int(y)))
-
-        self.lines = ysize - self.patch_size
-        self.cols = xsize - self.patch_size
-        self.n_samples = self.lines * self.cols
-
-        #logger.info(f"Number of samples: {len(self.samples)}, {self.n_samples } ")
-        logger.info(f"Number of samples:  {self.n_samples} ")
-        self.raster_bands = raster_bands
+        for n in range(self.n_samples):
+            y = n // lines
+            x = n - y * cols
+            self.samples.append((x, y, self.patch_size, self.patch_size))
+        self.logger.info(f"Number of samples: {self.n_samples}")
         self.done = False
 
     def __len__(self):
         return self.n_samples
 
     def __getitem__(self, idx):
-        #offsets = self.samples[idx]
-
-        y = idx // self.lines
-        x = idx-y * self.cols
-        offsets = (x, y)
         # Get the number n of workers and the current worker's id
         info = torch.utils.data.get_worker_info()
         # Open the data with gdal n times in multithread shared mode
         # The operation is done once
         if not self.done:
+            raster_path = self.raster.get('reader', self.raster['path'])
+            self.logger.info(f"Single time load of raster: [{raster_path}]")
             for _ in range(info.num_workers):
-                self.raster_dss.append(gdal.OpenShared(self.raster_path, gdal.GA_ReadOnly))
+                raster_ds = gdal.OpenShared(raster_path, gdal.GA_ReadOnly)
+                self.raster_dss.append(raster_ds)
             self.done = True
 
         # Do your processing with the gdal dataset associated with the worker's id
         image = []
-        for raster_band in self.raster_bands:
-            image.append(self.raster_dss[info.id].GetRasterBand(raster_band).ReadAsArray(offsets[0], offsets[1],
-                         self.patch_size, self.patch_size))
+        patch = self.samples[idx]
+        for raster_band in self.raster["bands"]:
+            image.append(self.raster_dss[info.id].GetRasterBand(raster_band).ReadAsArray(*patch))
         image = np.dstack(image)
-
+        offsets = patch[:2]
+        half_size = self.patch_size // 2
         sample = {
             self.image_key: np.array(image.data, copy=True, dtype='float32'),
-            self.center_key: (offsets[0] + self.hpatch_size, offsets[1] + self.hpatch_size),
+            self.center_key: (offsets[0] + half_size, offsets[1] + half_size),
         }
         if self.transforms:
             sample = self.transforms(sample)

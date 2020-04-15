@@ -1,25 +1,23 @@
-name: "example-classif-infer"
+name: "example-classif-infer-geo"
 bypass_queries: true
 datasets:
   example:
     type: "thelper.data.geo.parsers.SlidingWindowDataset"
     params:
+      # here is where you specify your input raster and how you want it parsed to generate sample patches for the model
       raster_path: "data/example/S2A_MSIL1C_20170608T161031_N0205_R097_T18TVR_20170608T161030.SAFE/MTD_MSIL1C.xml"
       raster_bands: [2, 3, 4]
       patch_size: 7
-      #batch_size: 256  # auto-found by loader (?)
-      #num_workers: 4   # moved to loaders.workers
-      #use_gpu: true    # auto-found by available devices
-      #normalize_loss: true     # moved to runner
-      #raster_inputs:
-      #- path: S2A_MSIL1C_20170608T161031_N0205_R097_T18TVR_20170608T161030.SAFE/MTD_MSIL1C.xml
 loaders:
   type: "thelper.data.geo.infer.SlidingWindowInferenceLoader"
-  workers: 4
+  # not much point in shuffling data since we test it all in inference (just more confusing for us to map indices)
   shuffle: false
-  # setting required to avoid assertion error with batch-size = 0
+  # we need to minimally define batch-size = 1, to avoid assertion checks with batch-size = 0
   # adjust according to available processing memory and workers of your machine or server
-  batch_size: 1
+  batch_size: 1000
+  workers: 4
+  # basic transformations should normally correspond to the operations used in training, or any additional step
+  # required to make sure that the raw data gets adjusted adequately before being presented to the model for inference
   base_transforms:
     - operation: thelper.transforms.NormalizeZeroMeanUnitVar
       params:
@@ -32,22 +30,23 @@ loaders:
     type: thelper.data.loaders.default_collate
     params:
       force_tensor: false
-  # The next section could normally be omitted, which will automatically ensure that thelper tests all images that
+  # This next section could normally be omitted, which will automatically ensure that thelper tests all images that
   # could be found with the data loaders, and this for every defined dataset in the 'datasets' section.
   # We can also define here to complete execution quickly with a very small subset for demonstration (or debug purpose).
-  # Normally it should always result to a full 'split' (ratio = 1) so that all data gets tested, unless you want to
+  # Normally we should always make it a full 'split' (ratio = 1) so that all data gets tested, unless you want to
   # combine the same configuration file for running both training and inference operations.
   test_split:
     example: 1
 # with this section, we define the metrics that will be used by the 'runner/tester' (aka. 'trainer' when doing training)
-# this is basically the prediction outputs that the model will produce during inference
+# this basically tells how to generate execute the inference of prediction outputs by the model
 runner:
   type: "thelper.data.geo.infer.SlidingWindowTester"
   normalize_loss: true
-  #metrics:
-  #  output:
-  #    type: "thelper.data.geo.ogc.TB15D104DetectLogger"
-# details about the model
+  # avoid adding sub-dirs with machine name
+  unique_output_dir: false
+  # No metrics are employed particularly in this case because SlidingWindowTester creates directly the GeoTiff results
+  # metrics: []
+# details about the model (must exist and be pre-trained)
 model:
   ckpt_path: "data/example/ckpt.best.pth"
   params:

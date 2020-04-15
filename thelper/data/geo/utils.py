@@ -441,51 +441,67 @@ def export_geojson_with_crs(features, srs_target):
     return geojson.dumps(_FeatureCollection(features, srs=srs_target), indent=2)
 
 
-def prepare_raster_metadata(raster_inputs):
-    """Prepares the provided raster inputs by adding extra metadata to help later parsing.
+def parse_raster_metadata(raster_metadata, raster_dataset=None):
+    # type: (dict, gdal.Dataset) -> None
+    """Parses the provided raster metadata and updates it by adding extra details required for later use.
 
-    The provided list of rasters is updated directly.
+    The provided raster metadata is updated directly. Metadata is validated against the matching data storage.
+    If any important, required or requested (bands) metadata is missing, the function raises the issue immediately.
 
     Args:
-        raster_inputs (list):
-            list of raster metadata specified as dictionaries with minimally a file 'path' and 'bands' to process.
+        raster_metadata (dict):
+            raster metadata dictionary with minimally a file 'path' and list of 'bands' indices to process.
+        raster_dataset (gdal.Dataset):
+            (optional) preloaded dataset object corresponding to the raster metadata.
 
     Raises:
         ValueError: at least one input raster was missing a required metadata parameter or a parameter is erroneous.
         IOError: the raster path could not be found or reading it did not generate a valid raster using GDAL.
     """
-    for k, raster_input in enumerate(raster_inputs):
-        raster_path = raster_input['path']
-        raster_inputs[k]['path_raw'] = raster_path
+    for key in ["path", "bands"]:
+        if key not in raster_metadata:
+            raise ValueError(f"Missing raster '{key}' in metadata")
+    raster_path = raster_metadata['path']
+    raster_bands = raster_metadata['bands']
+    raster_metadata['reader'] = raster_path
 
-        raster_ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
-        if raster_ds is None:
-            logger.fatal(f"File not found: {raster_path}")
-            raise IOError(f"Missing raster file could not be loaded: [{raster_path}]")
+    local_open = False
+    if not raster_dataset:
+        local_open = True
+        raster_dataset = gdal.OpenShared(raster_path, gdal.GA_ReadOnly)
+    if raster_dataset is None:
+        logger.fatal(f"File not found: {raster_path}")
+        raise IOError(f"Missing raster file could not be loaded by GDAL: [{raster_path}]")
 
-        driver_shortname = raster_ds.GetDriver().ShortName
-        raster_inputs[k]['raster_format'] = 'DEFAULT'
-        if driver_shortname == 'SENTINEL2':
-            got_md = raster_ds.GetMetadata('SUBDATASETS')
-            if got_md is None:
-                logger.fatal(f"Missing metadata: {raster_path}")
-                raise ValueError("Missing raster metadata with expected Sentinel-2 format")
-            raster_path = got_md["SUBDATASET_1_NAME"]
-            # path has prefix and can have suffix such that path is formatted as:
-            #   '<sensor-info>:<data-path>[:<resolution>:<csr>]'
-            raster_inputs[k]['path'] = os.path.dirname(raster_path.split(":", 1)[1])
-            raster_ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
-            if raster_ds is None:
-                logger.fatal(f"File not found: [{raster_path}]")
-                exit(0)
-            raster_inputs[k]['raster_format'] = 'SENTINEL2'
+    driver_shortname = raster_dataset.GetDriver().ShortName
+    raster_metadata['format'] = 'DEFAULT'
+    if driver_shortname == 'SENTINEL2':
+        got_md = raster_dataset.GetMetadata('SUBDATASETS')
+        if got_md is None:
+            logger.fatal(f"Missing metadata: {raster_path}")
+            raise ValueError("Missing raster metadata with expected Sentinel-2 format")
+        raster_path = got_md["SUBDATASET_1_NAME"]
+        # path has prefix and can have suffix such that path is formatted as:
+        #   '<sensor-info>:<data-path>[:<resolution>:<csr>]'
+        raster_metadata['path'] = os.path.dirname(raster_path.split(":", 1)[1])
+        raster_dataset = gdal.OpenShared(raster_path, gdal.GA_ReadOnly)
+        if raster_dataset is None:
+            logger.fatal(f"File not found: [{raster_path}]")
+            raise IOError(f"Invalid raster sub-dataset could not be loaded by GDAL: [{raster_path}]")
+        raster_metadata['format'] = 'SENTINEL2'
+        raster_metadata['reader'] = raster_path  # apply full sub-dataset reader path
 
-        for b in raster_input['bands']:
-            raster_band = raster_ds.GetRasterBand(b)
-            if raster_band is None:
-                logger.fatal(f"Raster band {b} not found: [{raster_path}]")
-                raise ValueError("Invalid raster band missing")
-            else:
-                logger.debug(f"Using band {b} in [{raster_path}]")
+    # in case explicit desired name provided, use it, otherwise find appropriate one from updated path
+    raster_name = raster_metadata.get('name')
+    if not raster_name:
+        raster_metadata['name'] = os.path.split(raster_metadata['path'])[-1].split('.')[0]
 
-        raster_ds = None  # noqa # flush
+    for b in raster_bands:
+        raster_band = raster_dataset.GetRasterBand(b)
+        if raster_band is None:
+            logger.fatal(f"Raster band {b} not found: [{raster_path}]")
+            raise ValueError("Invalid raster band missing")
+        else:
+            logger.debug(f"Using band {b} in [{raster_path}]")
+    if local_open:
+        raster_dataset = None  # noqa # flush dataset

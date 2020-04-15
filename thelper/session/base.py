@@ -131,6 +131,7 @@ class SessionRunner:
                 folder_name = f"{cname}-{str(platform.node())}-{timestr}" if unique_output_dir else cname
                 self.output_paths[cname] = os.path.join(output_root_dir, folder_name)
                 self.logger.debug(f"output {cname} directory = {os.path.abspath(self.output_paths[cname])}")
+                os.makedirs(self.output_paths[cname], exist_ok=True)
             else:
                 self.output_paths[cname] = None
             self.writers[cname] = None  # will be instantiated only when needed based on above path

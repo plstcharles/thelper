@@ -341,13 +341,13 @@ class Trainer(SessionRunner):
         raise NotImplementedError
 
     @abstractmethod
-    def eval_epoch(self, model, epoch, dev, loader, metrics, output_path):
+    def eval_epoch(self, model, epoch, device, loader, metrics, output_path):
         """Evaluates the model using the provided objects.
 
         Args:
             model: the model to evaluate that is already uploaded to the target device(s).
             epoch: the epoch index we are training for (0-based).
-            dev: the target device that tensors should be uploaded to.
+            device: the target device that tensors should be uploaded to.
             loader: the data loader used to get transformed valid/test samples.
             metrics: the dictionary of metrics/consumers to update every iteration.
             output_path: directory where output files should be written, if necessary.
