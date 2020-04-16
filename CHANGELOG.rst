@@ -6,6 +6,9 @@ Changelog
 `Unreleased <http://github.com/plstcharles/thelper/tree/master>`_ (latest)
 ----------------------------------------------------------------------------------
 
+`0.5.0-rc <http://github.com/plstcharles/thelper/tree/0.5.0-rc>`_ (%Y/%m/%d)
+----------------------------------------------------------------------------------
+
 * Update this changelog to use rst links (renders on github and readthedocs)
 * Add ``infer`` mode for classification of geo-referenced rasters
 * Add ``Dockerfile-geo`` to build thelper with pre-installed geo packages
