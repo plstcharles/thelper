@@ -13,7 +13,7 @@ ENV CONDA_HOME /opt/conda
 ENV PATH ${CONDA_HOME}/bin:$PATH
 RUN curl -o ~/miniconda.sh -O  https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
     chmod +x ~/miniconda.sh && \
-    ~/miniconda.sh -b -p /opt/conda && \
+    ~/miniconda.sh -b -p ${CONDA_HOME} && \
     rm ~/miniconda.sh && \
     ${CONDA_HOME}/bin/conda install -y python=$PYTHON_VERSION
 
