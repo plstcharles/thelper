@@ -7,6 +7,7 @@ python:
 sudo: false
 env:
   global:
+    - CONDA_HOME=$HOME/conda
     - LD_PRELOAD=/lib/x86_64-linux-gnu/libSegFault.so
     - SEGFAULT_SIGNALS=all
 before_install:
