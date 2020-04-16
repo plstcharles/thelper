@@ -9,19 +9,19 @@ ARG PYTHON_VERSION=3.7
 RUN apt-get update && apt-get install -y --no-install-recommends \
          build-essential git curl vim ca-certificates less && rm -rf /var/lib/apt/lists/*
 
+ENV CONDA_HOME /opt/conda
+ENV PATH ${CONDA_HOME}/bin:$PATH
 RUN curl -o ~/miniconda.sh -O  https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
     chmod +x ~/miniconda.sh && \
     ~/miniconda.sh -b -p /opt/conda && \
     rm ~/miniconda.sh && \
-    /opt/conda/bin/conda install -y python=$PYTHON_VERSION
+    ${CONDA_HOME}/bin/conda install -y python=$PYTHON_VERSION
 
-ENV CONDA_HOME /opt/conda
-ENV PATH /opt/conda/bin:$PATH
 ENV PROJ_LIB ${CONDA_HOME}/share/proj
 ENV THELPER_HOME /opt/thelper
 WORKDIR ${THELPER_HOME}
 
-# NOTE: 
+# NOTE:
 #  force full reinstall with *possibly* updated even if just changing source
 #  this way we make sure that it works with any recent dependency update
 COPY . .
