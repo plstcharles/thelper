@@ -160,10 +160,11 @@ def test_outputs(config):
     output_path = os.path.join(test_classif_mnist_path, "output", test_classif_mnist_name)
     assert os.path.isdir(output_path)
     out_dirs = next(os.walk(output_path))[1]
-    assert len(out_dirs) == 2
     assert any([out_dir.startswith("train-") for out_dir in out_dirs])
     assert any([out_dir.startswith("valid-") for out_dir in out_dirs])
     for out_dir in out_dirs:
+        if out_dir.startswith("test-"):
+            continue  # we did not test, skip
         ltype = "train" if out_dir.startswith("train-") else "valid"
         epoch_out_path = os.path.join(output_path, out_dir)
         assert os.path.isdir(epoch_out_path)
