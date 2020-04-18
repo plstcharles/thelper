@@ -1424,7 +1424,6 @@ def check_installed(package_name):
 
 
 def set_matplotlib_agg():
+    """Sets the matplotlib backend to Agg."""
     import matplotlib
     matplotlib.use('Agg')
-
-
