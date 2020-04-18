@@ -69,11 +69,11 @@ class Tester(Trainer):
         raise RuntimeError(f"Invalid call to 'train_epoch' using '{type(self).__name__}' (Tester)")
 
     def test(self):
-        __doc__ = self.eval.__doc__
+        __doc__ = self.eval.__doc__  # noqa:F841
         return self.eval()
 
     def test_epoch(self, *args, **kwargs):
-        __doc__ = self.eval_epoch.__doc__
+        __doc__ = self.eval_epoch.__doc__  # noqa:F841
         return self.eval_epoch(*args, **kwargs)
 
     @abstractmethod
