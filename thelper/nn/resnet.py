@@ -126,8 +126,9 @@ class SqueezeExcitationBlock(Module):
 
 class ResNet(thelper.nn.Module):
 
-    def __init__(self, task, block="thelper.nn.resnet.BasicBlock", layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
-                 flexible_input_res=False, pool_size=7, head_type=None, coordconv=False, radius_channel=True, pretrained=False,
+    def __init__(self, task, block="thelper.nn.resnet.BasicBlock", layers=[3, 4, 6, 3],
+                 strides=[1, 2, 2, 2], input_channels=3, flexible_input_res=False, pool_size=7,
+                 head_type=None, coordconv=False, radius_channel=True, pretrained=False,
                  conv1_config=[7, 2, 3]):
         # note: must always forward args to base class to keep backup
         super().__init__(task, **{k: v for k, v in vars().items() if k not in ["self", "task", "__class__"]})
@@ -139,10 +140,11 @@ class ResNet(thelper.nn.Module):
             raise AssertionError("expected layers/strides to be provided as list of ints")
         if len(layers) != len(strides):
             raise AssertionError("layer/strides length mismatch")
-        # NOTE: conv1_config=[7,2,3] is the basic configuration of ResNet.  
+        # NOTE: conv1_config=[7,2,3] is the basic configuration of ResNet.
         #       other configuration more suitables for CIFAR for example can use conv1_config[3,1,1]
-        if not isinstance(conv1_config, list) or not len(conv1_config) == 3 or not all(isinstance(c, int) for c in conv1_config): 
-            raise AssertionError("conv1 configuration must be a list of 3 parameters defining [kernel_size,stride,padding]")
+        assert isinstance(conv1_config, list) and \
+            len(conv1_config) == 3 and all(isinstance(c, int) for c in conv1_config), \
+            "conv1 configuration must be a list of 3 parameters defining [kernel_size,stride,padding]"
         self.input_channels = input_channels
         self.flexible_input_res = flexible_input_res
         self.pool_size = pool_size
@@ -152,7 +154,8 @@ class ResNet(thelper.nn.Module):
         self.pretrained = pretrained
         self.inplanes = 64
         self.conv1 = self._make_conv2d(in_channels=input_channels, out_channels=self.inplanes,
-                                       kernel_size=conv1_config[0], stride=conv1_config[1], padding=conv1_config[2], bias=False)
+                                       kernel_size=conv1_config[0], stride=conv1_config[1],
+                                       padding=conv1_config[2], bias=False)
         self.bn1 = torch.nn.BatchNorm2d(self.inplanes)
         self.relu = torch.nn.ReLU(inplace=True)
         self.maxpool = torch.nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -288,8 +291,10 @@ class ConvTailNet(torch.nn.Module):
 class ResNetFullyConv(ResNet):
     """DEPRECATED. Will be removed in a future version. Use the torchvision segmentation models or the ResNet above instead."""
 
-    def __init__(self, task, block="thelper.nn.resnet.BasicBlock", layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
-                 flexible_input_res=False, pool_size=7, coordconv=False, radius_channel=True, pretrained=False):
+    def __init__(self, task, block="thelper.nn.resnet.BasicBlock",
+                 layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
+                 flexible_input_res=False, pool_size=7, coordconv=False,
+                 radius_channel=True, pretrained=False):
         super().__init__(task=task, block=block, layers=layers, strides=strides, input_channels=input_channels,
                          flexible_input_res=flexible_input_res, pool_size=pool_size, coordconv=coordconv,
                          radius_channel=radius_channel, pretrained=pretrained)
@@ -337,7 +342,8 @@ class FCResNet(ResNet):
         super().__init__(old_model_task, **model_params)
         self.load_state_dict(ckptdata["model"], strict=False)  # assumes model always stored as weight dict
         self.finallayer = torch.nn.Conv2d(self.out_features, self.fc.out_features, kernel_size=1)
-        self.finallayer.weight = torch.nn.Parameter(self.fc.weight.view(self.fc.out_features, self.out_features, 1, 1))
+        self.finallayer.weight = \
+            torch.nn.Parameter(self.fc.weight.view(self.fc.out_features, self.out_features, 1, 1))
         self.finallayer.bias = torch.nn.Parameter(self.fc.bias)
         self.set_task(task)
 
@@ -355,6 +361,7 @@ class FCResNet(ResNet):
         if self.fc.out_features != num_classes:
             self.fc = torch.nn.Linear(self.out_features, num_classes)
             self.finallayer = torch.nn.Conv2d(self.out_features, num_classes, kernel_size=1)
-            self.finallayer.weight = torch.nn.Parameter(self.fc.weight.view(self.fc.out_features, self.out_features, 1, 1))
+            self.finallayer.weight = \
+                torch.nn.Parameter(self.fc.weight.view(self.fc.out_features, self.out_features, 1, 1))
             self.finallayer.bias = torch.nn.Parameter(self.fc.bias)
         self.task = task
