@@ -101,6 +101,7 @@ def test_classif_report():
 
 def test_confmat():
     # classification results are expected in 1D format; lets build some dummy data...
+    thelper.utils.set_matplotlib_agg()  # to fix rendering bugs with some backends...
     batch_size = 16
     iter_count = 32
     input_shape = (3, 32, 32)
