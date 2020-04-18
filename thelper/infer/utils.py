@@ -1,7 +1,7 @@
 from typing import AnyStr, Optional
 
-import thelper.tasks
 import thelper.infer.base
+import thelper.tasks
 
 
 def create_tester(session_name,    # type: AnyStr
