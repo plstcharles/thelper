@@ -6,7 +6,6 @@ import logging
 import math
 import os
 import pickle
-import threading
 
 import cv2 as cv
 import gdal
