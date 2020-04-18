@@ -109,8 +109,8 @@ class SlidingWindowTester(Tester):
                     y0 = int(center_y0[j])
                     class_ds.GetRasterBand(1).WriteArray(class_id, x0, y0)
                     for p in range(y_prob.shape[1]):
-                        probs_ds.GetRasterBand(p+1).WriteArray(np.array([[y_prob[j, p]]], dtype='float32'),
-                                                               int(center_x0[j]), int(center_y0[j]))
+                        probs_ds.GetRasterBand(p + 1).WriteArray(np.array([[y_prob[j, p]]], dtype='float32'),
+                                                                 int(center_x0[j]), int(center_y0[j]))
                 # save writen changes to disk
                 class_ds.FlushCache()
                 probs_ds.FlushCache()
