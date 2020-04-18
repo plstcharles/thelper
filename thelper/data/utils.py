@@ -528,5 +528,3 @@ def get_class_weights(label_map, stype="linear", maxw=float('inf'), minw=0.0, no
         tot_weight = sum([w for w in label_weights.values()])
         label_weights = {label: weight / tot_weight for label, weight in label_weights.items()}
     return label_weights
-
-
