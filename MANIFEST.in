@@ -19,6 +19,7 @@ include README.rst
 include LICENSE
 include Makefile
 include Dockerfile
+include Dockerfile-geo
 include requirements.txt
 include requirements-dev.txt
 include requirements-extra.txt
@@ -28,4 +29,4 @@ include conda-env-geo.yml
 include .travis.yml
 include appveyor.yml
 
-global-exclude *.py[cod] __pycache__ *.so *.dylib
+global-exclude *.py[cod] __pycache__ *.so *.dylib *.bak

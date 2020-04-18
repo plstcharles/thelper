@@ -1,0 +1,15 @@
+# use a generic tag easily reference base image, override actual tag with specific docker build
+FROM thelper:base
+
+# override base thelper
+LABEL name="thelper-geo"
+LABEL description.geo="Adds geospatial related packages to run machine learning projects with geo-referenced imagery"
+
+# everything already configured/copied by base thelper
+# don't change directory to remain on specified workdir in base image
+# only add extra geo packages
+RUN sed -i 's/thelper/base/g' ${THELPER_HOME}/conda-env-geo.yml
+RUN conda env update --file ${THELPER_HOME}/conda-env-geo.yml \
+    && conda clean --all -f -y
+
+# note: command is the same as base thelper

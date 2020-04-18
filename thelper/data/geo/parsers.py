@@ -13,11 +13,13 @@ import numpy as np
 import ogr
 import osr
 import shapely
+import torch
 import tqdm
 
 import thelper.tasks
 import thelper.utils
-from thelper.data import Dataset
+from thelper.data import Dataset, ImageFolderDataset
+from thelper.data.geo.utils import parse_raster_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -235,8 +237,8 @@ class VectorCropDataset(Dataset):
 
     def _process_crop(self, sample):
         """Returns a crop for a specific (internal) set of sampled features."""
-        # remember: we assume that all rasters have the same intrinsic settings
         import thelper.data.geo as geo
+        # remember: we assume that all rasters have the same intrinsic settings
         crop_datatype = geo.utils.GDAL2NUMPY_TYPE_CONV[self.rasters_data[0]["data_type"]]
         crop_size = (sample["crop_height"], sample["crop_width"], self.rasters_data[0]["band_count"])
         crop = np.ma.array(np.zeros(crop_size, dtype=crop_datatype), mask=np.ones(crop_size, dtype=np.uint8))
@@ -271,13 +273,13 @@ class VectorCropDataset(Dataset):
                 flag_mask = curr_band_array != curr_band.GetNoDataValue()
                 np.copyto(dst=crop.data[:, :, raster_band_idx], src=curr_band_array, where=flag_mask)
                 np.bitwise_and(crop.mask[:, :, raster_band_idx], np.invert(flag_mask), out=crop.mask[:, :, raster_band_idx])
-        # ogr_dataset = None # close local fd
+        # ogr_dataset = None  # noqa # close local fd
         # noinspection PyUnusedLocal
-        crop_raster_gdal = None  # close local fd
+        crop_raster_gdal = None  # noqa # close local fd
         # noinspection PyUnusedLocal
-        crop_mask_gdal = None  # close local fd
+        crop_mask_gdal = None  # noqa # close local fd
         # noinspection PyUnusedLocal
-        rasterfile = None  # close input fd
+        rasterfile = None  # noqa # close input fd
         return crop, mask
 
     def __getitem__(self, idx):
@@ -345,9 +347,9 @@ class TileDataset(VectorCropDataset):
     def _tile_cropper(features, rasters_data, coverage, srs_target, tile_size, tile_overlap,
                       skip_empty_tiles, skip_nodata_tiles, keep_rasters_open, px_size):
         """Returns the ROI information for a given feature (may be modified in derived classes)."""
+        import thelper.data.geo as geo
         # instead of iterating over features to generate samples, we tile the raster(s)
         # note: the 'coverage' geometry should already be in the target srs
-        import thelper.data.geo as geo
         roi_tl, roi_br = geo.utils.get_feature_bbox(coverage)
         roi_geotransform = (roi_tl[0], px_size[0], 0.0,
                             roi_tl[1], 0.0, px_size[1])
@@ -421,3 +423,132 @@ class TileDataset(VectorCropDataset):
                 roi_offset_px_x += tile_size[0] - tile_overlap
             roi_offset_px_y += tile_size[1] - tile_overlap
         return samples
+
+
+class ImageFolderGDataset(ImageFolderDataset):
+    """Image folder dataset specialization interface for classification tasks on geospatial images.
+
+    This specialization is used to parse simple image subfolders, and it essentially replaces the very
+    basic ``torchvision.datasets.ImageFolder`` interface with similar functionalities. It it used to provide
+    a proper task interface as well as path metadata in each loaded packet for metrics/logging output.
+
+    The difference with the parent class ImageFolderDataset is the used of gdal to manage multi channels images found
+    in remote sensing domain. The user can specify the channels to load. By default the first three channels are
+    loaded [1,2,3].
+
+    .. seealso::
+        | :class:`thelper.data.parsers.ImageDataset`
+        | :class:`thelper.data.parsers.ClassificationDataset`
+        | :class:`thelper.data.parsers.ImageFolderDataset`
+    """
+
+    def __init__(self, root, transforms=None, image_key="image", label_key="label",
+                 path_key="path", idx_key="idx", channels=None):
+        """Image folder dataset parser constructor."""
+
+        super(ImageFolderGDataset, self).__init__(root=root, transforms=transforms, image_key=image_key,
+                                                  path_key=path_key, label_key=label_key, idx_key=idx_key)
+        self.channels = channels if channels else [1, 2, 3]
+
+    def __getitem__(self, idx):
+        """Returns the data sample (a dictionary) for a specific (0-based) index."""
+        if isinstance(idx, slice):
+            return self._getitems(idx)
+        if idx >= len(self.samples):
+            raise AssertionError("sample index is out-of-range")
+        if idx < 0:
+            idx = len(self.samples) + idx
+        sample = self.samples[idx]
+        raster_path = sample[self.path_key]
+        raster_ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
+        if raster_ds is None:
+            raise Exception(f"File not found: {raster_path}")
+
+        image = []
+        for channel in self.channels:
+            image_arr = raster_ds.GetRasterBand(channel).ReadAsArray()
+            if image_arr is None:
+                logger.fatal(f"Band not found: {channel}")
+            image.append(image_arr)
+        image = np.dstack(image)
+        raster_ds = None  # noqa # flush
+
+        sample = {
+            self.image_key: image,
+            self.idx_key: idx,
+            **sample
+        }
+        if self.transforms:
+            sample = self.transforms(sample)
+        return sample
+
+
+class SlidingWindowDataset(Dataset):
+    """Sliding window dataset specialization interface for classification tasks over a geospatial image.
+
+    The dataset runs a sliding window over the whole geospatial image in order to return tile patches.
+    The operation can be accomplished over multiple raster bands if they can be found in the provided raster container.
+    """
+    def __init__(self, raster_path, raster_bands, patch_size, transforms=None, image_key="image"):
+        super().__init__(transforms=transforms)
+        self.logger.debug("Creating %s with [%s]", type(self).__name__, raster_path)
+        self.image_key = image_key
+        self.center_key = "center"
+        self.raster_dss = []
+
+        # update raster metadata that can be used by other objects
+        self.raster = {"path": raster_path, "bands": raster_bands}
+        raster_ds = gdal.OpenShared(raster_path, gdal.GA_ReadOnly)
+        parse_raster_metadata(self.raster, raster_ds)
+        xsize = raster_ds.RasterXSize
+        ysize = raster_ds.RasterYSize
+        self.patch_size = patch_size
+        self.raster["xsize"] = xsize
+        self.raster["ysize"] = ysize
+        self.raster["georef"] = raster_ds.GetProjectionRef()
+        self.raster["affine"] = raster_ds.GetGeoTransform()
+        raster_ds = None  # noqa # flush dataset
+
+        # generate patch samples
+        lines = ysize - self.patch_size
+        cols = xsize - self.patch_size
+        self.n_samples = lines * cols
+        self.samples = []
+        for n in range(self.n_samples):
+            y = n // lines
+            x = n - y * cols
+            self.samples.append((x, y, self.patch_size, self.patch_size))
+        self.logger.info(f"Number of samples: {self.n_samples}")
+        self.done = False
+
+    def __len__(self):
+        return self.n_samples
+
+    def __getitem__(self, idx):
+        # Get the number n of workers and the current worker's id
+        info = torch.utils.data.get_worker_info()
+        # Open the data with gdal n times in multithread shared mode
+        # The operation is done once
+        if not self.done:
+            raster_path = self.raster.get('reader', self.raster['path'])
+            self.logger.info(f"Single time load of raster: [{raster_path}]")
+            for _ in range(info.num_workers):
+                raster_ds = gdal.OpenShared(raster_path, gdal.GA_ReadOnly)
+                self.raster_dss.append(raster_ds)
+            self.done = True
+
+        # Do your processing with the gdal dataset associated with the worker's id
+        image = []
+        patch = self.samples[idx]
+        for raster_band in self.raster["bands"]:
+            image.append(self.raster_dss[info.id].GetRasterBand(raster_band).ReadAsArray(*patch))
+        image = np.dstack(image)
+        offsets = patch[:2]
+        half_size = self.patch_size // 2
+        sample = {
+            self.image_key: np.array(image.data, copy=True, dtype='float32'),
+            self.center_key: (offsets[0] + half_size, offsets[1] + half_size),
+        }
+        if self.transforms:
+            sample = self.transforms(sample)
+        return sample
