@@ -21,6 +21,7 @@ import platform
 import re
 import sys
 import time
+from distutils.version import LooseVersion
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -30,7 +31,7 @@ import yaml
 import thelper.typedefs  # noqa: F401
 
 if TYPE_CHECKING:
-    from typing import Any, AnyStr, Callable, Dict, List, Optional, Type, Union  # noqa: F401
+    from typing import Any, AnyStr, Callable, Dict, List, Optional, Tuple, Type, Union  # noqa: F401
     from types import FunctionType  # noqa: F401
 
 logger = logging.getLogger(__name__)
@@ -258,6 +259,42 @@ def load_checkpoint(ckpt,                      # type: thelper.typedefs.Checkpoi
     return ckptdata
 
 
+def check_version(version_check, version_required):
+    # type: (AnyStr, AnyStr) -> Tuple[bool, List[Union[int, AnyStr]], List[Union[int, AnyStr]]]
+    """Verifies that the checked version is not greater than the required one (ie: not a future version).
+
+    Version format is ``MAJOR[.MINOR[.PATCH[[-]<RELEASE>]]]``.
+    Some valid example versions:
+
+
+    Note that for ``RELEASE`` part, comparison depends on alphabetical order if all other previous parts were equal
+    (i.e.: ``alpha`` will be lower than ``beta``, which in turn is lower than ``rc`` and so on). The ``-`` is optional
+    and will be removed for comparison (i.e.: ``0.5.0-rc`` is exactly the same as ``0.5.0rc`` and the additional ``-``
+    will not result in evaluating ``0.5.0a0`` as a smaller version).
+
+    Args:
+        version_check: the version string that needs to be verified and compared for lower than the required version.
+        version_required: the control version against which the check is done.
+
+    Returns:
+        Tuple of the validated check, and lists of both parsed version parts as ``[MAJOR, MINOR, PATCH, 'RELEASE']``.
+        The returned lists are *guaranteed* to be formed of 4 elements, adding 0 or '' as applicable for missing parts.
+    """
+    v_check = LooseVersion(version_check)
+    v_req = LooseVersion(version_required)
+    l_check = [0, 0, 0, '']
+    l_req = [0, 0, 0, '']
+    for ver_list, ver_parse in [(l_check, v_check), (l_req, v_req)]:
+        for v in [0, 1, 2]:
+            ver_list[v] = 0 if len(ver_parse.version) < v + 1 else ver_parse.version[v]
+        if len(ver_parse.version) >= 4:
+            release_idx = 4 if len(ver_parse.version) >= 5 and ver_parse.version[3] == '-' else 3
+            ver_list[3] = ''.join(str(v) for v in ver_parse.version[release_idx:])
+    # check with re-parsed version after fixing release dash
+    v_ok = LooseVersion('.'.join(str(v) for v in l_check)) <= LooseVersion('.'.join(str(v) for v in l_req))
+    return v_ok, l_check, l_req
+
+
 def migrate_checkpoint(ckptdata,  # type: thelper.typedefs.CheckpointContentType
                        ):         # type: (...) -> thelper.typedefs.CheckpointContentType
     """Migrates the content of an incompatible or outdated checkpoint to the current version of the framework.
@@ -274,18 +311,16 @@ def migrate_checkpoint(ckptdata,  # type: thelper.typedefs.CheckpointContentType
     """
     if not isinstance(ckptdata, dict):
         raise AssertionError("unexpected ckptdata type")
-    from thelper import __version__ as curr_ver
-    curr_ver = [int(num) for num in curr_ver.split(".")]
+    from thelper import __version__ as curr_ver_str
     ckpt_ver_str = ckptdata["version"] if "version" in ckptdata else "0.0.0"
-    ckpt_ver = [int(num) for num in ckpt_ver_str.split(".")]
-    if (ckpt_ver[0] > curr_ver[0] or (ckpt_ver[0] == curr_ver[0] and ckpt_ver[1] > curr_ver[1]) or
-       (ckpt_ver[0:2] == curr_ver[0:2] and ckpt_ver[2] > curr_ver[2])):
-        raise AssertionError("cannot migrate checkpoints from future versions!")
+    ok_ver, ckpt_ver, curr_ver = check_version(ckpt_ver_str, curr_ver_str)
+    if not ok_ver:
+        raise AssertionError("cannot migrate checkpoints from future versions! You need to update your thelper package")
     if "config" not in ckptdata:
         raise AssertionError("checkpoint migration requires config")
     old_config = ckptdata["config"]
     new_config = migrate_config(copy.deepcopy(old_config), ckpt_ver_str)
-    if ckpt_ver == [0, 0, 0]:
+    if ckpt_ver[:3] == [0, 0, 0]:
         logger.warning("trying to migrate checkpoint data from v0.0.0; all bets are off")
     else:
         logger.info("trying to migrate checkpoint data from v%s" % ckpt_ver_str)
@@ -341,15 +376,11 @@ def migrate_config(config,        # type: thelper.typedefs.ConfigDict
     """
     if not isinstance(config, dict):
         raise AssertionError("unexpected config type")
-    if not isinstance(cfg_ver_str, str) or len(cfg_ver_str.split(".")) != 3:
-        raise AssertionError("unexpected checkpoint version formatting")
-    from thelper import __version__ as curr_ver
-    curr_ver = [int(num) for num in curr_ver.split(".")]
-    cfg_ver = [int(num) for num in cfg_ver_str.split(".")]
-    if (cfg_ver[0] > curr_ver[0] or (cfg_ver[0] == curr_ver[0] and cfg_ver[1] > curr_ver[1]) or
-       (cfg_ver[0:2] == curr_ver[0:2] and cfg_ver[2] > curr_ver[2])):
-        raise AssertionError("cannot migrate configs from future versions!")
-    if cfg_ver == [0, 0, 0]:
+    from thelper import __version__ as curr_ver_str
+    ok_ver, cfg_ver, curr_ver = check_version(cfg_ver_str, curr_ver_str)
+    if not ok_ver:
+        raise AssertionError("cannot migrate checkpoints from future versions! You need to update your thelper package")
+    if cfg_ver[:3] == [0, 0, 0]:
         logger.warning("trying to migrate config from v0.0.0; all bets are off")
     else:
         logger.info("trying to migrate config from v%s" % cfg_ver_str)
