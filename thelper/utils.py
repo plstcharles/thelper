@@ -264,13 +264,11 @@ def check_version(version_check, version_required):
     """Verifies that the checked version is not greater than the required one (ie: not a future version).
 
     Version format is ``MAJOR[.MINOR[.PATCH[[-]<RELEASE>]]]``.
-    Some valid example versions:
-
 
     Note that for ``RELEASE`` part, comparison depends on alphabetical order if all other previous parts were equal
     (i.e.: ``alpha`` will be lower than ``beta``, which in turn is lower than ``rc`` and so on). The ``-`` is optional
     and will be removed for comparison (i.e.: ``0.5.0-rc`` is exactly the same as ``0.5.0rc`` and the additional ``-``
-    will not result in evaluating ``0.5.0a0`` as a smaller version).
+    will not result in evaluating ``0.5.0a0`` as a greater version because of ``-`` being lower ascii than ``a``).
 
     Args:
         version_check: the version string that needs to be verified and compared for lower than the required version.
