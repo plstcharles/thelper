@@ -1,0 +1,53 @@
+name: "example-classif-infer-geo"
+bypass_queries: true
+datasets:
+  example:
+    type: "thelper.data.geo.parsers.SlidingWindowDataset"
+    params:
+      # here is where you specify your input raster and how you want it parsed to generate sample patches for the model
+      raster_path: "data/example/S2A_MSIL1C_20170608T161031_N0205_R097_T18TVR_20170608T161030.SAFE/MTD_MSIL1C.xml"
+      raster_bands: [2, 3, 4]
+      patch_size: 7
+loaders:
+  type: "thelper.data.geo.infer.SlidingWindowInferenceLoader"
+  # not much point in shuffling data since we test it all in inference (just more confusing for us to map indices)
+  shuffle: false
+  # we need to minimally define batch-size = 1, to avoid assertion checks with batch-size = 0
+  # adjust according to available processing memory and workers of your machine or server
+  batch_size: 1000
+  workers: 4
+  # basic transformations should normally correspond to the operations used in training, or any additional step
+  # required to make sure that the raw data gets adjusted adequately before being presented to the model for inference
+  base_transforms:
+    - operation: thelper.transforms.NormalizeZeroMeanUnitVar
+      params:
+        mean: [913.294, 634.823, 2750.945]
+        std: [229.093, 384.313, 1016.149]
+      target_key: image
+    - operation: torchvision.transforms.ToTensor
+      target_key: image
+  collate_fn:
+    type: thelper.data.loaders.default_collate
+    params:
+      force_tensor: false
+  # This next section could normally be omitted, which will automatically ensure that thelper tests all images that
+  # could be found with the data loaders, and this for every defined dataset in the 'datasets' section.
+  # We can also define here to complete execution quickly with a very small subset for demonstration (or debug purpose).
+  # Normally we should always make it a full 'split' (ratio = 1) so that all data gets tested, unless you want to
+  # combine the same configuration file for running both training and inference operations.
+  test_split:
+    example: 1
+# with this section, we define the metrics that will be used by the 'runner/tester' (aka. 'trainer' when doing training)
+# this basically tells how to generate execute the inference of prediction outputs by the model
+runner:
+  type: "thelper.data.geo.infer.SlidingWindowTester"
+  normalize_loss: true
+  # avoid adding sub-dirs with machine name
+  unique_output_dir: false
+  # No metrics are employed particularly in this case because SlidingWindowTester creates directly the GeoTiff results
+  # metrics: []
+# details about the model (must exist and be pre-trained)
+model:
+  ckpt_path: "data/example/ckpt.best.pth"
+  params:
+    pretrained: true

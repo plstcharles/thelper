@@ -92,7 +92,10 @@ def create_model(config, task, save_dir=None, ckptdata=None):
         # if checkpoint available, instantiate old model, load weights, and reconfigure for new task
         if "name" not in ckptdata or not isinstance(ckptdata["name"], str):
             raise AssertionError("invalid checkpoint, cannot reload previous session name")
-        new_task = task  # the 'new task' will later be applied to specialize the model, once it is loaded
+        if isinstance(task, str):
+            new_task = thelper.tasks.create_task(task)
+        else:
+            new_task = task  # the 'new task' will later be applied to specialize the model, once it is loaded
         supported_model_types = (torch.nn.Module, thelper.nn.Module, torch.jit.ScriptModule, dict)
         if "model" not in ckptdata or not isinstance(ckptdata["model"], supported_model_types):
             raise AssertionError("invalid checkpoint, cannot reload previous model state")

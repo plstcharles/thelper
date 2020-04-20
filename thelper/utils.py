@@ -790,9 +790,9 @@ def decode_data(data, approach="lz4", **kwargs):
         raise NotImplementedError
 
 
-def get_class_logger(skip=0):
+def get_class_logger(skip=0, base=False):
     """Shorthand to get logger for current class frame."""
-    return logging.getLogger(get_caller_name(skip + 1).rsplit(".", 1)[0])
+    return logging.getLogger(get_caller_name(skip + 1, base_class=base).rsplit(".", 1)[0])
 
 
 def get_func_logger(skip=0):
@@ -800,12 +800,14 @@ def get_func_logger(skip=0):
     return logging.getLogger(get_caller_name(skip + 1))
 
 
-def get_caller_name(skip=2):
+def get_caller_name(skip=2, base_class=False):
     # source: https://gist.github.com/techtonik/2151727
     """Returns the name of a caller in the format module.class.method.
 
     Args:
         skip: specifies how many levels of stack to skip while getting the caller.
+        base_class: specified if the base class should be returned or the top-most class in case of inheritance
+                    If the caller is not a class, this doesn't do anything.
 
     Returns:
         An empty string is returned if skipped levels exceed stack height; otherwise,
@@ -829,13 +831,19 @@ def get_caller_name(skip=2):
     module = inspect.getmodule(parent_frame)
     # `modname` can be None when frame is executed directly in console
     if module:
+        # frame module in case of inherited classes will point to base class
+        # but frame local will still refer to top-most class when checking for 'self'
+        # (stack: top(mid).__init__ -> mid(base).__init__ -> base.__init__)
         name.append(module.__name__)
     # detect class name
     if "self" in parent_frame.f_locals:
         # I don't know any way to detect call from the object method
         # XXX: there seems to be no way to detect static method call - it will
         #      be just a function call
-        name.append(parent_frame.f_locals["self"].__class__.__name__)
+        cls = parent_frame.f_locals["self"].__class__
+        if not base_class and module and inspect.isclass(cls):
+            name[0] = cls.__module__
+        name.append(cls.__name__)
     codename = parent_frame.f_code.co_name
     if codename != "<module>":  # top level usually
         name.append(codename)  # function or a method
@@ -1413,3 +1421,10 @@ def check_installed(package_name):
         return True
     except ImportError:
         return False
+
+
+def set_matplotlib_agg():
+    import matplotlib
+    matplotlib.use('Agg')
+
+

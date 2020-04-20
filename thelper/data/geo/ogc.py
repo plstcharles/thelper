@@ -472,5 +472,5 @@ def postproc_features(input_file, bboxes_srs, orig_geoms_path, output_file,
             point = ogr.CreateGeometryFromWkt(feat_tuple[1].wkt)
             feature.SetGeometry(point)
             layer.CreateFeature(feature)
-            feature = None
-        data_source = None
+            feature = None  # noqa # flush
+        data_source = None  # noqa # flush

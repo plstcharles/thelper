@@ -1,55 +1,126 @@
-*.py[cod]
-*.so
-*.egg
-*.egg-info
-dist
-build
+# Installer
+#Makefile
+[Mm]akefile.config
 downloads
-eggs
-.eggs
-parts
-bin
-var
-sdist
-wheelhouse
-develop-eggs
+
+# Docker
+#Dockerfile
+
+# Python / Extensions etc.
+*~
+*.mo
+*.so
+*.py[cod]
+*.bak
+*.sqlite
+*.egg
+*.egg[s]
+*.egg-info
+*egg[s]
 .installed.cfg
-lib
-lib64
-/data
-/src
+.build
+.bootstrap
+.matplotlib
+__pycache__
+[Bb]in
+build
+dist
+develop-eggs
+parts
+sdist
+var
+wheelhouse
+pip-log.txt
+docs/_build
+
+# Unit test / Coverage reports
+*.log
+*.lock
+.cache
+.coverage
+.pytest
+.pytest_cache
+.pytest_cache/
+.tox
+.coverage.*
+coverage.xml
+coverage
+htmlcov
+output/*.html
+output/*/index.html
+reports
+nosetests.xml
+unit_tests/testdata.json
+result[s].xml
+testdata.json
+
+# Environment
 env/
 venv*/
 pyvenv*/
-pip-log.txt
-*.log
-.coverage
-.tox
-.coverage.*
-.pytest_cache/
-nosetests.xml
-coverage.xml
-htmlcov
-*.mo
-.mr.developer.cfg
-.project
-.pydevproject
-.idea
-.vscode
-*.iml
-*.komodoproject
-output/*.html
-output/*/index.html
-docs/_build
-.DS_Store
-*~
-.*.sw[po]
-.build
 .ve
 .env
-.cache
-.pytest
-.pytest_cache
-.bootstrap
+
+# vscode
+.vscode
+
+# R
+*.Rhistory
+
+# Eclipse / PyDev
+.project
+.pydevproject
+.settings
+.mr.developer.cfg
+
+# PyCharm
+*.idea
+.idea
+
+# Intellij
+*.iml
+
+# Kate
+*.kate-swp
+
+# Sublime Text Editor
+*.sublime*
+
+# External Sources
+src
+lib
+lib64
+
+# IPython
+.ipynb_checkpoints
+
+# gcc/fortran
+*.o
+*.a
+*.mod
+*.out
+
+# snappy
+esa-snap_sentinel_unix_6_0.sh
+response.varfile
+
+# conda
+environment.yml
+
+# environment
+env
+venv
+
+# project sources
+demo
+# ignore both root data dir and root data symlink
+# but not lower level data dirs (ie: thelper.data)
+/data
+*.tif
+*.zip
+./workflow[s]
+*.komodoproject
+.*.sw[po]
+.DS_Store
 .appveyor.token
-*.bak
+00-LOGS

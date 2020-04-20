@@ -84,6 +84,7 @@ class Dataset(torch.utils.data.Dataset):
                 or buffer that might cause problems in multi-threaded data loaders.
         """
         super(Dataset, self).__init__()
+        self.logger = thelper.utils.get_class_logger()
         self.transforms = transforms
         self.deepcopy = deepcopy  # will determine if we deepcopy in each loader
         self.samples = None  # must be set by the derived class as a array-like object of dictionaries
