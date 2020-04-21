@@ -113,6 +113,7 @@ venv
 
 # project sources
 demo
+projects
 # ignore both root data dir and root data symlink
 # but not lower level data dirs (ie: thelper.data)
 /data
@@ -124,3 +125,4 @@ demo
 .DS_Store
 .appveyor.token
 00-LOGS
+
