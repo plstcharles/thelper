@@ -121,14 +121,14 @@ class SessionRunner:
             try:
                 import tensorboardX  # todo: replace w/ pytorch's internal tbx @@@@@
                 self.tbx = tensorboardX
-                logger.debug("Using internal external")
+                logger.debug("Using external tensorboard")
             except:
                 import torch.utils.tensorboard as tensorboard
                 self.tbx = tensorboard
                 logger.debug("Using internal tensorboard")
             self.logger.debug(
                 f"tensorboard init : tensorboard --logdir {os.path.abspath(output_root_dir)} --port <your_port>")
-            
+
         self.skip_tbx_histograms = thelper.utils.str2bool(
             thelper.utils.get_key_def("skip_tbx_histograms", trainer_config, False))
         self.tbx_histogram_freq = int(thelper.utils.get_key_def("tbx_histogram_freq", trainer_config, 5))
