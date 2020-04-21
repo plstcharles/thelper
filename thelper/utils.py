@@ -138,12 +138,36 @@ def setup_cudnn(config):
             logger.debug("cudnn deterministic mode = %s" % str(cudnn_deterministic_flag))
             torch.backends.cudnn.deterministic = cudnn_deterministic_flag
 
+def setup_sys(config):
+    """Parses the provided config for PYTHON sys paths and sets up its global state accordingly."""
+    if "sys" in config and isinstance(config["sys"], list):
+        config = config["sys"]
+        import sys
+        for dir_path in config:
+            if os.path.exists(dir_path):
+                sys.path.append(dir_path)
+                logger.debug(f"append path to python's path {dir_path}")
+            else:
+                logger.warning(f"path does not exist {dir_path}")
+
+    elif "sys" in config and isinstance(config["sys"], str):
+        config = config["sys"]
+        import sys
+        dir_path = config
+        if os.path.exists(dir_path):
+            sys.path.append(dir_path)
+            logger.debug(f"append path to python's path {dir_path}")
+        else:
+            logger.warning(f"path does not exist {dir_path}")
+
 
 def setup_globals(config):
     """Parses the provided config for global flags and sets up the global state accordingly."""
     if "bypass_queries" in config and config["bypass_queries"]:
         global bypass_queries
         bypass_queries = True
+
+    setup_sys(config)
     setup_plt(config)
     setup_cv2(config)
     setup_gdal(config)
@@ -1427,3 +1451,8 @@ def set_matplotlib_agg():
     """Sets the matplotlib backend to Agg."""
     import matplotlib
     matplotlib.use('Agg')
+
+def check_directory_exists(dir_path):
+    """ Checks if the directory exists"""
+    if not os.path.exists(dir_path):
+        raise AssertionError(f"invalid input file at absolute path {dir_path}")
