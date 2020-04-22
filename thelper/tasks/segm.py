@@ -166,7 +166,8 @@ class Segmentation(Task, ClassNamesHandler):
             assert self.input_key == task.input_key, "input key mismatch, cannot create compatible task"
             assert self.gt_key is None or task.gt_key is None or self.gt_key == task.gt_key, \
                 "gt key mismatch, cannot create compatible task"
-            assert self.dontcare == task.dontcare, "dontcare value mismatch, cannot create compatible task"
+            #TODO Check the validity of this assert
+            #assert self.dontcare == task.dontcare, "dontcare value mismatch, cannot create compatible task"
             meta_keys = list(set(self.meta_keys + task.meta_keys))
             # cannot use set for class names, order needs to stay intact!
             class_indices = {cname: cval for cname, cval in task.class_indices.items() if cname not in self.class_indices}
