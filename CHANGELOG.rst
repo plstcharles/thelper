@@ -6,13 +6,16 @@ Changelog
 `Unreleased <http://github.com/plstcharles/thelper/tree/master>`_ (latest)
 ----------------------------------------------------------------------------------
 
+* Fix version comparison check when validating configuration and/or checkpoint against package version.
+  Version can now have a release part which was not considered.
+
 `0.5.0-rc <http://github.com/plstcharles/thelper/tree/0.5.0-rc>`_ (%Y/%m/%d)
 ----------------------------------------------------------------------------------
 
 * Update this changelog to use rst links (renders on github and readthedocs)
 * Add ``infer`` mode for classification of geo-referenced rasters
 * Add ``Dockerfile-geo`` to build thelper with pre-installed geo packages
-* Add geo-related build instructions to travis-ci build steps 
+* Add geo-related build instructions to travis-ci build steps
 * Add auto-documentation of makefile targets and docker related targets
 
 `0.4.7 <http://github.com/plstcharles/thelper/tree/0.4.7>`_ (2019/11/20)
