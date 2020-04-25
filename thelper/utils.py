@@ -139,11 +139,29 @@ def setup_cudnn(config):
             torch.backends.cudnn.deterministic = cudnn_deterministic_flag
 
 
+def setup_sys(config):
+    """Parses the provided config for PYTHON sys paths and sets up its global state accordingly."""
+    paths_to_add = []
+    if "sys" in config:
+        if isinstance(config["sys"], list):
+            paths_to_add = config["sys"]
+        elif isinstance(config["sys"], str):
+            paths_to_add = [config["sys"]]
+    for dir_path in paths_to_add:
+        if os.path.isdir(dir_path):
+            logger.debug(f"will append path to python's syspaths: {dir_path}")
+            sys.path.append(dir_path)
+        else:
+            logger.warning(f"could not append to syspaths, invalid dir: {dir_path}")
+
+
 def setup_globals(config):
     """Parses the provided config for global flags and sets up the global state accordingly."""
     if "bypass_queries" in config and config["bypass_queries"]:
         global bypass_queries
         bypass_queries = True
+
+    setup_sys(config)
     setup_plt(config)
     setup_cv2(config)
     setup_gdal(config)
