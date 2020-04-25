@@ -119,13 +119,13 @@ class SessionRunner:
                                                                         trainer_config, False))
         if self.use_tbx:
             try:
-                import tensorboardX  # todo: replace w/ pytorch's internal tbx @@@@@
+                import tensorboardX
                 self.tbx = tensorboardX
-                logger.debug("Using external tensorboard")
-            except:
+                logger.debug("using external tensorboard")
+            except ImportError:
                 import torch.utils.tensorboard as tensorboard
                 self.tbx = tensorboard
-                logger.debug("Using internal tensorboard")
+                logger.debug("using PyTorch's tensorboard")
             self.logger.debug(
                 f"tensorboard init : tensorboard --logdir {os.path.abspath(output_root_dir)} --port <your_port>")
 
