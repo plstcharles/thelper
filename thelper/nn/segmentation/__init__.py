@@ -6,7 +6,11 @@ This package contains classes that define blocks and modules used in various neu
 import logging
 
 import thelper.nn  # noqa: F401
-from thelper.nn.segmentation.deeplabv3 import deeplabv3_resnet50
-from thelper.nn.segmentation.deeplabv3 import deeplabv3_resnet101  # noqa: F401
+from thelper.nn.segmentation.deeplabv3 import deeplabv3_resnet50 # qa: F401
+from thelper.nn.segmentation.deeplabv3 import deeplabv3_resnet101 # qa: F401
+from thelper.nn.segmentation.fcn import fcn_resnet50 # qa: F401
+from thelper.nn.segmentation.fcn import fcn_resnet101 # qa: F401
+
+
 
 logger = logging.getLogger("thelper.nn.sr")
