@@ -41,6 +41,7 @@ class ImageSegmTrainer(Trainer):
         trainer_config = thelper.utils.get_key_def("params", config["trainer"], config["trainer"])
         self.scale_preds = thelper.utils.get_key_def("scale_preds", trainer_config, default=False)
         self.warned_no_shuffling_augments = False
+        self.output_pred=thelper.utils.get_key_def("output_pred", trainer_config, default="out")
 
     def _to_tensor(self, sample):
         """Fetches and returns tensors of input images and label maps from a batched sample dictionary."""
@@ -104,6 +105,8 @@ class ImageSegmTrainer(Trainer):
                 augs_count = len(input_val)
                 for aug_idx in range(augs_count):
                     aug_pred = model(self._move_tensor(input_val[aug_idx], dev))
+                    if isinstance(aug_pred, dict):
+                        aug_pred = iter_pred[self.output_pred]
                     if self.scale_preds:
                         aug_pred = torch.nn.functional.interpolate(aug_pred, size=input_val[aug_idx].shape[-2:], mode="bilinear")
                     aug_loss = loss(aug_pred, label_map[aug_idx].long())
@@ -118,6 +121,9 @@ class ImageSegmTrainer(Trainer):
                 label_map = torch.cat(label_map, dim=0)
             else:  # this is the default (simple) case where we generate predictions without augmentations
                 iter_pred = model(self._move_tensor(input_val, dev))
+                if isinstance(iter_pred, dict):
+                    iter_pred=iter_pred[self.output_pred]
+                #print(iter_pred)
                 if self.scale_preds:
                     iter_pred = torch.nn.functional.interpolate(iter_pred, size=input_val.shape[-2:], mode="bilinear")
                 iter_loss = loss(iter_pred, self._move_tensor(label_map, dev).long())
@@ -167,6 +173,8 @@ class ImageSegmTrainer(Trainer):
                     preds = None
                     for input_idx in range(len(input_val)):
                         pred = model(self._move_tensor(input_val[input_idx], dev))
+                        if isinstance(pred, dict):
+                            pred = iter_pred[self.output_pred]
                         if preds is None:
                             preds = torch.unsqueeze(pred.clone(), 0)
                         else:
@@ -174,6 +182,8 @@ class ImageSegmTrainer(Trainer):
                     pred = torch.mean(preds, dim=0)
                 else:  # this is the default (simple) case where we generate predictions without augmentations
                     pred = model(self._move_tensor(input_val, dev))
+                    if isinstance(pred, dict):
+                        pred = pred[self.output_pred]
                 if self.scale_preds:
                     pred = torch.nn.functional.interpolate(pred, size=input_val.shape[-2:], mode="bilinear")
                 pred_cpu = self._move_tensor(pred, dev="cpu", detach=True)
