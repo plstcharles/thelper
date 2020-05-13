@@ -6,11 +6,15 @@ This package contains classes that define blocks and modules used in various neu
 import logging
 
 import thelper.nn  # noqa: F401
-from thelper.nn.segmentation.deeplabv3 import deeplabv3_resnet50 # qa: F401
-from thelper.nn.segmentation.deeplabv3 import deeplabv3_resnet101 # qa: F401
-from thelper.nn.segmentation.fcn import fcn_resnet50 # qa: F401
-from thelper.nn.segmentation.fcn import fcn_resnet101 # qa: F401
+from thelper.nn.segmentation.deeplabv3 import DeepLabV3ResNet50  # noqa: F401
+from thelper.nn.segmentation.deeplabv3 import DeepLabV3ResNet101  # noqa: F401
+from thelper.nn.segmentation.fcn import FCNResNet50  # noqa: F401
+from thelper.nn.segmentation.fcn import FCNResNet101  # noqa: F401
 
+# dirty redirection for backward compat with Mario's stuff
+deeplabv3_resnet50 = DeepLabV3ResNet50
+deeplabv3_resnet101 = DeepLabV3ResNet101
+fcn_resnet50 = FCNResNet50
+fcn_resnet101 = FCNResNet101
 
-
-logger = logging.getLogger("thelper.nn.sr")
+logger = logging.getLogger("thelper.nn.segm")

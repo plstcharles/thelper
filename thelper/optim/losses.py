@@ -1,9 +1,14 @@
-import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+
 
 class FocalLoss(nn.Module):
+    """
+    See https://arxiv.org/abs/1708.02002 for more information.
+
+    Contributed by Mario Beaulieu <mario.beaulieu@crim.ca>.
+    """
+
     def __init__(self, gamma=2, alpha=0.5, weight=None, ignore_index=255):
         super().__init__()
         self.gamma = gamma
@@ -13,7 +18,6 @@ class FocalLoss(nn.Module):
         self.ce_fn = nn.CrossEntropyLoss(weight=self.weight, ignore_index=self.ignore_index)
 
     def forward(self, preds, labels):
-
         logpt = -self.ce_fn(preds, labels)
         pt = torch.exp(logpt)
         if self.alpha is not None:
