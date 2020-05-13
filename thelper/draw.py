@@ -452,7 +452,7 @@ def draw_classifs(images, preds=None, labels=None, class_names_map=None, redraw=
         if not isinstance(labels, list) and not (isinstance(labels, torch.Tensor) and labels.dim() == 1):
             raise AssertionError("expected classification labels to be in list or 1-d tensor format")
         if isinstance(labels, list):
-            if all([isinstance(l, list) for l in labels]):
+            if all([isinstance(lbl, list) for lbl in labels]):
                 labels = list(itertools.chain.from_iterable(labels))  # merge all augmented lists together
             if all([isinstance(t, torch.Tensor) for t in labels]):
                 labels = torch.cat(labels, 0)

@@ -614,11 +614,12 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
                 det_target_iou = [compute_bbox_iou(det, t) for t in target_bboxes]
                 best_iou_idx = int(np.argmax(det_target_iou))
                 target_detects[best_iou_idx].append({"bbox": det, "iou": det_target_iou[best_iou_idx]})
-            group_bboxes = [{"target": target_bboxes[i],
-                             "detect": list(sorted(
-                                 target_detects[i], key=lambda d: d["iou"], reverse=True))
-                                 if sort_by_iou else target_detects[i]
-                            } for i in range(target_count)]     # noqa: PEP8
+            group_bboxes = [{
+                "target": target_bboxes[i],
+                "detect": list(
+                    sorted(target_detects[i], key=lambda d: d["iou"], reverse=True)
+                ) if sort_by_iou else target_detects[i]
+            } for i in range(target_count)]
         # apply filters on grouped results
         if self.iou_threshold:
             for grp in group_bboxes:
@@ -725,7 +726,7 @@ class DetectLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
                 header += f",detect_{k + 1}_name,detect_{k + 1}_bbox,detect_{k + 1}_conf,detect_{k + 1}_iou"
         else:
             # unknown count total detections (can be variable)
-            header += f",detect_name[N],detect_bbox[N],detect_conf[N],detect_iou[N],(...)[N]"
+            header += ",detect_name[N],detect_bbox[N],detect_conf[N],detect_iou[N],(...)[N]"
         lines = [""] * len(report)
         for i, result in enumerate(report):
             target = result["target"]

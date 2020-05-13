@@ -92,8 +92,8 @@ def default_collate(batch, force_tensor=True):
     elif isinstance(batch[0], tuple) and hasattr(batch[0], '_fields'):  # namedtuple
         return type(batch[0])(*(default_collate(samples, force_tensor=force_tensor) for samples in zip(*batch)))
     elif isinstance(batch[0], container_abcs.Sequence):
-        if isinstance(batch, list) and all([isinstance(l, list) for l in batch]) and \
-                all([isinstance(b, thelper.data.BoundingBox) for l in batch for b in l]):
+        if isinstance(batch, list) and all([isinstance(lbl, list) for lbl in batch]) and \
+                all([isinstance(b, thelper.data.BoundingBox) for lbl in batch for b in lbl]):
             return batch
         transposed = zip(*batch)
         return [default_collate(samples, force_tensor=force_tensor) for samples in transposed]
@@ -300,7 +300,7 @@ class LoaderFactory:
                         if name in subset:
                             subset[name] /= usage
         self.skip_verif = thelper.utils.str2bool(config["skip_verif"]) if "skip_verif" in config else True
-        logger.debug(f"batch sizes:" +
+        logger.debug("batch sizes:" +
                      (f"\n\ttrain = {self.train_batch_size}" if self.train_split else "") +
                      (f"\n\tvalid = {self.valid_batch_size}" if self.valid_split else "") +
                      (f"\n\ttest = {self.test_batch_size}" if self.test_split else ""))

@@ -39,8 +39,8 @@ class VectorCropDataset(Dataset):
         # before anything else, create a hash to cache parsed data
         cache_hash = thelper.utils.get_params_hash(
             {k: v for k, v in vars().items() if not k.startswith("_") and k != "self"}) if not force_parse else None
-        assert isinstance(raster_path, str), f"raster file/folder path should be given as string"
-        assert isinstance(vector_path, str), f"vector file/folder path should be given as string"
+        assert isinstance(raster_path, str), "raster file/folder path should be given as string"
+        assert isinstance(vector_path, str), "vector file/folder path should be given as string"
         self.raster_path = raster_path
         self.vector_path = vector_path
         assert px_size is None or \
@@ -180,10 +180,10 @@ class VectorCropDataset(Dataset):
             logger.debug(f"raster #{idx + 1} area = {data['target_roi'].area:.2f}")
             # here, we enforce that raster datatypes/bandcounts match
             assert data["band_count"] == rasters_data[0]["band_count"], \
-                f"parser expects that all raster band counts match" + \
+                "parser expects that all raster band counts match" + \
                 f"(found {str(data['band_count'])} and {str(rasters_data[0]['band_count'])})"
             assert data["data_type"] == rasters_data[0]["data_type"], \
-                f"parser expects that all raster data types match" + \
+                "parser expects that all raster data types match" + \
                 f"(found {str(data['data_type'])} and {str(rasters_data[0]['data_type'])})"
             data["to_target_transform"] = osr.CoordinateTransformation(data["srs"], srs)
             data["from_target_transform"] = osr.CoordinateTransformation(srs, data["srs"])
@@ -220,7 +220,7 @@ class VectorCropDataset(Dataset):
 
         Each 'crop' corresponds to a sample that can be loaded at runtime.
         """
-        logger.info(f"preparing crops...")
+        logger.info("preparing crops...")
         cache_file_path = os.path.join(os.path.dirname(cache_file_path), cache_hash + ".crops.pkl") \
             if cache_hash else None
         if cache_file_path is not None and os.path.exists(cache_file_path):

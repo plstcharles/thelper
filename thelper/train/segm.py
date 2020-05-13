@@ -161,7 +161,7 @@ class ImageSegmTrainer(Trainer):
                     assert isinstance(label_map, list) and len(label_map) == len(input_val), \
                         "label maps should also be provided via a list of the same length as the input_val"
                     # this might be costly for nothing, we could remove the check and assume user is not dumb
-                    assert not any([not torch.eq(l, label_map[0]).all() for l in label_map]), \
+                    assert not any([not torch.eq(lbl, label_map[0]).all() for lbl in label_map]), \
                         "all label maps should be identical! (why do eval-time augment otherwise?)"
                     label_map = label_map[0]  # since all identical, just pick the first one and pretend its the only one
                     preds = None
