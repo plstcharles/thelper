@@ -1344,7 +1344,8 @@ class IntersectionOverUnion(Metric):
         if task is not None:
             assert isinstance(task, thelper.tasks.Segmentation), "unexpected task type with IoU metric"
             if self.target_names is not None:
-                assert all([n in task.class_names for n in self.target_names]), f"missing iou target in task class names"
+                assert all([n in task.class_names for n in self.target_names]), \
+                    "missing iou target in task class names"
                 self.target_idxs = [task.class_indices[n] for n in self.target_names]
             else:
                 self.target_idxs = list(task.class_indices.values())

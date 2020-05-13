@@ -173,7 +173,7 @@ class ImageClassifTrainer(Trainer):
                     assert isinstance(label, list) and len(label) == len(input_val), \
                         "label should also be a list of the same length as input"
                     # this might be costly for nothing, we could remove the check and assume user is not dumb
-                    assert not any([not torch.eq(l, label[0]).all() for l in label]), \
+                    assert not any([not torch.eq(lbl, label[0]).all() for lbl in label]), \
                         "all labels should be identical! (why do eval-time augment otherwise?)"
                     label = label[0]  # since all identical, just pick the first one and pretend its the only one
                     preds = None
