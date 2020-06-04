@@ -14,6 +14,7 @@ from thelper.optim.eval import compute_average_precision  # noqa: F401
 from thelper.optim.eval import compute_bbox_iou  # noqa: F401
 from thelper.optim.eval import compute_mask_iou  # noqa: F401
 from thelper.optim.eval import compute_pascalvoc_metrics  # noqa: F401
+from thelper.optim.losses import FocalLoss  # noqa: F401
 from thelper.optim.metrics import PSNR  # noqa: F401
 from thelper.optim.metrics import Accuracy  # noqa: F401
 from thelper.optim.metrics import AveragePrecision  # noqa: F401
