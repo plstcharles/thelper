@@ -5,8 +5,9 @@ import thelper.nn
 class SRCNN(thelper.nn.Module):
     """Implements the SRCNN architecture.
 
-    See Dong et al., "Image Super-Resolution Using Deep Convolutional Networks" (2014) for more
-    information (https://arxiv.org/abs/1501.00092).
+    .. seealso::
+        | Dong et al., `Image Super-Resolution Using Deep Convolutional Networks
+          <https://arxiv.org/abs/1501.00092>`_ [arXiv], 2014.
     """
 
     def __init__(self, task, num_channels=1, base_filter=64, groups=1):

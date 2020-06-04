@@ -6,8 +6,9 @@ import thelper.nn
 class VDSR(thelper.nn.Module):
     """Implements the VDSR architecture.
 
-    See Kim et al., "Accurate Image Super-Resolution Using Very Deep Convolutional Networks" (2015) for more
-    information (https://arxiv.org/abs/1511.04587).
+    .. seealso::
+        | Kim et al., `Accurate Image Super-Resolution Using Very Deep Convolutional Networks
+          <https://arxiv.org/abs/1511.04587>`_ [arXiv], 2015.
     """
 
     def __init__(self, task, num_channels=1, base_filter=64, kernel_size0=3,

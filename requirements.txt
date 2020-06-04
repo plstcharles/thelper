@@ -10,5 +10,6 @@ pyyaml
 scikit-learn
 six
 torch
-torchvision
+# requirements at least needed for segmentation tasks
+torchvision>=0.6
 tqdm

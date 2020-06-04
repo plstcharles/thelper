@@ -4,9 +4,13 @@ import torch.nn as nn
 
 class FocalLoss(nn.Module):
     """
-    See https://arxiv.org/abs/1708.02002 for more information.
 
-    Contributed by Mario Beaulieu <mario.beaulieu@crim.ca>.
+    .. note::
+        Contributed by Mario Beaulieu <mario.beaulieu@crim.ca>.
+
+    .. seealso::
+        | `Focal Loss for Dense Object Detection <https://arxiv.org/abs/1708.02002>`_,
+          *Tsung-Yi Lin, Priya Goyal, Ross Girshick, Kaiming He, Piotr Dollár*, arXiv article.
     """
 
     def __init__(self, gamma=2, alpha=0.5, weight=None, ignore_index=255):
