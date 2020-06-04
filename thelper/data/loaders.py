@@ -36,7 +36,7 @@ def default_collate(batch, force_tensor=True):
     """
     from torch._six import container_abcs, string_classes, int_classes
     error_msg_fmt = "batch must contain tensors, numbers, dicts or lists; found {}"
-    torch_ver = [int(v) for v in torch.__version__.split(".")]
+    torch_ver = [int(v) for v in torch.__version__.split('+')[0].split(".")]  # format: X.Y.Z[+cu101]
     elem_type = type(batch[0])
     if any([b is None for b in batch]):
         assert all([b is None for b in batch]), "cannot mix ``None`` and non-``None`` types"
