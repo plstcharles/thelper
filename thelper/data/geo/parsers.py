@@ -509,15 +509,14 @@ class SlidingWindowDataset(Dataset):
         self.raster["affine"] = raster_ds.GetGeoTransform()
         raster_ds = None  # noqa # flush dataset
 
-        # generate patch samples
+        # generate patch sample locations
         lines = ysize - self.patch_size
         cols = xsize - self.patch_size
-        self.n_samples = lines * cols
         self.samples = []
-        for n in range(self.n_samples):
-            y = n // lines
-            x = n - y * cols
-            self.samples.append((x, y, self.patch_size, self.patch_size))
+        for y in range(lines):
+            for x in range(cols):
+                self.samples.append((x, y, self.patch_size, self.patch_size))
+        self.n_samples = len(self.samples)
         self.logger.info(f"Number of samples: {self.n_samples}")
         self.done = False
 

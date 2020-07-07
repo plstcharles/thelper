@@ -8,6 +8,7 @@ Changelog
 
 * Fix version comparison check when validating configuration and/or checkpoint against package version.
   Version can now have a release part which was not considered.
+* Fix incorrect calculation of sample coordinates in ``thelper.data.geo.parsers.SlidingWindowDataset``.
 
 `0.5.0-rc <http://github.com/plstcharles/thelper/tree/0.5.0-rc>`_ (%Y/%m/%d)
 ----------------------------------------------------------------------------------
