@@ -9,6 +9,8 @@ Changelog
 * Fix version comparison check when validating configuration and/or checkpoint against package version.
   Version can now have a release part which was not considered.
 * Fix incorrect calculation of sample coordinates in ``thelper.data.geo.parsers.SlidingWindowDataset``.
+* Remove ``not_skip = __init__.py`` config option for ``isort`` since ``__init__.py`` is included since ``4.3.5``.
+  Also force ``isort>=5`` since ``not_skip`` causes an error from that point.
 
 `0.5.0-rc <http://github.com/plstcharles/thelper/tree/0.5.0-rc>`_ (%Y/%m/%d)
 ----------------------------------------------------------------------------------
