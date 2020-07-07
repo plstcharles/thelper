@@ -6,6 +6,9 @@ Changelog
 `Unreleased <http://github.com/plstcharles/thelper/tree/master>`_ (latest)
 ----------------------------------------------------------------------------------
 
+`0.5.0-rc1 <http://github.com/plstcharles/thelper/tree/v0.5.0-rc1>`_ (2020/07/07)
+----------------------------------------------------------------------------------
+
 * Fix version comparison check when validating configuration and/or checkpoint against package version.
   Version can now have a release part which was not considered.
 * Fix incorrect calculation of sample coordinates in ``thelper.data.geo.parsers.SlidingWindowDataset``.
