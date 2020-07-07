@@ -4,7 +4,7 @@ check-manifest
 flake8
 readme-renderer
 pygments
-isort>=5
+isort>=4.3.5,<5
 mock
 pyopenssl
 pytest

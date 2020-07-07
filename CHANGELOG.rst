@@ -10,7 +10,7 @@ Changelog
   Version can now have a release part which was not considered.
 * Fix incorrect calculation of sample coordinates in ``thelper.data.geo.parsers.SlidingWindowDataset``.
 * Remove ``not_skip = __init__.py`` config option for ``isort`` since ``__init__.py`` is included since ``4.3.5``.
-  Also force ``isort>=5`` since ``not_skip`` causes an error from that point.
+  Also force ``isort<5`` since many import checks break suddenly (e.g.: direct import with `as` alias break).
 
 `0.5.0-rc0 <http://github.com/plstcharles/thelper/tree/v0.5.0-rc0>`_ (2020/04/25)
 ----------------------------------------------------------------------------------
