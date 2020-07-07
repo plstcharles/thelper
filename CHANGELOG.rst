@@ -12,7 +12,7 @@ Changelog
 * Remove ``not_skip = __init__.py`` config option for ``isort`` since ``__init__.py`` is included since ``4.3.5``.
   Also force ``isort>=5`` since ``not_skip`` causes an error from that point.
 
-`0.5.0-rc <http://github.com/plstcharles/thelper/tree/0.5.0-rc>`_ (%Y/%m/%d)
+`0.5.0-rc0 <http://github.com/plstcharles/thelper/tree/v0.5.0-rc0>`_ (2020/04/25)
 ----------------------------------------------------------------------------------
 
 * Update this changelog to use rst links (renders on github and readthedocs)
@@ -21,17 +21,17 @@ Changelog
 * Add geo-related build instructions to travis-ci build steps
 * Add auto-documentation of makefile targets and docker related targets
 
-`0.4.7 <http://github.com/plstcharles/thelper/tree/0.4.7>`_ (2019/11/20)
+`0.4.7 <http://github.com/plstcharles/thelper/tree/v0.4.7>`_ (2019/11/20)
 ----------------------------------------------------------------------------------
 
 * Removed optional dependencies from conda build env
 
-`0.4.6 <http://github.com/plstcharles/thelper/tree/0.4.6>`_ (2019/11/20)
+`0.4.6 <http://github.com/plstcharles/thelper/tree/v0.4.6>`_ (2019/11/20)
 ----------------------------------------------------------------------------------
 
 * Travis deploy test w/ split conda/docker stages
 
-`0.4.5 <http://github.com/plstcharles/thelper/tree/0.4.5>`_ (2019/11/18)
+`0.4.5 <http://github.com/plstcharles/thelper/tree/v0.4.5>`_ (2019/11/18)
 ----------------------------------------------------------------------------------
 
 * Split travis deploy stage into two phases
@@ -40,7 +40,7 @@ Changelog
 * Update all matplotlib plots to use 160 dpi by default
 * Refactor trainer data/metric writer to save all viz data
 
-`0.4.4 <http://github.com/plstcharles/thelper/tree/0.4.4>`_ (2019/11/18)
+`0.4.4 <http://github.com/plstcharles/thelper/tree/v0.4.4>`_ (2019/11/18)
 ----------------------------------------------------------------------------------
 
 * Added viz pkg w/ t-SNE & UMAP support for in-trainer usage
@@ -57,12 +57,12 @@ Changelog
 * Added efficientnet 3rd-party module wrapper
 * Fixed potential conflicts in task class names ordering
 
-`0.4.3 <http://github.com/plstcharles/thelper/tree/0.4.3>`_ (2019/11/06)
+`0.4.3 <http://github.com/plstcharles/thelper/tree/v0.4.3>`_ (2019/11/06)
 ----------------------------------------------------------------------------------
 
 * Fixed pytest-mock scope usage in metrics utests
 
-`0.4.2 <http://github.com/plstcharles/thelper/tree/0.4.2>`_ (2019/11/06)
+`0.4.2 <http://github.com/plstcharles/thelper/tree/v0.4.2>`_ (2019/11/06)
 ----------------------------------------------------------------------------------
 
 * Updated common resnet impl to support segmentation heads
@@ -74,12 +74,12 @@ Changelog
 * Update segmentation trainer to use long-typed label maps
 * Cleaned up augmentor/albumentations demo configurations
 
-`0.4.1 <http://github.com/plstcharles/thelper/tree/0.4.1>`_ (2019/10/15)
+`0.4.1 <http://github.com/plstcharles/thelper/tree/v0.4.1>`_ (2019/10/15)
 ----------------------------------------------------------------------------------
 
 * Removed travis check in deploy stage for master branch
 
-`0.4.0 <http://github.com/plstcharles/thelper/tree/0.4.0>`_ (2019/10/11)
+`0.4.0 <http://github.com/plstcharles/thelper/tree/v0.4.0>`_ (2019/10/11)
 ----------------------------------------------------------------------------------
 
 * Added geo subpackage
@@ -91,14 +91,14 @@ Changelog
 * Merged 3rdparty configs into setup.cfg
 * Updated travis to rely on makefile directly
 
-`0.3.14 <http://github.com/plstcharles/thelper/tree/0.3.14>`_ (2019/09/30)
+`0.3.14 <http://github.com/plstcharles/thelper/tree/v0.3.14>`_ (2019/09/30)
 ----------------------------------------------------------------------------------
 
 * Added extra logging calls in trainer and framework utils
 * Cleaned up data configuration parsing logger calls
 * Bypassed full device check when specific one is requested
 
-`0.3.13 <http://github.com/plstcharles/thelper/tree/0.3.13>`_ (2019/09/26)
+`0.3.13 <http://github.com/plstcharles/thelper/tree/v0.3.13>`_ (2019/09/26)
 ----------------------------------------------------------------------------------
 
 * Moved drawing utilities to new module
@@ -108,18 +108,18 @@ Changelog
 * Added support for root directory specification via config
 * Updated config load/save to make naming optional
 
-`0.3.12 <http://github.com/plstcharles/thelper/tree/0.3.12>`_ (2019/09/13)
+`0.3.12 <http://github.com/plstcharles/thelper/tree/v0.3.12>`_ (2019/09/13)
 ----------------------------------------------------------------------------------
 
 * Fixed potential issue when reinstantiating custom ResNet
 * Fixed ClassifLogger prediction logger w/o groundtruth
 
-`0.3.11 <http://github.com/plstcharles/thelper/tree/0.3.11>`_ (2019/09/09)
+`0.3.11 <http://github.com/plstcharles/thelper/tree/v0.3.11>`_ (2019/09/09)
 ----------------------------------------------------------------------------------
 
 * Add cli/config override for task compatibility mode setting
 
-`0.3.10 <http://github.com/plstcharles/thelper/tree/0.3.10>`_ (2019/09/05)
+`0.3.10 <http://github.com/plstcharles/thelper/tree/v0.3.10>`_ (2019/09/05)
 ----------------------------------------------------------------------------------
 
 * Cleaned up dependency lists, docstrings
@@ -130,7 +130,7 @@ Changelog
 * Fixed exponential parsing with pyyaml
 * Fixed bbox display when using integer coords values
 
-`0.3.9 <http://github.com/plstcharles/thelper/tree/0.3.9>`_ (2019/08/20)
+`0.3.9 <http://github.com/plstcharles/thelper/tree/v0.3.9>`_ (2019/08/20)
 ----------------------------------------------------------------------------------
 
 * Fixed collate issues for pytorch >= 1.2
@@ -142,7 +142,7 @@ Changelog
 * Cleaned up shared interfaces to fix circular dependencies
 * Added detection (bbox) logger class
 
-`0.3.8 <http://github.com/plstcharles/thelper/tree/0.3.8>`_ (2019/08/08)
+`0.3.8 <http://github.com/plstcharles/thelper/tree/v0.3.8>`_ (2019/08/08)
 ----------------------------------------------------------------------------------
 
 * Fixed nn modules constructor args forwarding
@@ -150,7 +150,7 @@ Changelog
 * Fixed file-based logging from submodules (e.g. for all data)
 * Cleaned and API-fied the CLI entrypoints for external use
 
-`0.3.7 <http://github.com/plstcharles/thelper/tree/0.3.7>`_ (2019/07/31)
+`0.3.7 <http://github.com/plstcharles/thelper/tree/v0.3.7>`_ (2019/07/31)
 ----------------------------------------------------------------------------------
 
 * Fixed travis timeouts on long deploy operations
@@ -160,7 +160,7 @@ Changelog
 * Cleaned up matplotlib use and show/block across draw functions
 * Fixed various dependency and logging issues
 
-`0.3.6 <http://github.com/plstcharles/thelper/tree/0.3.6>`_ (2019/07/26)
+`0.3.6 <http://github.com/plstcharles/thelper/tree/v0.3.6>`_ (2019/07/26)
 ----------------------------------------------------------------------------------
 
 * Fixed torch version checks in custom default collate impl
@@ -169,7 +169,7 @@ Changelog
 * Added pretrained opt to default resnet impl
 * Fixed objdetect trainer display and prediction callbacks
 
-`0.3.5 <http://github.com/plstcharles/thelper/tree/0.3.5>`_ (2019/07/23)
+`0.3.5 <http://github.com/plstcharles/thelper/tree/v0.3.5>`_ (2019/07/23)
 ----------------------------------------------------------------------------------
 
 * Refactored metrics/consumers into separate interfaces
@@ -179,7 +179,7 @@ Changelog
 * Cleaned drawing functions args wrt callback refactoring
 * Added eval module to optim w/ pascalvoc evaluation funcs
 
-`0.3.4 <http://github.com/plstcharles/thelper/tree/0.3.4>`_ (2019/07/12)
+`0.3.4 <http://github.com/plstcharles/thelper/tree/v0.3.4>`_ (2019/07/12)
 ----------------------------------------------------------------------------------
 
 * Fixed issues when reloading objdet model checkpoints
@@ -187,25 +187,25 @@ Changelog
 * Fixed backward compat issues when reloading old tasks
 * Cleaned up object detection drawing utilities
 
-`0.3.3 <http://github.com/plstcharles/thelper/tree/0.3.3>`_ (2019/07/09)
+`0.3.3 <http://github.com/plstcharles/thelper/tree/v0.3.3>`_ (2019/07/09)
 ----------------------------------------------------------------------------------
 
 * Fixed travis conda build dependencies & channels
 
-`0.3.2 <http://github.com/plstcharles/thelper/tree/0.3.2>`_ (2019/07/05)
+`0.3.2 <http://github.com/plstcharles/thelper/tree/v0.3.2>`_ (2019/07/05)
 ----------------------------------------------------------------------------------
 
 * Update documentation use cases (model export) & faq
 * Cleanup module base class config backup
 * Fixed docker build and automated it via travis
 
-`0.3.1 <http://github.com/plstcharles/thelper/tree/0.3.1>`_ (2019/06/17)
+`0.3.1 <http://github.com/plstcharles/thelper/tree/v0.3.1>`_ (2019/06/17)
 ----------------------------------------------------------------------------------
 
 * Fix metrics RawPredictions not returning predictions during eval
 * Fix parsing of checkpoint base path
 
-`0.3.0 <http://github.com/plstcharles/thelper/tree/0.3.0>`_ (2019/06/12)
+`0.3.0 <http://github.com/plstcharles/thelper/tree/v0.3.0>`_ (2019/06/12)
 ----------------------------------------------------------------------------------
 
 * Added dockerfile for containerized builds
@@ -216,7 +216,7 @@ Changelog
 * Added lots of new unit tests & docstrings
 * Cleaned up transform & display operations
 
-`0.2.8 <http://github.com/plstcharles/thelper/tree/0.2.8>`_ (2019/03/17)
+`0.2.8 <http://github.com/plstcharles/thelper/tree/v0.2.8>`_ (2019/03/17)
 ----------------------------------------------------------------------------------
 
 * Cleaned up build tools & docstrings throughout api
@@ -226,34 +226,34 @@ Changelog
 * Added fully convolutional resnet implementation
 * Fixup various issues related to fine-tuning via 'resume'
 
-`0.2.7 <http://github.com/plstcharles/thelper/tree/0.2.7>`_ (2019/02/04)
+`0.2.7 <http://github.com/plstcharles/thelper/tree/v0.2.7>`_ (2019/02/04)
 ----------------------------------------------------------------------------------
 
 * Updated conda build recipe for python variants w/ auto upload
 
-`0.2.6 <http://github.com/plstcharles/thelper/tree/0.2.6>`_ (2019/01/31)
+`0.2.6 <http://github.com/plstcharles/thelper/tree/v0.2.6>`_ (2019/01/31)
 ----------------------------------------------------------------------------------
 
 * Added framework checkpoint/configuration migration utilities
 * Fixed minor config parsing backward compatibility issues
 * Fixed minor bugs related to query & drawing utilities
 
-`0.2.5 <http://github.com/plstcharles/thelper/tree/0.2.5>`_ (2019/01/29)
+`0.2.5 <http://github.com/plstcharles/thelper/tree/v0.2.5>`_ (2019/01/29)
 ----------------------------------------------------------------------------------
 
 * Fix travis-ci conda build/env path
 
-`0.2.4 <http://github.com/plstcharles/thelper/tree/0.2.4>`_ (2019/01/29)
+`0.2.4 <http://github.com/plstcharles/thelper/tree/v0.2.4>`_ (2019/01/29)
 ----------------------------------------------------------------------------------
 
 * Fix travis-ci conda channel setup
 
-`0.2.3 <http://github.com/plstcharles/thelper/tree/0.2.3>`_ (2019/01/29)
+`0.2.3 <http://github.com/plstcharles/thelper/tree/v0.2.3>`_ (2019/01/29)
 ----------------------------------------------------------------------------------
 
 * Fix ``openssl`` dependency
 
-`0.2.2 <http://github.com/plstcharles/thelper/tree/0.2.2>`_ (2019/01/29)
+`0.2.2 <http://github.com/plstcharles/thelper/tree/v0.2.2>`_ (2019/01/29)
 ----------------------------------------------------------------------------------
 
 * Fixed travis-ci matrix configuration
@@ -264,7 +264,7 @@ Changelog
 * Fixed openssl dependency issues for travis tox check jobs
 * Updated travis post-deploy to try to fix conda packaging (wip)
 
-`0.2.1 <http://github.com/plstcharles/thelper/tree/0.2.1>`_ (2019/01/24)
+`0.2.1 <http://github.com/plstcharles/thelper/tree/v0.2.1>`_ (2019/01/24)
 ----------------------------------------------------------------------------------
 
 * Added typedef module & cleaned up parameter inspections
@@ -273,7 +273,7 @@ Changelog
 * Updated all trainers/schedulers to rely on 0-based indexing
 * Updated travis/rtd configs for auto-deploy & 3.6 support
 
-`0.2.0 <http://github.com/plstcharles/thelper/tree/0.2.0>`_ (2019/01/15)
+`0.2.0 <http://github.com/plstcharles/thelper/tree/v0.2.0>`_ (2019/01/15)
 ----------------------------------------------------------------------------------
 
 * Added regression/segmentation tasks and trainers
@@ -288,13 +288,13 @@ Changelog
 * Added trainer support for loss computation via external members
 * Added utils to download/verify/extract files
 
-`0.1.1 <http://github.com/plstcharles/thelper/tree/0.1.1>`_ (2019/01/14)
+`0.1.1 <http://github.com/plstcharles/thelper/tree/v0.1.1>`_ (2019/01/14)
 ----------------------------------------------------------------------------------
 
 * Minor fixups and updates for CCFB02 compatibility
 * Added RawPredictions metric to fetch data from trainers
 
-`0.1.0 <http://github.com/plstcharles/thelper/tree/0.1.0>`_ (2018/11/28)
+`0.1.0 <http://github.com/plstcharles/thelper/tree/v0.1.0>`_ (2018/11/28)
 ----------------------------------------------------------------------------------
 
 * Fixed readthedocs sphinx auto-build w/ mocking.
@@ -308,14 +308,14 @@ Changelog
 * Refactored task interfaces to allow merging.
 * Simplified model fine-tuning via checkpoints.
 
-`0.0.2 <http://github.com/plstcharles/thelper/tree/0.0.2>`_ (2018/10/18)
+`0.0.2 <http://github.com/plstcharles/thelper/tree/v0.0.2>`_ (2018/10/18)
 ----------------------------------------------------------------------------------
 
 * Completed first documentation pass.
 * Fixed travis/rtfd builds.
 * Fixed device mapping/loading issues.
 
-`0.0.1 <http://github.com/plstcharles/thelper/tree/0.0.1>`_ (2018/10/03)
+`0.0.1 <http://github.com/plstcharles/thelper/tree/v0.0.1>`_ (2018/10/03)
 ----------------------------------------------------------------------------------
 
 * Initial release (work in progress).
