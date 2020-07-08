@@ -6,6 +6,14 @@ Changelog
 `Unreleased <http://github.com/plstcharles/thelper/tree/master>`_ (latest)
 ----------------------------------------------------------------------------------
 
+.. **INSERT APPLIED CHANGES HERE**
+
+`0.5.0-rc2 <http://github.com/plstcharles/thelper/tree/v0.5.0-rc2>`_ (2020/07/08)
+----------------------------------------------------------------------------------
+
+* Employ ``requirements.txt`` within ``conda-env.yml`` to kept dependencies in sync.
+* Fixes built docker image not using appropriate dependencies enforced through ``requirements.txt``.
+
 `0.5.0-rc1 <http://github.com/plstcharles/thelper/tree/v0.5.0-rc1>`_ (2020/07/07)
 ----------------------------------------------------------------------------------
 
