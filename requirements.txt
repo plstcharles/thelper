@@ -4,7 +4,8 @@ lz4
 matplotlib
 numpy
 opencv-python
-Pillow
+# PILLOW_VERSION removed which causes import to fail with torchvision
+pillow<7
 pip
 pyyaml
 scikit-learn
