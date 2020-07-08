@@ -54,7 +54,7 @@ with open("requirements.txt") as reqfd:
 
 setuptools.setup(
     name="thelper",
-    version="0.5.0-rc",
+    version="0.5.0-rc1",
     license="Apache Software License 2.0",
     description="Training framework & tools for PyTorch-based machine learning projects.",
     long_description="%s\n%s" % (
@@ -74,13 +74,16 @@ setuptools.setup(
         "Intended Audience :: Developers",
         "Intended Audience :: Science/Research",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
+        "Topic :: Scientific/Engineering :: Image Recognition",
         "License :: OSI Approved :: Apache Software License",
         "Natural Language :: English",
         "Operating System :: Unix",
         "Operating System :: POSIX",
         "Operating System :: Microsoft :: Windows",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",  # we assume dict insert order will be kept intact... (>=3.6)
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: Implementation :: CPython",
     ],
     keywords=["pytorch", "trainer", "loader"],
