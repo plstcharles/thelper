@@ -23,7 +23,11 @@ notifications:
 jobs:
   include:
     - stage: test
-      script: make test-all
+      # test everything except 'geo' tested separately (more installs)
+      script: make check test
+    - stage: test
+      # test 'geo' extra with additional dependencies
+      script: make test-geo
     - stage: test
       script: make docs
     - stage: deploy

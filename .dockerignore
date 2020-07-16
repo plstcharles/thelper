@@ -25,6 +25,7 @@ pyvenv*/
 .mr.developer.cfg
 .project
 .pydevproject
+.conda-env*
 
 # Python / Extensions etc.
 *~
