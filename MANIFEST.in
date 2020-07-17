@@ -29,4 +29,4 @@ include conda-env-geo.yml
 include .travis.yml
 include appveyor.yml
 
-global-exclude *.py[cod] __pycache__ *.so *.dylib *.bak
+global-exclude *.py[cod] __pycache__ *.so *.dylib *.bak cluster_*.sh
