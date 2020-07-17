@@ -210,51 +210,39 @@ def create_loaders(config, save_dir=None):
             fd.write(f"session: {session_name}-{logstamp}\n")
             fd.write(f"version: {repover}\n")
             fd.write(str(task) + "\n")
-        log_sample_metadata = thelper.utils.get_key_def(["log_samples", "log_samples_metadata"],
-                                                        config, default=False)
         for dataset_name, dataset in datasets.items():
             dataset_log_file = os.path.join(data_logger_dir, dataset_name + ".log")
             if not loader_factory.skip_verif and os.path.isfile(dataset_log_file):
                 logger.info(f"verifying sample list for dataset '{dataset_name}'...")
                 log_content = thelper.utils.load_config(dataset_log_file, as_json=True, add_name_if_missing=False)
                 assert isinstance(log_content, dict), "old split data logs no longer supported for verification"
-                assert "samples" in log_content and isinstance(log_content["samples"], list), \
-                    "unexpected dataset log content (bad 'samples' field, should be list)"
-                samples_old = log_content["samples"]
-                samples_new = dataset.samples if hasattr(dataset, "samples") and dataset.samples is not None \
-                    and len(dataset.samples) == len(dataset) else []
-                if len(samples_old) != len(samples_new):
-                    query_msg = "Old sample list for dataset '%s' mismatch with current sample list; proceed anyway?"
-                    answer = thelper.utils.query_yes_no(query_msg, bypass="n")
-                    if not answer:
-                        logger.error("sample list mismatch with previous run; user aborted")
-                        sys.exit(1)
-                    break
-                else:
-                    breaking = False
-                    for set_name, idxs in zip(["train_idxs", "valid_idxs", "test_idxs"],
-                                              [train_idxs[dataset_name], valid_idxs[dataset_name], test_idxs[dataset_name]]):
-                        # index values were paired in tuples earlier, 0=idx, 1=label --- we unpack in the miniloop below
-                        if not np.array_equal(np.sort(log_content[set_name]), np.sort([idx for idx, _ in idxs])):
-                            query_msg = f"Old indices list for dataset '{dataset_name}' mismatch with current indices" \
-                                        f"list ('{set_name}'); proceed anyway?"
-                            answer = thelper.utils.query_yes_no(query_msg, bypass="n")
-                            if not answer:
-                                logger.error("indices list mismatch with previous run; user aborted")
-                                sys.exit(1)
-                            breaking = True
-                            break
-                    if not breaking:
-                        for idx, (sample_new, sample_old) in enumerate(zip(samples_new, samples_old)):
-                            if str(sample_new) != sample_old:
-                                query_msg = f"Old sample #{idx} for dataset '{dataset_name}' mismatch with current #{idx};" \
-                                            f" proceed anyway?\n\told: {str(sample_old)}\n\tnew: {str(sample_new)}"
-                                answer = thelper.utils.query_yes_no(query_msg, bypass="n")
-                                if not answer:
-                                    logger.error("sample list mismatch with previous run; user aborted")
-                                    sys.exit(1)
-                                break
+                samples_old, samples_new = None, None
+                if "samples" in log_content:
+                    assert isinstance(log_content["samples"], list), \
+                        "unexpected dataset log content (bad 'samples' field, should be list)"
+                    samples_old = log_content["samples"]
+                    samples_new = dataset.samples if hasattr(dataset, "samples") and dataset.samples is not None \
+                        and len(dataset.samples) == len(dataset) else []
+                    if len(samples_old) != len(samples_new):
+                        query_msg = f"old sample list for dataset '{dataset_name}' mismatch with current list; proceed?"
+                        answer = thelper.utils.query_yes_no(query_msg, bypass="n")
+                        if not answer:
+                            logger.error("sample list mismatch with previous run; user aborted")
+                            sys.exit(1)
+                        break
+                for set_name, idxs in zip(["train_idxs", "valid_idxs", "test_idxs"],
+                                          [train_idxs[dataset_name], valid_idxs[dataset_name], test_idxs[dataset_name]]):
+                    # index values were paired in tuples earlier, 0=idx, 1=label --- we unpack in the miniloop below
+                    if not np.array_equal(np.sort(log_content[set_name]), np.sort([idx for idx, _ in idxs])):
+                        query_msg = f"Old indices list for dataset '{dataset_name}' mismatch with current indices" \
+                                    f"list ('{set_name}'); proceed anyway?"
+                        answer = thelper.utils.query_yes_no(query_msg, bypass="n")
+                        if not answer:
+                            logger.error("indices list mismatch with previous run; user aborted")
+                            sys.exit(1)
+                        break
         printer = pprint.PrettyPrinter(indent=2)
+        log_sample_metadata = thelper.utils.get_key_def(["log_samples", "log_samples_metadata"], config, default=False)
         for dataset_name, dataset in datasets.items():
             dataset_log_file = os.path.join(data_logger_dir, dataset_name + ".log")
             samples = dataset.samples if hasattr(dataset, "samples") and dataset.samples is not None \

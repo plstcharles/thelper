@@ -566,6 +566,7 @@ def verif_config():
             "dataset_B": DummyClassifDataset(100, 3, "B", seed=2),
             "dataset_C": DummyClassifDataset(100, 3, "C", seed=3)
         },
+        "log_samples": True,
         "loaders": {
             "test_seed": 0,
             "valid_seed": 0,
@@ -632,19 +633,6 @@ def test_sample_data_verif(verif_config, verif_dir_path, mocker):
     task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(bad_config, save_dir=verif_dir_path)
     assert proceed_query.call_count == 1
     assert sum([subset == "C" for b in test_loader for subset in b["subset"]]) < 100
-
-    shutil.rmtree(verif_dir_path, ignore_errors=True)  # rebuild correct logs with next call for new test
-    _ = thelper.data.create_loaders(verif_config, save_dir=verif_dir_path)
-    bad_config["datasets"]["dataset_C"] = DummyClassifDataset(100, 3, "D", seed=3)
-    bad_config["loaders"]["test_split"]["dataset_C"] = 1.0
-    proceed_query = mocker.patch("thelper.utils.query_yes_no", return_value=False)
-    with pytest.raises(SystemExit):
-        _ = thelper.data.create_loaders(bad_config, save_dir=verif_dir_path)
-    assert proceed_query.call_count == 1
-    proceed_query = mocker.patch("thelper.utils.query_yes_no", return_value=True)
-    task, train_loader, valid_loader, test_loader = thelper.data.create_loaders(bad_config, save_dir=verif_dir_path)
-    assert proceed_query.call_count == 1
-    assert sum([subset == "D" for b in test_loader for subset in b["subset"]]) == 100
 
 
 def collate_fn(*args, **kwargs):  # pragma: no cover
