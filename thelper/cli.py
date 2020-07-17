@@ -508,10 +508,10 @@ def make_argparser():
     cl_new_ap.add_argument("-c", "--config", required=True, type=str, help="path to the session configuration file")
     cl_new_ap.add_argument("-d", "--save-dir", required=True, type=str, help="path to the session output root directory")
     resume_ap = subparsers.add_parser("resume", help="resume a session from a checkpoint file")
-    resume_ap.add_argument("--ckpt-path", required=True, type=str, help="path to the checkpoint (or directory) to reload")
+    resume_ap.add_argument("--ckpt-path", default=None, type=str, help="path to the checkpoint (or directory) to reload")
     resume_ap.add_argument("-d", "--save-dir", default=None, type=str, help="path to the session output root directory")
     resume_ap.add_argument("-m", "--map-location", default=None, help="map location for loading data (default=None)")
-    resume_ap.add_argument("--override-config", default=None, help="override config file path (default=None)")
+    resume_ap.add_argument("-c", "--override-config", default=None, help="override config file path (default=None)")
     resume_ap.add_argument("-e", "--eval-only", default=False, action="store_true", help="only run evaluation pass (valid+test)")
     resume_ap.add_argument("-t", "--task-compat", default=None, type=str, choices=TASK_COMPAT_CHOICES,
                            help="task compatibility mode to use to resolve any discrepancy between loaded tasks")
@@ -527,10 +527,10 @@ def make_argparser():
     export_ap.add_argument("-c", "--config", required=True, type=str, help="path to the session configuration file (or session directory)")
     export_ap.add_argument("-d", "--save-dir", required=True, type=str, help="path to the session output root directory")
     infer_ap = subparsers.add_parser("infer", help="creates a inference session from a config file")
-    infer_ap.add_argument("--ckpt-path", required=True, type=str, help="path to the checkpoint (or directory) to use for inference "
-                                                                       "(otherwise uses model checkpoint from configuration)")
-    infer_ap.add_argument("-c", "--config", required=True, type=str, help="path to the session configuration file (or session directory)")
-    infer_ap.add_argument("-d", "--save-dir", required=True, type=str, help="path to the session output root directory")
+    infer_ap.add_argument("--ckpt-path", type=str, help="path to the checkpoint (or directory) to use for inference "
+                                                        "(otherwise uses model checkpoint from configuration)")
+    infer_ap.add_argument("-c", "--config", type=str, help="path to the session configuration file (or session directory)")
+    infer_ap.add_argument("-d", "--save-dir", type=str, help="path to the session output root directory")
     return ap
 
 
@@ -588,21 +588,23 @@ def main(args=None, argparser=None):
                 raise AssertionError("cannot specify device in config for cluster sessions, it is determined at runtime")
         create_session(config, args.save_dir)
     elif args.mode == "resume":
-        ckptdata = thelper.utils.load_checkpoint(args.ckpt_path, map_location=args.map_location,
-                                                 always_load_latest=(not args.eval_only))
+        ckptdata = None
+        if args.ckpt_path is not None:
+            ckptdata = thelper.utils.load_checkpoint(args.ckpt_path, map_location=args.map_location,
+                                                     always_load_latest=(not args.eval_only))
         override_config = None
-        if args.override_cfg:
-            thelper.logger.debug("parsing override config at '%s'" % args.override_cfg)
-            override_config = thelper.utils.load_config(args.override_cfg)
+        if args.override_config:
+            thelper.logger.debug(f"parsing override config at: {args.override_config}")
+            override_config = thelper.utils.load_config(args.override_config)
         save_dir = args.save_dir
-        if save_dir is None:
+        if save_dir is None and args.ckpt_path is not None:
             save_dir = thelper.utils.get_checkpoint_session_root(args.ckpt_path)
         if save_dir is None:
             save_dir = thelper.utils.get_save_dir(out_root=None, dir_name=None, config=override_config)
         resume_session(ckptdata, save_dir, config=override_config, eval_only=args.eval_only, task_compat=args.task_compat)
     elif args.mode == "infer":
-        thelper.logger.debug("parsing config at '%s'" % args.cfg_path)
-        config = thelper.utils.load_config(args.cfg_path)
+        thelper.logger.debug(f"parsing config at: {args.config}")
+        config = thelper.utils.load_config(args.config)
         inference_session(config, save_dir=args.save_dir, ckpt_path=args.ckpt_path)
     else:
         thelper.logger.debug("parsing config at '%s'" % args.config)

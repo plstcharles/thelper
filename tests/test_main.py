@@ -41,11 +41,12 @@ def test_main_args(dummy_config, mocker):
     _ = mocker.patch("thelper.cli.annotate_data")
     _ = mocker.patch("thelper.cli.split_data")
     _ = mocker.patch("thelper.cli.export_model")
+    _ = mocker.patch("thelper.cli.inference_session")
     from thelper.cli import main
     assert main([]) == 1
     assert main(["--version"]) == 0
     with pytest.raises(AssertionError):
-        main(["-v", "--silent", "new", dummy_config_path, dummy_save_path])
+        main(["-v", "--silent", "new", "--config", dummy_config_path, "--save-dir", dummy_save_path])
     config = {}
 
     def config_getter(*args, **kwargs):
@@ -55,24 +56,23 @@ def test_main_args(dummy_config, mocker):
     mock_config_load = mocker.patch("thelper.utils.load_config")
     mock_config_load.side_effect = config_getter
     config = {"oii": "test"}
-    assert main(["new", dummy_config_path, dummy_save_path]) == 0
+    assert main(["new", "--config", dummy_config_path, "--save-dir", dummy_save_path]) == 0
     assert mock_create.called_with(config, dummy_save_path)
-    assert main(["cl_new", dummy_config_path, dummy_save_path]) == 0
+    assert main(["cl_new", "--config", dummy_config_path, "--save-dir", dummy_save_path]) == 0
     config = {"trainer": {"device": "cpu"}}
     with pytest.raises(AssertionError):
-        _ = main(["cl_new", dummy_config_path, dummy_save_path])
-    assert main(["viz", dummy_config_path]) == 0
-    assert main(["annot", dummy_config_path, dummy_save_path]) == 0
-    assert main(["split", dummy_config_path, dummy_save_path]) == 0
-    assert main(["export", dummy_config_path, dummy_save_path]) == 0
+        _ = main(["cl_new", "--config", dummy_config_path, "--save-dir", dummy_save_path])
+    assert main(["viz", "--config", dummy_config_path]) == 0
+    assert main(["annot", "--config", dummy_config_path, "--save-dir", dummy_save_path]) == 0
+    assert main(["split", "--config", dummy_config_path, "--save-dir", dummy_save_path]) == 0
+    assert main(["export", "--config", dummy_config_path, "--save-dir", dummy_save_path]) == 0
     _ = mocker.patch("thelper.utils.load_checkpoint")
-    assert main(["resume", dummy_save_path]) == 0
-    assert main(["resume", dummy_save_path, "-c=" + dummy_config_path]) == 0
-    assert main(["resume", os.path.join(dummy_save_path, "checkpoints"), "-c=" + dummy_config_path]) == 0
-    mocker_getter = mocker.patch("thelper.utils.get_save_dir")
-    assert main(["resume", dummy_save_path, "-c=" + dummy_config_path]) == 0
-    assert mocker_getter.call_count == 0
-    assert main(["resume", os.path.join(dummy_save_path, "bad/dir/no/ckpts")]) == 0
-    assert mocker_getter.call_count == 1
-    assert main(["resume", dummy_ckpt_path]) == 0
-    assert main(["resume", dummy_ckpt_path, "-s=" + dummy_save_path]) == 0
+    assert main(["resume", "--save-dir", dummy_save_path]) == 0
+    assert main(["resume", "--save-dir", dummy_save_path, "--override-config", dummy_config_path]) == 0
+    assert main(["resume", "--save-dir", os.path.join(dummy_save_path, "checkpoints"), "--override-config", dummy_config_path]) == 0
+    assert main(["resume", "--save-dir", dummy_save_path, "--override-config", dummy_config_path]) == 0
+    assert main(["resume", "--save-dir", os.path.join(dummy_save_path, "bad/dir/no/ckpts")]) == 0
+    assert main(["resume", "--ckpt-path", dummy_ckpt_path]) == 0
+    assert main(["resume", "--ckpt-path", dummy_ckpt_path, "--save-dir", dummy_save_path]) == 0
+    assert main(["infer", "--config", dummy_config_path, "--save-dir", dummy_save_path]) == 0
+    assert main(["infer", "--config", dummy_config_path, "--save-dir", dummy_save_path, "--ckpt-path", dummy_ckpt_path]) == 0
