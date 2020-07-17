@@ -6,13 +6,13 @@ Updated by Pierre-Luc St-Charles (April 2020)
 """
 
 import copy
+import logging
 import os
 import pprint
 import shutil
 import typing
 
 import h5py
-import logging
 import numpy as np
 import torch.utils
 import torch.utils.data
