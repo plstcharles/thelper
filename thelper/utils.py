@@ -35,6 +35,7 @@ import thelper.typedefs  # noqa: F401
 if TYPE_CHECKING:
     from typing import Any, AnyStr, Callable, Dict, List, Optional, Tuple, Type, Union  # noqa: F401
     from types import FunctionType  # noqa: F401
+    from thelper.session.base import SessionRunner
 
 logger = logging.getLogger(__name__)
 bypass_queries = False
@@ -1581,3 +1582,22 @@ def get_slurm_tmpdir() -> str:
         assert os.path.isdir(slurm_tmpdir), "invalid SLURM_TMPDIR path (not directory)"
         assert os.access(slurm_tmpdir, os.W_OK), "invalid SLURM_TMPDIR path (not writable)"
     return slurm_tmpdir
+
+
+def report_orion_results(session_runner: "SessionRunner") -> None:
+    """Reports the results of a session runner, but only if the config allows it (true by default)."""
+    orion_config = get_key_def("orion", session_runner.config, default={})
+    orion_report_flag = get_key_def("report", orion_config, default=True)
+    if not orion_report_flag:
+        return
+    import orion.client
+    if session_runner.monitor is not None:
+        if session_runner.monitor_goal == thelper.optim.Metric.minimize:
+            report_val = session_runner.monitor_best
+        else:
+            report_val = -session_runner.monitor_best
+        orion.client.report_results([dict(
+            name=session_runner.monitor,
+            type="objective",
+            value=report_val,
+        )])

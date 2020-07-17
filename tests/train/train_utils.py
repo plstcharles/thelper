@@ -21,6 +21,9 @@ def mnist_config(request):
     return {
         "name": test_classif_mnist_name,
         "bypass_queries": True,
+        "orion": {
+            "report": False,
+        },
         "datasets": {
             "mnist": {
                 "type": "torchvision.datasets.MNIST",

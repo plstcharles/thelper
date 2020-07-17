@@ -14,7 +14,6 @@ import logging
 import os
 from typing import Any, Union
 
-import orion.client
 import torch
 import tqdm
 
@@ -57,16 +56,7 @@ def create_session(config, save_dir):
     else:
         trainer.eval()
     logger.debug("all done")
-    if trainer.monitor is not None:
-        if trainer.monitor_goal == thelper.optim.Metric.minimize:
-            report_val = trainer.monitor_best
-        else:
-            report_val = -trainer.monitor_best
-        orion.client.report_results([dict(
-            name=trainer.monitor,
-            type="objective",
-            value=report_val,
-        )])
+    thelper.utils.report_orion_results(trainer)
     return trainer.outputs
 
 
@@ -159,16 +149,7 @@ def resume_session(ckptdata, save_dir, config=None, eval_only=False, task_compat
         logger.info("resuming training session '%s' @ epoch %d" % (trainer.name, trainer.current_epoch))
         trainer.train()
     logger.debug("all done")
-    if trainer.monitor is not None:
-        if trainer.monitor_goal == thelper.optim.Metric.minimize:
-            report_val = trainer.monitor_best
-        else:
-            report_val = -trainer.monitor_best
-        orion.client.report_results([dict(
-            name=trainer.monitor,
-            type="objective",
-            value=report_val,
-        )])
+    thelper.utils.report_orion_results(trainer)
     return trainer.outputs
 
 

@@ -57,6 +57,9 @@ def config(request):
     return {
         "name": test_classif_leak_name,
         "bypass_queries": True,
+        "orion": {
+            "report": False,
+        },
         "datasets": {
             "dummy": DummyDataset(100)
         },
