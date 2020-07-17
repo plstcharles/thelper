@@ -2,7 +2,7 @@ datasets:
   bigearthnet:
     type: thelper.data.geo.bigearthnet.BigEarthNet
     params:
-      hdf5_path: "/shared/data_sfast/datasets/bigearthnet/bigearthnet-thelper.hdf5"
+      hdf5_path: "data/bigearthnet/bigearthnet-thelper.hdf5"
       cache_path: "data/cache"
       keep_file_open: true
 loaders:
