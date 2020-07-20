@@ -219,6 +219,18 @@ class ClassifLogger(PredictionConsumer, ClassNamesHandler, FormatHandler):
         # type: () -> Optional[AnyStr]
         return self.report_csv()
 
+    def report_json(self):
+        # type: () -> Optional[AnyStr]
+        csv = self.report_csv()
+        if csv is None:
+            return None
+        csv = csv.splitlines()
+        header, data = csv[0], csv[1:]
+        headers = header.split(",")
+        json_entries = [{k: float(v) if "score" in k else str(v)
+                         for k, v in zip(headers, line.split(","))} for line in data]
+        return json.dumps(json_entries, sort_keys=False, indent=4)
+
     def report_csv(self):
         # type: () -> Optional[AnyStr]
         """Returns the logged metadata of predicted samples.
