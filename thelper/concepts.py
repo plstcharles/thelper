@@ -81,7 +81,10 @@ def supports(thing, concept):
         | :func:`thelper.concepts.segmentation`
         | :func:`thelper.concepts.regression`
     """
-    return getattr(thing, f"{SUPPORT_PREFIX}{concept}", False) if isinstance(concept, str) else False
+    if not isinstance(concept, str):
+        return False
+    concept = concept.lower()  # in case it was capitalized
+    return getattr(thing, f"{SUPPORT_PREFIX}{concept}", False)
 
 
 def classification(func_or_cls=None):

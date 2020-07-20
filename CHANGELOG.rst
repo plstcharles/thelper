@@ -6,7 +6,8 @@ Changelog
 `Unreleased <http://github.com/plstcharles/thelper/tree/master>`_ (latest)
 ----------------------------------------------------------------------------------
 
-.. **INSERT APPLIED CHANGES HERE**
+* Skip image save call during metric rendering if the provided value is ``None`` as employed by basic logger/reporter.
+* Fix ``concepts`` to handle any variation of upper/lower concept name.
 
 `0.5.0-rc2 <http://github.com/plstcharles/thelper/tree/v0.5.0-rc2>`_ (2020/07/08)
 ----------------------------------------------------------------------------------
