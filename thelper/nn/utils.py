@@ -183,7 +183,7 @@ def create_model(config, task, save_dir=None, ckptdata=None):
     if hasattr(model, "summary"):
         model.summary()
     param_count = get_learnable_param_count(model)
-    if param_count > 10 ** 5:
+    if param_count > 10 ** 6:
         param_count_str = f"{(param_count // 10 ** 5) / 10}M"
     else:
         param_count_str = f"{param_count}"
