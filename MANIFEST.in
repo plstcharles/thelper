@@ -3,6 +3,7 @@ graft thelper
 graft ci
 graft tests
 graft configs
+graft scripts
 
 include .bumpversion.cfg
 include .coveragerc
@@ -29,4 +30,4 @@ include conda-env-geo.yml
 include .travis.yml
 include appveyor.yml
 
-global-exclude *.py[cod] __pycache__ *.so *.dylib *.bak cluster_*.sh
+global-exclude *.py[cod] __pycache__ *.so *.dylib *.bak
