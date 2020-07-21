@@ -1,9 +1,20 @@
+import typing
+
 import torch
 import torch.nn
 import torch.utils.model_zoo
 
 import thelper.nn
 import thelper.nn.coordconv
+
+
+def get_activation_layer(name: typing.AnyStr) -> torch.nn.Module:
+    # todo: support more prebuilt/custom layer types here, if needed...
+    assert name in ["relu", "leaky_relu"]
+    if name == "relu":
+        return torch.nn.ReLU(inplace=True)
+    elif name == "leaky_relu":
+        return torch.nn.LeakyReLU(inplace=True)
 
 
 class Module(torch.nn.Module):
@@ -33,11 +44,7 @@ class BasicBlock(Module):
         super().__init__(inplanes, planes, stride, downsample, coordconv, radius_channel)
         self.conv1 = self._make_conv2d(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = torch.nn.BatchNorm2d(planes)
-        assert activation in ["relu", "leaky_relu"]
-        if activation == "relu":
-            self.activ = torch.nn.ReLU(inplace=True)
-        elif activation == "leaky_relu":
-            self.activ = torch.nn.LeakyReLU(inplace=True)
+        self.activ = get_activation_layer(activation)
         self.conv2 = self._make_conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn2 = torch.nn.BatchNorm2d(planes)
 
@@ -68,11 +75,7 @@ class Bottleneck(Module):
         self.bn2 = torch.nn.BatchNorm2d(planes)
         self.conv3 = self._make_conv2d(planes, planes * self.expansion, kernel_size=1, bias=False)
         self.bn3 = torch.nn.BatchNorm2d(planes * self.expansion)
-        assert activation in ["relu", "leaky_relu"]
-        if activation == "relu":
-            self.activ = torch.nn.ReLU(inplace=True)
-        elif activation == "leaky_relu":
-            self.activ = torch.nn.LeakyReLU(inplace=True)
+        self.activ = get_activation_layer(activation)
 
     def forward(self, x):
         residual = x
@@ -95,15 +98,10 @@ class SqueezeExcitationLayer(torch.nn.Module):
 
     def __init__(self, channel, reduction=16, activation="relu"):
         super().__init__()
-        assert activation in ["relu", "leaky_relu"]
-        if activation == "relu":
-            activation = torch.nn.ReLU
-        elif activation == "leaky_relu":
-            activation = torch.nn.LeakyReLU
         self.pool = torch.nn.AdaptiveAvgPool2d(1)
         self.fc = torch.nn.Sequential(
             torch.nn.Linear(channel, channel // reduction),
-            activation(inplace=True),
+            get_activation_layer(activation),
             torch.nn.Linear(channel // reduction, channel),
             torch.nn.Sigmoid()
         )
@@ -123,11 +121,7 @@ class SqueezeExcitationBlock(Module):
         super().__init__(inplanes, planes, stride, downsample, coordconv, radius_channel)
         self.conv1 = self._make_conv2d(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = torch.nn.BatchNorm2d(planes)
-        assert activation in ["relu", "leaky_relu"]
-        if activation == "relu":
-            self.activ = torch.nn.ReLU(inplace=True)
-        elif activation == "leaky_relu":
-            self.activ = torch.nn.LeakyReLU(inplace=True)
+        self.activ = get_activation_layer(activation)
         self.conv2 = self._make_conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn2 = torch.nn.BatchNorm2d(planes)
         self.se = SqueezeExcitationLayer(planes, reduction, activation=activation)
@@ -188,11 +182,7 @@ class ResNet(thelper.nn.Module):
             kernel_size=conv1_config[0], stride=conv1_config[1],
             padding=conv1_config[2], bias=False)
         self.bn1 = torch.nn.BatchNorm2d(self.inplanes)
-        assert activation in ["relu", "leaky_relu"]
-        if activation == "relu":
-            self.activ = torch.nn.ReLU(inplace=True)
-        elif activation == "leaky_relu":
-            self.activ = torch.nn.LeakyReLU(inplace=True)
+        self.activ = get_activation_layer(activation)
         if skip_max_pool:
             self.maxpool = None
         else:
