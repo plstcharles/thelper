@@ -97,7 +97,7 @@ class ClassNamesHandler(abc.ABC):
         return self._class_names
 
     @class_names.setter
-    def class_names(self, class_names) -> None:
+    def class_names(self, class_names: typing.Union[typing.AnyStr, typing.Iterable[typing.AnyStr]]) -> None:
         """Sets the list of class names considered "of interest" by the derived class."""
         if class_names is None:
             self._class_names = None
