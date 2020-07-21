@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 @thelper.concepts.classification
 @thelper.concepts.segmentation
-class AETrainer(Trainer):
+class AutoEncoderTrainer(Trainer):
 
     def __init__(self,
                  session_name,    # type: typing.AnyStr

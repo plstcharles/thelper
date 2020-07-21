@@ -26,7 +26,7 @@ loaders:
   valid_split:
     bigearthnet: 0.2
 model:
-  type: thelper.nn.resnet.AEResNet
+  type: thelper.nn.resnet.AutoEncoderResNet
   params:
     block: "thelper.nn.resnet.SqueezeExcitationBlock"
     layers: [2, 2, 2, 2]
@@ -39,7 +39,7 @@ model:
     coordconv: true
     output_pads: [1, 0, 1, 1, 1]  # for 120x120
 trainer:
-  type: thelper.train.ae.AETrainer
+  type: thelper.train.ae.AutoEncoderTrainer
   reconstr_display_count: 16
   reconstr_display_mean: "loader.dataset.image_mean"
   reconstr_display_stddev: "loader.dataset.image_stddev"

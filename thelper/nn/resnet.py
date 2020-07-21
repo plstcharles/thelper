@@ -398,7 +398,7 @@ class FCResNet(ResNet):
         self.task = task
 
 
-class AEResNet(ResNet):
+class AutoEncoderResNet(ResNet):
     """Autoencoder-classifier architecture based on ResNet blocks+layers configurations."""
 
     def __init__(self, task, output_pads=None, **kwargs):
@@ -449,7 +449,7 @@ class FakeModule(torch.nn.Module):
         return inputs
 
 
-class AESkipResNet(ResNet):
+class AutoEncoderSkipResNet(ResNet):
     """Autoencoder-U-Net architecture based on ResNet blocks+layers configurations."""
 
     def __init__(self, task, output_pads=None, decoder_dropout=False, dropout_prob=0.1, **kwargs):
