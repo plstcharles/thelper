@@ -188,7 +188,7 @@ class FormatHandler(abc.ABC):
 
     def solve_format(
         self,
-        format: typing.Optional[typing.AnyStr]
+        format: typing.Optional[typing.AnyStr] = None,
     ) -> None:
         self.format = self.__formats__.get(format, "text")
         self.ext = self.__fmt_ext__.get(self.format, "txt")
