@@ -115,9 +115,8 @@ class SessionRunner:
         self.skip_eval_iter = thelper.utils.get_key_def("skip_eval_iter", trainer_config, 0)
 
         # parse and prepare tbx stuff
-        self.use_tbx = \
-            thelper.utils.get_key_def(["use_tbx", "tbx", "use_tb", "tb", "tensorboard"], trainer_config, False)
-        self.use_tbx = thelper.utils.str2bool(self.use_tbx)
+        tbx_config_flags = ["use_tbx", "tbx", "use_tb", "tb", "tensorboard"]
+        self.use_tbx = thelper.utils.str2bool(thelper.utils.get_key_def(tbx_config_flags, trainer_config, False))
         if self.use_tbx:
             try:
                 import tensorboardX
