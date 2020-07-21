@@ -214,9 +214,8 @@ class SessionRunner:
         for cname, mset in zip(["train", "valid", "test"], [self.train_metrics, self.valid_metrics, self.test_metrics]):
             # parse user (custom) callback
             user_callback_keys = [f"{cname}_iter_callback", f"{cname}_callback", "callback"]
-            user_callback = \
-                thelper.utils.get_key_def(user_callback_keys, trainer_config) \
-                # type: Optional[thelper.typedefs.IterCallbackType]
+            user_callback = thelper.utils.get_key_def(
+                user_callback_keys, trainer_config)  # type: Optional[thelper.typedefs.IterCallbackType]
             if user_callback is not None:
                 assert f"{cname}_user_callback" not in mset, f"metrics set already had a '{cname}_user_callback' in it"
                 mset[f"{cname}_user_callback"] = thelper.train.utils.PredictionCallback(user_callback)
