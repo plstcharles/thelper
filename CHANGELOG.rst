@@ -8,7 +8,7 @@ Changelog
 
 .. **INSERT APPLIED CHANGES HERE**
 
-`0.5.0 <http://github.com/plstcharles/thelper/tree/v0.5.0>`_ (%Y/%m/%d)
+`0.5.0 <http://github.com/plstcharles/thelper/tree/v0.5.0>`_ (2020/07/21)
 ----------------------------------------------------------------------------------
 
 * Skip image save call during metric rendering if the provided value is ``None`` as employed by basic logger/reporter.
