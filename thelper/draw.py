@@ -718,9 +718,9 @@ def draw_bbox(image, tl, br, text, color, box_thickness=2, font_thickness=1,
     return win_name, image
 
 
-def draw_bboxes(images,
-                preds=None,
-                bboxes=None,
+def draw_bboxes(images,                 # type: thelper.typedefs.InputType
+                preds=None,             # type: Optional[thelper.typedefs.AnyPredictionType]
+                bboxes=None,            # type: Optional[thelper.typedefs.AnyTargetType]
                 color_map=None,         # type: Optional[thelper.typedefs.ClassColorMap]
                 redraw=None,            # type: Optional[thelper.typedefs.DrawingType]
                 block=False,            # type: Optional[bool]
