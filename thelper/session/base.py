@@ -431,7 +431,7 @@ class SessionRunner:
                         writer.add_text(f"{writer_prefix}{key}", val, idx)
                     else:
                         writer.add_scalar(f"{writer_prefix}{key}", val, idx)
-            if key.endswith("/image"):
+            if key.endswith("/image") and val is not None:  # some metrics got the callable but return None
                 assert isinstance(val, np.ndarray) and len(val.shape) == 3 and val.shape[2] == 3, \
                     "unexpected image format (should be numpy array with RGB channels)"
                 image_ext = thelper.utils.get_key_def(key + "/extension", data, "png")
