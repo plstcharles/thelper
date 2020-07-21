@@ -6,6 +6,11 @@ Changelog
 `Unreleased <http://github.com/plstcharles/thelper/tree/master>`_ (latest)
 ----------------------------------------------------------------------------------
 
+.. **INSERT APPLIED CHANGES HERE**
+
+`0.5.0 <http://github.com/plstcharles/thelper/tree/v0.5.0>`_ (%Y/%m/%d)
+----------------------------------------------------------------------------------
+
 * Skip image save call during metric rendering if the provided value is ``None`` as employed by basic logger/reporter.
 * Add JSON implementation for ``thelper.train.utils.ClassifLogger``.
 * Fix ``concepts`` to handle any variation of upper/lower concept name.
