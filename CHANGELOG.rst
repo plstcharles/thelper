@@ -6,7 +6,14 @@ Changelog
 `Unreleased <http://github.com/plstcharles/thelper/tree/master>`_ (latest)
 ----------------------------------------------------------------------------------
 
-.. **INSERT APPLIED CHANGES HERE**
+* Refactored and cleaned up HDF5 data extraction/parsing classes
+* Added dataset interfaces for BigEarthNet, Agri-Vis challenge
+* Update classification task to allow multi-label classification
+* Added activation layer customization for in-framework ResNet archs
+* Updated default move_tensor behavior to be non-blocking
+* Added trainer implementation for auto-encoder-type models
+* Added Orion reporting support for hyperparameter explorations
+* Added SLURM cluster utilities (tmpdir getter, launch scripts)
 
 `0.5.0 <http://github.com/plstcharles/thelper/tree/v0.5.0>`_ (2020/07/21)
 ----------------------------------------------------------------------------------
