@@ -6,8 +6,7 @@ matplotlib
 numpy
 opencv-python
 orion
-# PILLOW_VERSION removed which causes import to fail with torchvision
-pillow<7
+pillow>=7.1
 pyyaml
 scikit-learn
 six
