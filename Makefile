@@ -135,24 +135,24 @@ test-all: check     ## run all checks and tests in the installed environment
 
 .PHONY: bump
 bump: install-dev   ## bump version using version specified as user input
-	$(shell bash -c 'read -p "Version: " VERSION_PART; \
+	@bash -c 'read -p "Version: " VERSION_PART; \
 	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/setup.cfg \
-		--verbose --allow-dirty --no-tag --new-version $$VERSION_PART patch;')
+		--verbose --allow-dirty --no-tag --new-version $$VERSION_PART patch;'
 
 .PHONY: bump-dry
 bump-dry: install-dev   ## bump version using version specified as user input (dry-run)
-	$(shell bash -c 'read -p "Version: " VERSION_PART; \
+	@bash -c 'read -p "Version: " VERSION_PART; \
 	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/setup.cfg \
-		--verbose --allow-dirty --dry-run --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;')
+		--verbose --allow-dirty --dry-run --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;'
 
 .PHONY: bump-tag
 bump-tag: install-dev   ## bump version using version specified as user input, tags it and commits the change in git
-	$(shell bash -c 'read -p "Version: " VERSION_PART; \
+	@bash -c 'read -p "Version: " VERSION_PART; \
 	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/setup.cfg \
-		--verbose --allow-dirty --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;')
+		--verbose --allow-dirty --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;'
 
 ## --- execution targets --- ##
 
