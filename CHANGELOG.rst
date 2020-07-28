@@ -6,6 +6,11 @@ Changelog
 `Unreleased <http://github.com/plstcharles/thelper/tree/master>`_ (latest)
 ----------------------------------------------------------------------------------
 
+.. **INSERT APPLIED CHANGES HERE**
+
+`0.6.0 <http://github.com/plstcharles/thelper/tree/v0.6.0>`_ (2020/07/28)
+----------------------------------------------------------------------------------
+
 * Refactored and cleaned up HDF5 data extraction/parsing classes
 * Added dataset interfaces for BigEarthNet, Agri-Vis challenge
 * Update classification task to allow multi-label classification
