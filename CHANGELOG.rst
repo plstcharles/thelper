@@ -6,7 +6,7 @@ Changelog
 `Unreleased <http://github.com/plstcharles/thelper/tree/master>`_ (latest)
 ----------------------------------------------------------------------------------
 
-.. **INSERT APPLIED CHANGES HERE**
+* Fixed conda package builds for tagged deployments
 
 `0.6.0 <http://github.com/plstcharles/thelper/tree/v0.6.0>`_ (2020/07/28)
 ----------------------------------------------------------------------------------
