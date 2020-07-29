@@ -145,14 +145,14 @@ bump-dry: install-dev   ## bump version using version specified as user input (d
 	@bash -c 'read -p "Version: " VERSION_PART; \
 	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/setup.cfg \
-		--verbose --allow-dirty --dry-run --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;'
+		--verbose --allow-dirty --dry-run --tag --tag-name "v{new_version}" --new-version $$VERSION_PART patch;'
 
 .PHONY: bump-tag
 bump-tag: install-dev   ## bump version using version specified as user input, tags it and commits the change in git
 	@bash -c 'read -p "Version: " VERSION_PART; \
 	source $(CONDA_HOME)/bin/activate $(CONDA_ENV); \
 	$(CONDA_ENV_PATH)/bin/bumpversion --config-file $(CUR_DIR)/setup.cfg \
-		--verbose --allow-dirty --tag --tag-name "{new_version}" --new-version $$VERSION_PART patch;'
+		--verbose --allow-dirty --tag --tag-name "v{new_version}" --new-version $$VERSION_PART patch;'
 
 ## --- execution targets --- ##
 
