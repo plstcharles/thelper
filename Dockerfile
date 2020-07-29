@@ -2,7 +2,7 @@ FROM nvidia/cuda:10.0-cudnn7-devel-ubuntu16.04
 LABEL name="thelper"
 LABEL description="Training framework and CLI for PyTorch-based machine learning projects"
 LABEL vendor="Centre de Recherche Informatique de Montréal / Computer Research Institute of Montreal (CRIM)"
-LABEL version="0.6.0"
+LABEL version="0.6.1"
 
 ARG PYTHON_VERSION=3.7
 
