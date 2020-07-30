@@ -1,9 +1,9 @@
 import torchvision
 
-import thelper.nn.segmentation.base
+from thelper.nn.segmentation.base import SegmModelBase
 
 
-class DeepLabV3ResNet50(thelper.nn.segmentation.base.SegmModelBase):
+class DeepLabV3ResNet50(SegmModelBase):
     """
     This class is a thin wrapper for :func:`torchvision.models.segmentation.deeplabv3_resnet101`
     (``torchvision > 0.6``).
@@ -21,7 +21,7 @@ class DeepLabV3ResNet50(thelper.nn.segmentation.base.SegmModelBase):
         super().__init__(task, pretrained=pretrained)
 
 
-class DeepLabV3ResNet101(thelper.nn.segmentation.base.SegmModelBase):
+class DeepLabV3ResNet101(SegmModelBase):
     """
     This class is a thin wrapper for :func:`torchvision.models.segmentation.deeplabv3_resnet101`
     (``torchvision > 0.6``).

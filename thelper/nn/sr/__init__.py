@@ -7,7 +7,8 @@ individual headers for more information.
 
 import logging
 
-import thelper.nn  # noqa: F401
+import thelper.nn.sr.srcnn  # noqa: F401
+import thelper.nn.sr.vdsr  # noqa: F401
 from thelper.nn.sr.srcnn import SRCNN  # noqa: F401
 from thelper.nn.sr.vdsr import VDSR  # noqa: F401
 

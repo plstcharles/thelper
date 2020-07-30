@@ -1,9 +1,9 @@
 import torchvision
 
-import thelper.nn.segmentation.base
+from thelper.nn.segmentation.base import SegmModelBase
 
 
-class FCNResNet50(thelper.nn.segmentation.base.SegmModelBase):
+class FCNResNet50(SegmModelBase):
     """
     This class is a thin wrapper for :func:`torchvision.models.segmentation.fcn_resnet50` (``torchvision > 0.6``).
 
@@ -20,7 +20,7 @@ class FCNResNet50(thelper.nn.segmentation.base.SegmModelBase):
         super().__init__(task, pretrained=pretrained)
 
 
-class FCNResNet101(thelper.nn.segmentation.base.SegmModelBase):
+class FCNResNet101(SegmModelBase):
     """
     This class is a thin wrapper for :func:`torchvision.models.segmentation.fcn_resnet50` (``torchvision > 0.6``).
 

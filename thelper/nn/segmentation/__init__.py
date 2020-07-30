@@ -5,7 +5,9 @@ This package contains classes that define blocks and modules used in various neu
 
 import logging
 
-import thelper.nn  # noqa: F401
+import thelper.nn.segmentation.base  # noqa: F401
+import thelper.nn.segmentation.deeplabv3  # noqa: F401
+import thelper.nn.segmentation.fcn  # noqa: F401
 from thelper.nn.segmentation.deeplabv3 import DeepLabV3ResNet50  # noqa: F401
 from thelper.nn.segmentation.deeplabv3 import DeepLabV3ResNet101  # noqa: F401
 from thelper.nn.segmentation.fcn import FCNResNet50  # noqa: F401
