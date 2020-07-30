@@ -223,14 +223,19 @@ autodoc_mock_imports = [
     'argparse',
     'augmentor',
     'cv2',
+    'efficientnet_pytorch',
     'gdal',  # for geospatial tools
     'geojson',  # for geospatial tools
     'git',
     'h5py',
+    'hdf5plugin',
+    'kornia',
     'lz4',
     'matplotlib',
     'numpy',
     'ogr',  # for geospatial tools
+    'orion',
+    'orion.client',
     'osr',  # for geospatial tools
     'PIL',
     'PIL.Image',
