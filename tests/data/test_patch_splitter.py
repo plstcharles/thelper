@@ -50,7 +50,7 @@ def test_splitter_config(mock_warning):
         )
     )
     aligned_no_channels = thelper.data.wrappers.patch.ImageSplitter(
-        patch_size=(10, 10), patch_stride=(10, 10),
+        patch_size=(10, 10), patch_stride=(10, 10), patch_jitter=(0, 0),
         **wrapped_dataset_args, split_mode="stack",
     )
     assert mock_warning.call_count == 0
@@ -60,7 +60,7 @@ def test_splitter_config(mock_warning):
     assert aligned_no_channels.patch_coords[0][-1] == 90
     assert aligned_no_channels.patch_coords[1][-1] == 110
     unaligned_no_channels = thelper.data.wrappers.patch.ImageSplitter(
-        patch_size=(10, 11), patch_stride=(10, 11),
+        patch_size=(10, 11), patch_stride=(10, 11), patch_jitter=(0, 0),
         **wrapped_dataset_args, split_mode="stack",
     )
     assert mock_warning.call_count == 1
@@ -69,7 +69,7 @@ def test_splitter_config(mock_warning):
     assert unaligned_no_channels.patch_coords[0][-1] == 90
     assert unaligned_no_channels.patch_coords[1][-1] == 99
     unaligned_no_channels = thelper.data.wrappers.patch.ImageSplitter(
-        patch_size=(10, 10), patch_stride=(10, 7),
+        patch_size=(10, 10), patch_stride=(10, 7), patch_jitter=(0, 0),
         **wrapped_dataset_args, split_mode="stack",
     )
     assert mock_warning.call_count == 2
@@ -78,7 +78,7 @@ def test_splitter_config(mock_warning):
     assert unaligned_no_channels.patch_coords[0][-1] == 90
     assert unaligned_no_channels.patch_coords[1][-1] == 105
     unaligned_no_channels = thelper.data.wrappers.patch.ImageSplitter(
-        patch_size=(10, 10), patch_stride=(7, 7),
+        patch_size=(10, 10), patch_stride=(7, 7), patch_jitter=(0, 0),
         **wrapped_dataset_args, split_mode="stack",
     )
     assert mock_warning.call_count == 4
@@ -90,7 +90,7 @@ def test_splitter_config(mock_warning):
 
 def test_splitter_stack():
     dataset = thelper.data.wrappers.patch.ImageSplitter(
-        patch_size=(10, 10), patch_stride=(10, 10),
+        patch_size=(10, 10), patch_stride=(10, 10), patch_jitter=(0, 0),
         dataset_type=DummyDataset, dataset_params=dict(
             image_size=(100, 100), sample_count=10, with_channels=False,
         ), split_mode="stack",
@@ -115,7 +115,7 @@ def test_splitter_stack():
 
 def test_splitter_iterate():
     dataset = thelper.data.wrappers.patch.ImageSplitter(
-        patch_size=(5, 5), patch_stride=(1, 1),
+        patch_size=(5, 5), patch_stride=(1, 1), patch_jitter=(0, 0),
         dataset_type=DummyDataset, dataset_params=dict(
             image_size=(10, 10), sample_count=10, with_channels=False,
         ), split_mode="iterate",
@@ -130,7 +130,7 @@ def test_splitter_iterate():
 
 def test_splitter_random():
     dataset = thelper.data.wrappers.patch.ImageSplitter(
-        patch_size=(5, 5), patch_stride=(1, 1),
+        patch_size=(5, 5), patch_stride=(1, 1), patch_jitter=(0, 0),
         dataset_type=DummyDataset, dataset_params=dict(
             image_size=(10, 10), sample_count=10, with_channels=False,
         ), split_mode="random",
@@ -146,7 +146,7 @@ def test_splitter_random():
 def test_transforms():
     np.random.seed(0)
     args = dict(
-        patch_size=(5, 5), patch_stride=(1, 1),
+        patch_size=(5, 5), patch_stride=(1, 1), patch_jitter=(0, 0),
         dataset_type=DummyDataset, dataset_params=dict(
             image_size=(30, 30), sample_count=30, with_channels=False,
         ), split_mode="stack", transforms=dummy_stochastic_transformer,
@@ -181,3 +181,21 @@ def test_transforms():
         sample = dataset[np.random.randint(30)]["0"]
         assert all([(patch == 0).all() for patch in sample])
     assert transform_call_count == 100
+
+
+def test_splitter_jitter():
+    dataset = thelper.data.wrappers.patch.ImageSplitter(
+        patch_size=(5, 5), patch_stride=(5, 5), patch_jitter=(4, 3),
+        dataset_type=DummyDataset, dataset_params=dict(
+            image_size=(20, 20), sample_count=5, with_channels=False,
+        ), split_mode="iterate",
+    )
+    # first, just sample patches near image bounds to make sure OOB never crashes
+    _ = [dataset[0]["0"] for _ in range(10000)]
+    _ = [dataset[len(dataset) - 1]["0"] for _ in range(10000)]
+    # now, sample 10 should be pretty centered, let's use it to check jitter bounds
+    sample_stack = np.stack([np.asarray(dataset[10]["patch_coords"]) for _ in range(10000)])
+    mean_coords = np.mean(sample_stack, axis=0)
+    assert np.allclose(mean_coords, 10, atol=0.05)
+    assert sample_stack[:, 0].min() == 6 and sample_stack[:, 0].max() == 14  # y-axis
+    assert sample_stack[:, 1].min() == 7 and sample_stack[:, 1].max() == 13  # x-axis

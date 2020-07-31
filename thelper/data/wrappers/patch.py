@@ -33,6 +33,7 @@ class ImageSplitter(Dataset):
             self,
             patch_size: typing.Sequence[int],
             patch_stride: typing.Sequence[int],
+            patch_jitter: typing.Sequence[int],
             dataset_type: typing.Union[typing.AnyStr, typing.Type],
             dataset_params: typing.Optional[typing.Dict] = None,
             split_mode: typing.AnyStr = "stack",
@@ -44,8 +45,9 @@ class ImageSplitter(Dataset):
         """Constructs the specified dataset parser & validates the splitting dimensions.
 
         Args:
-            patch_size: a tuple of patch dimensions (typically 2D).
-            patch_stride: a tuple of patch strides (typically 2D).
+            patch_size: a tuple of patch dimensions (all axes, but typically 2D).
+            patch_stride: a tuple of patch strides (all axes, but typically 2D).
+            patch_jitter: a tuple of patch jitter values (all axes, but typically 2D).
             dataset_type: the name (or type) of the parser to instantiate and wrap.
             dataset_params: the arguments to pass to the instantiated parser constructor.
             split_mode: the type of splitting to perform. Must be 'stack', 'iterate', or
@@ -77,9 +79,12 @@ class ImageSplitter(Dataset):
         self.transforms_mode = transforms_mode
         assert patch_size and all([0 < p for p in patch_size]), f"invalid patch size: {patch_size}"
         assert patch_stride and all([0 < p for p in patch_stride]), f"invalid patch size: {patch_stride}"
+        assert patch_jitter and all([0 <= p for p in patch_jitter]), f"invalid patch jitter: {patch_jitter}"
         assert len(patch_stride) == len(patch_size), "mismatched patch size/stride dimensions count"
+        assert len(patch_jitter) == len(patch_size), "mismatched patch size/jitter dimensions count"
         self.patch_size = patch_size
         self.patch_stride = patch_stride
+        self.patch_jitter = patch_jitter
         if isinstance(dataset_type, str):
             dataset_type = thelper.utils.import_class(dataset_type)  # pragma: no cover
         self.dataset_type = dataset_type
@@ -98,7 +103,7 @@ class ImageSplitter(Dataset):
 
     def _validate_split(self):
         # first, we will get the 1st sample from the wrapped dataset to get the input shpae
-        logger.debug(f"loading first sample for size checks...")
+        logger.debug("loading first sample for size checks...")
         sample = self.samples[0]
         assert isinstance(sample, dict), f"unexpected sample type: {type(sample)}"
         assert self.task.input_key in sample, "loaded sample did not possess image key"
@@ -133,9 +138,16 @@ class ImageSplitter(Dataset):
 
     def _get_patch_coords_from_index(self, patch_idx: int):
         out_coords = []
-        for coords in reversed(self.patch_coords):
+        for dim in reversed(range(len(self.patch_coords))):
+            coords = self.patch_coords[dim]
             curr_coord_idx = patch_idx % len(coords)
-            out_coords = [coords[curr_coord_idx], *out_coords]
+            curr_coord = coords[curr_coord_idx]
+            jitter = self.patch_jitter[dim]
+            if jitter:
+                offset = np.random.randint(-jitter, jitter + 1)
+                patch_max_coord = self.expected_input_shape[dim] - 1
+                curr_coord = min(max(curr_coord + offset, 0), patch_max_coord)
+            out_coords = [curr_coord, *out_coords]
             patch_idx -= curr_coord_idx
             patch_idx //= len(coords)
         assert patch_idx == 0, "messed up logic?"
