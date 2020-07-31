@@ -14,6 +14,7 @@ import thelper.data.parsers  # noqa: F401
 import thelper.data.pascalvoc  # noqa: F401
 import thelper.data.samplers  # noqa: F401
 import thelper.data.utils  # noqa: F401
+import thelper.data.wrappers  # noqa: F401
 from thelper.data.loaders import DataLoader  # noqa: F401
 from thelper.data.loaders import DataLoaderWrapper  # noqa: F401
 from thelper.data.loaders import default_collate  # noqa: F401
