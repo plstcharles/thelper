@@ -3,12 +3,12 @@
 This module contains utility functions and tools used to instantiate data loaders and parsers.
 """
 
-import inspect
 import json
 import logging
 import os
 import pprint
 import sys
+import typing
 
 import numpy as np
 import tqdm
@@ -16,6 +16,9 @@ import tqdm
 import thelper.tasks
 import thelper.transforms
 import thelper.utils
+
+if typing.TYPE_CHECKING:
+    import thelper.data
 
 logger = logging.getLogger(__name__)
 
@@ -268,7 +271,10 @@ def create_loaders(config, save_dir=None):
     return task, train_loader, valid_loader, test_loader
 
 
-def create_parsers(config, base_transforms=None):
+def create_parsers(
+        config: typing.Dict,
+        base_transforms: typing.Optional[typing.Callable] = None,
+) -> typing.Tuple[typing.Dict, thelper.tasks.Task]:
     """Instantiates dataset parsers based on a provided dictionary.
 
     This function will instantiate dataset parsers as defined in a name-type-param dictionary. If multiple
@@ -290,7 +296,7 @@ def create_parsers(config, base_transforms=None):
             will be provided to the constructor of all instantiated dataset parsers.
 
     Returns:
-        A 2-element tuple that contains: 1) the list of dataset interfaces/parsers that were instantiated; and
+        A 2-element tuple that contains: 1) the name-to-dataset map of data parsers that were instantiated; and
         2) a task object compatible with all of those (see :class:`thelper.tasks.utils.Task` for more information).
 
     .. seealso::
@@ -299,10 +305,9 @@ def create_parsers(config, base_transforms=None):
         | :class:`thelper.data.parsers.ExternalDataset`
         | :class:`thelper.tasks.utils.Task`
     """
-    if not isinstance(config, dict):
-        raise AssertionError("unexpected session config type")
-    if "datasets" not in config or not config["datasets"]:
-        raise AssertionError("config missing 'datasets' field (must contain dict or str value)")
+    assert isinstance(config, dict), "unexpected session config type"
+    assert "datasets" in config and config["datasets"], \
+        "config missing 'datasets' field (must contain dict or str value)"
     config = config["datasets"]  # no need to keep the full config here
     if isinstance(config, str):
         try:
@@ -310,52 +315,56 @@ def create_parsers(config, base_transforms=None):
         except Exception:
             raise AssertionError("'datasets' string should point to valid configuration file")
     logger.debug("loading datasets templates")
-    if not isinstance(config, dict):
-        raise AssertionError("invalid datasets config type (must be dictionary)")
+    assert isinstance(config, dict), "invalid datasets config type (must be dictionary)"
     datasets = {}
     tasks = []
     for dataset_name, dataset_config in config.items():
-        if isinstance(dataset_config, thelper.data.Dataset):
+        from thelper.data import Dataset
+        if isinstance(dataset_config, Dataset):
             dataset = dataset_config
             task = dataset.task
         else:
             logger.debug("loading dataset '%s' configuration..." % dataset_name)
-            if "type" not in dataset_config:
-                raise AssertionError("missing field 'type' for instantiation of dataset '%s'" % dataset_name)
-            dataset_type = thelper.utils.import_class(dataset_config["type"])
-            dataset_params = thelper.utils.get_key_def(["params", "parameters"], dataset_config, {})
-            transforms = None
-            if "transforms" in dataset_config and dataset_config["transforms"]:
-                logger.debug("loading custom transforms for dataset '%s'..." % dataset_name)
-                transforms = thelper.transforms.load_transforms(dataset_config["transforms"])
-                if base_transforms is not None:
-                    transforms = thelper.transforms.Compose([transforms, base_transforms])
-            elif base_transforms is not None:
-                transforms = base_transforms
-            if issubclass(dataset_type, thelper.data.Dataset):
-                # assume that the dataset is derived from thelper.data.parsers.Dataset (it is fully sampling-ready)
-                dataset_sig = inspect.signature(dataset_type)
-                if "config" in dataset_sig.parameters:  # pragma: no cover
-                    # @@@@ for backward compatibility only, will be removed in v0.3
-                    dataset = dataset_type(transforms=transforms, config=dataset_params)
-                else:
-                    dataset = dataset_type(transforms=transforms, **dataset_params)
-                if "task" in dataset_config:
-                    logger.warning("'task' field detected in dataset '%s' config; dataset's default task will be ignored" % dataset_name)
-                    task = thelper.tasks.create_task(dataset_config["task"])
-                else:
-                    task = dataset.task
-            else:
-                if "task" not in dataset_config or not dataset_config["task"]:
-                    raise AssertionError("external dataset '%s' must define task interface in its configuration dict" % dataset_name)
-                task = thelper.tasks.create_task(dataset_config["task"])
-                # assume that __getitem__ and __len__ are implemented, but we need to make it sampling-ready
-                dataset = thelper.data.ExternalDataset(dataset_type, task, transforms=transforms, **dataset_params)
-        if task is None:
-            raise AssertionError("parsed task interface should not be None anymore (old code doing something strange?)")
+            dataset, task = _create_parser(dataset_config, base_transforms)
+        assert task is not None, "parsed task interface should not be None (old code doing something strange?)"
         tasks.append(task)
         datasets[dataset_name] = dataset
     return datasets, thelper.tasks.create_global_task(tasks)
+
+
+def _create_parser(
+        dataset_config: typing.Dict,
+        base_transforms: typing.Optional[typing.Callable]
+) -> typing.Tuple["thelper.data.Dataset", thelper.tasks.Task]:
+    """Instantiates a single dataset parser. Used in `create_parsers`."""
+    assert "type" in dataset_config, "missing field 'type' for instantiation of dataset parser"
+    dataset_type = thelper.utils.import_class(dataset_config["type"])
+    dataset_params_keys = ["params", "parameters"]
+    dataset_params = thelper.utils.get_key_def(dataset_params_keys, dataset_config, {})
+    transforms = None
+    if "transforms" in dataset_config and dataset_config["transforms"]:
+        logger.debug("loading custom transforms...")
+        transforms = thelper.transforms.load_transforms(dataset_config["transforms"])
+        if base_transforms is not None:
+            # dataset-specific transforms will always be applied before 'base' (generic) transforms
+            transforms = thelper.transforms.Compose([transforms, base_transforms])
+    elif base_transforms is not None:
+        transforms = base_transforms
+    from thelper.data import Dataset
+    if issubclass(dataset_type, Dataset):
+        dataset = dataset_type(transforms=transforms, **dataset_params)
+        if "task" in dataset_config:
+            logger.warning("task field found in dataset config, will ignore the dataset's task")
+            task = thelper.tasks.create_task(dataset_config["task"])
+        else:
+            task = dataset.task
+    else:
+        assert "task" in dataset_config and dataset_config["task"], \
+            "external dataset must define task object in its configuration dictionary"
+        task = thelper.tasks.create_task(dataset_config["task"])
+        # assume that __getitem__ and __len__ are implemented, but we need to make it sampling-ready
+        dataset = thelper.data.ExternalDataset(dataset_type, task, transforms=transforms, **dataset_params)
+    return dataset, task
 
 
 def create_hdf5(archive_path, task, train_loader, valid_loader, test_loader, compression=None, config_backup=None):
