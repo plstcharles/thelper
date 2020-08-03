@@ -277,8 +277,11 @@ class LoaderFactory:
         self.total_usage = Counter(self.train_split) + Counter(self.valid_split) + Counter(self.test_split)
         self.skip_split_norm = thelper.utils.str2bool(thelper.utils.get_key_def(
             ["skip_norm", "skip_split_norm"], config, False))
-        self.skip_class_balancing = thelper.utils.str2bool(thelper.utils.get_key_def(
-            ["skip_balancing", "skip_class_balancing", "skip_rebalancing", "skip_class_rebalancing"], config, False))
+        skip_class_balancing_flags = \
+            ["skip_balance", "skip_rebalance", "skip_balancing",
+             "skip_class_balancing", "skip_rebalancing", "skip_class_rebalancing"]
+        self.skip_class_balancing = \
+            thelper.utils.str2bool(thelper.utils.get_key_def(skip_class_balancing_flags, config, False))
         for name, usage in self.total_usage.items():
             if usage != 1:
                 normalize_ratios = None
@@ -354,7 +357,7 @@ class LoaderFactory:
 
     def _get_raw_split(self, indices):
         for name in self.total_usage:
-            assert name in indices, f"dataset '{name}' does not exist"
+            assert name in indices, f"cannot split dataset named '{name}', it does not exist"
         _indices, train_idxs, valid_idxs, test_idxs = {}, {}, {}, {}
         for name, indices in indices.items():
             _indices[name] = copy.deepcopy(indices)
@@ -432,78 +435,90 @@ class LoaderFactory:
         must_split = {}
         global_size = 0
         for dataset_name, dataset in datasets.items():
-            assert isinstance(dataset, thelper.data.Dataset) or isinstance(dataset, thelper.data.ExternalDataset), \
+            assert isinstance(dataset, thelper.data.Dataset) or \
+                isinstance(dataset, thelper.data.ExternalDataset), \
                 f"unexpected dataset type for '{dataset_name}'"
             dataset_sizes[dataset_name] = len(dataset)
             global_size += dataset_sizes[dataset_name]
             # if a single dataset is used in more than a single loader, we cannot skip the rebalancing below
-            must_split[dataset_name] = sum([dataset_name in split for split in
-                                            [self.train_split, self.valid_split, self.test_split]]) > 1
+            must_split[dataset_name] = \
+                sum([dataset_name in split for split in [self.train_split, self.valid_split, self.test_split]]) > 1
         global_size = sum(len(dataset) for dataset in datasets.values())
         logger.info("splitting datasets with parsed sizes = %s" % str(dataset_sizes))
         must_split = any(must_split.values())
-        if task is not None and isinstance(task, thelper.tasks.Classification) and not self.skip_class_balancing and must_split:
+        if task is not None and isinstance(task, thelper.tasks.Classification) and \
+                not self.skip_class_balancing and must_split:
             # note: with current impl, all class sets will be shuffled the same way... (shouldnt matter, right?)
             logger.debug("will split evenly over %d classes..." % len(task.class_names))
             unset_class_key = "<unset>"
-            global_class_names = task.class_names + [unset_class_key]  # extra name added for unlabeled samples (if needed!)
+            global_class_names = task.class_names + [unset_class_key]  # extra name added for unlabeled samples
             sample_maps, sample_counts = {}, {cname: 0 for cname in global_class_names}
             for dataset_name, dataset in datasets.items():
-                # fetching a reference to the list of samples here allows us to bypass the 'loading' process and possibly
-                # directly access sample labels/groundtruth (assuming it is already loaded)
+                # fetching a reference to the list of samples here allows us to bypass the 'loading' process
+                # and possibly directly access sample labels/groundtruth (assuming it is already loaded)
                 samples = dataset.samples if hasattr(dataset, "samples") and dataset.samples is not None \
                     and len(dataset.samples) == len(dataset) else dataset
                 if isinstance(dataset, thelper.data.ExternalDataset):
-                    if hasattr(samples, "samples") and samples.samples is not None and len(samples.samples) == len(samples):
-                        sample_maps[dataset_name] = task.get_class_sample_map(samples.samples, unset_class_key)
+                    if hasattr(samples, "samples") and samples.samples is not None and \
+                            len(samples.samples) == len(samples):
+                        samples_to_sort = samples.samples
                     else:
-                        logger.warning(f"must fully parse the external dataset '{dataset_name}' for balanced intra-class shuffling;" +
-                                       " this might take a while!\n\t...consider making a dataset interface that can return labels" +
-                                       " only, it would greatly speed up the analysis of class distributions\n\t...you could also" +
-                                       " add the 'skip_class_balancing' flag to your data configuration to skip this rebalancing")
+                        logger.warning(
+                            f"must fully parse the external dataset '{dataset_name}' for balanced intra-class "
+                            "shuffling; this might take a while!\n\t...consider making a dataset interface "
+                            "that can return labels only, it would greatly speed up the analysis of class "
+                            "distributions\n\t...you could also add the 'skip_class_balancing' flag to your "
+                            "data configuration to skip this rebalancing"
+                        )
                         # to allow glitch-less tqdm printing after latest logger output
                         sys.stdout.flush(), sys.stderr.flush(), time.sleep(0.01)
-                        samples = []
-                        for sample in tqdm.tqdm(dataset):
+                        samples_to_sort = []
+                        for sample in tqdm.tqdm(dataset, desc=f"fetching '{dataset_name}' class labels"):
                             assert task.gt_key in sample, f"could not find label key ('{task.gt_key}') in sample dict"
-                            samples.append({task.gt_key: sample[task.gt_key]})
-                        sample_maps[dataset_name] = task.get_class_sample_map(samples, unset_class_key)
+                            samples_to_sort.append({task.gt_key: sample[task.gt_key]})
                 else:
-                    sample_maps[dataset_name] = task.get_class_sample_map(samples, unset_class_key)
+                    samples_to_sort = samples
+                sample_maps[dataset_name] = task.get_class_sample_map(
+                    samples_to_sort, unset_class_key, display_progress=True,
+                    progress_desc=f"sorting '{dataset_name}' class labels")
                 for class_name, class_samples in sample_maps[dataset_name].items():
                     assert class_name in sample_counts
                     sample_counts[class_name] += len(class_samples)
             sample_counts = {k: v for k, v in sorted(sample_counts.items(), key=lambda i: i[1])}
             backlist_idxs = {d: np.asarray([], np.int32) for d in datasets}
-            train_idxs, valid_idxs, test_idxs = {d: [] for d in datasets}, {d: [] for d in datasets}, {d: [] for d in datasets}
+            train_idxs, valid_idxs, test_idxs = \
+                {d: [] for d in datasets}, {d: [] for d in datasets}, {d: [] for d in datasets}
             for class_name in sample_counts.keys():
                 curr_class_samples = {}
                 for dataset_name in datasets:
-                    class_samples = sample_maps[dataset_name][class_name] if class_name in sample_maps[dataset_name] else []
+                    if class_name in sample_maps[dataset_name]:
+                        class_samples = sample_maps[dataset_name][class_name]
+                    else:
+                        class_samples = []
                     if task.multi_label:
                         class_samples = np.setdiff1d(class_samples, backlist_idxs[dataset_name])
                     else:
                         assert len(np.intersect1d(class_samples, backlist_idxs[dataset_name])) == 0, \
                             "duplicated sample idx across classes"
                     curr_class_samples[dataset_name] = class_samples
-                    logger.debug("dataset '{}' class #{} '{}' sample count: {}  ({:0.1f}% of dataset, {:0.1f}% of total)".format(
-                        dataset_name,
-                        global_class_names.index(class_name),
-                        class_name,
-                        len(class_samples),
-                        int(100 * len(class_samples) / dataset_sizes[dataset_name]),
-                        int(100 * len(class_samples) / global_size)))
+                    logger.debug(
+                        f"dataset '{dataset_name}' class #{global_class_names.index(class_name)} '{class_name}' "
+                        f"sample count: {len(class_samples)}  "
+                        f"({int(100 * len(class_samples) / dataset_sizes[dataset_name]):0.1f}% of dataset, "
+                        f"{int(100 * len(class_samples) / global_size):0.1f}% of total)")
                 class_train_idxs, class_valid_idxs, class_test_idxs = self._get_raw_split(curr_class_samples)
                 for dname in datasets:
-                    for subset_idxs, class_subset_idxs in zip([train_idxs[dname], valid_idxs[dname], test_idxs[dname]],
-                                                              [class_train_idxs[dname], class_valid_idxs[dname], class_test_idxs[dname]]):
-                        # idx-label pairs below are passed through to the sampler for label-specific indexing (if needed)
+                    for subset_idxs, class_subset_idxs in \
+                            zip([train_idxs[dname], valid_idxs[dname], test_idxs[dname]],
+                                [class_train_idxs[dname], class_valid_idxs[dname], class_test_idxs[dname]]):
+                        # idx-label pairs below are passed through to the sampler for label-specific indexing
                         subset_idxs.extend(list(zip(class_subset_idxs, [class_name] * len(class_subset_idxs))))
-                        backlist_idxs[dname] = np.append(backlist_idxs[dname].astype(np.int32), np.asarray(class_subset_idxs))
+                        backlist_idxs[dname] = \
+                            np.append(backlist_idxs[dname].astype(np.int32), np.asarray(class_subset_idxs))
         else:  # no balancing to be done
             dataset_indices = {}
             for dataset_name in datasets:
-                # note: all indices paired with 'None' below as class is ignored; used for compatibility with code above
+                # note: all indices paired with 'None' below as class is ignored; used for compatibility
                 dataset_indices[dataset_name] = list(
                     zip(list(range(dataset_sizes[dataset_name])), [None] * dataset_sizes[dataset_name]))
             train_idxs, valid_idxs, test_idxs = self._get_raw_split(dataset_indices)
