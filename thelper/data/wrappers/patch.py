@@ -90,7 +90,7 @@ class ImageSplitter(Dataset):
         self.dataset_type = dataset_type
         self.dataset_params = dataset_params
         logger.debug(f"creating wrapped parser with type: {self.dataset_type}")
-        self.samples, self.task = _create_parser(
+        self.wrapped_dataset, self.task = _create_parser(
             dataset_config={"type": self.dataset_type, "params": dataset_params},
             base_transforms=None if self.transforms_mode != "preproc" else self.transforms,
         )
@@ -100,11 +100,18 @@ class ImageSplitter(Dataset):
         self.patch_count_per_image = None
         self.expected_input_shape = None
         self._validate_split()
+        # note: we keep a 'sample' object in case the underlying metadata needs to be split/sorted
+        self.samples = self.wrapped_dataset.samples \
+            if hasattr(self.wrapped_dataset, "samples") and self.wrapped_dataset.samples is not None \
+            and len(self.wrapped_dataset.samples) == len(self.wrapped_dataset) else None
+        if self.split_mode == "iterate":  # in this case, we need to dupe some sample metadata fields...
+            self.samples = [self.samples[idx] for idx in range(len(self.wrapped_dataset))
+                            for _ in range(self.patch_count_per_image)]
 
     def _validate_split(self):
         # first, we will get the 1st sample from the wrapped dataset to get the input shpae
         logger.debug("loading first sample for size checks...")
-        sample = self.samples[0]
+        sample = self.wrapped_dataset[0]
         assert isinstance(sample, dict), f"unexpected sample type: {type(sample)}"
         assert self.task.input_key in sample, "loaded sample did not possess image key"
         image = sample[self.task.input_key]
@@ -130,7 +137,7 @@ class ImageSplitter(Dataset):
 
     def __len__(self):
         """Returns the total number of samples available from the wrapped dataset interface."""
-        base_dataset_size = len(self.samples)
+        base_dataset_size = len(self.wrapped_dataset)
         if self.split_mode == "random" or self.split_mode == "stack":
             return base_dataset_size
         else:
@@ -145,7 +152,7 @@ class ImageSplitter(Dataset):
             jitter = self.patch_jitter[dim]
             if jitter:
                 offset = np.random.randint(-jitter, jitter + 1)
-                patch_max_coord = self.expected_input_shape[dim] - 1
+                patch_max_coord = self.expected_input_shape[dim] - self.patch_size[dim]
                 curr_coord = min(max(curr_coord + offset, 0), patch_max_coord)
             out_coords = [curr_coord, *out_coords]
             patch_idx -= curr_coord_idx
@@ -165,8 +172,8 @@ class ImageSplitter(Dataset):
             base_idx = idx // self.patch_count_per_image
         else:
             base_idx = idx
-        assert base_idx < len(self.samples), "sample index is out-of-range"
-        sample = self.samples[base_idx]
+        assert base_idx < len(self.wrapped_dataset), "sample index is out-of-range"
+        sample = self.wrapped_dataset[base_idx]
         assert isinstance(sample, dict), f"unexpected sample type: {type(sample)}"
         assert self.task.input_key in sample, "loaded sample did not possess image key"
         image = sample[self.task.input_key]
