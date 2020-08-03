@@ -2,11 +2,13 @@
 
 This module contains a class that defines the objectives of models/trainers for classification tasks.
 """
+import functools
 import logging
 import typing
 
 import numpy as np
 import torch
+import tqdm
 
 import thelper.concepts
 import thelper.utils
@@ -67,6 +69,8 @@ class Classification(Task, ClassNamesHandler):
         self,
         samples: typing.Iterable,
         unset_key: typing.Optional[typing.Hashable] = None,
+        display_progress: bool = False,
+        progress_desc: typing.AnyStr = "",
     ) -> typing.Dict[typing.AnyStr, typing.List[int]]:
         """Splits a list of samples based on their labels into a map of sample lists.
 
@@ -79,6 +83,8 @@ class Classification(Task, ClassNamesHandler):
         Args:
             samples: the samples to split, where each sample is provided as a dictionary.
             unset_key: a key under which all unlabeled samples should be kept (``None`` = ignore).
+            display_progress: defines whether a progress bar should be shown or not (for big datasets).
+            progress_desc: if a progress bar is shown, this is the description to put on it.
 
         Returns:
             A dictionary that maps each class label to its corresponding list of samples.
@@ -89,7 +95,14 @@ class Classification(Task, ClassNamesHandler):
             assert isinstance(unset_key, collections.abc.Hashable), "unset class name key should be hashable"
             assert unset_key not in sample_idxs, "unset class name key cannot already be in class names list"
             sample_idxs[unset_key] = []
-        for sample_idx, sample in enumerate(samples):
+        if display_progress:
+            if hasattr(samples, "__len__"):
+                pbar = functools.partial(tqdm.tqdm, desc=progress_desc, total=len(samples))
+            else:
+                pbar = functools.partial(tqdm.tqdm, desc=progress_desc)
+        else:
+            pbar = lambda x: x
+        for sample_idx, sample in enumerate(pbar(samples)):
             gt_attrib = None
             if self.gt_key is not None:
                 if isinstance(sample, dict) and self.gt_key in sample:
