@@ -8,19 +8,36 @@ import thelper.nn
 import thelper.nn.coordconv
 
 
-def get_activation_layer(name: typing.AnyStr) -> torch.nn.Module:
+def get_activation_layer(name: typing.AnyStr, *args, **kwargs) -> torch.nn.Module:
     # todo: support more prebuilt/custom layer types here, if needed...
     assert name in ["relu", "leaky_relu"]
     if name == "relu":
         return torch.nn.ReLU(inplace=True)
     elif name == "leaky_relu":
-        return torch.nn.LeakyReLU(inplace=True)
+        return torch.nn.LeakyReLU(*args, inplace=True, **kwargs)
+
+
+def get_norm_layer(name: typing.AnyStr, *args, **kwargs) -> torch.nn.Module:
+    # todo: support more prebuilt/custom layer types here, if needed...
+    assert name in ["batch", "layer"]
+    if name == "batch":
+        return torch.nn.BatchNorm2d(*args, **kwargs)
+    elif name == "layer":
+        return torch.nn.LayerNorm(*args, **kwargs)
 
 
 class Module(torch.nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, coordconv=False, radius_channel=True):
+    def __init__(
+            self,
+            inplanes: int,
+            planes: int,
+            stride: int = 1,
+            downsample: typing.Optional[torch.nn.Module] = None,
+            coordconv: bool = False,
+            radius_channel: bool = True,
+    ):
         super().__init__()
         self.inplanes = inplanes
         self.planes = planes
@@ -38,23 +55,31 @@ class Module(torch.nn.Module):
 
 class BasicBlock(Module):
 
-    def __init__(self, inplanes, planes, stride=1,
-                 downsample=None, coordconv=False,
-                 radius_channel=True, activation="relu"):
+    def __init__(
+            self,
+            inplanes: int,
+            planes: int,
+            stride: int = 1,
+            downsample: typing.Optional[torch.nn.Module] = None,
+            coordconv: bool = False,
+            radius_channel: bool = True,
+            activation: typing.AnyStr = "relu",
+            norm: typing.AnyStr = "batch",
+    ):
         super().__init__(inplanes, planes, stride, downsample, coordconv, radius_channel)
         self.conv1 = self._make_conv2d(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn1 = torch.nn.BatchNorm2d(planes)
+        self.norm1 = get_norm_layer(norm, planes)
         self.activ = get_activation_layer(activation)
         self.conv2 = self._make_conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn2 = torch.nn.BatchNorm2d(planes)
+        self.norm2 = get_norm_layer(norm, planes)
 
     def forward(self, x):
         residual = x
         out = self.conv1(x)
-        out = self.bn1(out)
+        out = self.norm1(out)
         out = self.activ(out)
         out = self.conv2(out)
-        out = self.bn2(out)
+        out = self.norm2(out)
         if self.downsample is not None:
             residual = self.downsample(x)
         out += residual
@@ -65,28 +90,36 @@ class BasicBlock(Module):
 class Bottleneck(Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1,
-                 downsample=None, coordconv=False,
-                 radius_channel=True, activation="relu"):
+    def __init__(
+            self,
+            inplanes: int,
+            planes: int,
+            stride: int = 1,
+            downsample: typing.Optional[torch.nn.Module] = None,
+            coordconv: bool = False,
+            radius_channel: bool = True,
+            activation: typing.AnyStr = "relu",
+            norm: typing.AnyStr = "batch",
+    ):
         super().__init__(inplanes, planes, stride, downsample, coordconv, radius_channel)
         self.conv1 = self._make_conv2d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = torch.nn.BatchNorm2d(planes)
+        self.norm1 = get_norm_layer(norm, planes)
         self.conv2 = self._make_conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn2 = torch.nn.BatchNorm2d(planes)
+        self.norm2 = get_norm_layer(norm, planes)
         self.conv3 = self._make_conv2d(planes, planes * self.expansion, kernel_size=1, bias=False)
-        self.bn3 = torch.nn.BatchNorm2d(planes * self.expansion)
+        self.norm3 = get_norm_layer(norm, planes * self.expansion)
         self.activ = get_activation_layer(activation)
 
     def forward(self, x):
         residual = x
         out = self.conv1(x)
-        out = self.bn1(out)
+        out = self.norm1(out)
         out = self.activ(out)
         out = self.conv2(out)
-        out = self.bn2(out)
+        out = self.norm2(out)
         out = self.activ(out)
         out = self.conv3(out)
-        out = self.bn3(out)
+        out = self.norm3(out)
         if self.downsample is not None:
             residual = self.downsample(x)
         out += residual
@@ -96,7 +129,12 @@ class Bottleneck(Module):
 
 class SqueezeExcitationLayer(torch.nn.Module):
 
-    def __init__(self, channel, reduction=16, activation="relu"):
+    def __init__(
+            self,
+            channel: int,
+            reduction: int = 16,
+            activation: typing.AnyStr = "relu",
+    ):
         super().__init__()
         self.pool = torch.nn.AdaptiveAvgPool2d(1)
         self.fc = torch.nn.Sequential(
@@ -115,24 +153,33 @@ class SqueezeExcitationLayer(torch.nn.Module):
 
 class SqueezeExcitationBlock(Module):
 
-    def __init__(self, inplanes, planes, stride=1,
-                 downsample=None, reduction=16, coordconv=False,
-                 radius_channel=True, activation="relu"):
+    def __init__(
+            self,
+            inplanes: int,
+            planes: int,
+            stride: int = 1,
+            downsample: typing.Optional[torch.nn.Module] = None,
+            reduction: int = 16,
+            coordconv: bool = False,
+            radius_channel: bool = True,
+            activation: typing.AnyStr = "relu",
+            norm: typing.AnyStr = "batch",
+    ):
         super().__init__(inplanes, planes, stride, downsample, coordconv, radius_channel)
         self.conv1 = self._make_conv2d(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn1 = torch.nn.BatchNorm2d(planes)
+        self.norm1 = get_norm_layer(norm, planes)
         self.activ = get_activation_layer(activation)
         self.conv2 = self._make_conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn2 = torch.nn.BatchNorm2d(planes)
+        self.norm2 = get_norm_layer(norm, planes)
         self.se = SqueezeExcitationLayer(planes, reduction, activation=activation)
 
     def forward(self, x):
         residual = x
         out = self.conv1(x)
-        out = self.bn1(out)
+        out = self.norm1(out)
         out = self.activ(out)
         out = self.conv2(out)
-        out = self.bn2(out)
+        out = self.norm2(out)
         out = self.se(out)
         if self.downsample is not None:
             residual = self.downsample(x)
@@ -143,27 +190,40 @@ class SqueezeExcitationBlock(Module):
 
 class ResNet(thelper.nn.Module):
 
-    def __init__(self, task, block="thelper.nn.resnet.BasicBlock",
-                 layers=[3, 4, 6, 3], strides=[1, 2, 2, 2], input_channels=3,
-                 flexible_input_res=False, pool_size=7, head_type=None,
-                 coordconv=False, radius_channel=True, activation="relu",
-                 skip_max_pool=False, pretrained=False, conv1_config=[7, 2, 3]):
+    def __init__(
+            self,
+            task: thelper.tasks.Task,
+            block: typing.AnyStr = "thelper.nn.resnet.BasicBlock",
+            layers: typing.Sequence[int] = [3, 4, 6, 3],
+            strides: typing.Sequence[int] = [1, 2, 2, 2],
+            input_channels: int = 3,
+            flexible_input_res: bool = False,
+            inplanes: int = 64,
+            pool_size: int = 7,
+            head_type: typing.Optional[typing.AnyStr] = None,
+            coordconv: bool = False,
+            radius_channel: bool = True,
+            activation: typing.AnyStr = "relu",
+            norm: typing.AnyStr = "batch",
+            skip_max_pool: bool = False,
+            pretrained: bool = False,
+            conv1_config: typing.Sequence[int] = [7, 2, 3],
+    ):
         # note: must always forward args to base class to keep backup
         super().__init__(task, **{k: v for k, v in vars().items() if k not in ["self", "task", "__class__"]})
         if isinstance(block, str):
             block = thelper.utils.import_class(block)
-        if not issubclass(block, Module):
-            raise AssertionError("block type must be subclass of thelper.nn.resnet.Module")
+        assert issubclass(block, Module), "block type must be subclass of thelper.nn.resnet.Module"
         if isinstance(layers, str):
             assert layers in ["18", "34"], "unknown basic block layer depth string postfix"
             if layers == "18":
                 layers = [2, 2, 2, 2]
             elif layers == "34":
                 layers = [3, 4, 6, 3]
-        if not isinstance(layers, list) or not isinstance(strides, list):
-            raise AssertionError("expected layers/strides to be provided as list of ints")
-        if len(layers) != len(strides):
-            raise AssertionError("layer/strides length mismatch")
+        assert isinstance(layers, list) and isinstance(strides, list), \
+            "expected layers/strides to be provided as list of ints"
+        assert len(layers) == len(strides), "layer/strides length mismatch"
+        assert 0 < inplanes, "invalid inplanes count"
         # NOTE: conv1_config=[7,2,3] is the basic configuration of ResNet.
         #       other configuration more suitables for CIFAR for example can use conv1_config[3,1,1]
         assert isinstance(conv1_config, list) and \
@@ -176,26 +236,26 @@ class ResNet(thelper.nn.Module):
         self.coordconv = coordconv
         self.radius_channel = radius_channel
         self.pretrained = pretrained
-        self.inplanes = 64
+        self.inplanes = inplanes
         self.conv1 = self._make_conv2d(
             in_channels=input_channels, out_channels=self.inplanes,
             kernel_size=conv1_config[0], stride=conv1_config[1],
             padding=conv1_config[2], bias=False)
-        self.bn1 = torch.nn.BatchNorm2d(self.inplanes)
+        self.norm1 = get_norm_layer(norm, self.inplanes)
         self.activ = get_activation_layer(activation)
         if skip_max_pool:
             self.maxpool = None
         else:
             self.maxpool = torch.nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0], stride=strides[0], activation=activation)
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=strides[1], activation=activation)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=strides[2], activation=activation)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=strides[3], activation=activation)
-        self.out_features = 512
+        self.layer1 = self._make_layer(block, inplanes, layers[0], stride=strides[0], activation=activation)
+        self.layer2 = self._make_layer(block, inplanes * 2, layers[1], stride=strides[1], activation=activation)
+        self.layer3 = self._make_layer(block, inplanes * 4, layers[2], stride=strides[2], activation=activation)
+        self.layer4 = self._make_layer(block, inplanes * 8, layers[3], stride=strides[3], activation=activation)
+        self.out_features = inplanes * 8
         self.layer5 = None
         if len(layers) > 4:
-            self.layer5 = self._make_layer(block, 1024, layers[4], stride=strides[4])
-            self.out_features = 1024
+            self.layer5 = self._make_layer(block, inplanes * 16, layers[4], stride=strides[4], activation=activation)
+            self.out_features = inplanes * 16
         if flexible_input_res:
             self.avgpool = torch.nn.AdaptiveAvgPool2d(1)
         else:
@@ -228,22 +288,24 @@ class ResNet(thelper.nn.Module):
                     f"unrecognized head type ('{head_type}') for segmentation resnet"
             # note: head below will be fully instantiated when the task is assigned
             self.fc = None
-        self.set_task(task)
+        if task is not None:
+            self.set_task(task)
 
     def _init_weights(self, activation):
         for m in self.modules():
             if isinstance(m, torch.nn.Conv2d) or isinstance(m, torch.nn.ConvTranspose2d):
                 torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity=activation)
-            elif isinstance(m, thelper.nn.coordconv.CoordConv2d) or isinstance(m, thelper.nn.coordconv.CoordConvTranspose2d):
+            elif isinstance(m, thelper.nn.coordconv.CoordConv2d) or \
+                    isinstance(m, thelper.nn.coordconv.CoordConvTranspose2d):
                 torch.nn.init.kaiming_normal_(m.conv.weight, mode='fan_out', nonlinearity=activation)
-            elif isinstance(m, torch.nn.BatchNorm2d):
+            elif isinstance(m, torch.nn.BatchNorm2d) or isinstance(m, torch.nn.LayerNorm):
                 torch.nn.init.constant_(m.weight, 1)
                 torch.nn.init.constant_(m.bias, 0)
         for m in self.modules():
             if isinstance(m, Bottleneck):
-                torch.nn.init.constant_(m.bn3.weight, 0)
+                torch.nn.init.constant_(m.norm3.weight, 0)
             elif isinstance(m, BasicBlock) or isinstance(m, SqueezeExcitationBlock):
-                torch.nn.init.constant_(m.bn2.weight, 0)
+                torch.nn.init.constant_(m.norm2.weight, 0)
 
     def _make_conv2d(self, *args, **kwargs):
         if self.coordconv:
@@ -268,7 +330,7 @@ class ResNet(thelper.nn.Module):
 
     def get_embedding(self, x, pool=True):
         x = self.conv1(x)
-        x = self.bn1(x)
+        x = self.norm1(x)
         x = self.activ(x)
         if self.maxpool is not None:
             x = self.maxpool(x)
@@ -512,7 +574,7 @@ class AutoEncoderSkipResNet(ResNet):
 
     def forward(self, input):
         # forward while keeping refs for latent build? @@@
-        encoder1 = self.activ(self.bn1(self.conv1(input)))
+        encoder1 = self.activ(self.norm1(self.conv1(input)))
         if self.maxpool is not None:
             encoder2 = self.layer1(self.maxpool(encoder1))
         else:
