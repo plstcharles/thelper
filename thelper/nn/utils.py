@@ -209,8 +209,6 @@ class Module(torch.nn.Module):
     def __init__(self, task, **kwargs):
         """Receives a task object to hold internally for model specialization."""
         super().__init__()
-        if task is None or not isinstance(task, thelper.tasks.Task):
-            raise AssertionError("task must derive from thelper.tasks.Task")
         self.task = task
         self.config = kwargs  # make a backup of constructor params for reinstantiation later
 

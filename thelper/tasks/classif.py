@@ -101,7 +101,8 @@ class Classification(Task, ClassNamesHandler):
             else:
                 pbar = functools.partial(tqdm.tqdm, desc=progress_desc)
         else:
-            pbar = lambda x: x
+            def fake_pbar(x): return x
+            pbar = fake_pbar
         for sample_idx, sample in enumerate(pbar(samples)):
             gt_attrib = None
             if self.gt_key is not None:
