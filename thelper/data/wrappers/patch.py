@@ -128,9 +128,9 @@ class ImageSplitter(Dataset):
             while coord_idx + self.patch_size[patch_dim] <= in_shape[patch_dim]:
                 self.patch_coords[patch_dim].append(coord_idx)
                 coord_idx += self.patch_stride[patch_dim]
-            if coord_idx != in_shape[patch_dim]:
-                logger.warning(f"patch split @ dim[{patch_dim}] will not preserve whole input")
             assert len(self.patch_coords[patch_dim]), "messed up logic?"
+            if self.patch_coords[patch_dim][-1] + self.patch_size[patch_dim] != in_shape[patch_dim]:
+                logger.warning(f"patch split @ dim[{patch_dim}] will not preserve whole input")
         self.patch_count_per_image = np.prod([len(c) for c in self.patch_coords])
         assert self.patch_count_per_image >= 1
         self.expected_input_shape = in_shape
@@ -205,8 +205,8 @@ class ImageSplitter(Dataset):
                     patch = self.transforms({self.task.input_key: patch})[self.task.input_key]
                 patch_stack.append(patch)
                 patch_coords_stack.append(patch_start_idx)
-            sample[self.task.input_key] = patch_stack
-            sample[self.patch_coords_key] = patch_coords_stack
+            sample[self.task.input_key] = np.stack(patch_stack)
+            sample[self.patch_coords_key] = np.stack(patch_coords_stack)
         if self.transforms_mode == "postproc" and self.transforms:
             sample = self.transforms(sample)
         return sample
