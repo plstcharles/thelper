@@ -1,5 +1,6 @@
 gitpython
 h5py
+hdf5plugin
 kornia
 lz4
 matplotlib
