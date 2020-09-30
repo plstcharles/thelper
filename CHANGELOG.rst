@@ -6,7 +6,7 @@ Changelog
 `Unreleased <http://github.com/plstcharles/thelper/tree/master>`_ (latest)
 ----------------------------------------------------------------------------------
 
-.. **INSERT APPLIED CHANGES HERE**
+* Added ``SelectChannels`` transform operator for inplace sample modifications that might need it.
 
 `0.6.1 <http://github.com/plstcharles/thelper/tree/v0.6.1>`_ (2020/07/29)
 ----------------------------------------------------------------------------------

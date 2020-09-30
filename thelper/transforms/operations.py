@@ -48,7 +48,7 @@ class NoTransform:
 class ToNumpy:
     """Converts and returns an image in numpy format from a ``torch.Tensor`` or ``PIL.Image`` format.
 
-    This operation is deterministic. The returns image will always be encoded as HxWxC, where
+    This operation is deterministic. The returned image will always be encoded as HxWxC, where
     if the input has three channels, the ordering might be optionally changed.
 
     Attributes:
@@ -86,6 +86,96 @@ class ToNumpy:
         """Provides print-friendly output for class attributes."""
         return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
             f"(reorder_bgr={self.reorder_bgr})"
+
+
+class SelectChannels:
+    """Returns selected channels by indices from an array in numpy, ``torch.Tensor`` or ``PIL.Image`` format.
+
+    This operation does not attempt to interpret the meaning of the channel's content.
+    It only moves them around by indices. It is up to the user to make sure indices make sense for desired result.
+    Input is expected to be encoded as HxWxC and will be returned as numpy array of same format.
+
+    Behavior according to provided ``channels``:
+
+    - single index (``int``):
+      only that channel is extracted to form a single channel array as result
+    - multiple indices (``list``, ``tuple``, ``set``):
+      all specified unique channel indices are extracted and placed in the specified order as result
+    - indices map (``dict`` with ``int`` values):
+      channels at key index are moved to value index
+      values
+
+    Examples::
+        out = SelectChannels(0)(img)                    # only the first channel is kept, out is HxWx1
+        out = SelectChannels([2,1,0])(img3C)            # out image will have channels in reversed order
+        out = SelectChannels([0,1,3])(img4C)            # out image will drop the channel at index #2
+        out = SelectChannels({3:0, 0:1, 1:2})(img4C)    # out image is HxWx3 with remapped channels using
+                                                        # <from:to> definitions and drops channel #2
+
+        # all of the following are equivalent, some implicit and other explicit with ``None``
+        out = SelectChannels([0, 1, 3])(img4C)
+        out = SelectChannels({0:0, 1:1, 3:3})(img4C)
+        out = SelectChannels({0:0, 1:1, 2:None 3:3})(img4C)
+
+    Attributes:
+        channels: indices or map of the channels to select from the original array.
+    Returns:
+        numpy array of selected channels
+    """
+
+    def __init__(self, channels):
+        """Initializes transformation parameters."""
+        assert isinstance(channels, (int, tuple, list, set, dict)), \
+            "unexpected channels (must be an int, an iterable of integers or a dictionary mapping of integers)"
+        if isinstance(channels, int):
+            assert channels >= 0, "channel index must be a positive integer"
+            self.channels = {channels: 0}
+        elif isinstance(channels, (tuple, list, set, dict)):
+            assert len(channels) > 0, "channels must provide at least one index"
+            assert len(set(channels)) == len(channels), "channel indices must be unique"
+            assert all(isinstance(c, int) and c >= 0 for c in channels), "all channel indices must be positive integers"
+            if not isinstance(channels, dict):
+                self.channels = {c: i for i, c in enumerate(channels)}
+            else:
+                to_channels = [c for c in channels.values() if c is not None]
+                assert len(set(to_channels)) == len(to_channels), "mapping destination channel indices must be unique"
+                assert all(isinstance(c, int) and c >= 0 for c in to_channels), \
+                    "mapping destination channel indices must be positive integers or None"
+                to_channels = list(sorted(to_channels))
+                assert list(range(len(to_channels))) == to_channels, \
+                    f"mapping destination channel indices must be 0-based continuous list, {to_channels} skips indices"
+                self.channels = {k: v for k, v in channels.items() if v is not None}
+
+    def __call__(self, sample):
+        """Converts and returns an array in numpy format with selected channels.
+
+        Args:
+            sample: the array to convert; should be a tensor, numpy array, or PIL image.
+
+        Returns:
+            The numpy-converted array with selected channels.
+        """
+        sample = ToNumpy()(sample)
+        n_from_channels = sample.shape[2]
+        n_to_channels = len(self.channels)
+        assert all(c < n_from_channels for c in self.channels) and n_to_channels <= n_from_channels, \
+            f"source channel indices ({list(self.channels)}) " \
+            f"cannot be greater than the number of available channels ({n_from_channels})"
+        inv_map = {v: k for k, v in self.channels.items()}  # guaranteed 0..N keys with init checks
+        sample = np.dstack(sample[:, :, inv_map[i]] for i in range(n_to_channels))
+        if n_to_channels == 1:
+            return sample[:, :, 0]  # force cast to have expected format HxWx1
+        return sample
+
+    def invert(self, sample):
+        """
+        Specifies that this operation cannot be inverted. Original data type is unknown and channels can be dropped.
+        """
+        raise RuntimeError("cannot be inverted")
+
+    def __repr__(self):
+        """Provides print-friendly output for class attributes."""
+        return f"{self.__class__.__module__}.{self.__class__.__qualname__}(channels={self.channels})"
 
 
 class CenterCrop:

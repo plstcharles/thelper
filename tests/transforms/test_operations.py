@@ -44,6 +44,40 @@ def test_tonumpy():
     assert op.__dict__ == op2.__dict__
 
 
+def test_select_channels():
+    with pytest.raises(AssertionError):
+        _ = thelper.transforms.SelectChannels(None)
+    with pytest.raises(AssertionError):
+        _ = thelper.transforms.SelectChannels(-1)
+    with pytest.raises(AssertionError):
+        _ = thelper.transforms.SelectChannels(["a"])
+    with pytest.raises(AssertionError):
+        _ = thelper.transforms.SelectChannels([0, 0, 0])
+    with pytest.raises(AssertionError):
+        _ = thelper.transforms.SelectChannels([-1])
+    with pytest.raises(AssertionError):
+        _ = thelper.transforms.SelectChannels({0: -1})
+    with pytest.raises(AssertionError):
+        _ = thelper.transforms.SelectChannels({0: 1, 1: 2, 2: 3})  # destinations must start at 0
+    with pytest.raises(AssertionError):
+        _ = thelper.transforms.SelectChannels({0: 0, 1: 2, 2: 3})  # destinations must be continuous
+
+    op_int1 = thelper.transforms.SelectChannels(1)
+    op_list = thelper.transforms.SelectChannels([3, 0, 1])  # inferred destination from list index
+    op_dict = thelper.transforms.SelectChannels({1: 2, 3: 0, 0: 1})  # same as above ordered list, but mixed map
+    op_none = thelper.transforms.SelectChannels({1: 2, 2: None, 3: 0, 0: 1})  # same as above implicit map
+
+    img4chan = np.arange(2 * 3 * 4).reshape((2, 3, 4))
+
+    assert np.array_equal(op_int1(img4chan), img4chan[:, :, 1])
+    for op in [op_list, op_dict, op_none]:
+        res = op(img4chan)
+        res.shape == (2, 3, 3)
+        assert np.array_equal(res[:, :, 0], img4chan[:, :, 3])
+        assert np.array_equal(res[:, :, 1], img4chan[:, :, 0])
+        assert np.array_equal(res[:, :, 2], img4chan[:, :, 1])
+
+
 def test_centercrop():
     with pytest.raises((AssertionError, ValueError)):
         _ = thelper.transforms.CenterCrop(size=-1, borderval=99)
