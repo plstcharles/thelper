@@ -162,7 +162,7 @@ class SelectChannels:
             f"source channel indices ({list(self.channels)}) " \
             f"cannot be greater than the number of available channels ({n_from_channels})"
         inv_map = {v: k for k, v in self.channels.items()}  # guaranteed 0..N keys with init checks
-        sample = np.dstack(sample[:, :, inv_map[i]] for i in range(n_to_channels))
+        sample = np.dstack([sample[:, :, inv_map[i]] for i in range(n_to_channels)])
         if n_to_channels == 1:
             return sample[:, :, 0]  # force cast to have expected format HxWx1
         return sample
