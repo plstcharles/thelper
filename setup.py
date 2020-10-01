@@ -54,7 +54,7 @@ with open("requirements.txt") as reqfd:
 
 setuptools.setup(
     name="thelper",
-    version="0.6.1",
+    version="0.6.2",
     license="Apache Software License 2.0",
     description="Training framework & tools for PyTorch-based machine learning projects.",
     long_description="%s\n%s" % (
