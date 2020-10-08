@@ -181,13 +181,21 @@ def create_optimizer(config, model):
     via a dictionary named 'params'.
     """
     logger.debug("loading optimizer")
+    if isinstance(config, torch.optim.Optimizer):
+        # user passed in a fully instantiated optimizer; trust them and return it directly...
+        return config
     if not isinstance(config, dict):
         raise AssertionError("config should be provided as a dictionary")
     if "type" not in config or not config["type"]:
         raise AssertionError("optimizer config missing 'type' field")
     optimizer_type = thelper.utils.import_class(config["type"])
     optimizer_params = thelper.utils.get_key_def(["params", "parameters"], config, {})
-    optimizer = optimizer_type(filter(lambda p: p.requires_grad, model.parameters()), **optimizer_params)
+    if "params" not in optimizer_params:  # "params" here is defined by torch.optim.Optimizer
+        # if the user did not specify the model params to optimize, assume we must use all of them
+        learnable_params = filter(lambda p: p.requires_grad, model.parameters())
+        optimizer = optimizer_type(params=learnable_params, **optimizer_params)
+    else:
+        optimizer = optimizer_type(**optimizer_params)
     return optimizer
 
 
