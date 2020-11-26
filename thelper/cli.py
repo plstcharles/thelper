@@ -345,7 +345,7 @@ def inference_session(config, save_dir=None, ckpt_path=None):
         raise RuntimeError("Model checkpoint was explicitly defined as not pretrained. It must be for inference.")
 
     if not os.path.exists(ckpt_path):
-        logger.fatal(f"Model not found: {ckpt_path}")
+        logger.fatal("Model not found: %s", ckpt_path)
         raise AssertionError("Model checkpoint missing to run inference")
     ckptdata = thelper.utils.load_checkpoint(ckpt_path, map_location=None, always_load_latest=False)
     if "task" not in ckptdata or not isinstance(ckptdata["task"], (thelper.tasks.Task, str)):
@@ -409,7 +409,9 @@ def inference_session(config, save_dir=None, ckpt_path=None):
     logger.debug("Writing employed infer config: [%s]", config_file_path)
     thelper.utils.save_config(config, config_file_path, force_convert=True)
 
+    logger.info("Starting inference.")
     tester.test()
+    logger.info("Inference completed.")
 
 
 def export_model(config, save_dir):
