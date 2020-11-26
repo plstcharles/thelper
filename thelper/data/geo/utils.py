@@ -4,16 +4,20 @@ import math
 import os
 
 import affine
-import gdal
 import geojson
 import numpy as np
-import ogr
-import osr
 import shapely
 import shapely.geometry
 import shapely.ops
 import shapely.wkt
 import tqdm
+
+try:
+    from osgeo import gdal, ogr, osr
+except (ImportError, ModuleNotFoundError):
+    import gdal
+    import ogr
+    import osr
 
 logger = logging.getLogger(__name__)
 

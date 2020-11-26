@@ -8,13 +8,17 @@ import os
 import pickle
 
 import cv2 as cv
-import gdal
 import numpy as np
-import ogr
-import osr
 import shapely
 import torch
 import tqdm
+
+try:
+    from osgeo import gdal, ogr, osr
+except (ImportError, ModuleNotFoundError):
+    import gdal
+    import ogr
+    import osr
 
 import thelper.tasks
 import thelper.utils

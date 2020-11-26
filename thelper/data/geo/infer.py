@@ -3,9 +3,13 @@ import logging
 import os
 from typing import TYPE_CHECKING
 
-import gdal
 import numpy as np
 import torch
+
+try:
+    from osgeo import gdal
+except (ImportError, ModuleNotFoundError):
+    import gdal
 
 import thelper.concepts
 import thelper.data.geo

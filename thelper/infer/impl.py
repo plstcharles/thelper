@@ -1,7 +1,7 @@
 """Explicit Tester definitions from existing Trainers."""
 
 import thelper.concepts
-from thelper.infer.base import Tester, make_tester_from_trainer
+from thelper.infer.base import Tester
 from thelper.train.classif import ImageClassifTrainer
 from thelper.train.detect import ObjDetectTrainer
 from thelper.train.regr import RegressionTrainer
@@ -9,8 +9,7 @@ from thelper.train.segm import ImageSegmTrainer
 
 
 @thelper.concepts.classification
-@make_tester_from_trainer(ImageClassifTrainer)
-class ImageClassifTester(Tester):
+class ImageClassifTester(ImageClassifTrainer, Tester):
     """Session runner specialized for testing of image classification task with safeguard against model training.
 
     .. seealso::
@@ -21,8 +20,7 @@ class ImageClassifTester(Tester):
 
 
 @thelper.concepts.detection
-@make_tester_from_trainer(ObjDetectTrainer)
-class ObjDetectTester(Tester):
+class ObjDetectTester(ObjDetectTrainer, Tester):
     """Session runner specialized for testing of object detection task with safeguard against model training.
 
     .. seealso::
@@ -33,8 +31,7 @@ class ObjDetectTester(Tester):
 
 
 @thelper.concepts.regression
-@make_tester_from_trainer(RegressionTrainer)
-class RegressionTester(Tester):
+class RegressionTester(RegressionTrainer, Tester):
     """Session runner specialized for testing of regression task with safeguard against model training.
 
     .. seealso::
@@ -45,8 +42,7 @@ class RegressionTester(Tester):
 
 
 @thelper.concepts.segmentation
-@make_tester_from_trainer(ImageSegmTrainer)
-class ImageSegmTester(Tester):
+class ImageSegmTester(ImageSegmTrainer, Tester):
     """Session runner specialized for testing of image segmentation task with safeguard against model training.
 
     .. seealso::

@@ -126,8 +126,15 @@ def create_model(config, task, save_dir=None, ckptdata=None):
                 raise AssertionError("invalid checkpoint, cannot reload previous session config")
             old_config = ckptdata["config"]
             if "model" not in old_config or not isinstance(old_config["model"], dict):
-                raise AssertionError("invalid checkpoint, cannot reload previous model config")
-            old_model_config = old_config["model"]
+                logger.warning("erroneous checkpoint, could not find model type in model config")
+                maybe_model_type = thelper.utils.get_key_def("model_type", ckptdata)
+                maybe_model_params = thelper.utils.get_key_def("model_params", ckptdata)
+                if not maybe_model_type or not maybe_model_params:
+                    raise AssertionError("invalid checkpoint, cannot reload previous model config")
+                logger.info("found model type/params directly in checkpoint instead of config, trying with them")
+                old_model_config = {"type": maybe_model_type, "params": maybe_model_params}
+            else:
+                old_model_config = old_config["model"]
             if "type" in old_model_config:
                 old_model_type = old_model_config["type"]
                 if isinstance(old_model_type, str):

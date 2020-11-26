@@ -401,15 +401,13 @@ def inference_session(config, save_dir=None, ckpt_path=None):
 
     config_file = "config-train.json"
     config_file_path = os.path.join(save_dir, config_file)
-    train_config = ckptdata['config']
+    train_config = ckptdata["config"]
     logger.debug("Writing employed train config: [%s]", config_file_path)
-    with open(config_file_path, 'w') as f:
-        json.dump(train_config, f, indent=4)
+    thelper.utils.save_config(train_config, config_file_path, force_convert=True)
     config_name = "config-infer.json"
     config_file_path = os.path.join(save_dir, config_name)
     logger.debug("Writing employed infer config: [%s]", config_file_path)
-    with open(config_file_path, 'w') as f:
-        json.dump(config, f, indent=4)
+    thelper.utils.save_config(config, config_file_path, force_convert=True)
 
     tester.test()
 

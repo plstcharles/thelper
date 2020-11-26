@@ -1,6 +1,6 @@
 """Segmentation trainer/evaluator implementation module."""
 import logging
-from typing import AnyStr  # noqa: F401
+from typing import AnyStr, Optional  # noqa: F401
 
 import torch
 import torch.optim
@@ -33,7 +33,7 @@ class ImageSegmTrainer(Trainer):
                  task,            # type: thelper.tasks.Task
                  loaders,         # type: thelper.typedefs.MultiLoaderType
                  config,          # type: thelper.typedefs.ConfigDict
-                 ckptdata=None    # type: typ.Optional[thelper.typedefs.CheckpointContentType]
+                 ckptdata=None    # type: Optional[thelper.typedefs.CheckpointContentType]
                  ):
         """Receives session parameters, parses image/label keys from task object, and sets up metrics."""
         super().__init__(session_name, session_dir, model, task, loaders, config, ckptdata=ckptdata)

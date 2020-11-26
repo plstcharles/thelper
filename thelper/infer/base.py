@@ -1,44 +1,12 @@
 from abc import abstractmethod
 from typing import TYPE_CHECKING
 
+import thelper.utils
 from thelper.train.base import Trainer
 
 if TYPE_CHECKING:
     from typing import AnyStr, Callable, Optional, Type  # noqa: F401
     import thelper.typedefs  # noqa: F401
-
-
-def make_tester_from_trainer(trainer):
-    # type: (Type[Trainer]) -> Callable
-    def make_tester(tester):
-        # type: (Type[Tester]) -> Callable
-        """
-        Decorator that wraps a Tester session runner by replacing any training-related methods with RuntimeError
-        to make sure they cannot be erroneously called.
-        It also adds any missing testing-related method from the base tester in order to support redirection
-        to evaluation methods of the specified trainer.
-        """
-        class TesterWrapper(object):
-            def __new__(cls, *args, **kwargs):
-                cls.__wrapped__ = tester
-                setattr(cls, "eval", lambda *a, **kw: trainer.eval(*a, **kw))
-                setattr(cls, "eval_epoch", lambda *a, **kw: trainer.eval_epoch(*a, **kw))
-                # if item correctly inherits from Tester, redirects should already be there
-                # but make sure that a direct reference to a Trainer class for inference will still work
-                if not hasattr(cls, "test"):
-                    setattr(cls, "test", getattr(tester, "test"))
-                if not hasattr(cls, "test_epoch"):
-                    setattr(cls, "test_epoch", getattr(tester, "test_epoch"))
-                return cls
-
-            def train(self):
-                raise RuntimeError(f"Invalid call to 'train' using '{tester.__name__}' (Tester)")
-
-            def train_epoch(self, model, epoch, dev, loss, optimizer, loader, metrics, output_path):
-                raise RuntimeError(f"Invalid call to 'train_epoch' using '{tester.__name__}' (Tester)")
-
-        return TesterWrapper
-    return make_tester
 
 
 class Tester(Trainer):
@@ -60,7 +28,11 @@ class Tester(Trainer):
                  config,          # type: thelper.typedefs.ConfigDict
                  ckptdata=None    # type: Optional[thelper.typedefs.CheckpointContentType]
                  ):
-        super(Trainer, self).__init__(session_name, session_dir, model, task, loaders, config, ckptdata=ckptdata)
+        runner_config = thelper.utils.get_key_def(["runner", "tester"], config)
+        config["trainer"] = runner_config or {}
+        if "tester" not in config:
+            config["tester"] = runner_config
+        super().__init__(session_name, session_dir, model, task, loaders, config, ckptdata=ckptdata)
 
     def train(self):
         raise RuntimeError(f"Invalid call to 'train' using '{type(self).__name__}' (Tester)")
@@ -69,11 +41,9 @@ class Tester(Trainer):
         raise RuntimeError(f"Invalid call to 'train_epoch' using '{type(self).__name__}' (Tester)")
 
     def test(self):
-        __doc__ = self.eval.__doc__  # noqa:F841
         return self.eval()
 
     def test_epoch(self, *args, **kwargs):
-        __doc__ = self.eval_epoch.__doc__  # noqa:F841
         return self.eval_epoch(*args, **kwargs)
 
     @abstractmethod
