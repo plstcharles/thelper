@@ -84,7 +84,7 @@ class ClassNamesHandler(abc.ABC):
     # args and kwargs are for additional inputs that could be passed down involuntarily, but that are not necessary
     def __init__(
         self,
-        class_names: typing.Optional[typing.Iterable[typing.AnyStr]] = None,
+        class_names: typing.Optional[thelper.typedefs.LabelMapping] = None,
         *args,
         **kwargs
     ) -> None:
@@ -138,12 +138,12 @@ class ClassNamesHandler(abc.ABC):
         self._class_indices = {class_name: idx for idx, class_name in enumerate(class_names)}
 
     @property
-    def class_indices(self) -> typing.Dict[str, int]:
+    def class_indices(self) -> thelper.typedefs.ReversedLabelMapping:
         """Returns the class-name-to-index map used for encoding labels as integers."""
         return self._class_indices
 
     @class_indices.setter
-    def class_indices(self, class_indices: typing.Dict[str, int]) -> None:
+    def class_indices(self, class_indices: thelper.typedefs.ReversedLabelMapping) -> None:
         """Sets the class-name-to-index map used for encoding labels as integers."""
         assert class_indices is None or isinstance(class_indices, dict), "indices must be provided as dictionary"
         self.class_names = class_indices
@@ -214,3 +214,102 @@ class FormatHandler(abc.ABC):
     def report_text(self) -> typing.Optional[typing.AnyStr]:
         """Must be implemented by inheriting classes. Default report text representation."""
         raise NotImplementedError
+
+
+class ColorMapHandler(abc.ABC):
+    """Generic interface to handle color map output operations for inheriting classes.
+
+    If :attr:`color_map` is specified, validation ensure that the obtained map is converted from the various typing
+    combinations. If :attr:`dontcare` index is provided, the corresponding labels (pixels) matching that value will be
+    ignored and displayed by default as black, unless corresponding index/color is already within the color map.
+
+    Can be combined with :class:`ClassNamesHandler` to take advantage of class indices extracted from its name mapping.
+
+    The result is a completely defined index to (R,G,B) mapping of labels.
+
+    Attributes:
+        color_map: index to single or 3-int pairs to employ for coloring outputs.
+        dontcare: label index to mark as 'ignore' candidate (for coloring but also possibly for metrics)
+        background: alias to dontcare, for different naming convention across task concepts.
+    """
+
+    _ignore_names = ["dontcare", "background"]
+
+    # args and kwargs are for additional inputs that could be passed down involuntarily, but that are not necessary
+    def __init__(
+        self,
+        color_map: typing.Optional[thelper.typedefs.ClassColorMap] = None,
+        dontcare: typing.Optional[thelper.typedefs.LabelIndex] = None,
+        background: typing.Optional[thelper.typedefs.LabelIndex] = None,
+        *args,
+        **kwargs
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        if not hasattr(self, "class_indices") and color_map:
+            self.class_indices = {
+                str(key): i if not (str.isnumeric(key) or isinstance(key, int)) else int(key)
+                for i, key in enumerate(color_map)  # mapping can have label index or name based keys
+            }
+        assert dontcare is None or background is None, "only one 'ignore' keyword can be provided"
+        self.ignore = dontcare or background
+        self.color_map = color_map
+
+    @property
+    def color_map(self):
+        """Returns the color map used to swap label indices for colors when displaying results."""
+        return self._color_map
+
+    @color_map.setter
+    def color_map(self, color_map: typing.Optional[thelper.typedefs.ClassColorMap]):
+        """Sets the color map used to swap label indices for colors when displaying results."""
+        if color_map is not None:
+            assert isinstance(color_map, dict), "color map should be given as dictionary"
+            self._color_map = {}
+            assert all([isinstance(k, int) for k in color_map]) or all([isinstance(k, str) for k in color_map]), \
+                "color map keys should be only class names or only class indices"
+
+            for key, val in color_map.items():
+                if isinstance(key, str):
+                    if key in self._ignore_names and self.ignore is not None:
+                        key = self.ignore
+                    else:
+                        assert key in self.class_indices, f"could not find color map key '{key}' in class names"
+                        key = self.class_indices[key]
+                assert key in self.class_indices.values() or key == self.ignore, f"unrecognized class index '{key}'"
+                if isinstance(val, int):
+                    val = (val, val, val)
+                if isinstance(val, (list, tuple)):
+                    val = np.asarray(val)
+                assert isinstance(val, np.ndarray) and val.size == 3, \
+                    "color values should be given as triplets of integers or unique integers"
+                self._color_map[key] = val
+            if self.ignore is not None and self.ignore not in self._color_map and self._color_map:
+                self._color_map[self.ignore] = np.asarray([0, 0, 0])  # use black as default 'ignore' color
+        else:
+            self._color_map = {}
+
+    @property
+    def ignore(self):
+        """Returns 'ignore' label value used in loss functions (can be ``None``)."""
+        return self._ignore
+
+    @ignore.setter
+    def ignore(self, ignore: typing.Optional[thelper.typedefs.LabelIndex]):
+        """Sets the 'ignore' label value for this task (can be ``None``)."""
+        if ignore is not None:
+            assert isinstance(ignore, int), "'ignore' value should be integer (index)"
+            if self.class_indices:
+                ignore_name = None
+                for _ignore in self._ignore_names:
+                    ignore = None if _ignore not in self.class_indices else self.class_indices[_ignore]
+                    if ignore is not None:
+                        ignore_name = _ignore
+                        break
+                assert ignore not in self.class_indices.values() or \
+                       (ignore_name and self.class_indices[ignore_name] == ignore), \
+                       "found '{}' value '{}' tied to another class label".format(ignore_name, ignore)
+        self._ignore = ignore
+
+    # aliases for other classes
+    background = property(ignore.fget, ignore.fset)
+    dontcare = property(ignore.fget, ignore.fset)

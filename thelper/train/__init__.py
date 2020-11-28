@@ -12,6 +12,7 @@ from thelper.train.regr import RegressionTrainer  # noqa: F401
 from thelper.train.segm import ImageSegmTrainer  # noqa: F401
 from thelper.train.utils import ClassifLogger  # noqa: F401
 from thelper.train.utils import ClassifReport  # noqa: F401
+from thelper.train.utils import SegmOutputGenerator  # noqa: F401
 from thelper.train.utils import ConfusionMatrix  # noqa: F401
 from thelper.train.utils import DetectLogger  # noqa: F401
 from thelper.train.utils import create_consumers  # noqa: F401

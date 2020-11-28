@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import tempfile
 
 import thelper
 
@@ -145,3 +146,55 @@ def test_confmat():
                         None, iter_idx, iter_count, 0, 1, test_save_path)
         tot_idx += targets[iter_idx].shape[0]
     assert consumer.report() == report
+
+
+def test_segm_output_generator():
+    batch_size = 16
+    iter_count = 32
+    input_shape = (3, 32, 32)
+    class_count = 10
+    class_names = [str(i) for i in range(class_count)]
+    task = thelper.tasks.Segmentation(class_names, "input", "map", ["idx"])
+    prefix = "unittest_"
+    ext = ".png"
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        consumer_config = {"consumer": {
+            "type": "thelper.train.utils.ClassifLogger",
+            "params": {"output": tmp_dir, "prefix": prefix, "extension": ext,
+                       "class_names": class_names, "format": "yaml"}
+        }}
+        consumers = thelper.train.create_consumers(consumer_config)
+        consumer = consumers["consumer"]
+        assert isinstance(consumer, thelper.train.utils.SegmOutputGenerator)
+        assert consumer.output == tmp_dir
+        assert consumer.prefix == prefix
+        assert consumer.class_names == class_names
+        assert consumer.ext
+        assert repr(consumer)
+        inputs, targets, preds = [], [], []
+        tot_idx = 0
+        for iter_idx in range(iter_count):
+            # set batch size to one for 'lingering' sample in last minibatch
+            curr_batch_size = batch_size if iter_idx < iter_count - 1 else 1
+            inputs.append(torch.randn((curr_batch_size, *input_shape)))
+            targets.append(torch.randint(low=0, high=class_count, size=(curr_batch_size, )))
+            preds.append(torch.randint(low=0, high=class_count, size=(curr_batch_size, )))
+            consumer.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
+                            {"idx": [tot_idx + idx for idx in range(curr_batch_size)]},
+                            None, iter_idx, iter_count, 0, 1, test_save_path)
+            tot_idx += curr_batch_size
+        report = consumer.report()
+        assert report is not None and isinstance(report, str)
+        assert len(report.split("\n")) == 11  # 10 lines + header
+        assert "target_name,target_score,pred_1_name,pred_1_score,pred_2_name," \
+               "pred_2_score,pred_3_name,pred_3_score,idx" == report.split("\n")[0]
+        consumer.reset()
+        assert consumer.report() is None
+        consumer.class_names = None
+        tot_idx = 0
+        for iter_idx in range(iter_count):
+            consumer.update(task, inputs[iter_idx], preds[iter_idx], targets[iter_idx],
+                            {"idx": [tot_idx + idx for idx in range(targets[iter_idx].shape[0])]},
+                            None, iter_idx, iter_count, 0, 1, test_save_path)
+            tot_idx += targets[iter_idx].shape[0]
+        assert consumer.report() == report

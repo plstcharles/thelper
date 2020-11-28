@@ -1,0 +1,69 @@
+# This file can be called using the inference mode in order to generate segmentation results from input samples:
+#
+#   thelper infer --ckpt-path <pretrained-segm-model> --config <this-file> --save-dir <where-to-output>
+#
+# Simply adjust the location of input data (see 'datasets.test_data.params.root').
+# The model is detected from the provided checkpoint option. Alternatively, you could also define it here like so:
+#
+#   model:
+#     ckpt_path: "data/example/ckpt.best.pth"
+#     params:
+#       pretrained: true
+#
+# Finally, remember to adjust any preprocessing steps accordingly to the input data format and expected model inputs.
+datasets:
+  # this name can be anything, as long as it matches with 'loaders.test_split.<>'
+  # you can also define multiple sources/data-loader to process all of them
+  test_data:
+    type: "thelper.data.geo.parsers.ImageFolderGDataset"
+    params:
+      # here is where the inputs data is expected
+      # dump your GeoTiffs into a subdirectory
+      #     example: "/tmp/test/samples/sentinel2.tif"
+      root: "/tmp/test"  # must be 1 level above directory containing image samples
+      channels: [1, 2, 3, 4]
+      image_key: "data"
+runner:
+  # generic session runner specialized for inference (testing only) and segmentation task
+  # this ensures that the model will not be retrained/fine-tuned, just employed for predictions
+  type: "thelper.infer.ImageSegmTester"
+  #device: cpu  # adjust as needed, use whatever is available otherwise
+  metrics:
+    # segmentation outputs will dumped from model inference at some level under the save directory
+    # (specific location depends on the configuration name and session computer/username)
+    segmenter:
+      type: "thelper.train.SegmOutputGenerator"
+      params: {}  # see class for custom parameters, mostly to adjust output formats
+loaders:
+  # process test data in normal order
+  shuffle: false
+  # adjust workers/batch-size accordingly to your machine capacity (see also for 'runner.device' option)
+  batch_size: 32
+  workers: 1
+  test_split:
+    # make sure all test data is processed using 1
+    # add other entries if adding other datasets
+    test_data: 1
+  # preprocessing operations specific to data and model requirements
+  base_transforms:
+    - operation: "thelper.transforms.SelectChannels"
+      params:
+        channels: [1, 2, 3]
+      target_key: "data"
+    - operation: "thelper.transforms.CenterCrop"
+      params:
+        size: 128
+    - operation: "thelper.transforms.NormalizeMinMax"
+      params:
+        min: 0.0
+        max: 255.0
+      target_key: "data"
+    - operation: "thelper.transforms.NormalizeZeroMeanUnitVar"
+      params:
+        mean: [0.485, 0.456, 0.406]
+        std: [0.229, 0.224, 0.225]
+      target_key: "data"
+    - operation: "thelper.transforms.Transpose"
+      params:
+        axes: [2, 0, 1]
+      target_key: "data"

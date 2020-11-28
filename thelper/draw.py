@@ -377,7 +377,7 @@ def draw_predicts(images, preds=None, targets=None, swap_channels=False, redraw=
 
 
 def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, block=False,
-                  segm_threshold=None, target_class=None, target_threshold=None, **kwargs):
+                  segm_threshold=None, target_class=None, target_threshold=None, return_images=False, **kwargs):
     """Draws and returns a set of segmentation results."""
     image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
     image_gray_list = [cv.cvtColor(cv.cvtColor(image, cv.COLOR_BGR2GRAY), cv.COLOR_GRAY2BGR) for image in image_list]
@@ -440,6 +440,8 @@ def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, b
                        if preds[idx].dtype == np.uint8 else (image_list[idx] * preds[idx]).astype(np.uint8)
                        for idx in range(nb_imgs)]
         grid_size_y += 1
+    if return_images:
+        return image_list
     return draw_images(image_list, redraw=redraw, window_name="segments", block=block,
                        grid_size_x=grid_size_x, grid_size_y=grid_size_y, **kwargs)
 

@@ -23,7 +23,9 @@ LabelColorMapType = typing.Union[ArrayType, typing.Dict[int, ArrayType]]
 LabelIndex = typing.AnyStr
 LabelType = typing.AnyStr
 LabelDict = typing.Dict[LabelIndex, LabelType]
-LabelList = typing.List[LabelType]
+LabelList = typing.Sequence[LabelType]  # list/set/tuple
+LabelMapping = typing.Union[LabelList, LabelDict]
+ReversedLabelMapping = typing.Dict[LabelType, LabelIndex]
 DrawingType = typing.Optional[typing.Tuple[plt.Figure, plt.Axes]]
 ClassColorMap = typing.Dict[ClassIdType, typing.Union[int, typing.Tuple[int, int, int]]]
 

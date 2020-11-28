@@ -12,14 +12,14 @@ import tqdm
 
 import thelper.concepts
 import thelper.utils
-from thelper.ifaces import ClassNamesHandler
+from thelper.ifaces import ClassNamesHandler, ColorMapHandler
 from thelper.tasks.utils import Task
 
 logger = logging.getLogger(__name__)
 
 
 @thelper.concepts.segmentation
-class Segmentation(Task, ClassNamesHandler):
+class Segmentation(Task, ClassNamesHandler, ColorMapHandler):
     """Interface for pixel-level labeling/classification (segmentation) tasks.
 
     This specialization requests that when given an input tensor, the trained model should
@@ -60,51 +60,7 @@ class Segmentation(Task, ClassNamesHandler):
             elif isinstance(class_names, dict):
                 del class_names["dontcare"]
         ClassNamesHandler.__init__(self, class_names=class_names)
-        self.dontcare = dontcare
-        self.color_map = color_map
-
-    @property
-    def dontcare(self):
-        """Returns the 'dontcare' label value used in loss functions (can be ``None``)."""
-        return self._dontcare
-
-    @dontcare.setter
-    def dontcare(self, dontcare):
-        """Sets the 'dontcare' label value for this segmentation task (can be ``None``)."""
-        if dontcare is not None:
-            assert isinstance(dontcare, int), "'dontcare' value should be integer (index)"
-            assert dontcare not in self.class_indices.values(), "found 'dontcare' value tied to another class label"
-        self._dontcare = dontcare
-
-    @property
-    def color_map(self):
-        """Returns the color map used to swap label indices for colors when displaying results."""
-        return self._color_map
-
-    @color_map.setter
-    def color_map(self, color_map):
-        """Sets the color map used to swap label indices for colors when displaying results."""
-        if color_map is not None:
-            assert isinstance(color_map, dict), "color map should be given as dictionary"
-            self._color_map = {}
-            assert all([isinstance(k, int) for k in color_map]) or all([isinstance(k, str) for k in color_map]), \
-                "color map keys should be only class names or only class indices"
-            for key, val in color_map.items():
-                if isinstance(key, str):
-                    if key == "dontcare" and self.dontcare is not None:
-                        key = self.dontcare
-                    else:
-                        assert key in self.class_indices, f"could not find color map key '{key}' in class names"
-                        key = self.class_indices[key]
-                assert key in self.class_indices.values() or key == self.dontcare, f"unrecognized class index '{key}'"
-                if isinstance(val, (list, tuple)):
-                    val = np.asarray(val)
-                assert isinstance(val, np.ndarray) and val.size == 3, "color values should be given as triplets"
-                self._color_map[key] = val
-            if self.dontcare is not None and self.dontcare not in self._color_map and self._color_map:
-                self._color_map[self.dontcare] = np.asarray([0, 0, 0])  # use black as default 'dontcare' color
-        else:
-            self._color_map = {}
+        ColorMapHandler.__init__(self, color_map=color_map, dontcare=dontcare)
 
     def get_class_sizes(self, samples):
         """Given a list of samples, returns a map of element counts for each class label."""

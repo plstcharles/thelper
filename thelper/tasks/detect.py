@@ -11,7 +11,7 @@ import tqdm
 
 import thelper.concepts
 import thelper.utils
-from thelper.ifaces import ClassNamesHandler
+from thelper.ifaces import ClassNamesHandler, ColorMapHandler
 from thelper.tasks.regr import Regression
 from thelper.tasks.utils import Task
 
@@ -356,7 +356,7 @@ class BoundingBox:
 
 
 @thelper.concepts.detection
-class Detection(Regression, ClassNamesHandler):
+class Detection(Regression, ClassNamesHandler, ColorMapHandler):
     """Interface for object detection tasks.
 
     This specialization requests that when given an input image, the trained model should
@@ -399,54 +399,7 @@ class Detection(Regression, ClassNamesHandler):
                                         input_shape=input_shape, target_shape=target_shape,
                                         target_min=target_min, target_max=target_max)
         ClassNamesHandler.__init__(self, class_names=class_names)
-        if background is not None:
-            background = None if "background" not in self.class_indices else self.class_indices["background"]
-        self.background = background
-        self.color_map = color_map
-
-    @property
-    def background(self):
-        """Returns the 'background' label value used in loss functions (can be ``None``)."""
-        return self._background
-
-    @background.setter
-    def background(self, background):
-        """Sets the 'background' label value for this segmentation task (can be ``None``)."""
-        if background is not None:
-            assert isinstance(background, int), "'background' value should be integer (index)"
-            assert background not in self.class_indices.values() or self.class_indices["background"] == background, \
-                "found 'background' value tied to another class label"
-        self._background = background
-
-    @property
-    def color_map(self):
-        """Returns the color map used to swap label indices for colors when displaying results."""
-        return self._color_map
-
-    @color_map.setter
-    def color_map(self, color_map):
-        """Sets the color map used to swap label indices for colors when displaying results."""
-        if color_map is not None:
-            assert isinstance(color_map, dict), "color map should be given as dictionary"
-            self._color_map = {}
-            assert all([isinstance(k, int) for k in color_map]) or all([isinstance(k, str) for k in color_map]), \
-                "color map keys should be only class names or only class indices"
-            for key, val in color_map.items():
-                if isinstance(key, str):
-                    if key == "background" and self.background is not None:
-                        key = self.background
-                    else:
-                        assert key in self.class_indices, f"could not find color map key '{key}' in class names"
-                        key = self.class_indices[key]
-                assert key in self.class_indices.values() or key == self.background, f"unrecognized class index '{key}'"
-                if isinstance(val, (list, tuple)):
-                    val = np.asarray(val)
-                assert isinstance(val, np.ndarray) and val.size == 3, "color values should be given as triplets"
-                self._color_map[key] = val
-            if self.background is not None and self.background not in self._color_map:
-                self._color_map[self.background] = np.asarray([0, 0, 0])  # use black as default 'background' color
-        else:
-            self._color_map = {}
+        ColorMapHandler.__init__(self, color_map=color_map, background=background)
 
     def get_class_sizes(self, samples, bbox_format=None):
         """Given a list of samples, returns a map of element counts for each object type."""
