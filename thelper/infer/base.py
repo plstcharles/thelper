@@ -28,8 +28,11 @@ class Tester(Trainer):
                  config,          # type: thelper.typedefs.ConfigDict
                  ckptdata=None    # type: Optional[thelper.typedefs.CheckpointContentType]
                  ):
-        runner_config = thelper.utils.get_key_def(["runner", "tester"], config)
-        config["trainer"] = runner_config or {}
+        runner_config = thelper.utils.get_key_def(["runner", "tester"], config) or {}
+        # default epoch 0 if omitted as they are not actually needed for single pass inference
+        if "epochs" not in runner_config:
+            runner_config["epochs"] = 1
+        config["trainer"] = runner_config
         if "tester" not in config:
             config["tester"] = runner_config
         super().__init__(session_name, session_dir, model, task, loaders, config, ckptdata=ckptdata)

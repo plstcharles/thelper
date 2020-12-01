@@ -781,12 +781,21 @@ class SegmOutputGenerator(PredictionConsumer, ClassNamesHandler, FormatHandler, 
                 # this type is used to instantiate the confusion matrix report object
                 "type": "thelper.train.utils.SegmOutputGenerator",
                 "params": {
-                    # some prefix value to saved output files
+                    # (optional) prefix value to saved output files
                     "prefix": "segm",
-                    # extension of the resulting file, (defaults to same extension as input sample)
+                    # (optional) extension of the resulting image file (default: .tif)
                     "extension": ".tif",
-                    # format of the generated file with class name mapping
-                    "format": "json"
+                    # format of the generated metadata file with indices, labels and class name mapping
+                    "format": "json",
+                    # (optional) list of class names or map of output index to label name
+                    # if not provided, will attempt to retrieve applicable ones from model task
+                    "class_names": ["class-1", "class-2"],
+                    # (optional) color map of labels to colors to apply for generating output predictions
+                    # if not provided, will use default sets for distinctive colors
+                    "color_map": {}
+                    # (optional) name of the class label to consider as 'ignore' class
+                    # defaults to black if not specified in color mapping and if applicable for employed model
+                    "dontcare": "background"
                 }
             },
             # ...
@@ -804,7 +813,7 @@ class SegmOutputGenerator(PredictionConsumer, ClassNamesHandler, FormatHandler, 
 
     def __init__(self,
                  prefix="segm",         # type: AnyStr
-                 extension=None,        # type: Optional[AnyStr]
+                 extension=".tif",      # type: Optional[AnyStr]
                  format="json",         # type: Optional[AnyStr]
                  class_names=None,      # type: Optional[thelper.typedefs.LabelMapping]
                  color_map=None,        # type: Optional[thelper.typedefs.ClassColorMap]
@@ -814,7 +823,7 @@ class SegmOutputGenerator(PredictionConsumer, ClassNamesHandler, FormatHandler, 
         assert isinstance(prefix, str) and len(prefix), "invalid output filename prefix"
         assert extension is None or (isinstance(extension, str) and len(extension)), "invalid output filename extension"
         self.prefix = prefix
-        self.extension = extension or ".tif"
+        self.extension = extension
         ClassNamesHandler.__init__(self, class_names=class_names)
         ColorMapHandler.__init__(self, color_map=color_map, dontcare=dontcare)
         FormatHandler.__init__(self, format=format)
@@ -850,20 +859,22 @@ class SegmOutputGenerator(PredictionConsumer, ClassNamesHandler, FormatHandler, 
         assert isinstance(task, thelper.tasks.Segmentation), "segm output generator only impl for segmentation tasks"
         assert iter_idx is not None and max_iters is not None and iter_idx < max_iters, \
             "bad iteration indices given to update function"
-        if task.class_names != self.class_names:
+        if task.class_names != self.class_names or \
+                (task.color_map and task.color_map != self.color_map) or \
+                (task.dontcare is not None and task.dontcare != self.dontcare):
             # if classes where completely bad, rebuild
-            ClassNamesHandler.__init__(self, class_names=task.class_names)
+            ClassNamesHandler.__init__(self, class_names=task.class_names or self.class_names)
             self._make_map()
         images = thelper.utils.to_numpy(input)
-        masks = None if self.dontcare is None or target is None else target
+        masks = None if target is None else target
         idx_color_map = {k: v[1] for k, v in self._map.items()}
-        results = thelper.draw.draw_segments(images, pred, masks,
-                                             color_map=idx_color_map, swap_channels=True, return_images=True)
+        _, img_preds, img_masks = thelper.draw.draw_segments(images, pred, masks, color_map=idx_color_map,
+                                                             swap_channels=True, return_images=True)
         ext = f".{self.extension}" if not self.extension.startswith(".") else self.extension
-        for res_img, res_type in zip(results, ["image", "pred", "mask"]):
+        for res_img, res_type in zip([img_preds, img_masks], ["pred", "mask"]):
             for idx, image in enumerate(res_img):
-                label = sample.get("label")
-                name = sample.get("path")
+                label = sample.get("label", "")
+                name = sample.get("path", "")
                 if name:
                     name = os.path.splitext(os.path.split(name[idx])[-1])[0]
                     name = f"_{label[idx]}_{name}" if label else f"_{name}"
@@ -886,6 +897,8 @@ class SegmOutputGenerator(PredictionConsumer, ClassNamesHandler, FormatHandler, 
 
         The returned object is a print-friendly CSV string.
         """
+        if not self._map:
+            return None
         header = "index,label,color"
         # don't use comma for color because of CSV
         lines = [f"{index},{label},({color[0]} {color[1]} {color[2]})" for index, (label, color) in self._map.items()]
@@ -897,12 +910,18 @@ class SegmOutputGenerator(PredictionConsumer, ClassNamesHandler, FormatHandler, 
 
     def report_json(self):
         # type: () -> Optional[AnyStr]
+        if not self._map:
+            return None
         items = [{"index": index, "label": label, "color": color.tolist()}
                  for index, (label, color) in self._map.items()]
         return json.dumps(items, sort_keys=False, indent=4, ensure_ascii=False)
 
     def reset(self):
         """Toggles a reset of the internal state."""
+        # must NOT reset color map here, otherwise we loose provided configs by user,
+        # which are more important in this case for result images vs whatever the model task specified
+        self.class_names = None
+        self._map = None
 
 
 @thelper.concepts.classification

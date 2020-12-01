@@ -251,7 +251,7 @@ class ColorMapHandler(abc.ABC):
                 for i, key in enumerate(color_map)  # mapping can have label index or name based keys
             }
         assert dontcare is None or background is None, "only one 'ignore' keyword can be provided"
-        self.ignore = dontcare or background
+        self.ignore = dontcare if background is None else background
         self.color_map = color_map
 
     @property
@@ -301,9 +301,10 @@ class ColorMapHandler(abc.ABC):
             if self.class_indices:
                 ignore_name = None
                 for _ignore in self._ignore_names:
-                    ignore = None if _ignore not in self.class_indices else self.class_indices[_ignore]
-                    if ignore is not None:
+                    class_ignore = None if _ignore not in self.class_indices else self.class_indices[_ignore]
+                    if class_ignore is not None:
                         ignore_name = _ignore
+                        ignore = class_ignore
                         break
                 assert ignore not in self.class_indices.values() or \
                        (ignore_name and self.class_indices[ignore_name] == ignore), \

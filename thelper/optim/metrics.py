@@ -1291,7 +1291,7 @@ class IntersectionOverUnion(Metric):
     Attributes:
         target_names: name(s) of the class(es) to target; if 'None' or list, will compute mIoU instead of IoU.
         max_win_size: maximum moving average window size to use (default=None, which equals dataset size).
-        inters: array holding the intesection areas or IoU scores for all input samples.
+        inters: array holding the intersection areas or IoU scores for all input samples.
         unions: array holding the union areas for all input samples.
     """
 
