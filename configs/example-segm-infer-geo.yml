@@ -15,9 +15,10 @@ datasets:
   # this name can be anything, as long as it matches with 'loaders.test_split.<>'
   # you can also define multiple sources/data-loader to process all of them
   test_data:
+    # specific the required dataset parser for your data format
     type: "thelper.data.geo.parsers.ImageFolderGDataset"
     params:
-      # here is where the inputs data is expected
+      # here is where the inputs data is expected for the above parser
       # dump your GeoTiffs into a subdirectory
       #     example: "/tmp/test/samples/sentinel2.tif"
       root: "/tmp/test"  # must be 1 level above directory containing image samples
@@ -39,7 +40,7 @@ loaders:
   shuffle: false
   # adjust workers/batch-size accordingly to your machine capacity (see also for 'runner.device' option)
   batch_size: 32
-  workers: 1
+  workers: 0  # this value helps debugging, increase it for parallelization if you just need processing
   test_split:
     # make sure all test data is processed using 1
     # add other entries if adding other datasets
@@ -48,7 +49,7 @@ loaders:
   base_transforms:
     - operation: "thelper.transforms.SelectChannels"
       params:
-        channels: [1, 2, 3]
+        channels: [0, 1, 2]
       target_key: "data"
     - operation: "thelper.transforms.CenterCrop"
       params:

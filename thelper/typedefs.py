@@ -27,7 +27,7 @@ LabelList = typing.Sequence[LabelType]  # list/set/tuple
 LabelMapping = typing.Union[LabelList, LabelDict]
 ReversedLabelMapping = typing.Dict[LabelType, LabelIndex]
 DrawingType = typing.Optional[typing.Tuple[plt.Figure, plt.Axes]]
-ClassColorMap = typing.Dict[ClassIdType, typing.Union[int, typing.Tuple[int, int, int]]]
+ClassColorMap = typing.Dict[ClassIdType, typing.Union[int, typing.Tuple[int, int, int], ArrayType]]
 
 Number = typing.Union[int, float]
 _literalJSON = typing.Optional[typing.Union[typing.AnyStr, Number, bool]]

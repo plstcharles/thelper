@@ -255,12 +255,12 @@ class ColorMapHandler(abc.ABC):
         self.color_map = color_map
 
     @property
-    def color_map(self):
+    def color_map(self) -> typing.Optional[thelper.typedefs.ClassColorMap]:
         """Returns the color map used to swap label indices for colors when displaying results."""
         return self._color_map
 
     @color_map.setter
-    def color_map(self, color_map: typing.Optional[thelper.typedefs.ClassColorMap]):
+    def color_map(self, color_map: typing.Optional[thelper.typedefs.ClassColorMap]) -> None:
         """Sets the color map used to swap label indices for colors when displaying results."""
         if color_map is not None:
             assert isinstance(color_map, dict), "color map should be given as dictionary"
@@ -289,12 +289,12 @@ class ColorMapHandler(abc.ABC):
             self._color_map = {}
 
     @property
-    def ignore(self):
+    def ignore(self) -> typing.Optional[thelper.typedefs.LabelIndex]:
         """Returns 'ignore' label value used in loss functions (can be ``None``)."""
         return self._ignore
 
     @ignore.setter
-    def ignore(self, ignore: typing.Optional[thelper.typedefs.LabelIndex]):
+    def ignore(self, ignore: typing.Optional[thelper.typedefs.LabelIndex]) -> None:
         """Sets the 'ignore' label value for this task (can be ``None``)."""
         if ignore is not None:
             assert isinstance(ignore, int), "'ignore' value should be integer (index)"

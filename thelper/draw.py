@@ -377,9 +377,28 @@ def draw_predicts(images, preds=None, targets=None, swap_channels=False, redraw=
 
 
 def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, block=False,
-                  segm_threshold=None, target_class=None, target_threshold=None, return_images=False, **kwargs):
+                  segm_threshold=None, target_class=None, target_threshold=None,
+                  swap_channels=False, return_images=False, **kwargs):
     """Draws and returns a set of segmentation results."""
+    if swap_channels:
+        if images.ndim != 4:
+            raise AssertionError("unexpected swap for images tensor that is not 4-dim (BxCxHxW -> BxHxWxC)")
+        if preds is not None:
+            if preds.ndim != 4 or images.shape[2] != preds.shape[2] or images.shape[3] != preds.shape[3]:
+                raise AssertionError("unexpected predictions tensor is not of 4D format (BxCxHxW) matching images")
+        if masks is not None:
+            if masks.ndim == 4 and images.shape[2] == masks.shape[2] and images.shape[3] == masks.shape[3]:
+                masks = np.transpose(masks, (0, 2, 3, 1)).squeeze(axis=3)
+            elif masks.ndim == 3 and images.shape[2] == masks.shape[1] and images.shape[3] == masks.shape[2]:
+                pass  # already ordered correctly
+            else:
+                raise AssertionError("unexpected swap for masks tensor that isn't 3D or 4D (BxCxHxW or BxHxW -> BxHxW)")
+        # swap images last even though we checked it first to make indices easier to understand against preds/masks
+        images = np.transpose(images, (0, 2, 3, 1))
     image_list = [get_displayable_image(images[batch_idx, ...]) for batch_idx in range(images.shape[0])]
+    preds_list = []
+    masks_list = []
+    stack_list = [img for img in image_list]
     image_gray_list = [cv.cvtColor(cv.cvtColor(image, cv.COLOR_BGR2GRAY), cv.COLOR_GRAY2BGR) for image in image_list]
     nb_imgs = len(image_list)
     grid_size_x, grid_size_y = nb_imgs, 1  # all images on one row, by default (add gt and preds as extra rows)
@@ -409,13 +428,14 @@ def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, b
         masks = masks.numpy()
         if color_map is not None:
             masks = [apply_color_map(masks[idx], color_map) for idx in range(masks.shape[0])]
-        image_list += [cv.addWeighted(image_gray_list[idx], 0.3, masks[idx], 0.7, 0)
-                       if masks[idx].dtype == np.uint8 else (image_list[idx] * masks[idx]).astype(np.uint8)
-                       for idx in range(nb_imgs)]
+        masks_list = [cv.addWeighted(image_gray_list[idx], 0.3, masks[idx], 0.7, 0)
+                      if masks[idx].dtype == np.uint8 else (image_list[idx] * masks[idx]).astype(np.uint8)
+                      for idx in range(nb_imgs)]
+        stack_list += masks_list
         grid_size_y += 1
     if preds is not None:
         if not isinstance(preds, list) and not (isinstance(preds, torch.Tensor) and preds.dim() == 4):
-            raise AssertionError("expected segmentation preds to be in list or 3-d tensor format (BxCxHxW)")
+            raise AssertionError("expected segmentation preds to be in list or 4-d tensor format (BxCxHxW)")
         if isinstance(preds, list):
             if all([isinstance(p, list) for p in preds]):
                 preds = list(itertools.chain.from_iterable(preds))  # merge all augmented lists together
@@ -436,13 +456,14 @@ def draw_segments(images, preds=None, masks=None, color_map=None, redraw=None, b
         preds = preds.numpy()
         if color_map is not None:
             preds = [apply_color_map(preds[idx], color_map) for idx in range(preds.shape[0])]
-        image_list += [cv.addWeighted(image_gray_list[idx], 0.3, preds[idx], 0.7, 0)
-                       if preds[idx].dtype == np.uint8 else (image_list[idx] * preds[idx]).astype(np.uint8)
-                       for idx in range(nb_imgs)]
+        preds_list = [cv.addWeighted(image_gray_list[idx], 0.3, preds[idx], 0.7, 0)
+                      if preds[idx].dtype == np.uint8 else (image_list[idx] * preds[idx]).astype(np.uint8)
+                      for idx in range(nb_imgs)]
+        stack_list += preds_list
         grid_size_y += 1
     if return_images:
-        return image_list
-    return draw_images(image_list, redraw=redraw, window_name="segments", block=block,
+        return image_list, preds_list, masks_list
+    return draw_images(stack_list, redraw=redraw, window_name="segments", block=block,
                        grid_size_x=grid_size_x, grid_size_y=grid_size_y, **kwargs)
 
 

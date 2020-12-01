@@ -782,7 +782,7 @@ class SegmOutputGenerator(PredictionConsumer, ClassNamesHandler, FormatHandler, 
                 "type": "thelper.train.utils.SegmOutputGenerator",
                 "params": {
                     # some prefix value to saved output files
-                    "prefix": "segm_",
+                    "prefix": "segm",
                     # extension of the resulting file, (defaults to same extension as input sample)
                     "extension": ".tif",
                     # format of the generated file with class name mapping
@@ -803,7 +803,7 @@ class SegmOutputGenerator(PredictionConsumer, ClassNamesHandler, FormatHandler, 
     """
 
     def __init__(self,
-                 prefix="segm_",        # type: AnyStr
+                 prefix="segm",         # type: AnyStr
                  extension=None,        # type: Optional[AnyStr]
                  format="json",         # type: Optional[AnyStr]
                  class_names=None,      # type: Optional[thelper.typedefs.LabelMapping]
@@ -814,7 +814,7 @@ class SegmOutputGenerator(PredictionConsumer, ClassNamesHandler, FormatHandler, 
         assert isinstance(prefix, str) and len(prefix), "invalid output filename prefix"
         assert extension is None or (isinstance(extension, str) and len(extension)), "invalid output filename extension"
         self.prefix = prefix
-        self.extension = extension
+        self.extension = extension or ".tif"
         ClassNamesHandler.__init__(self, class_names=class_names)
         ColorMapHandler.__init__(self, color_map=color_map, dontcare=dontcare)
         FormatHandler.__init__(self, format=format)
@@ -850,24 +850,35 @@ class SegmOutputGenerator(PredictionConsumer, ClassNamesHandler, FormatHandler, 
         assert isinstance(task, thelper.tasks.Segmentation), "segm output generator only impl for segmentation tasks"
         assert iter_idx is not None and max_iters is not None and iter_idx < max_iters, \
             "bad iteration indices given to update function"
-
         if task.class_names != self.class_names:
-            self.class_names = task.class_names
+            # if classes where completely bad, rebuild
+            ClassNamesHandler.__init__(self, class_names=task.class_names)
             self._make_map()
-        results = thelper.draw.draw_segments(input, pred, target, color_map=self._map, return_images=True)
-        extension = f".{self.extension}" if not self.extension.startswith(".") else self.extension
-        for idx, image in enumerate(results):
-            path = os.path.join(output_path, f"{self.prefix}{epoch_idx}_{iter_idx}_{idx}{extension}")
-            logger.debug("Writing image: %s", path)
-            cv.imwrite(path, image)
+        images = thelper.utils.to_numpy(input)
+        masks = None if self.dontcare is None or target is None else target
+        idx_color_map = {k: v[1] for k, v in self._map.items()}
+        results = thelper.draw.draw_segments(images, pred, masks,
+                                             color_map=idx_color_map, swap_channels=True, return_images=True)
+        ext = f".{self.extension}" if not self.extension.startswith(".") else self.extension
+        for res_img, res_type in zip(results, ["image", "pred", "mask"]):
+            for idx, image in enumerate(res_img):
+                label = sample.get("label")
+                name = sample.get("path")
+                if name:
+                    name = os.path.splitext(os.path.split(name[idx])[-1])[0]
+                    name = f"_{label[idx]}_{name}" if label else f"_{name}"
+                elif label:
+                    name = f"_{label[idx]}"
+                file_name = f"{self.prefix}_{res_type}_epoch-{epoch_idx}_iter-{iter_idx}_index-{idx}{name}{ext}"
+                path = os.path.join(output_path, file_name)
+                logger.debug("Writing image: %s", path)
+                cv.imwrite(path, image)
 
     def _make_map(self):
-        self._map = {index: (label, None) for label, index in (self.class_indices or {}).items()}
-        for index, color in self.color_map.items():
-            if index in self._map:
-                self._map[index][1] = color
-            else:
-                self._map[index][1] = thelper.draw.get_label_color_mapping(index)
+        self._map = {index: [label, None] for label, index in (self.class_indices or {}).items()}
+        for index, (label, _) in self._map.items():
+            color = self.color_map.get(index, self.color_map.get(label))
+            self._map[index][1] = color if color is not None else thelper.draw.get_label_color_mapping(index)
 
     def report_csv(self):
         # type: () -> Optional[AnyStr]
@@ -886,7 +897,8 @@ class SegmOutputGenerator(PredictionConsumer, ClassNamesHandler, FormatHandler, 
 
     def report_json(self):
         # type: () -> Optional[AnyStr]
-        items = [{"index": index, "label": label, "color": color} for index, (label, color) in self._map.items()]
+        items = [{"index": index, "label": label, "color": color.tolist()}
+                 for index, (label, color) in self._map.items()]
         return json.dumps(items, sort_keys=False, indent=4, ensure_ascii=False)
 
     def reset(self):
