@@ -9,7 +9,6 @@ outputs, the path to a directory where to save the data is also needed.
 """
 
 import argparse
-import json
 import logging
 import os
 from typing import Any, Union

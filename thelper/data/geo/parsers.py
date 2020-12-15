@@ -13,17 +13,17 @@ import shapely
 import torch
 import tqdm
 
+import thelper.tasks
+import thelper.utils
+from thelper.data import Dataset, ImageFolderDataset
+from thelper.data.geo.utils import parse_raster_metadata
+
 try:
     from osgeo import gdal, ogr, osr
 except (ImportError, ModuleNotFoundError):
     import gdal
     import ogr
     import osr
-
-import thelper.tasks
-import thelper.utils
-from thelper.data import Dataset, ImageFolderDataset
-from thelper.data.geo.utils import parse_raster_metadata
 
 logger = logging.getLogger(__name__)
 
