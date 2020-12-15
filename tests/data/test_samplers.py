@@ -1,6 +1,5 @@
 import copy
 import functools
-import inspect
 
 import numpy as np
 import pytest

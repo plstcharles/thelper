@@ -3,7 +3,6 @@
 This module contains utility functions and tools used by the other modules of this package.
 """
 import copy
-import inspect
 import logging
 
 import numpy as np
