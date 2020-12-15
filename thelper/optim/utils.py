@@ -149,8 +149,8 @@ def create_loss_fn(config, model, loader=None, uploader=None):
     if isinstance(model.task, thelper.tasks.Segmentation):
         ignore_index_param_name = thelper.utils.get_key_def("ignore_index_param_name", config, "ignore_index")
         ignore_index_label_name = thelper.utils.get_key_def("ignore_index_label_name", config, "dontcare")
-        loss_sig = inspect.signature(loss_type)
-        if ignore_index_param_name in loss_sig.parameters:
+        loss_expected_params = thelper.utils.get_func_params(loss_type)
+        if ignore_index_param_name in loss_expected_params:
             if ignore_index_label_name != "dontcare":
                 loss_params[ignore_index_param_name] = model.task.class_indices[ignore_index_label_name]
             else:
@@ -158,7 +158,7 @@ def create_loss_fn(config, model, loader=None, uploader=None):
             if loss_params[ignore_index_param_name] is None:
                 # some loss functions dont actually accept 'None' as the dontcare value (e.g. cross entropy loss)
                 # ... switch back to the default value in that case
-                loss_params[ignore_index_param_name] = loss_sig.parameters[ignore_index_param_name].default
+                loss_params[ignore_index_param_name] = loss_expected_params[ignore_index_param_name].default
     if weight_param_name in loss_params:
         loss_params[weight_param_name] = converter(loss_params[weight_param_name])
     loss = loss_type(**loss_params)

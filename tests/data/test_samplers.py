@@ -167,7 +167,7 @@ def test_custom_weighted_subset(fake_multimodal_dataset):
 @pytest.mark.parametrize("sampler_type", [thelper.data.samplers.WeightedSubsetRandomSampler,
                                           thelper.data.samplers.FixedWeightSubsetSampler])
 def test_subset_random_epoch_step(fake_dataset, sampler_type):
-    if "weights" in inspect.signature(sampler_type).parameters:
+    if "weights" in thelper.utils.get_func_params(sampler_type):
         sampler_type = functools.partial(sampler_type, weights={idx: 1 for idx in range(5)})
     sampler = sampler_type(
         indices=fake_dataset[0], labels=fake_dataset[1],

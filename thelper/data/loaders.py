@@ -575,10 +575,10 @@ class LoaderFactory:
                         sampler_pass_labels_param_name = thelper.utils.get_key_def("pass_labels_param_name", sampler, "labels")
                         if sampler_pass_labels:
                             sampler_params = {**sampler_params, sampler_pass_labels_param_name: loader_sample_classes}
-                        sampler_sig = inspect.signature(sampler_type)
-                        if "seeds" in sampler_sig.parameters:
+                        sampler_expected_params = thelper.utils.get_func_params(sampler_type)
+                        if "seeds" in sampler_expected_params:
                             sampler_params = {**sampler_params, "seeds": self.seeds}
-                        if "scale" in sampler_sig.parameters:
+                        if "scale" in sampler_expected_params:
                             assert "scale" not in sampler_params, "specified scale in both sampler config and loader config"
                             sampler_params = {**sampler_params, "scale": scale}
                         else:

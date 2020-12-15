@@ -334,8 +334,8 @@ def create_parsers(config, base_transforms=None):
                 transforms = base_transforms
             if issubclass(dataset_type, thelper.data.Dataset):
                 # assume that the dataset is derived from thelper.data.parsers.Dataset (it is fully sampling-ready)
-                dataset_sig = inspect.signature(dataset_type)
-                if "config" in dataset_sig.parameters:  # pragma: no cover
+                dataset_expected_params = thelper.utils.get_func_params(dataset_type)
+                if "config" in dataset_expected_params:  # pragma: no cover
                     # @@@@ for backward compatibility only, will be removed in v0.3
                     dataset = dataset_type(transforms=transforms, config=dataset_params)
                 else:
