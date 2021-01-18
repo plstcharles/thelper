@@ -1100,7 +1100,7 @@ class PSNR(Metric):
             return
         assert pred.shape == target.shape, "prediction/gt tensors shape mismatch"
         mse = np.mean(np.square(pred.numpy() - target.numpy()), dtype=np.float64)
-        self.psnrs[curr_idx] = 10 * np.log10(self.data_range / mse)
+        self.psnrs[curr_idx] = 10 * np.log10(self.data_range**2 / mse)
 
     def eval(self):
         """Returns the current (average) PSNR based on the accumulated values.
